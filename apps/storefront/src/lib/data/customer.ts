@@ -59,7 +59,7 @@ export const retrieveCustomer = cache(
       .fetch<{ customer: HttpTypes.StoreCustomer }>(`/store/customers/me`, {
         method: "GET",
         query: {
-          fields: "*orders",
+          fields: "*addresses",
         },
         headers,
         next,

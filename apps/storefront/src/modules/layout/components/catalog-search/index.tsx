@@ -32,10 +32,11 @@ export default function CatalogSearch({ dict }: { dict?: Record<string, Record<s
         <input
           id="catalog-search"
           type="search"
+          autoComplete="off"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={dict?.nav?.search || "Search the catalog"}
-          className="relative z-[1] w-full bg-transparent text-base small:text-sm text-[#12231d] outline-none placeholder:text-[#718078]"
+          className="relative z-[1] w-full bg-transparent text-base small:text-sm text-[#12231d] outline-none border-transparent focus:border-transparent focus:ring-0 focus:outline-none shadow-none focus:shadow-none placeholder:text-[#718078] appearance-none"
         />
       </div>
     </form>

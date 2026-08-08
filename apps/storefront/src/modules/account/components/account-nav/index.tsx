@@ -2,7 +2,8 @@
 
 import { ArrowRightOnRectangle } from "@medusajs/icons"
 import { clx } from "@modules/common/components/ui"
-import { useParams, usePathname } from "next/navigation"
+import { useEffect, useState } from "react"
+import { useParams, usePathname, useRouter } from "next/navigation"
 
 import { signout } from "@lib/data/customer"
 import { HttpTypes } from "@medusajs/types"
@@ -18,7 +19,25 @@ const AccountNav = ({
   customer: HttpTypes.StoreCustomer | null
 }) => {
   const route = usePathname()
-  const { countryCode, locale } = useParams() as { countryCode: string, locale: string }
+  const router = useRouter()
+  const [pendingHref, setPendingHref] = useState<string | null>(null)
+  const { countryCode, locale } = useParams() as {
+    countryCode: string
+    locale: string
+  }
+
+  useEffect(() => {
+    setPendingHref(null)
+  }, [route])
+
+  useEffect(() => {
+    const routePrefix = `/${locale || "en"}/${countryCode}`
+
+    router.prefetch(`${routePrefix}/account`)
+    router.prefetch(`${routePrefix}/account/profile`)
+    router.prefetch(`${routePrefix}/account/addresses`)
+    router.prefetch(`${routePrefix}/account/orders`)
+  }, [countryCode, locale, router])
 
   const handleLogout = async () => {
     await signout(countryCode)
@@ -118,6 +137,8 @@ const AccountNav = ({
                 <AccountNavLink
                   href="/account"
                   route={route!}
+                  pendingHref={pendingHref}
+                  onNavigateStart={setPendingHref}
                   data-testid="overview-link"
                 >
                   Overview
@@ -127,6 +148,8 @@ const AccountNav = ({
                 <AccountNavLink
                   href="/account/profile"
                   route={route!}
+                  pendingHref={pendingHref}
+                  onNavigateStart={setPendingHref}
                   data-testid="profile-link"
                 >
                   Profile
@@ -136,6 +159,8 @@ const AccountNav = ({
                 <AccountNavLink
                   href="/account/addresses"
                   route={route!}
+                  pendingHref={pendingHref}
+                  onNavigateStart={setPendingHref}
                   data-testid="addresses-link"
                 >
                   Addresses
@@ -145,6 +170,8 @@ const AccountNav = ({
                 <AccountNavLink
                   href="/account/orders"
                   route={route!}
+                  pendingHref={pendingHref}
+                  onNavigateStart={setPendingHref}
                   data-testid="orders-link"
                 >
                   Orders
@@ -170,6 +197,8 @@ const AccountNav = ({
 type AccountNavLinkProps = {
   href: string
   route: string
+  pendingHref: string | null
+  onNavigateStart: (href: string) => void
   children: React.ReactNode
   "data-testid"?: string
 }
@@ -177,21 +206,43 @@ type AccountNavLinkProps = {
 const AccountNavLink = ({
   href,
   route,
+  pendingHref,
+  onNavigateStart,
   children,
   "data-testid": dataTestId,
 }: AccountNavLinkProps) => {
-  const { countryCode, locale }: { countryCode: string, locale: string } = useParams()
+  const { countryCode, locale }: { countryCode: string; locale: string } =
+    useParams()
 
-  const active = route.split(`/${locale || "en"}/${countryCode}`)[1] === href
+  const currentHref = route.split(`/${locale || "en"}/${countryCode}`)[1]
+  const isPending = pendingHref === href
+  const active = pendingHref ? isPending : currentHref === href
+
   return (
     <LocalizedClientLink
       href={href}
-      className={clx("text-ui-fg-subtle hover:text-ui-fg-base", {
-        "text-ui-fg-base font-semibold": active,
-      })}
+      className={clx(
+        "inline-flex items-center gap-x-2 text-ui-fg-subtle hover:text-ui-fg-base transition-colors duration-150",
+        {
+          "text-ui-fg-base font-semibold": active,
+        }
+      )}
+      aria-current={active ? "page" : undefined}
+      aria-busy={isPending}
+      onClick={() => {
+        if (currentHref !== href) {
+          onNavigateStart(href)
+        }
+      }}
       data-testid={dataTestId}
     >
       {children}
+      {isPending && (
+        <span
+          className="inline-block h-1.5 w-1.5 rounded-full bg-ui-fg-base animate-pulse"
+          aria-hidden="true"
+        />
+      )}
     </LocalizedClientLink>
   )
 }
