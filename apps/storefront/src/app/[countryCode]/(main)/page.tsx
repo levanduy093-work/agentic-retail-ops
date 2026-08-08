@@ -23,7 +23,8 @@ export default async function Home(props: {
 
   const [{ collections }, heroProducts] = await Promise.all([
     listCollections({
-    fields: "id, handle, title",
+      fields: "id,handle,title",
+      limit: "3",
     }),
     region
       ? listProducts({

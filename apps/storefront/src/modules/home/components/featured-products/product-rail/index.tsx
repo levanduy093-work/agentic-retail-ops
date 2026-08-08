@@ -18,7 +18,8 @@ export default async function ProductRail({
     regionId: region.id,
     queryParams: {
       collection_id: collection.id,
-      fields: "*variants.calculated_price",
+      limit: 4,
+      fields: "id,handle,title,thumbnail,*variants.calculated_price",
     },
   })
 

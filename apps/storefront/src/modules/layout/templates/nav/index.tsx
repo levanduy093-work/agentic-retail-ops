@@ -1,7 +1,5 @@
 import { Suspense } from "react"
 
-import { listLocales } from "@lib/data/locales"
-import { getLocale } from "@lib/data/locale-actions"
 import { listRegions } from "@lib/data/regions"
 import { StoreRegion } from "@medusajs/types"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
@@ -11,10 +9,8 @@ import SideMenu from "@modules/layout/components/side-menu"
 import { getDictionary } from "@lib/i18n"
 
 export default async function Nav() {
-  const [regions, locales, currentLocale, dict] = await Promise.all([
+  const [regions, dict] = await Promise.all([
     listRegions().then((regions: StoreRegion[]) => regions),
-    listLocales(),
-    getLocale(),
     getDictionary(),
   ])
 
@@ -24,7 +20,7 @@ export default async function Nav() {
         <nav className="flex h-full items-center gap-4 px-4 small:px-6 text-small-regular text-[#315248]">
           <div className="flex min-w-fit items-center gap-x-5">
             <div className="block small:hidden h-full">
-              <SideMenu regions={regions} locales={locales} currentLocale={currentLocale} />
+              <SideMenu regions={regions} locales={null} currentLocale={null} />
             </div>
             <LocalizedClientLink
               href="/"

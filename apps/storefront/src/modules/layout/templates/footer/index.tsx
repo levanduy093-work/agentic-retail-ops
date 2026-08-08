@@ -7,11 +7,17 @@ import MedusaCTA from "@modules/layout/components/medusa-cta";
 import { getDictionary } from "@lib/i18n";
 
 export default async function Footer() {
-  const dict = await getDictionary();
-  const { collections } = await listCollections({
-    fields: "*products",
-  });
-  const productCategories = await listCategories();
+  const [dict, { collections }, productCategories] = await Promise.all([
+    getDictionary(),
+    listCollections({
+      fields: "id,handle,title",
+      limit: "6",
+    }),
+    listCategories({
+      fields: "id,handle,name,*category_children,*parent_category",
+      limit: 20,
+    }),
+  ]);
 
   return (
     <footer className="mt-10 w-full border-t border-[color:var(--line)] bg-white/45">
