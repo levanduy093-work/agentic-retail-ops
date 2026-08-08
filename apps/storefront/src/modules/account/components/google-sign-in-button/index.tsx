@@ -19,8 +19,6 @@ declare global {
       accounts: {
         id: {
           initialize: (options: Record<string, unknown>) => void
-          prompt: () => void
-          cancel: () => void
           renderButton: (
             parent: HTMLElement,
             options: Record<string, unknown>,
@@ -127,12 +125,7 @@ export default function GoogleSignInButton({ label }: GoogleSignInButtonProps) {
       locale,
     })
 
-    if (!isMobileViewport) {
-      google.prompt()
-    }
-
     return () => {
-      google.cancel()
       isInitializedRef.current = false
     }
   }, [

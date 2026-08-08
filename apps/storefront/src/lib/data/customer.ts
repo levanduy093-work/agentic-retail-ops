@@ -178,7 +178,15 @@ export async function loginWithGoogleOneTap(
 
     token = result
   } catch (error) {
-    return { state: "error", error: String(error) }
+    const errorStr = String(error)
+    if (errorStr.includes("Request already authenticated")) {
+      await removeAuthToken()
+      return { 
+        state: "error", 
+        error: "Your session was out of sync. Please click the sign-in button again." 
+      }
+    }
+    return { state: "error", error: errorStr }
   }
 
   const customerExists = await sdk.store.customer

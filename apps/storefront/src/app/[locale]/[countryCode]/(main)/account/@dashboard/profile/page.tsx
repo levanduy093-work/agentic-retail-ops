@@ -28,9 +28,8 @@ export default async function Profile() {
       <div className="mb-8 flex flex-col gap-y-4">
         <h1 className="text-2xl-semi">Profile</h1>
         <p className="text-base-regular">
-          View and update your profile information, including your name, email,
-          and phone number. You can also update your billing address, or change
-          your password.
+          View and update your name, phone number, and billing address. Your
+          email is used to sign in and cannot be changed here.
         </p>
       </div>
       <div className="flex flex-col gap-y-8 w-full">
