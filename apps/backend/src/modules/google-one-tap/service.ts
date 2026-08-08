@@ -106,6 +106,7 @@ class GoogleOneTapAuthService extends AbstractAuthModuleProvider {
 
     const userMetadata = {
       email: profile.email,
+      email_verified: profile.email_verified,
       family_name: profile.family_name,
       given_name: profile.given_name,
       name: profile.name,
@@ -113,8 +114,12 @@ class GoogleOneTapAuthService extends AbstractAuthModuleProvider {
     }
 
     try {
-      return await authIdentityProviderService.retrieve({
+      await authIdentityProviderService.retrieve({
         entity_id: entityId
+      })
+
+      return authIdentityProviderService.update(entityId, {
+        user_metadata: userMetadata
       })
     } catch (error) {
       if (

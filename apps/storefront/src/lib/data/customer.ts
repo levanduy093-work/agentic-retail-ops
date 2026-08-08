@@ -67,7 +67,7 @@ export const retrieveCustomer = cache(
       })
       .then(({ customer }) => customer)
       .catch(() => null)
-  },
+  }
 )
 
 export const updateCustomer = async (body: HttpTypes.StoreUpdateCustomer) => {
@@ -151,7 +151,7 @@ const getGoogleAccountProfile = (token: string): GoogleAccountProfile => {
 
   try {
     return JSON.parse(
-      Buffer.from(payload, "base64url").toString("utf8"),
+      Buffer.from(payload, "base64url").toString("utf8")
     ) as GoogleAccountProfile
   } catch {
     return {}
@@ -159,7 +159,7 @@ const getGoogleAccountProfile = (token: string): GoogleAccountProfile => {
 }
 
 export async function loginWithGoogleOneTap(
-  credential: string,
+  credential: string
 ): Promise<CustomerAuthState> {
   let token: string
 
@@ -181,9 +181,10 @@ export async function loginWithGoogleOneTap(
     const errorStr = String(error)
     if (errorStr.includes("Request already authenticated")) {
       await removeAuthToken()
-      return { 
-        state: "error", 
-        error: "Your session was out of sync. Please click the sign-in button again." 
+      return {
+        state: "error",
+        error:
+          "Your session was out of sync. Please click the sign-in button again.",
       }
     }
     return { state: "error", error: errorStr }
@@ -195,6 +196,20 @@ export async function loginWithGoogleOneTap(
     .catch(() => false)
 
   if (!customerExists) {
+    const authHeaders = { authorization: `Bearer ${token}` }
+    let linked: boolean
+
+    try {
+      linked = await sdk.client
+        .fetch<{ linked: boolean }>("/store/customers/link-google", {
+          method: "POST",
+          headers: authHeaders,
+        })
+        .then((response) => response.linked)
+    } catch (error) {
+      return { state: "error", error: String(error) }
+    }
+
     // The same ID token has just been verified by the custom Medusa provider;
     // its profile claims are only used to create the initial customer record.
     const profile = getGoogleAccountProfile(credential)
@@ -206,22 +221,45 @@ export async function loginWithGoogleOneTap(
       }
     }
 
-    try {
-      await sdk.store.customer.create(
-        {
-          email: profile.email,
-          first_name: profile.given_name,
-          last_name: profile.family_name,
-        },
-        {},
-        { authorization: `Bearer ${token}` },
-      )
+    if (!linked) {
+      try {
+        await sdk.store.customer.create(
+          {
+            email: profile.email,
+            first_name: profile.given_name,
+            last_name: profile.family_name,
+          },
+          {},
+          authHeaders
+        )
+      } catch (error) {
+        try {
+          linked = await sdk.client
+            .fetch<{ linked: boolean }>("/store/customers/link-google", {
+              method: "POST",
+              headers: authHeaders,
+            })
+            .then((response) => response.linked)
+        } catch (linkError) {
+          return { state: "error", error: String(linkError) }
+        }
 
+        if (!linked) {
+          return { state: "error", error: String(error) }
+        }
+      }
+    }
+
+    try {
       const refreshedToken = await sdk.auth.refresh({
-        authorization: `Bearer ${token}`,
+        ...authHeaders,
       })
 
-      if (!refreshedToken || typeof refreshedToken !== "object" || !("token" in refreshedToken)) {
+      if (
+        !refreshedToken ||
+        typeof refreshedToken !== "object" ||
+        !("token" in refreshedToken)
+      ) {
         return {
           state: "error",
           error: "Google sign-in could not be finalized.",
