@@ -40,6 +40,7 @@ export default function GoogleSignInButton({ label }: GoogleSignInButtonProps) {
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isScriptReady, setIsScriptReady] = useState(false)
+  const isInitializedRef = useRef(false)
 
   const isEnabled = process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === "true"
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
@@ -77,6 +78,10 @@ export default function GoogleSignInButton({ label }: GoogleSignInButtonProps) {
       return
     }
 
+    if (isInitializedRef.current) {
+      return
+    }
+
     const google = window.google?.accounts.id
 
     if (!google) {
@@ -84,10 +89,14 @@ export default function GoogleSignInButton({ label }: GoogleSignInButtonProps) {
       return
     }
 
+    isInitializedRef.current = true
+
     google.initialize({
       client_id: clientId,
       callback: handleCredential,
       use_fedcm_for_button: true,
+      cancel_on_tap_outside: false,
+      prompt_parent_id: "google-one-tap-container",
     })
     buttonRef.current.replaceChildren()
     google.renderButton(buttonRef.current, {
@@ -98,6 +107,12 @@ export default function GoogleSignInButton({ label }: GoogleSignInButtonProps) {
       width: 360,
       locale,
     })
+    google.prompt()
+    
+    return () => {
+      google.cancel()
+      isInitializedRef.current = false
+    }
   }, [clientId, handleCredential, isEnabled, isScriptReady, locale])
 
   if (!isEnabled || !clientId) {
@@ -106,6 +121,10 @@ export default function GoogleSignInButton({ label }: GoogleSignInButtonProps) {
 
   return (
     <div className="w-full">
+      <div 
+        id="google-one-tap-container" 
+        className="fixed top-16 right-4 z-[9999]"
+      ></div>
       <Script
         src="https://accounts.google.com/gsi/client"
         strategy="afterInteractive"
