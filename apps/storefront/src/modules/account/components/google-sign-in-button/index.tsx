@@ -109,7 +109,7 @@ export default function GoogleSignInButton({ label }: GoogleSignInButtonProps) {
       <Script
         src="https://accounts.google.com/gsi/client"
         strategy="afterInteractive"
-        onLoad={() => setIsScriptReady(true)}
+        onReady={() => setIsScriptReady(true)}
       />
       <div
         ref={buttonRef}

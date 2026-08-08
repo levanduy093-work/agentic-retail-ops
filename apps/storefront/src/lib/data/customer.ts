@@ -211,14 +211,14 @@ export async function loginWithGoogleOneTap(
         authorization: `Bearer ${token}`,
       })
 
-      if (typeof refreshedToken !== "string") {
+      if (!refreshedToken || typeof refreshedToken !== "object" || !("token" in refreshedToken)) {
         return {
           state: "error",
           error: "Google sign-in could not be finalized.",
         }
       }
 
-      token = refreshedToken
+      token = refreshedToken.token
     } catch (error) {
       return { state: "error", error: String(error) }
     }
