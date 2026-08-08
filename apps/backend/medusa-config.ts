@@ -1,8 +1,15 @@
-import { loadEnv, defineConfig } from '@medusajs/framework/utils'
+import {
+  ContainerRegistrationKeys,
+  defineConfig,
+  loadEnv,
+  Modules,
+} from '@medusajs/framework/utils'
 import { readFile } from 'fs/promises'
 import { resolve } from 'path'
 
 loadEnv(process.env.NODE_ENV || 'development', process.cwd())
+
+const isGoogleAuthConfigured = Boolean(process.env.GOOGLE_CLIENT_ID)
 
 const injectDashboardThemeBridge = (code: string, id: string) => {
   const normalizedId = id.replace(/\\/g, '/')
@@ -194,6 +201,38 @@ module.exports = defineConfig({
       authCors: process.env.AUTH_CORS!,
       jwtSecret: process.env.JWT_SECRET,
       cookieSecret: process.env.COOKIE_SECRET,
+      authMethodsPerActor: {
+        customer: [
+          'emailpass',
+          ...(isGoogleAuthConfigured ? ['google-one-tap'] : []),
+        ],
+        user: ['emailpass'],
+      },
     }
-  }
+  },
+  modules: [
+    {
+      resolve: '@medusajs/medusa/auth',
+      dependencies: [Modules.CACHE, ContainerRegistrationKeys.LOGGER],
+      options: {
+        providers: [
+          {
+            resolve: '@medusajs/medusa/auth-emailpass',
+            id: 'emailpass',
+          },
+          ...(isGoogleAuthConfigured
+            ? [
+                {
+                  resolve: './src/modules/google-one-tap',
+                  id: 'google-one-tap',
+                  options: {
+                    clientId: process.env.GOOGLE_CLIENT_ID,
+                  },
+                },
+              ]
+            : []),
+        ],
+      },
+    },
+  ],
 })

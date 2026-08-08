@@ -3,6 +3,8 @@ import { LOGIN_VIEW } from "@modules/account/templates/login-template"
 import ErrorMessage from "@modules/checkout/components/error-message"
 import { SubmitButton } from "@modules/checkout/components/submit-button"
 import Input from "@modules/common/components/input"
+import GoogleSignInButton from "@modules/account/components/google-sign-in-button"
+import { useSearchParams } from "next/navigation"
 import { useActionState } from "react"
 
 type Props = {
@@ -11,6 +13,8 @@ type Props = {
 
 const Login = ({ setCurrentView }: Props) => {
   const [message, formAction] = useActionState(login, null)
+  const searchParams = useSearchParams()
+  const googleAuthError = searchParams.get("google_auth_error")
 
   return (
     <div
@@ -21,6 +25,18 @@ const Login = ({ setCurrentView }: Props) => {
       <p className="text-center text-base-regular text-ui-fg-base mb-8">
         Sign in to access an enhanced shopping experience.
       </p>
+      <GoogleSignInButton label="Continue with Google" />
+      {googleAuthError && (
+        <ErrorMessage
+          error={googleAuthError}
+          data-testid="google-auth-error-message"
+        />
+      )}
+      <div className="w-full flex items-center gap-3 my-6 text-ui-fg-subtle text-small-regular">
+        <div className="h-px flex-1 bg-ui-border-base" />
+        <span>or sign in with email</span>
+        <div className="h-px flex-1 bg-ui-border-base" />
+      </div>
       {message?.state === "verification_required" && (
         <div
           className="w-full mb-6 text-center text-base-regular text-ui-fg-base bg-ui-bg-subtle border border-ui-border-base rounded-rounded p-4"

@@ -7,6 +7,7 @@ import ErrorMessage from "@modules/checkout/components/error-message"
 import { SubmitButton } from "@modules/checkout/components/submit-button"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 import { signup } from "@lib/data/customer"
+import GoogleSignInButton from "@modules/account/components/google-sign-in-button"
 
 type Props = {
   setCurrentView: (view: LOGIN_VIEW) => void
@@ -27,6 +28,12 @@ const Register = ({ setCurrentView }: Props) => {
         Create your Synapse Store Member profile, and get access to an enhanced
         shopping experience.
       </p>
+      <GoogleSignInButton label="Continue with Google" />
+      <div className="w-full flex items-center gap-3 my-6 text-ui-fg-subtle text-small-regular">
+        <div className="h-px flex-1 bg-ui-border-base" />
+        <span>or create an account with email</span>
+        <div className="h-px flex-1 bg-ui-border-base" />
+      </div>
       {message?.state === "verification_required" && (
         <div
           className="w-full mb-4 text-center text-base-regular text-ui-fg-base bg-ui-bg-subtle border border-ui-border-base rounded-rounded p-4"

@@ -134,6 +134,110 @@ export async function login(
   return completeLogin(email, password)
 }
 
+type GoogleAccountProfile = {
+  email?: string
+  family_name?: string
+  given_name?: string
+}
+
+const getGoogleAccountProfile = (token: string): GoogleAccountProfile => {
+  const payload = token.split(".")[1]
+
+  if (!payload) {
+    return {}
+  }
+
+  try {
+    return JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8"),
+    ) as GoogleAccountProfile
+  } catch {
+    return {}
+  }
+}
+
+export async function loginWithGoogleOneTap(
+  credential: string,
+): Promise<CustomerAuthState> {
+  let token: string
+
+  try {
+    const result = await sdk.auth.login("customer", "google-one-tap", {
+      credential,
+    })
+
+    if (typeof result !== "string") {
+      return {
+        state: "error",
+        error:
+          "Google authentication requires additional steps that aren't supported.",
+      }
+    }
+
+    token = result
+  } catch (error) {
+    return { state: "error", error: String(error) }
+  }
+
+  const customerExists = await sdk.store.customer
+    .retrieve({}, { authorization: `Bearer ${token}` })
+    .then(() => true)
+    .catch(() => false)
+
+  if (!customerExists) {
+    // The same ID token has just been verified by the custom Medusa provider;
+    // its profile claims are only used to create the initial customer record.
+    const profile = getGoogleAccountProfile(credential)
+
+    if (!profile.email) {
+      return {
+        state: "error",
+        error: "Google did not provide a verified email address.",
+      }
+    }
+
+    try {
+      await sdk.store.customer.create(
+        {
+          email: profile.email,
+          first_name: profile.given_name,
+          last_name: profile.family_name,
+        },
+        {},
+        { authorization: `Bearer ${token}` },
+      )
+
+      const refreshedToken = await sdk.auth.refresh({
+        authorization: `Bearer ${token}`,
+      })
+
+      if (typeof refreshedToken !== "string") {
+        return {
+          state: "error",
+          error: "Google sign-in could not be finalized.",
+        }
+      }
+
+      token = refreshedToken
+    } catch (error) {
+      return { state: "error", error: String(error) }
+    }
+  }
+
+  await setAuthToken(token)
+
+  const customerCacheTag = await getCacheTag("customers")
+  revalidateTag(customerCacheTag)
+
+  try {
+    await transferCart()
+  } catch (error) {
+    return { state: "error", error: String(error) }
+  }
+
+  return { state: "success" }
+}
+
 // Logs the customer in and reconciles the customer record. The behavior is
 // driven entirely by the backend's login response, so it works whether or not
 // email verification is enabled.
