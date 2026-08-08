@@ -64,22 +64,17 @@ const SideMenu = ({ regions, locales, currentLocale, dict }: SideMenuProps) => {
                 as={Fragment}
                 enter="transition ease-out duration-150"
                 enterFrom="opacity-0"
-                enterTo="opacity-100 backdrop-blur-2xl"
+                enterTo="opacity-100"
                 leave="transition ease-in duration-150"
-                leaveFrom="opacity-100 backdrop-blur-2xl"
+                leaveFrom="opacity-100"
                 leaveTo="opacity-0"
               >
-                <PopoverPanel className="flex flex-col absolute w-full pr-4 sm:pr-0 sm:w-1/3 2xl:w-1/4 sm:min-w-min h-[calc(100vh-1rem)] z-[51] inset-x-0 text-sm text-ui-fg-on-color m-2 backdrop-blur-2xl">
+                <PopoverPanel className="flex flex-col absolute top-full left-0 mt-3 w-[85vw] max-w-[320px] z-[51] text-sm text-[#315248]">
                   <div
                     data-testid="nav-menu-popup"
-                    className="flex flex-col h-full bg-[rgba(3,7,18,0.5)] rounded-rounded justify-between p-6"
+                    className="flex flex-col bg-white border border-[#12231d]/10 shadow-[0_18px_55px_rgba(17,49,39,0.12)] rounded-[22px] p-6 gap-6"
                   >
-                    <div className="flex justify-end" id="xmark">
-                      <button data-testid="close-menu-button" onClick={close}>
-                        <XMark />
-                      </button>
-                    </div>
-                    <ul className="flex flex-col gap-6 items-start justify-start">
+                    <ul className="flex flex-col gap-4 items-start justify-start">
                       {Object.entries(SideMenuItems).map(([name, href]) => {
                         const translationKey = name.toLowerCase() as "home" | "store" | "account" | "cart"
                         const translatedName = dict?.nav?.[translationKey] || name
@@ -88,7 +83,7 @@ const SideMenu = ({ regions, locales, currentLocale, dict }: SideMenuProps) => {
                           <li key={name}>
                             <LocalizedClientLink
                               href={href}
-                              className="text-3xl leading-10 hover:text-ui-fg-disabled"
+                              className="text-xl leading-8 font-semibold text-[#174b3d] hover:text-[#103a2f] transition-colors tracking-tight"
                               onClick={close}
                               data-testid={`${name.toLowerCase()}-link`}
                             >
@@ -98,7 +93,7 @@ const SideMenu = ({ regions, locales, currentLocale, dict }: SideMenuProps) => {
                         )
                       })}
                     </ul>
-                    <div className="flex flex-col gap-y-6">
+                    <div className="flex flex-col gap-y-4 pt-4 border-t border-[#12231d]/10">
                       {!!locales?.length && (
                         <div
                           className="flex justify-between"
@@ -136,8 +131,8 @@ const SideMenu = ({ regions, locales, currentLocale, dict }: SideMenuProps) => {
                           )}
                         />
                       </div>
-                      <Text className="flex justify-between txt-compact-small">
-                        © {new Date().getFullYear()} Synapse Store. {dict?.footer?.rights || "All rights reserved."}
+                      <Text className="flex justify-between txt-compact-small text-[#60716a] mt-2">
+                        © {new Date().getFullYear()} Synapse Store.
                       </Text>
                     </div>
                   </div>

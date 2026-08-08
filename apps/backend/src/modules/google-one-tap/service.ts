@@ -7,15 +7,10 @@ import {
   AuthenticationResponse,
   AuthIdentityProviderService
 } from '@medusajs/framework/types'
-import { createPublicKey, verify, type JsonWebKey } from 'crypto'
+import { OAuth2Client } from 'google-auth-library'
 
 type GoogleOneTapOptions = {
   clientId: string
-}
-
-type GoogleTokenHeader = {
-  alg?: string
-  kid?: string
 }
 
 type GoogleTokenPayload = {
@@ -28,36 +23,20 @@ type GoogleTokenPayload = {
   name?: string
   picture?: string
   sub?: string
-  aud?: string | string[]
 }
-
-type GoogleJwk = JsonWebKey & {
-  kid?: string
-}
-
-const GOOGLE_JWKS_URL = 'https://www.googleapis.com/oauth2/v3/certs'
-const GOOGLE_ISSUERS = new Set([
-  'accounts.google.com',
-  'https://accounts.google.com'
-])
-const JWKS_CACHE_TTL_MS = 60 * 60 * 1000
-
-let jwksCache: GoogleJwk[] | null = null
-let jwksCacheExpiresAt = 0
-
-const decodeBase64UrlJson = <T>(value: string): T =>
-  JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as T
 
 class GoogleOneTapAuthService extends AbstractAuthModuleProvider {
   static DISPLAY_NAME = 'Google One Tap'
   static identifier = 'google-one-tap'
 
   protected options_: GoogleOneTapOptions
+  private googleClient_: OAuth2Client
 
   constructor(_container: unknown, options: GoogleOneTapOptions) {
     // @ts-ignore Medusa injects the provider container at runtime.
     super(...arguments)
     this.options_ = options
+    this.googleClient_ = new OAuth2Client(options.clientId)
   }
 
   static validateOptions(options: GoogleOneTapOptions) {
@@ -119,7 +98,10 @@ class GoogleOneTapAuthService extends AbstractAuthModuleProvider {
     const entityId = profile.sub
 
     if (!entityId) {
-      throw new Error('Google did not provide an account identifier.')
+      throw new MedusaError(
+        MedusaError.Types.UNAUTHORIZED,
+        'Google did not provide an account identifier.'
+      )
     }
 
     const userMetadata = {
@@ -152,87 +134,39 @@ class GoogleOneTapAuthService extends AbstractAuthModuleProvider {
   private async verifyCredential(
     credential: string
   ): Promise<GoogleTokenPayload> {
-    const [encodedHeader, encodedPayload, encodedSignature, ...rest] =
-      credential.split('.')
+    try {
+      const ticket = await this.googleClient_.verifyIdToken({
+        idToken: credential,
+        audience: this.options_.clientId
+      })
+      const payload = ticket.getPayload()
 
-    if (
-      !encodedHeader ||
-      !encodedPayload ||
-      !encodedSignature ||
-      rest.length > 0
-    ) {
-      throw new Error('Google credential has an invalid format.')
-    }
-
-    const header = decodeBase64UrlJson<GoogleTokenHeader>(encodedHeader)
-    const payload = decodeBase64UrlJson<GoogleTokenPayload>(encodedPayload)
-
-    if (header.alg !== 'RS256' || !header.kid) {
-      throw new Error('Google credential uses an unsupported signing key.')
-    }
-
-    const key = await this.getGoogleSigningKey(header.kid)
-    const signatureIsValid = verify(
-      'RSA-SHA256',
-      Buffer.from(`${encodedHeader}.${encodedPayload}`),
-      createPublicKey({ key: key as JsonWebKey, format: 'jwk' }),
-      Buffer.from(encodedSignature, 'base64url')
-    )
-
-    if (!signatureIsValid) {
-      throw new Error('Google credential signature is invalid.')
-    }
-
-    const audience = Array.isArray(payload.aud) ? payload.aud : [payload.aud]
-
-    if (!audience.includes(this.options_.clientId)) {
-      throw new Error('Google credential was issued for another application.')
-    }
-
-    if (!payload.iss || !GOOGLE_ISSUERS.has(payload.iss)) {
-      throw new Error('Google credential has an invalid issuer.')
-    }
-
-    if (!payload.exp || payload.exp * 1000 <= Date.now()) {
-      throw new Error('Google credential has expired.')
-    }
-
-    if (!payload.sub || !payload.email || payload.email_verified !== true) {
-      throw new Error('Google did not provide a verified account identity.')
-    }
-
-    return payload
-  }
-
-  private async getGoogleSigningKey(kid: string): Promise<GoogleJwk> {
-    const now = Date.now()
-
-    if (!jwksCache || jwksCacheExpiresAt <= now) {
-      const response = await fetch(GOOGLE_JWKS_URL)
-
-      if (!response.ok) {
-        throw new Error('Google signing keys are currently unavailable.')
+      if (!payload?.sub || !payload.email || payload.email_verified !== true) {
+        throw new MedusaError(
+          MedusaError.Types.UNAUTHORIZED,
+          'Google did not provide a verified account identity.'
+        )
       }
 
-      const body = (await response.json()) as { keys?: GoogleJwk[] }
-
-      if (!body.keys?.length) {
-        throw new Error('Google signing keys are currently unavailable.')
+      return {
+        email: payload.email,
+        email_verified: payload.email_verified,
+        family_name: payload.family_name,
+        given_name: payload.given_name,
+        name: payload.name,
+        picture: payload.picture,
+        sub: payload.sub
+      }
+    } catch (error) {
+      if (error instanceof MedusaError) {
+        throw error
       }
 
-      jwksCache = body.keys
-      jwksCacheExpiresAt = now + JWKS_CACHE_TTL_MS
+      throw new MedusaError(
+        MedusaError.Types.UNAUTHORIZED,
+        'Google credential could not be verified.'
+      )
     }
-
-    const key = jwksCache.find((candidate) => candidate.kid === kid)
-
-    if (!key) {
-      jwksCache = null
-      jwksCacheExpiresAt = 0
-      throw new Error('Google signing key could not be found.')
-    }
-
-    return key
   }
 }
 
