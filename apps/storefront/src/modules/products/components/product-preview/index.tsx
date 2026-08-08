@@ -28,22 +28,22 @@ export default async function ProductPreview({
   })
 
   return (
-    <LocalizedClientLink href={`/products/${product.handle}`} className="group h-full flex">
-      <div data-testid="product-wrapper" className="flex flex-col w-full bg-white border border-ui-border-base rounded-large overflow-hidden transition-shadow duration-200 group-hover:shadow-elevation-card-hover group-hover:border-transparent">
-        <div className="flex-grow">
+    <LocalizedClientLink href={`/products/${product.handle}`} className="group flex h-full">
+      <div data-testid="product-wrapper" className="flex w-full flex-col overflow-hidden rounded-large border border-[color:var(--line)] bg-white transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_18px_44px_rgba(17,49,39,0.12)]">
+        <div className="flex-grow bg-[#eef3f0]">
           <Thumbnail
             thumbnail={product.thumbnail}
             images={product.images}
             size="full"
             isFeatured={isFeatured}
-            className="rounded-none shadow-none border-b border-ui-border-base group-hover:shadow-none"
+            className="rounded-none border-0 shadow-none group-hover:shadow-none"
           />
         </div>
-        <div className="flex flex-col gap-2 p-4 pt-3 bg-white">
-          <Text className="text-ui-fg-base font-semibold truncate" data-testid="product-title" title={product.title}>
+        <div className="flex flex-col gap-2 p-5 pt-4">
+          <Text className="truncate text-base font-semibold tracking-[-0.02em] text-[#12231d]" data-testid="product-title" title={product.title}>
             {product.title}
           </Text>
-          <div className="flex items-center gap-x-2 text-ui-fg-interactive font-medium">
+          <div className="flex items-center gap-x-2 font-semibold text-[#174b3d]">
             {cheapestPrice && <PreviewPrice price={cheapestPrice} />}
           </div>
         </div>

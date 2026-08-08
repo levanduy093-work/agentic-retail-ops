@@ -137,7 +137,7 @@ export default function ProductActions({
 
   return (
     <>
-      <div className="flex flex-col gap-y-2" ref={actionsRef}>
+      <div className="surface-card flex flex-col gap-y-4 p-5" ref={actionsRef}>
         <div>
           {(product.variants?.length ?? 0) > 1 && (
             <div className="flex flex-col gap-y-4">
@@ -172,7 +172,7 @@ export default function ProductActions({
             !isValidVariant
           }
           variant="primary"
-          className="w-full h-10"
+          className="h-12 w-full"
           isLoading={isAdding}
           data-testid="add-product-button"
         >

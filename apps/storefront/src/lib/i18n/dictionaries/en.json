@@ -1,0 +1,22 @@
+{
+  "nav": {
+    "home": "Home",
+    "store": "Store",
+    "account": "Account",
+    "cart": "Cart"
+  },
+  "hero": {
+    "title": "Ecommerce Starter Template",
+    "subtitle": "Powered by Synapse and Next.js",
+    "github": "View on GitHub"
+  },
+  "store": {
+    "title": "Our Collection",
+    "subtitle": "Discover our premium selection of carefully curated products designed for modern living."
+  },
+  "footer": {
+    "categories": "Categories",
+    "collections": "Collections",
+    "rights": "All rights reserved."
+  }
+}

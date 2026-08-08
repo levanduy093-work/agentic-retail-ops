@@ -6,59 +6,43 @@ import { listRegions } from "@lib/data/regions"
 import { StoreRegion } from "@medusajs/types"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 import CartButton from "@modules/layout/components/cart-button"
+import CatalogSearch from "@modules/layout/components/catalog-search"
 import SideMenu from "@modules/layout/components/side-menu"
+import { getDictionary } from "@lib/i18n"
 
 export default async function Nav() {
-  const [regions, locales, currentLocale] = await Promise.all([
+  const [regions, locales, currentLocale, dict] = await Promise.all([
     listRegions().then((regions: StoreRegion[]) => regions),
     listLocales(),
     getLocale(),
+    getDictionary(),
   ])
 
   return (
-    <div className="sticky top-0 inset-x-0 z-50 group">
-      <header className="relative h-16 mx-auto duration-200 bg-white/70 backdrop-blur-md border-b border-ui-border-base/50">
-        <nav className="content-container txt-xsmall-plus text-ui-fg-subtle flex items-center justify-between w-full h-full text-small-regular">
-          <div className="flex-1 basis-0 h-full flex items-center gap-x-6">
+    <div className="sticky top-0 inset-x-0 z-50 px-3 pt-3 small:px-6 small:pt-5">
+      <header className="liquid-glass-web-approx relative mx-auto h-[68px] max-w-[1376px] rounded-[22px]">
+        <nav className="flex h-full items-center gap-4 px-4 small:px-6 text-small-regular text-[#315248]">
+          <div className="flex min-w-fit items-center gap-x-5">
             <div className="block small:hidden h-full">
               <SideMenu regions={regions} locales={locales} currentLocale={currentLocale} />
             </div>
-            <div className="hidden small:flex items-center gap-x-6 h-full font-medium">
-              <LocalizedClientLink
-                href="/"
-                className="hover:text-ui-fg-base transition-colors duration-200"
-                data-testid="nav-home-link"
-              >
-                Home
-              </LocalizedClientLink>
-              <LocalizedClientLink
-                href="/store"
-                className="hover:text-ui-fg-base transition-colors duration-200"
-                data-testid="nav-store-link-left"
-              >
-                Store
-              </LocalizedClientLink>
-            </div>
-          </div>
-
-          <div className="flex items-center h-full">
             <LocalizedClientLink
               href="/"
-              className="text-xl font-bold tracking-tight hover:text-ui-fg-base uppercase transition-colors duration-200"
+              className="relative z-[1] text-lg font-bold tracking-[-0.04em] text-[#174b3d] transition-colors hover:text-[#103a2f] small:text-xl"
               data-testid="nav-store-link"
             >
               Synapse Store
             </LocalizedClientLink>
           </div>
-
-          <div className="flex items-center gap-x-6 h-full flex-1 basis-0 justify-end">
-            <div className="hidden small:flex items-center gap-x-6 h-full font-medium">
+          <CatalogSearch />
+          <div className="ml-auto flex items-center gap-x-3 small:gap-x-5">
+            <div className="hidden small:flex items-center font-medium">
               <LocalizedClientLink
-                className="hover:text-ui-fg-base transition-colors duration-200"
+                className="relative z-[1] hover:text-[#103a2f] transition-colors duration-200"
                 href="/account"
                 data-testid="nav-account-link"
               >
-                Account
+                {dict.nav.account}
               </LocalizedClientLink>
             </div>
             <Suspense
@@ -68,11 +52,11 @@ export default async function Nav() {
                   href="/cart"
                   data-testid="nav-cart-link"
                 >
-                  Cart (0)
+                  {dict.nav.cart} (0)
                 </LocalizedClientLink>
               }
             >
-              <div className="font-medium">
+              <div className="relative z-[1] font-medium">
                 <CartButton />
               </div>
             </Suspense>

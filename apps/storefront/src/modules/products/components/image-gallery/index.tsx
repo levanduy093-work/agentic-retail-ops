@@ -8,13 +8,13 @@ type ImageGalleryProps = {
 
 const ImageGallery = ({ images }: ImageGalleryProps) => {
   return (
-    <div className="flex items-start relative">
-      <div className="flex flex-col flex-1 small:mx-16 gap-y-4">
+    <div className="relative">
+      <div className="grid grid-cols-1 gap-4 xsmall:grid-cols-2">
         {images.map((image, index) => {
           return (
             <Container
               key={image.id}
-              className="relative aspect-[29/34] w-full overflow-hidden bg-ui-bg-subtle"
+              className="relative aspect-[4/5] w-full overflow-hidden rounded-large border border-[color:var(--line)] bg-[#eef3f0] p-2"
               id={image.id}
             >
               {!!image.url && (
@@ -26,7 +26,7 @@ const ImageGallery = ({ images }: ImageGalleryProps) => {
                   fill
                   sizes="(max-width: 576px) 280px, (max-width: 768px) 360px, (max-width: 992px) 480px, 800px"
                   style={{
-                    objectFit: "cover",
+                    objectFit: "contain",
                   }}
                 />
               )}

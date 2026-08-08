@@ -1,0 +1,22 @@
+{
+  "nav": {
+    "home": "Trang chủ",
+    "store": "Cửa hàng",
+    "account": "Tài khoản",
+    "cart": "Giỏ hàng"
+  },
+  "hero": {
+    "title": "Mẫu Cửa Hàng Bán Lẻ",
+    "subtitle": "Cung cấp sức mạnh bởi Synapse và Next.js",
+    "github": "Xem trên GitHub"
+  },
+  "store": {
+    "title": "Bộ sưu tập",
+    "subtitle": "Khám phá các sản phẩm cao cấp được chúng tôi tuyển chọn kỹ lưỡng dành cho phong cách sống hiện đại."
+  },
+  "footer": {
+    "categories": "Danh mục",
+    "collections": "Bộ sưu tập",
+    "rights": "Mọi quyền được bảo lưu."
+  }
+}

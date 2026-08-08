@@ -4,21 +4,23 @@ import { Text, clx } from "@modules/common/components/ui";
 
 import LocalizedClientLink from "@modules/common/components/localized-client-link";
 import MedusaCTA from "@modules/layout/components/medusa-cta";
+import { getDictionary } from "@lib/i18n";
 
 export default async function Footer() {
+  const dict = await getDictionary();
   const { collections } = await listCollections({
     fields: "*products",
   });
   const productCategories = await listCategories();
 
   return (
-    <footer className="border-t border-ui-border-base w-full">
+    <footer className="mt-10 w-full border-t border-[color:var(--line)] bg-white/45">
       <div className="content-container flex flex-col w-full">
-        <div className="flex flex-col gap-y-6 xsmall:flex-row items-start justify-between py-40">
+        <div className="flex flex-col items-start justify-between gap-y-8 py-16 xsmall:flex-row small:py-24">
           <div>
             <LocalizedClientLink
               href="/"
-              className="txt-compact-xlarge-plus text-ui-fg-subtle hover:text-ui-fg-base uppercase"
+              className="text-xl font-bold tracking-[-0.04em] text-[#174b3d] hover:text-[#103a2f]"
             >
               Synapse Store
             </LocalizedClientLink>
@@ -27,7 +29,7 @@ export default async function Footer() {
             {productCategories && productCategories?.length > 0 && (
               <div className="flex flex-col gap-y-2">
                 <span className="txt-small-plus txt-ui-fg-base">
-                  Categories
+                  {dict.footer.categories}
                 </span>
                 <ul
                   className="grid grid-cols-1 gap-2"
@@ -85,7 +87,7 @@ export default async function Footer() {
             {collections && collections.length > 0 && (
               <div className="flex flex-col gap-y-2">
                 <span className="txt-small-plus txt-ui-fg-base">
-                  Collections
+                  {dict.footer.collections}
                 </span>
                 <ul
                   className={clx(
@@ -145,9 +147,9 @@ export default async function Footer() {
             </div>
           </div>
         </div>
-        <div className="flex w-full mb-16 justify-between text-ui-fg-muted">
+        <div className="mb-8 flex w-full justify-between border-t border-[color:var(--line)] pt-6 text-ui-fg-muted">
           <Text className="txt-compact-small">
-            © {new Date().getFullYear()} Synapse Store. All rights reserved.
+            © {new Date().getFullYear()} Synapse Store. {dict.footer.rights}
           </Text>
           <MedusaCTA />
         </div>

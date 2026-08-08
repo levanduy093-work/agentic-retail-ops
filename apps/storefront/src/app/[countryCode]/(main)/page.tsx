@@ -4,6 +4,7 @@ import FeaturedProducts from "@modules/home/components/featured-products"
 import Hero from "@modules/home/components/hero"
 import { listCollections } from "@lib/data/collections"
 import { getRegion } from "@lib/data/regions"
+import { listProducts } from "@lib/data/products"
 
 export const metadata: Metadata = {
   title: "Medusa Next.js Starter Template",
@@ -20,9 +21,17 @@ export default async function Home(props: {
 
   const region = await getRegion(countryCode)
 
-  const { collections } = await listCollections({
+  const [{ collections }, heroProducts] = await Promise.all([
+    listCollections({
     fields: "id, handle, title",
-  })
+    }),
+    region
+      ? listProducts({
+          regionId: region.id,
+          queryParams: { limit: 1, fields: "id,handle,title,thumbnail,images" },
+        })
+      : Promise.resolve({ response: { products: [], count: 0 }, nextPage: null }),
+  ])
 
   if (!collections || !region) {
     return null
@@ -30,8 +39,8 @@ export default async function Home(props: {
 
   return (
     <>
-      <Hero />
-      <div className="py-12">
+      <Hero product={heroProducts.response.products[0]} />
+      <div className="py-8 small:py-14">
         <ul className="flex flex-col gap-x-6">
           <FeaturedProducts collections={collections} region={region} />
         </ul>
