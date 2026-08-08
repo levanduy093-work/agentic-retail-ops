@@ -28,19 +28,22 @@ export default async function ProductPreview({
   })
 
   return (
-    <LocalizedClientLink href={`/products/${product.handle}`} className="group">
-      <div data-testid="product-wrapper">
-        <Thumbnail
-          thumbnail={product.thumbnail}
-          images={product.images}
-          size="full"
-          isFeatured={isFeatured}
-        />
-        <div className="flex txt-compact-medium mt-4 justify-between">
-          <Text className="text-ui-fg-subtle" data-testid="product-title">
+    <LocalizedClientLink href={`/products/${product.handle}`} className="group h-full flex">
+      <div data-testid="product-wrapper" className="flex flex-col w-full bg-white border border-ui-border-base rounded-large overflow-hidden transition-shadow duration-200 group-hover:shadow-elevation-card-hover group-hover:border-transparent">
+        <div className="flex-grow">
+          <Thumbnail
+            thumbnail={product.thumbnail}
+            images={product.images}
+            size="full"
+            isFeatured={isFeatured}
+            className="rounded-none shadow-none border-b border-ui-border-base group-hover:shadow-none"
+          />
+        </div>
+        <div className="flex flex-col gap-2 p-4 pt-3 bg-white">
+          <Text className="text-ui-fg-base font-semibold truncate" data-testid="product-title" title={product.title}>
             {product.title}
           </Text>
-          <div className="flex items-center gap-x-2">
+          <div className="flex items-center gap-x-2 text-ui-fg-interactive font-medium">
             {cheapestPrice && <PreviewPrice price={cheapestPrice} />}
           </div>
         </div>

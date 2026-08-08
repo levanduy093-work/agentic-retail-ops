@@ -15,7 +15,7 @@ const Hero = () => {
             level="h2"
             className="text-3xl leading-10 text-ui-fg-subtle font-normal"
           >
-            Powered by Medusa and Next.js
+            Powered by Synapse and Next.js
           </Heading>
         </span>
         <a href="https://github.com/medusajs/dtc-starter" target="_blank">
