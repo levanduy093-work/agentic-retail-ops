@@ -247,6 +247,8 @@ export async function confirmEmailVerification(
   }
 }
 
+import { getLocale } from "./locale-actions"
+
 export async function signout(countryCode: string) {
   await sdk.auth.logout()
 
@@ -260,7 +262,8 @@ export async function signout(countryCode: string) {
   const cartCacheTag = await getCacheTag("carts")
   revalidateTag(cartCacheTag)
 
-  redirect(`/${countryCode}/account`)
+  const locale = (await getLocale()) || "en"
+  redirect(`/${locale}/${countryCode}/account`)
 }
 
 export async function transferCart() {

@@ -1,0 +1,15 @@
+
+> @dtc/storefront@1.0.3 dev /Users/levanduy/agentic-retail-ops/apps/storefront
+> next dev --turbopack -p 8000
+
+ ⨯ Failed to start server
+Error: listen EADDRINUSE: address already in use :::8000
+    at <unknown> (Error: listen EADDRINUSE: address already in use :::8000)
+    at new Promise (<anonymous>) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '::',
+  port: 8000
+}
+[?25h

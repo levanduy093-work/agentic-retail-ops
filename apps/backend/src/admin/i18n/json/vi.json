@@ -1,0 +1,250 @@
+{
+  "general": {
+    "add": "Thêm",
+    "apply": "Áp dụng",
+    "cancel": "Hủy",
+    "close": "Đóng",
+    "create": "Tạo mới",
+    "delete": "Xóa",
+    "edit": "Chỉnh sửa",
+    "export": "Xuất",
+    "import": "Nhập",
+    "save": "Lưu",
+    "search": "Tìm kiếm",
+    "select": "Chọn",
+    "selected": "Đã chọn",
+    "next": "Tiếp",
+    "prev": "Trước",
+    "results": "kết quả",
+    "pages": "trang",
+    "of": "trên",
+    "active": "Đang hoạt động",
+    "inactive": "Không hoạt động",
+    "enabled": "Đã bật",
+    "disabled": "Đã tắt",
+    "draft": "Bản nháp",
+    "published": "Đã xuất bản",
+    "details": "Chi tiết",
+    "status": "Trạng thái",
+    "success": "Thành công",
+    "warning": "Cảnh báo",
+    "error": "Lỗi",
+    "noRecordsFound": "Không tìm thấy dữ liệu",
+    "noResultsTitle": "Không có kết quả",
+    "noResultsMessage": "Hãy thử thay đổi bộ lọc hoặc từ khóa tìm kiếm.",
+    "noSearchResults": "Không có kết quả tìm kiếm",
+    "areYouSure": "Bạn có chắc chắn không?",
+    "unsavedChangesTitle": "Bạn có muốn rời khỏi biểu mẫu?",
+    "unsavedChangesDescription": "Các thay đổi chưa lưu sẽ bị mất.",
+    "items_one": "{{count}} mục",
+    "items_other": "{{count}} mục"
+  },
+  "products": {
+    "domain": "Sản phẩm",
+    "list": {
+      "noRecordsMessage": "Tạo sản phẩm đầu tiên để bắt đầu bán hàng."
+    },
+    "create": {
+      "title": "Tạo sản phẩm",
+      "description": "Tạo một sản phẩm mới.",
+      "tabs": {
+        "details": "Chi tiết",
+        "organize": "Sắp xếp",
+        "variants": "Biến thể",
+        "inventory": "Tồn kho"
+      },
+      "successToast": "Đã tạo sản phẩm {{title}}."
+    },
+    "edit": {
+      "header": "Chỉnh sửa sản phẩm",
+      "description": "Cập nhật thông tin sản phẩm.",
+      "successToast": "Đã cập nhật sản phẩm {{title}}."
+    }
+  },
+  "collections": {
+    "domain": "Bộ sưu tập",
+    "subtitle": "Nhóm và quản lý sản phẩm theo bộ sưu tập.",
+    "createCollection": "Tạo bộ sưu tập",
+    "createCollectionHint": "Tạo bộ sưu tập mới để tổ chức sản phẩm.",
+    "editCollection": "Chỉnh sửa bộ sưu tập",
+    "createSuccess": "Đã tạo bộ sưu tập.",
+    "deleteWarning": "Bạn sắp xóa bộ sưu tập {{title}}. Thao tác này không thể hoàn tác."
+  },
+  "categories": {
+    "domain": "Danh mục",
+    "subtitle": "Sắp xếp sản phẩm theo danh mục và quản lý thứ tự, phân cấp.",
+    "create": {
+      "header": "Tạo danh mục",
+      "hint": "Tạo danh mục mới để tổ chức sản phẩm.",
+      "tabs": {
+        "details": "Chi tiết",
+        "organize": "Sắp xếp thứ tự"
+      },
+      "successToast": "Đã tạo danh mục {{name}}."
+    },
+    "edit": {
+      "header": "Chỉnh sửa danh mục",
+      "description": "Cập nhật thông tin danh mục.",
+      "successToast": "Đã cập nhật danh mục."
+    },
+    "organize": {
+      "header": "Sắp xếp",
+      "action": "Chỉnh sửa thứ tự"
+    },
+    "fields": {
+      "visibility": {
+        "label": "Hiển thị",
+        "internal": "Nội bộ",
+        "public": "Công khai"
+      },
+      "status": {
+        "label": "Trạng thái",
+        "active": "Đang hoạt động",
+        "inactive": "Không hoạt động"
+      },
+      "path": {
+        "label": "Đường dẫn"
+      },
+      "children": {
+        "label": "Danh mục con"
+      }
+    }
+  },
+  "returnReasons": {
+    "domain": "Lý do trả hàng",
+    "subtitle": "Quản lý lý do cho các mặt hàng được trả lại.",
+    "calloutHint": "Quản lý các lý do dùng để phân loại yêu cầu trả hàng.",
+    "editReason": "Chỉnh sửa lý do trả hàng",
+    "create": {
+      "header": "Thêm lý do trả hàng",
+      "subtitle": "Khai báo những lý do trả hàng phổ biến.",
+      "hint": "Tạo lý do mới để phân loại yêu cầu trả hàng.",
+      "successToast": "Đã tạo lý do trả hàng {{label}}."
+    },
+    "edit": {
+      "header": "Chỉnh sửa lý do trả hàng",
+      "subtitle": "Chỉnh sửa giá trị của lý do trả hàng.",
+      "successToast": "Đã cập nhật lý do trả hàng {{label}}."
+    },
+    "delete": {
+      "confirmation": "Bạn sắp xóa lý do trả hàng \"{{label}}\". Thao tác này không thể hoàn tác.",
+      "successToast": "Đã xóa lý do trả hàng \"{{label}}\"."
+    },
+    "fields": {
+      "value": {
+        "label": "Giá trị",
+        "placeholder": "sai_kích_cỡ",
+        "tooltip": "Giá trị phải là mã định danh duy nhất cho lý do trả hàng."
+      },
+      "label": {
+        "label": "Nhãn",
+        "placeholder": "Sai kích cỡ"
+      },
+      "description": {
+        "label": "Mô tả",
+        "placeholder": "Khách hàng nhận sai kích cỡ"
+      }
+    }
+  },
+  "refundReasons": {
+    "domain": "Lý do hoàn tiền",
+    "subtitle": "Quản lý lý do thực hiện hoàn tiền.",
+    "calloutHint": "Quản lý các lý do dùng để phân loại yêu cầu hoàn tiền.",
+    "editReason": "Chỉnh sửa lý do hoàn tiền",
+    "create": {
+      "header": "Thêm lý do hoàn tiền",
+      "subtitle": "Khai báo những lý do hoàn tiền phổ biến.",
+      "hint": "Tạo lý do mới để phân loại yêu cầu hoàn tiền.",
+      "successToast": "Đã tạo lý do hoàn tiền {{label}}."
+    },
+    "edit": {
+      "header": "Chỉnh sửa lý do hoàn tiền",
+      "subtitle": "Chỉnh sửa giá trị của lý do hoàn tiền.",
+      "successToast": "Đã cập nhật lý do hoàn tiền {{label}}."
+    },
+    "delete": {
+      "confirmation": "Bạn sắp xóa lý do hoàn tiền \"{{label}}\". Thao tác này không thể hoàn tác.",
+      "successToast": "Đã xóa lý do hoàn tiền."
+    },
+    "fields": {
+      "label": {
+        "label": "Nhãn",
+        "placeholder": "Hỗ trợ thiện chí"
+      },
+      "code": {
+        "label": "Mã",
+        "placeholder": "ho_tro_thien_chi"
+      },
+      "description": {
+        "label": "Mô tả",
+        "placeholder": "Khách hàng có trải nghiệm mua sắm chưa tốt"
+      }
+    }
+  },
+  "taxRegions": {
+    "domain": "Khu vực thuế",
+    "subtitle": "Quản lý các khu vực và thuế suất áp dụng.",
+    "create": "Tạo khu vực thuế",
+    "edit": "Chỉnh sửa khu vực thuế"
+  },
+  "locations": {
+    "domain": "Vị trí",
+    "editLocation": "Chỉnh sửa vị trí",
+    "addSalesChannels": "Thêm kênh bán hàng",
+    "noLocationsFound": "Không tìm thấy vị trí"
+  },
+  "productTypes": {
+    "domain": "Loại sản phẩm"
+  },
+  "productTags": {
+    "domain": "Thẻ sản phẩm"
+  },
+  "propertyLabels": {
+    "domain": "Nhãn thuộc tính"
+  },
+  "salesChannels": {
+    "domain": "Kênh bán hàng"
+  },
+  "orders": {
+    "domain": "Đơn hàng",
+    "create": "Tạo đơn hàng",
+    "order": "Đơn hàng",
+    "customer": "Khách hàng",
+    "payment": "Thanh toán",
+    "fulfillment": "Hoàn tất đơn",
+    "shipping": "Vận chuyển"
+  },
+  "inventory": {
+    "domain": "Tồn kho",
+    "subtitle": "Quản lý các mặt hàng trong kho.",
+    "available": "Có sẵn",
+    "reserved": "Đã giữ chỗ",
+    "locationLevels": "Địa điểm",
+    "manageLocations": "Quản lý địa điểm"
+  },
+  "customers": {
+    "domain": "Khách hàng",
+    "create": "Tạo khách hàng"
+  },
+  "promotions": {
+    "domain": "Khuyến mãi",
+    "createPromotion": "Tạo khuyến mãi"
+  },
+  "priceLists": {
+    "domain": "Bảng giá",
+    "createPriceList": "Tạo bảng giá"
+  },
+  "profile": {
+    "domain": "Hồ sơ",
+    "fields": {
+      "languageLabel": "Ngôn ngữ"
+    },
+    "edit": {
+      "languageHint": "Ngôn ngữ sử dụng trong trang quản trị. Việc này không đổi ngôn ngữ cửa hàng.",
+      "languagePlaceholder": "Chọn ngôn ngữ"
+    }
+  },
+  "layout": {
+    "customizeLayout": "Tùy chỉnh bố cục"
+  }
+}

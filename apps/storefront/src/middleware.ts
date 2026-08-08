@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from "next/server"
 const BACKEND_URL = process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL
 const PUBLISHABLE_API_KEY = process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY
 const DEFAULT_REGION = process.env.NEXT_PUBLIC_DEFAULT_REGION || "dk"
+const SUPPORTED_LOCALES = ["en", "vi"]
+const DEFAULT_LOCALE = "en"
 
 const regionMapCache = {
   regionMap: new Map<string, HttpTypes.StoreRegion>(),
@@ -72,7 +74,16 @@ async function getCountryCode(
 ) {
   let countryCode
 
-  const urlCountryCode = request.nextUrl.pathname.split("/")[1]?.toLowerCase()
+  const pathSegments = request.nextUrl.pathname.split("/").filter(Boolean)
+  const firstSegment = pathSegments[0]?.toLowerCase()
+
+  // Determine if the first segment is a locale
+  const isFirstSegmentLocale = SUPPORTED_LOCALES.includes(firstSegment)
+
+  // If first segment is locale, country code might be the second segment
+  const urlCountryCode = isFirstSegmentLocale
+    ? pathSegments[1]?.toLowerCase()
+    : firstSegment
 
   // Cloudflare Workers provides country via request.cf.country
   const cloudflareCountryCode = (request as { cf?: { country?: string } }).cf?.country?.toLowerCase()
@@ -97,6 +108,23 @@ async function getCountryCode(
   return countryCode
 }
 
+function getLocale(request: NextRequest): string {
+  const pathSegments = request.nextUrl.pathname.split("/").filter(Boolean)
+  const firstSegment = pathSegments[0]?.toLowerCase()
+
+  if (firstSegment && SUPPORTED_LOCALES.includes(firstSegment)) {
+    return firstSegment
+  }
+
+  // Fallback to cookie
+  const localeCookie = request.cookies.get("_medusa_locale")?.value
+  if (localeCookie && SUPPORTED_LOCALES.includes(localeCookie)) {
+    return localeCookie
+  }
+
+  return DEFAULT_LOCALE
+}
+
 /**
  * Middleware to handle region selection and onboarding status.
  */
@@ -110,13 +138,18 @@ export async function middleware(request: NextRequest) {
 
   const regionMap = await getRegionMap(cacheId)
   const countryCode = await getCountryCode(request, regionMap)
+  const locale = getLocale(request)
 
   // if the country code is available, use it, otherwise use the default region
   const country = countryCode || DEFAULT_REGION
-  const firstPathSegment = request.nextUrl.pathname.split("/")[1]?.toLowerCase()
-  const urlHasCountry = firstPathSegment === country.toLowerCase()
 
-  if (urlHasCountry) {
+  const pathSegments = request.nextUrl.pathname.split("/").filter(Boolean)
+  const urlHasLocale = pathSegments[0]?.toLowerCase() === locale
+  const urlHasCountry = urlHasLocale
+    ? pathSegments[1]?.toLowerCase() === country.toLowerCase()
+    : pathSegments[0]?.toLowerCase() === country.toLowerCase()
+
+  if (urlHasLocale && urlHasCountry) {
     if (!cacheIdCookie) {
       const response = NextResponse.next()
       response.cookies.set("_medusa_cache_id", cacheId, {
@@ -127,15 +160,27 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // if the url doesn't have the country, redirect to it
-  const redirectPath =
-    request.nextUrl.pathname === "/" ? "" : request.nextUrl.pathname
+  // if the url doesn't have the locale or country, redirect to it
+  let redirectPath = request.nextUrl.pathname
+
+  // Strip existing locale/country if they are incorrect
+  if (pathSegments.length > 0) {
+    if (SUPPORTED_LOCALES.includes(pathSegments[0].toLowerCase())) {
+      pathSegments.shift()
+    }
+  }
+  // Now check if the next segment is a valid country, if so strip it
+  if (pathSegments.length > 0 && regionMap.has(pathSegments[0].toLowerCase())) {
+    pathSegments.shift()
+  }
+
+  redirectPath = `/${pathSegments.join("/")}`
+
   const queryString = request.nextUrl.search || ""
-  const redirectUrl = `${request.nextUrl.origin}/${country}${redirectPath}${queryString}`
+  const redirectUrl = `${request.nextUrl.origin}/${locale}/${country}${redirectPath === "/" ? "" : redirectPath}${queryString}`
 
   return NextResponse.redirect(redirectUrl, 307)
 }
-
 export const config = {
   matcher: [
     "/((?!api|_next/static|_next/image|favicon.ico|images|assets|png|svg|jpg|jpeg|gif|webp).*)",

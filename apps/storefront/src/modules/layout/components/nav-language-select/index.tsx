@@ -1,7 +1,7 @@
 "use client"
 
 import { setLocaleCookie } from "@lib/data/locale-actions"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useTransition } from "react"
 
 const languages = [
@@ -17,15 +17,39 @@ export default function NavLanguageSelect({
   currentLocale,
 }: NavLanguageSelectProps) {
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
-  const activeLocale = currentLocale === "vi" ? "vi" : "en"
+  const pathLocale = pathname.split("/").filter(Boolean)[0]
+  const activeLocale =
+    pathLocale === "vi" || pathLocale === "en"
+      ? pathLocale
+      : currentLocale === "vi"
+      ? "vi"
+      : "en"
 
   const selectLanguage = (locale: "en" | "vi") => {
     if (locale === activeLocale) return
 
-    startTransition(async () => {
-      await setLocaleCookie(locale)
-      router.refresh()
+    startTransition(() => {
+      const pathSegments = pathname.split("/").filter(Boolean)
+
+      if (pathSegments[0] === "en" || pathSegments[0] === "vi") {
+        pathSegments[0] = locale
+      } else {
+        pathSegments.unshift(locale)
+      }
+
+      const queryString = searchParams.toString()
+      const href = `/${pathSegments.join("/")}${
+        queryString ? `?${queryString}` : ""
+      }`
+
+      // The URL is the canonical locale state. Replacing it prevents language
+      // changes from building a history chain that appears to toggle back and forth.
+      router.replace(href)
+
+      void setLocaleCookie(locale)
     })
   }
 

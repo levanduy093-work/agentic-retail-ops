@@ -19,11 +19,11 @@ export default async function Nav() {
 
   return (
     <div className="sticky top-0 inset-x-0 z-50 px-3 pt-3 small:px-6 small:pt-5">
-      <header className="liquid-glass-web-approx relative mx-auto h-[68px] max-w-[1376px] rounded-[22px]">
+      <header className="liquid-glass-web-approx relative mx-auto h-[68px] max-w-[1376px] rounded-[22px] !overflow-visible">
         <nav className="flex h-full items-center gap-2 px-3 small:gap-4 small:px-6 text-small-regular text-[#315248]">
           <div className="flex shrink-0 items-center gap-x-2 small:gap-x-5">
             <div className="block small:hidden h-full">
-              <SideMenu regions={regions} locales={null} currentLocale={null} />
+              <SideMenu regions={regions} locales={null} currentLocale={null} dict={dict} />
             </div>
             <LocalizedClientLink
               href="/"
@@ -33,7 +33,7 @@ export default async function Nav() {
               Synapse Store
             </LocalizedClientLink>
           </div>
-          <CatalogSearch />
+          <CatalogSearch dict={dict} />
           <div className="ml-auto flex shrink-0 items-center gap-x-2 small:gap-x-5">
             <div className="hidden small:flex items-center font-medium">
               <LocalizedClientLink
@@ -56,7 +56,7 @@ export default async function Nav() {
                 </LocalizedClientLink>
               }
             >
-              <div className="relative z-[1] font-medium">
+              <div className="relative z-[1] font-medium h-full flex items-center">
                 <CartButton />
               </div>
             </Suspense>

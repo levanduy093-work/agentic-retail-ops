@@ -3,11 +3,15 @@
     "home": "Trang chủ",
     "store": "Cửa hàng",
     "account": "Tài khoản",
-    "cart": "Giỏ hàng"
+    "cart": "Giỏ hàng",
+    "search": "Tìm kiếm danh mục"
   },
   "hero": {
-    "title": "Mẫu Cửa Hàng Bán Lẻ",
-    "subtitle": "Cung cấp sức mạnh bởi Synapse và Next.js",
+    "title": "Trang phục thường ngày, được chọn lọc kỹ càng.",
+    "subtitle": "Bộ sưu tập tuyển chọn",
+    "description": "Duyệt qua các sản phẩm mới nhất và mua sắm theo nhịp điệu của bạn.",
+    "view_product": "Xem sản phẩm nổi bật",
+    "browse_catalog": "Duyệt danh mục",
     "github": "Xem trên GitHub"
   },
   "store": {
@@ -18,5 +22,18 @@
     "categories": "Danh mục",
     "collections": "Bộ sưu tập",
     "rights": "Mọi quyền được bảo lưu."
+  },
+  "cart": {
+    "title": "Giỏ hàng",
+    "quantity": "Số lượng",
+    "remove": "Xóa",
+    "subtotal": "Tạm tính",
+    "subtotal_tax": "(chưa bao gồm thuế)",
+    "go_to_cart": "Đến giỏ hàng",
+    "empty": "Giỏ hàng của bạn đang trống.",
+    "explore": "Khám phá sản phẩm"
+  },
+  "collection": {
+    "view_all": "Xem tất cả"
   }
 }

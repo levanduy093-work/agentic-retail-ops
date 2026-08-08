@@ -3,11 +3,15 @@
     "home": "Home",
     "store": "Store",
     "account": "Account",
-    "cart": "Cart"
+    "cart": "Cart",
+    "search": "Search the catalog"
   },
   "hero": {
-    "title": "Ecommerce Starter Template",
-    "subtitle": "Powered by Synapse and Next.js",
+    "title": "Everyday pieces, thoughtfully chosen.",
+    "subtitle": "Curated collection",
+    "description": "Browse the latest products and build a cart at your own pace.",
+    "view_product": "View featured product",
+    "browse_catalog": "Browse catalog",
     "github": "View on GitHub"
   },
   "store": {
@@ -18,5 +22,18 @@
     "categories": "Categories",
     "collections": "Collections",
     "rights": "All rights reserved."
+  },
+  "cart": {
+    "title": "Cart",
+    "quantity": "Quantity",
+    "remove": "Remove",
+    "subtotal": "Subtotal",
+    "subtotal_tax": "(excl. taxes)",
+    "go_to_cart": "Go to cart",
+    "empty": "Your shopping bag is empty.",
+    "explore": "Explore products"
+  },
+  "collection": {
+    "view_all": "View all"
   }
 }

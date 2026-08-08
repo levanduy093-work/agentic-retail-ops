@@ -419,7 +419,8 @@ export async function placeOrder(cartId?: string) {
     revalidateTag(orderCacheTag)
 
     removeCartId()
-    redirect(`/${countryCode}/order/${cartRes?.order.id}/confirmed`)
+    const locale = (await getLocale()) || "en"
+    redirect(`/${locale}/${countryCode}/order/${cartRes?.order.id}/confirmed`)
   }
 
   return cartRes.cart
@@ -450,7 +451,8 @@ export async function updateRegion(countryCode: string, currentPath: string) {
   const productsCacheTag = await getCacheTag("products")
   revalidateTag(productsCacheTag)
 
-  redirect(`/${countryCode}${currentPath}`)
+  const locale = (await getLocale()) || "en"
+  redirect(`/${locale}/${countryCode}${currentPath}`)
 }
 
 export async function listCartOptions() {

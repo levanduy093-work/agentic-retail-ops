@@ -4,6 +4,7 @@ import FeaturedProducts from "@modules/home/components/featured-products"
 import Hero from "@modules/home/components/hero"
 import { listCollections } from "@lib/data/collections"
 import { getRegion } from "@lib/data/regions"
+import { getDictionary } from "@lib/i18n"
 import { listProducts } from "@lib/data/products"
 
 export const metadata: Metadata = {
@@ -20,6 +21,7 @@ export default async function Home(props: {
   const { countryCode } = params
 
   const region = await getRegion(countryCode)
+  const dict = await getDictionary()
 
   const [{ collections }, heroProducts] = await Promise.all([
     listCollections({
@@ -40,7 +42,7 @@ export default async function Home(props: {
 
   return (
     <>
-      <Hero product={heroProducts.response.products[0]} />
+      <Hero product={heroProducts.response.products[0]} dict={dict} />
       <div className="py-8 small:py-14">
         <ul className="flex flex-col gap-x-6">
           <FeaturedProducts collections={collections} region={region} />

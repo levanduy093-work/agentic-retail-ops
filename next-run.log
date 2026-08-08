@@ -1,0 +1,785 @@
+   ▲ Next.js 15.5.21
+   - Local:        http://localhost:8001
+   - Network:      http://127.0.2.2:8001
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1435ms
+ ✓ Compiled /middleware in 252ms (160 modules)
+ ○ Compiling /[locale]/[countryCode] ...
+Browserslist: browsers data (caniuse-lite) is 8 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+ ✓ Compiled /[locale]/[countryCode] in 2.9s (2697 modules)
+ ✓ Compiled in 217ms (921 modules)
+Initiating Medusa client with default headers:
+ {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Initiating Medusa client with default headers:
+ {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/regions
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/customers/me?fields=%2Aorders
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=3&offset=0
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/products?limit=1&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2Cimages
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/products?limit=4&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2C%2Avariants.calculated_price&collection_id=pcol_01KZFW1X41ZYZTYQHKRM0HN9D3
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 401
+
+Performing request to:
+ URL: http://localhost:9000/store/regions
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=6&offset=0
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/product-categories?fields=id%2Chandle%2Cname%2C%2Acategory_children%2C%2Aparent_category&limit=20
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Received response with status 200
+
+Image with src "https://medusa-public-images.s3.eu-west-1.amazonaws.com/sweatshirt-vintage-front.png" is using quality "50" which is not configured in images.qualities. This config will be required starting in Next.js 16.
+Read more: https://nextjs.org/docs/messages/next-image-unconfigured-qualities
+Image with src "https://medusa-public-images.s3.eu-west-1.amazonaws.com/shorts-vintage-front.png" is using quality "50" which is not configured in images.qualities. This config will be required starting in Next.js 16.
+Read more: https://nextjs.org/docs/messages/next-image-unconfigured-qualities
+Image with src "https://medusa-public-images.s3.eu-west-1.amazonaws.com/sweatpants-gray-front.png" is using quality "50" which is not configured in images.qualities. This config will be required starting in Next.js 16.
+Read more: https://nextjs.org/docs/messages/next-image-unconfigured-qualities
+Image with src "https://medusa-public-images.s3.eu-west-1.amazonaws.com/tee-black-front.png" is using quality "50" which is not configured in images.qualities. This config will be required starting in Next.js 16.
+Read more: https://nextjs.org/docs/messages/next-image-unconfigured-qualities
+Received response with status 200
+
+Received response with status 200
+
+ GET /vi/dk 200 in 3713ms
+ │ GET http://localhost:9000/store/regions 200 in 7ms (cache hit)
+ │ GET http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=3&offset=0 200 in 3ms (cache hit)
+ │ GET http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987 200 in 3ms (cache hit)
+ │ GET http://localhost:9000/store/products?limit=1&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2Cimages 200 in 2ms (cache hit)
+ │ GET http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987 200 in 0ms (cache hit)
+ │ GET http://localhost:9000/store/customers/me?fields=%2Aorders 401 in 23ms (cache skip)
+ │ │ Cache skipped reason: (cache-control: no-cache (hard refresh))
+ │ GET http://localhost:9000/store/regions 200 in 2ms (cache hit)
+ │ GET http://localhost:9000/store/products?limit=4&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2C%2Avariants.calculated_price&collection_id=pcol_01KZFW1X41ZYZTYQHKRM0HN9D3 200 in 72ms (cache hit)
+ │ GET http://localhost:9000/store/product-categories?fields=id%2Chandle%2Cname%2C%2Acategory_children%2C%2Aparent_category&limit=20 200 in 90ms (cache hit)
+ │ GET http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=6&offset=0 200 in 91ms (cache hit)
+ ✓ Compiled in 329ms (921 modules)
+ ✓ Compiled in 142ms (921 modules)
+ ✓ Compiled /[locale]/[countryCode] in 221ms (1776 modules)
+Initiating Medusa client with default headers:
+ {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/regions
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/customers/me?fields=%2Aorders
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=3&offset=0
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/products?limit=1&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2Cimages
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/products?limit=4&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2C%2Avariants.calculated_price&collection_id=pcol_01KZFW1X41ZYZTYQHKRM0HN9D3
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Received response with status 401
+
+Performing request to:
+ URL: http://localhost:9000/store/regions
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=6&offset=0
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/product-categories?fields=id%2Chandle%2Cname%2C%2Acategory_children%2C%2Aparent_category&limit=20
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Received response with status 200
+
+Received response with status 200
+
+Image with src "https://medusa-public-images.s3.eu-west-1.amazonaws.com/sweatshirt-vintage-front.png" is using quality "50" which is not configured in images.qualities. This config will be required starting in Next.js 16.
+Read more: https://nextjs.org/docs/messages/next-image-unconfigured-qualities
+Image with src "https://medusa-public-images.s3.eu-west-1.amazonaws.com/shorts-vintage-front.png" is using quality "50" which is not configured in images.qualities. This config will be required starting in Next.js 16.
+Read more: https://nextjs.org/docs/messages/next-image-unconfigured-qualities
+Image with src "https://medusa-public-images.s3.eu-west-1.amazonaws.com/sweatpants-gray-front.png" is using quality "50" which is not configured in images.qualities. This config will be required starting in Next.js 16.
+Read more: https://nextjs.org/docs/messages/next-image-unconfigured-qualities
+Image with src "https://medusa-public-images.s3.eu-west-1.amazonaws.com/tee-black-front.png" is using quality "50" which is not configured in images.qualities. This config will be required starting in Next.js 16.
+Read more: https://nextjs.org/docs/messages/next-image-unconfigured-qualities
+ GET /en/dk 200 in 570ms
+ │ GET http://localhost:9000/store/regions 200 in 2ms (cache hit)
+ │ GET http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=3&offset=0 200 in 1ms (cache hit)
+ │ GET http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987 200 in 1ms (cache hit)
+ │ GET http://localhost:9000/store/products?limit=1&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2Cimages 200 in 0ms (cache hit)
+ │ GET http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987 200 in 0ms (cache hit)
+ │ GET http://localhost:9000/store/products?limit=4&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2C%2Avariants.calculated_price&collection_id=pcol_01KZFW1X41ZYZTYQHKRM0HN9D3 200 in 0ms (cache hit)
+ │ GET http://localhost:9000/store/customers/me?fields=%2Aorders 401 in 47ms (cache skip)
+ │ │ Cache skipped reason: (cache-control: no-cache (hard refresh))
+ │ GET http://localhost:9000/store/regions 200 in 1ms (cache hit)
+ │ GET http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=6&offset=0 200 in 1ms (cache hit)
+ │ GET http://localhost:9000/store/product-categories?fields=id%2Chandle%2Cname%2C%2Acategory_children%2C%2Aparent_category&limit=20 200 in 1ms (cache hit)
+Performing request to:
+ URL: http://localhost:9000/store/customers/me?fields=%2Aorders
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=3&offset=0
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/products?limit=1&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2Cimages
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/products?limit=4&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2C%2Avariants.calculated_price&collection_id=pcol_01KZFW1X41ZYZTYQHKRM0HN9D3
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Received response with status 401
+
+Performing request to:
+ URL: http://localhost:9000/store/regions
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=6&offset=0
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/product-categories?fields=id%2Chandle%2Cname%2C%2Acategory_children%2C%2Aparent_category&limit=20
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Received response with status 200
+
+Received response with status 200
+
+Initiating Medusa client with default headers:
+ {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+ GET /vi/dk 200 in 90ms
+ │ GET http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=3&offset=0 200 in 1ms (cache hit)
+ │ GET http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987 200 in 0ms (cache hit)
+ │ GET http://localhost:9000/store/products?limit=1&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2Cimages 200 in 0ms (cache hit)
+ │ GET http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987 200 in 0ms (cache hit)
+ │ GET http://localhost:9000/store/products?limit=4&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2C%2Avariants.calculated_price&collection_id=pcol_01KZFW1X41ZYZTYQHKRM0HN9D3 200 in 0ms (cache hit)
+ │ GET http://localhost:9000/store/customers/me?fields=%2Aorders 401 in 15ms (cache skip)
+ │ │ Cache skipped reason: (cache-control: no-cache (hard refresh))
+ │ GET http://localhost:9000/store/regions 200 in 2ms (cache hit)
+ │ GET http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=6&offset=0 200 in 2ms (cache hit)
+ │ GET http://localhost:9000/store/product-categories?fields=id%2Chandle%2Cname%2C%2Acategory_children%2C%2Aparent_category&limit=20 200 in 1ms (cache hit)
+ ✓ Compiled in 61ms (160 modules)
+Performing request to:
+ URL: http://localhost:9000/store/customers/me?fields=%2Aorders
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "en",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=3&offset=0
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "en",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "en",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/products?limit=1&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2Cimages
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "en",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 401
+
+Performing request to:
+ URL: http://localhost:9000/store/regions
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "en",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=6&offset=0
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "en",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/product-categories?fields=id%2Chandle%2Cname%2C%2Acategory_children%2C%2Aparent_category&limit=20
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "en",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "en",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/products?limit=4&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2C%2Avariants.calculated_price&collection_id=pcol_01KZFW1X41ZYZTYQHKRM0HN9D3
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "en",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Received response with status 200
+
+Received response with status 200
+
+Received response with status 200
+
+ GET /vi/dk 200 in 117ms
+ │ GET http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=3&offset=0 200 in 7ms (cache hit)
+ │ GET http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987 200 in 7ms (cache hit)
+ │ GET http://localhost:9000/store/customers/me?fields=%2Aorders 401 in 11ms (cache skip)
+ │ │ Cache skipped reason: (cache-control: no-cache (hard refresh))
+ │ GET http://localhost:9000/store/products?limit=1&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2Cimages 200 in 14ms (cache hit)
+ │ GET http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987 200 in 1ms (cache hit)
+ │ GET http://localhost:9000/store/regions 200 in 18ms (cache hit)
+ │ GET http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=6&offset=0 200 in 19ms (cache hit)
+ │ GET http://localhost:9000/store/product-categories?fields=id%2Chandle%2Cname%2C%2Acategory_children%2C%2Aparent_category&limit=20 200 in 19ms (cache hit)
+ │ GET http://localhost:9000/store/products?limit=4&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2C%2Avariants.calculated_price&collection_id=pcol_01KZFW1X41ZYZTYQHKRM0HN9D3 200 in 26ms (cache hit)
+Performing request to:
+ URL: http://localhost:9000/store/customers/me?fields=%2Aorders
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "vi",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=3&offset=0
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "vi",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "vi",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/products?limit=1&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2Cimages
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "vi",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 401
+
+Performing request to:
+ URL: http://localhost:9000/store/regions
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "vi",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=6&offset=0
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "vi",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/product-categories?fields=id%2Chandle%2Cname%2C%2Acategory_children%2C%2Aparent_category&limit=20
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "vi",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "vi",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/products?limit=4&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2C%2Avariants.calculated_price&collection_id=pcol_01KZFW1X41ZYZTYQHKRM0HN9D3
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-medusa-locale": "vi",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Received response with status 200
+
+Received response with status 200
+
+Received response with status 200
+
+ GET /en/dk 200 in 104ms
+ │ GET http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=3&offset=0 200 in 4ms (cache hit)
+ │ GET http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987 200 in 4ms (cache hit)
+ │ GET http://localhost:9000/store/customers/me?fields=%2Aorders 401 in 9ms (cache skip)
+ │ │ Cache skipped reason: (cache-control: no-cache (hard refresh))
+ │ GET http://localhost:9000/store/products?limit=1&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2Cimages 200 in 10ms (cache hit)
+ │ GET http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987 200 in 1ms (cache hit)
+ │ GET http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=6&offset=0 200 in 14ms (cache hit)
+ │ GET http://localhost:9000/store/regions 200 in 15ms (cache hit)
+ │ GET http://localhost:9000/store/product-categories?fields=id%2Chandle%2Cname%2C%2Acategory_children%2C%2Aparent_category&limit=20 200 in 15ms (cache hit)
+ │ GET http://localhost:9000/store/products?limit=4&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2C%2Avariants.calculated_price&collection_id=pcol_01KZFW1X41ZYZTYQHKRM0HN9D3 200 in 22ms (cache hit)
+Initiating Medusa client with default headers:
+ {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/customers/me?fields=%2Aorders
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=3&offset=0
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/products?limit=1&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2Cimages
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Performing request to:
+ URL: http://localhost:9000/store/products?limit=4&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2C%2Avariants.calculated_price&collection_id=pcol_01KZFW1X41ZYZTYQHKRM0HN9D3
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Received response with status 401
+
+Performing request to:
+ URL: http://localhost:9000/store/regions
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=6&offset=0
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Performing request to:
+ URL: http://localhost:9000/store/product-categories?fields=id%2Chandle%2Cname%2C%2Acategory_children%2C%2Aparent_category&limit=20
+ Headers: {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+Received response with status 200
+
+Received response with status 200
+
+Received response with status 200
+
+ GET /en/dk 200 in 145ms
+ │ GET http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=3&offset=0 200 in 1ms (cache hit)
+ │ GET http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987 200 in 1ms (cache hit)
+ │ GET http://localhost:9000/store/products?limit=1&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2Cimages 200 in 0ms (cache hit)
+ │ GET http://localhost:9000/store/regions/reg_01KZFT70E62QNQ964WZQTC4987 200 in 0ms (cache hit)
+ │ GET http://localhost:9000/store/products?limit=4&offset=0&region_id=reg_01KZFT70E62QNQ964WZQTC4987&fields=id%2Chandle%2Ctitle%2Cthumbnail%2C%2Avariants.calculated_price&collection_id=pcol_01KZFW1X41ZYZTYQHKRM0HN9D3 200 in 0ms (cache hit)
+ │ GET http://localhost:9000/store/customers/me?fields=%2Aorders 401 in 25ms (cache skip)
+ │ │ Cache skipped reason: (cache-control: no-cache (hard refresh))
+ │ GET http://localhost:9000/store/regions 200 in 2ms (cache hit)
+ │ GET http://localhost:9000/store/collections?fields=id%2Chandle%2Ctitle&limit=6&offset=0 200 in 2ms (cache hit)
+ │ GET http://localhost:9000/store/product-categories?fields=id%2Chandle%2Cname%2C%2Acategory_children%2C%2Aparent_category&limit=20 200 in 2ms (cache hit)
+Initiating Medusa client with default headers:
+ {
+  "accept": "application/json",
+  "content-type": "application/json",
+  "x-publishable-api-key": "pk_2fc0013a2075c206f8e5a04ec4dfda4efaf22038c95ee1d714331abcfc358f4c",
+  "authorization": "<REDACTED>"
+}
+
+[?25h

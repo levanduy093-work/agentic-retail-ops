@@ -23,9 +23,10 @@ type SideMenuProps = {
   regions: HttpTypes.StoreRegion[] | null
   locales: Locale[] | null
   currentLocale: string | null
+  dict?: Record<string, Record<string, string>>
 }
 
-const SideMenu = ({ regions, locales, currentLocale }: SideMenuProps) => {
+const SideMenu = ({ regions, locales, currentLocale, dict }: SideMenuProps) => {
   const countryToggleState = useToggleState()
   const languageToggleState = useToggleState()
 
@@ -80,6 +81,9 @@ const SideMenu = ({ regions, locales, currentLocale }: SideMenuProps) => {
                     </div>
                     <ul className="flex flex-col gap-6 items-start justify-start">
                       {Object.entries(SideMenuItems).map(([name, href]) => {
+                        const translationKey = name.toLowerCase() as "home" | "store" | "account" | "cart"
+                        const translatedName = dict?.nav?.[translationKey] || name
+
                         return (
                           <li key={name}>
                             <LocalizedClientLink
@@ -88,7 +92,7 @@ const SideMenu = ({ regions, locales, currentLocale }: SideMenuProps) => {
                               onClick={close}
                               data-testid={`${name.toLowerCase()}-link`}
                             >
-                              {name}
+                              {translatedName}
                             </LocalizedClientLink>
                           </li>
                         )
@@ -133,8 +137,7 @@ const SideMenu = ({ regions, locales, currentLocale }: SideMenuProps) => {
                         />
                       </div>
                       <Text className="flex justify-between txt-compact-small">
-                        © {new Date().getFullYear()} Synapse Store. All rights
-                        reserved.
+                        © {new Date().getFullYear()} Synapse Store. {dict?.footer?.rights || "All rights reserved."}
                       </Text>
                     </div>
                   </div>
