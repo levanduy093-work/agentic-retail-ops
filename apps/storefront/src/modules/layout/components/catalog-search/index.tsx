@@ -20,11 +20,14 @@ export default function CatalogSearch() {
   }
 
   return (
-    <form onSubmit={submit} className="hidden md:block w-full max-w-[430px]">
+    <form
+      onSubmit={submit}
+      className="block min-w-0 flex-1 md:max-w-[430px]"
+    >
       <label className="sr-only" htmlFor="catalog-search">
         Search the catalog
       </label>
-      <div className="liquid-glass-web-approx flex h-11 items-center gap-3 rounded-full px-4">
+      <div className="liquid-glass-web-approx flex h-10 items-center gap-2 rounded-full px-3 small:h-11 small:gap-3 small:px-4">
         <MagnifyingGlass className="relative z-[1] shrink-0 text-[#174b3d]" />
         <input
           id="catalog-search"
