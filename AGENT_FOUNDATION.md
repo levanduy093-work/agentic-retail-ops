@@ -1,0 +1,552 @@
+# Agent Platform Foundation
+
+## 1. Mục đích
+
+Tài liệu này xác định phần nền phải hoàn thiện trước khi biến các vai trò trong
+[`AGENT_CATALOG.md`](./AGENT_CATALOG.md) thành agent có thể chạy thật.
+
+Mục tiêu không phải tạo ngay 17 tiến trình AI độc lập. Mục tiêu là xây một nền
+vận hành chung để từng năng lực agent có thể:
+
+- nhận đúng sự kiện nghiệp vụ;
+- đọc dữ liệu có quyền và có nguồn gốc;
+- tạo kết luận hoặc đề xuất có cấu trúc;
+- xin duyệt khi hành động có rủi ro;
+- thực thi qua API/workflow nghiệp vụ được kiểm soát;
+- chống xử lý trùng và kiểm tra lại dữ liệu trước khi ghi;
+- lưu đầy đủ lịch sử để con người kiểm tra, tiếp quản và đánh giá.
+
+## 2. Hiện trạng cần hiểu đúng
+
+### Đã có
+
+- Medusa backend là system of record cho catalog, customer, cart, order,
+  payment, fulfillment, inventory, promotion và các cấu hình commerce.
+- Medusa Admin cung cấp giao diện quản trị nghiệp vụ.
+- Next.js storefront cung cấp luồng mua hàng và tài khoản khách hàng.
+- PostgreSQL là cơ sở dữ liệu chính.
+- Backend đã có ví dụ đúng về route gọi workflow trong luồng liên kết Google
+  customer.
+- `AGENT_CATALOG.md` đã liệt kê 17 năng lực agent mục tiêu.
+
+### Chưa có
+
+- Agent runtime hoặc worker riêng.
+- Canonical event contract và event inbox.
+- Incident/case, agent run, recommendation, approval và task persistence.
+- Policy engine và Action Gateway.
+- Typed tool registry cho agent.
+- Transactional outbox, consumer deduplication và retry/lease cho agent worker.
+- Knowledge ingestion/RAG có version, trạng thái phê duyệt và citation.
+- Incident Queue, Approval Inbox và Agent Trace trong Admin.
+- Bộ scenario và evaluation dùng để chứng minh agent hoạt động đúng.
+
+Vì vậy, `AGENT_CATALOG.md` hiện là danh mục thiết kế, chưa phải danh sách năng
+lực đã triển khai.
+
+## 3. Ranh giới kiến trúc bắt buộc
+
+### 3.1 Medusa vẫn là system of record
+
+Medusa sở hữu và quyết định trạng thái cuối của:
+
+- product, variant, price và promotion;
+- customer, cart và order;
+- payment, refund và return;
+- fulfillment, reservation, stock location và sellable inventory.
+
+Agent không được ghi trực tiếp vào bảng Medusa và không được tự tính lại các
+giá trị mà Medusa phải quyết định như tồn khả dụng, tổng tiền, điều kiện refund
+hoặc eligibility của promotion.
+
+### 3.2 Agent Operations sở hữu trạng thái điều phối
+
+Phần Agent Operations sở hữu:
+
+- canonical event và event inbox;
+- incident/case;
+- agent run và từng bước thực thi;
+- evidence, recommendation và confidence;
+- approval, rejection, expiry và escalation;
+- action request, tool call và execution result;
+- task của con người;
+- audit trail và evaluation result.
+
+### 3.3 Mọi mutation phải đi qua một đường duy nhất
+
+```text
+Agent
+  -> Typed Tool
+  -> Action Gateway
+  -> Authentication / Authorization
+  -> Policy / Risk / Approval Check
+  -> Idempotency / State Revalidation
+  -> Medusa Workflow hoặc Application Service
+  -> Transaction + Outbox
+  -> Domain Event + Audit
+```
+
+Worker, LLM, Admin UI và connector bên ngoài đều không được đi tắt qua ranh giới
+này.
+
+### 3.4 Deterministic rules có quyền quyết định cuối
+
+LLM có thể phân loại, tóm tắt và đề xuất. Code deterministic phải quyết định:
+
+- quyền truy cập;
+- risk level và yêu cầu phê duyệt;
+- số tiền, tồn kho và ngưỡng;
+- điều kiện hợp lệ của refund/return/promotion;
+- idempotency;
+- kiểm tra state mới nhất trước mutation;
+- hành động nào được phép thực thi.
+
+## 4. Những nền tảng phải bổ sung
+
+### 4.1 Chuẩn hóa domain và ownership
+
+Tạo bảng ownership cho từng entity và command trước khi code agent đầu tiên.
+Mỗi dòng phải xác định:
+
+- system of record;
+- API đọc;
+- command được phép;
+- workflow thực thi;
+- role có quyền;
+- risk level;
+- yêu cầu approval;
+- audit fields bắt buộc.
+
+Không cho phép hai module cùng sở hữu inventory, order hoặc payment state.
+
+### 4.2 Canonical event contract
+
+Mọi sự kiện đưa vào Agent Operations phải có envelope thống nhất:
+
+```ts
+type CanonicalEvent<TPayload> = {
+  eventId: string
+  eventType: string
+  eventVersion: number
+  occurredAt: string
+  receivedAt: string
+  source: string
+  tenantId: string
+  correlationId: string
+  causationId?: string
+  subjectType: string
+  subjectId: string
+  payload: TPayload
+}
+```
+
+Yêu cầu:
+
+- event bất biến sau khi ghi;
+- unique theo nguồn và ID sự kiện nguồn;
+- consumer dedupe trước khi tạo workflow run;
+- có version và migration strategy;
+- payload được validate bằng schema;
+- dữ liệu nhạy cảm không được đưa tùy tiện vào payload/log.
+
+Các event đầu tiên nên bám vào domain hiện có:
+
+- `order.placed`;
+- `order.fulfillment_at_risk`;
+- `inventory.low`;
+- `inventory.reservation_changed`;
+- `payment.failed`;
+- `return.requested`;
+- `approval.decided`;
+- `action.executed`;
+- `action.failed`.
+
+### 4.3 Agent state và state machine
+
+Không lưu trạng thái agent chỉ trong memory của process. Một run tối thiểu cần
+các trạng thái:
+
+```text
+RECEIVED
+  -> INVESTIGATING
+  -> OPTIONS_READY
+  -> AWAITING_APPROVAL
+  -> EXECUTING
+  -> MONITORING
+  -> RESOLVED
+```
+
+Các nhánh kết thúc khác:
+
+```text
+REJECTED | CANCELLED | FAILED | ESCALATED
+```
+
+Mỗi transition phải lưu actor, thời gian, reason, input reference,
+correlation ID và previous state. Transition không hợp lệ phải bị từ chối.
+
+### 4.4 Typed Tool Registry
+
+Mỗi tool phải có:
+
+- tên và version;
+- mục đích nghiệp vụ;
+- input/output schema;
+- read hoặc command classification;
+- required permission;
+- risk level;
+- approval rule;
+- timeout, retry và idempotency behavior;
+- error taxonomy;
+- audit fields;
+- test contract.
+
+Ví dụ nhóm tool đầu tiên:
+
+```text
+order.get
+order.list-at-risk
+inventory.get-position
+inventory.get-availability
+inventory.propose-transfer
+inventory.execute-transfer
+approval.request
+approval.get-decision
+task.create
+notification.create-draft
+```
+
+Tên `execute-*` không có nghĩa agent được tự thực thi. Action Gateway vẫn phải
+kiểm tra policy, approval và state mới nhất.
+
+### 4.5 Policy và Approval
+
+Tạo policy matrix theo `action type x risk x actor x amount/quantity`.
+
+Mức rủi ro đề xuất:
+
+- `READ_ONLY`: chỉ đọc và phân tích;
+- `LOW`: có thể tự động nếu policy cho phép;
+- `MEDIUM`: có thể yêu cầu xác nhận hoặc sampling review;
+- `HIGH`: luôn cần người có đúng role phê duyệt;
+- `PROHIBITED`: agent không được gọi.
+
+Approval record tối thiểu gồm:
+
+- request ID và action proposal bất biến;
+- requester/agent run;
+- risk level và policy version;
+- approver role;
+- trạng thái pending/approved/rejected/expired/cancelled;
+- decision actor, reason và timestamp;
+- expiry time;
+- snapshot/reference của evidence;
+- execution status và result reference.
+
+Approval chỉ cấp quyền thử thực thi. Worker vẫn phải revalidate inventory,
+order, price, SLA hoặc payment state ngay trước mutation. State đã đổi phải trả
+conflict an toàn, không cố thực thi theo approval cũ.
+
+### 4.6 Idempotency, transaction và outbox
+
+Mọi command có side effect phải nhận idempotency key. Cùng key và cùng input chỉ
+được tạo một kết quả nghiệp vụ; cùng key nhưng input khác phải bị từ chối.
+
+Trong cùng transaction cần ghi:
+
+1. thay đổi domain;
+2. execution result;
+3. audit record;
+4. outbox event.
+
+Outbox worker cần có:
+
+- status;
+- attempt count;
+- available time;
+- lock owner và lock expiry;
+- last error;
+- dead-letter/escalation policy.
+
+Retry không được tạo thêm refund, stock movement, notification hoặc task.
+
+### 4.7 Audit và observability
+
+Audit là append-only và tối thiểu phải trả lời được:
+
+- ai hoặc agent nào đã làm gì;
+- dùng tool/version/model/prompt nào;
+- dựa trên dữ liệu và tài liệu nào;
+- policy nào đã áp dụng;
+- ai phê duyệt;
+- input/output đã được redaction như thế nào;
+- mutation cuối cùng thành công hay thất bại;
+- correlation ID để lần theo toàn bộ luồng.
+
+Metrics nền:
+
+- event-to-case latency;
+- time-to-recommendation;
+- approval waiting time;
+- execution success/conflict rate;
+- duplicate suppression count;
+- tool error/retry rate;
+- human override rate;
+- false positive/false negative theo scenario;
+- cost và token usage khi LLM được bật.
+
+### 4.8 Human Operations UI
+
+Tận dụng Medusa Admin trước khi cân nhắc một console riêng. Các màn hình đầu
+tiên:
+
+- `Incident Queue`: danh sách case, mức độ ưu tiên, SLA và owner;
+- `Incident Detail`: timeline, evidence, recommendation và task;
+- `Approval Inbox`: approve/reject cùng reason và impact preview;
+- `Agent Trace`: event, tool calls, model output, policy và execution result;
+- `Task Board`: việc cần con người xử lý và escalation.
+
+UI không được coi thao tác click là nguồn sự thật duy nhất. Mọi decision phải đi
+qua Admin API/workflow và được ghi audit.
+
+### 4.9 Knowledge foundation
+
+Chỉ xây RAG sau khi tool/policy/approval chạy ổn định. Knowledge item cần:
+
+- document ID, version và owner;
+- status `DRAFT | APPROVED | RETIRED`;
+- effective/expiry time;
+- scope/tenant/locale;
+- nguồn gốc và checksum;
+- citation locator;
+- access policy.
+
+Agent chỉ được dùng tài liệu `APPROVED` còn hiệu lực cho quyết định nghiệp vụ.
+Không tìm được bằng chứng phải hỏi hoặc escalation, không được đoán.
+
+### 4.10 Security và tenant boundary
+
+Trước khi bật agent command cần có:
+
+- service identity riêng cho worker;
+- least-privilege permission cho từng tool;
+- tenant/store/sales-channel/location scope;
+- secret reference thay vì lưu token thô;
+- PII redaction trong prompt, trace và log;
+- rate limit và execution budget;
+- kill switch theo agent, action type và tenant;
+- không cho prompt/user text tạo tên tool hoặc query tùy ý.
+
+## 5. Cấu trúc source đề xuất
+
+Giữ modular monolith cho control plane và chỉ tách worker thực thi nền:
+
+```text
+apps/
+  backend/
+    src/
+      modules/
+        agent-operations/
+        approval/
+        audit/
+        policy/
+      workflows/
+        agent-operations/
+        action-gateway/
+      subscribers/
+        agent-events/
+      api/
+        admin/
+          agent-operations/
+      admin/
+        routes/
+          agent-operations/
+        widgets/
+  agent-worker/
+    src/
+      consumers/
+      executors/
+      scheduler/
+      runtime/
+packages/
+  agent-contracts/
+  agent-domain/
+  agent-evaluation/
+```
+
+Quy tắc dependency:
+
+- `agent-domain` chỉ chứa type, rule deterministic và state transition thuần;
+- `agent-contracts` chứa event/tool/API schema, không chứa DB client;
+- backend sở hữu module service, workflow và transaction;
+- worker chỉ gọi typed API/Action Gateway;
+- Admin UI chỉ gọi Admin API;
+- LLM adapter không được import repository hoặc Medusa service để mutation.
+
+Nếu thêm `packages/**`, phải cập nhật `pnpm-workspace.yaml`. Nếu thêm task mới,
+phải khai báo đúng `outputs` trong `turbo.json`.
+
+## 6. Cách nâng cấp `AGENT_CATALOG.md`
+
+Mỗi dòng mô tả hiện tại phải được mở rộng thành một contract có cùng mẫu:
+
+```yaml
+id: inventory-agent
+name: Inventory Agent
+version: 0.1.0
+status: planned
+business_owner: Operations
+technical_owner: Agent Platform
+mission: Detect inventory risk and prepare safe resolution options
+triggers: []
+reads: []
+tools: []
+prohibited_actions: []
+risk_level: medium
+approval_rules: []
+state_machine: []
+human_handoff: []
+sla: {}
+metrics: []
+scenarios: []
+dependencies: []
+```
+
+Mỗi agent phải trả lời rõ:
+
+1. Business outcome nào agent chịu trách nhiệm?
+2. Sự kiện hoặc lịch nào kích hoạt?
+3. Agent được đọc entity nào?
+4. Agent được gọi những tool nào?
+5. Hành động nào bị cấm?
+6. Hành động nào cần approval của role nào?
+7. Khi nào agent phải dừng và giao cho con người?
+8. Trạng thái nào được persist?
+9. SLA và metric thành công là gì?
+10. Scenario nào chứng minh agent hoạt động đúng và an toàn?
+
+`status` chỉ được dùng theo các mức:
+
+- `planned`: mới có thiết kế;
+- `contracted`: event/tool/policy/scenario đã được duyệt;
+- `implemented-static`: code và test tĩnh đã có;
+- `runtime-verified`: đã chạy qua API/worker/database thật;
+- `production-ready`: đã qua security, load, recovery và operational gate.
+
+## 7. Thứ tự triển khai agent
+
+Không triển khai 17 agent cùng lúc. Bốn năng lực đầu tiên nên tạo thành một
+vertical slice:
+
+1. **Event Triage** nhận sự kiện và tạo incident.
+2. **Inventory hoặc Order Exception** điều tra và tạo recommendation.
+3. **Policy & Approval** quyết định có cần người duyệt và quản lý decision.
+4. **Audit & Compliance** ghi và kiểm tra trace của toàn bộ luồng.
+
+Sau khi vertical slice này ổn định mới mở rộng theo thứ tự:
+
+1. Fulfillment và Returns & Refund;
+2. Catalog Quality và Pricing/Promotion;
+3. Customer Support và Knowledge Curator;
+4. Integration Watchdog và Incident Commander;
+5. Workforce Coordinator, Owner Briefing và Analytics.
+
+Các tên trên là năng lực nghiệp vụ. Chúng có thể dùng chung một supervisor,
+worker, policy engine và Action Gateway; không bắt buộc tương ứng với 17 service
+hay 17 process.
+
+## 8. Vertical slice đầu tiên đề xuất
+
+### Scenario: đơn hàng có nguy cơ thiếu tồn kho
+
+1. Inventory/order event được ghi vào event inbox.
+2. Event Triage tạo một incident duy nhất dù event bị gửi lại.
+3. Agent đọc order, reservation và availability qua typed read tools.
+4. Rule deterministic tính shortfall và các phương án hợp lệ.
+5. Agent tạo recommendation có evidence và impact.
+6. Policy đánh dấu chuyển tồn kho là hành động rủi ro cao.
+7. Operations Manager approve/reject trong Admin.
+8. Worker nhận `approval.decided`.
+9. Action Gateway kiểm tra permission, idempotency và state mới nhất.
+10. Medusa workflow thực thi hoặc trả conflict an toàn.
+11. Outbox phát kết quả, incident chuyển sang monitoring/resolved.
+12. Toàn bộ event, tool, approval, mutation và lỗi xuất hiện trong Agent Trace.
+
+Để scenario có ý nghĩa, dữ liệu test phải có ít nhất hai stock location, tồn
+kho lệch nhau, order/reservation thực và expected outcome rõ ràng.
+
+## 9. Milestone chuẩn bị nền
+
+### M0 — Contract và ownership
+
+- Chốt entity ownership, event envelope, tool contract và risk matrix.
+- Chọn vertical slice đầu tiên và viết scenario ground truth.
+- Chưa tích hợp LLM.
+
+### M1 — Persistence và control plane
+
+- Tạo migrations/module cho event inbox, incident, run, recommendation,
+  approval, tool call, audit và outbox.
+- Implement state transition và dedupe/idempotency tests.
+
+### M2 — Action Gateway và worker
+
+- Implement read tools, approval flow và một command tool.
+- Worker có lease, retry, dead-letter và safe conflict.
+- Chạy end-to-end bằng rule deterministic.
+
+### M3 — Human console
+
+- Incident Queue, Incident Detail, Approval Inbox và Agent Trace trong Admin.
+- Role/permission và audit decision hoạt động bằng tài khoản thật.
+
+### M4 — LLM trong giới hạn
+
+- LLM chỉ sinh structured recommendation theo schema.
+- Bổ sung prompt/version tracking, redaction, budget và evaluation.
+- So sánh deterministic-only với LLM-assisted trên cùng scenario.
+
+### M5 — Mở rộng catalog agent
+
+- Chỉ chuyển agent tiếp theo sang `contracted` khi event, tool, policy,
+  scenario và human owner đã sẵn sàng.
+- Integration Hub và connector bên ngoài là capability bổ sung, không thay thế
+  commerce core.
+
+## 10. Definition of Ready cho một agent
+
+Một agent chỉ được bắt đầu code khi có đủ:
+
+- business owner;
+- mission và out-of-scope;
+- trigger/event schema;
+- entity ownership;
+- typed read/command tools;
+- risk và approval matrix;
+- state machine;
+- human handoff/escalation;
+- scenario gồm initial state, event, expected actions và forbidden actions;
+- success, safety và latency metrics.
+
+## 11. Definition of Done cho một agent
+
+Một agent chỉ được gọi là runtime verified khi:
+
+- duplicate event không tạo run/action thứ hai;
+- invalid transition bị từ chối;
+- unauthorized tool call bị từ chối;
+- high-risk action không thể chạy thiếu approval;
+- approval hết hạn hoặc state thay đổi tạo safe conflict;
+- retry không tạo side effect trùng;
+- audit truy được event đến mutation cuối;
+- con người có thể reject, cancel, retry và takeover;
+- scenario happy path và failure paths chạy qua API, worker và database thật;
+- không có secret/PII không cần thiết trong prompt hoặc log.
+
+## 12. Việc cần làm ngay
+
+1. Duyệt tài liệu nền này và chốt vertical slice đầu tiên.
+2. Chuyển bốn agent đầu tiên trong `AGENT_CATALOG.md` sang mẫu contract đầy đủ.
+3. Viết scenario và policy matrix trước migration/code.
+4. Chốt cấu trúc `agent-worker` và các shared package.
+5. Sau architecture gate mới tạo module, migration, API và Admin UI.
