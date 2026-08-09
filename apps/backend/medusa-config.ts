@@ -169,6 +169,12 @@ module.exports = defineConfig({
       plugins: [
         ...(config.plugins || []),
         {
+          name: 'synapse-admin-title',
+          transformIndexHtml(html: string) {
+            return html.replace(/<title>.*?<\/title>/i, '<title>Synapse</title>')
+          },
+        },
+        {
           name: 'synapse-admin-light-theme',
           transform(code: string, id: string) {
             if (!id.endsWith('/.medusa/client/entry.jsx')) {

@@ -8,9 +8,9 @@ import { getDictionary } from "@lib/i18n"
 import { listProducts } from "@lib/data/products"
 
 export const metadata: Metadata = {
-  title: "Medusa Next.js Starter Template",
+  title: "Synapse Store",
   description:
-    "A performant frontend ecommerce starter template with Next.js 15 and Medusa.",
+    "A performant frontend ecommerce starter template with Next.js 15 and Synapse.",
 }
 
 export default async function Home(props: {
