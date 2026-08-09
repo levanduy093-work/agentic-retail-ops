@@ -36,13 +36,30 @@
     "source_code": "Source code",
     "powered_by": "Powered by Synapse",
     "category_names": {
-      "sweatshirts": "Sweatshirts",
-      "shirts": "Shirts",
-      "pants": "Pants",
-      "merch": "Merch"
+      "sweatshirts": "Sweatshirts & Hoodies",
+      "shirts": "Men & Women Shirts",
+      "pants": "Pants & Merch",
+      "merch": "Merch",
+      "quan-dai-jeans": "Jeans & Long Pants",
+      "ao-nam-cat": "Men's Tops",
+      "quan-nam-cat": "Men's Pants",
+      "ao-nu-cat": "Women's Tops",
+      "quan-nu-va-vay-cat": "Women's Pants & Skirts",
+      "do-the-thao-va-phu-kien-cat": "Sportswear & Accessories",
+      "t-shirt": "T-Shirts",
+      "sweatpants": "Sweatpants",
+      "shorts": "Shorts",
+      "ao-hoodie-oversize": "Oversized Hoodies",
+      "ao-polo-nam-premium": "Premium Polos",
+      "quan-jeans-denim-classic": "Classic Denim Jeans",
+      "ao-so-mi-vintage": "Vintage Shirts"
     },
     "collection_names": {
-      "summer": "Summer Collection"
+      "summer": "Summer Collection",
+      "ban-chay-nhat": "Best Sellers",
+      "khuyen-mai-hot": "Hot Deals",
+      "mau-moi-ve": "New Arrivals",
+      "san-pham-noi-bat": "Featured Products"
     }
   },
   "cart": {

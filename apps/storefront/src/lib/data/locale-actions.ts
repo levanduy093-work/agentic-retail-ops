@@ -1,6 +1,6 @@
 "use server"
 
-import { sdk } from "@lib/config"
+import { getRequestLocale } from "@lib/i18n/request-locale"
 import { revalidateTag } from "next/cache"
 import { cookies as nextCookies } from "next/headers"
 import { getAuthHeaders, getCacheTag, getCartId } from "./cookies"
@@ -8,15 +8,10 @@ import { getAuthHeaders, getCacheTag, getCartId } from "./cookies"
 const LOCALE_COOKIE_NAME = "_medusa_locale"
 
 /**
- * Gets the current locale from cookies
+ * Gets the locale selected for the current request
  */
 export const getLocale = async (): Promise<string | null> => {
-  try {
-    const cookies = await nextCookies()
-    return cookies.get(LOCALE_COOKIE_NAME)?.value ?? null
-  } catch {
-    return null
-  }
+  return getRequestLocale()
 }
 
 /**
@@ -42,6 +37,7 @@ export const updateLocale = async (localeCode: string): Promise<string> => {
   // Update cart with the new locale if a cart exists
   const cartId = await getCartId()
   if (cartId) {
+    const { sdk } = await import("@lib/config")
     const headers = {
       ...(await getAuthHeaders()),
     }

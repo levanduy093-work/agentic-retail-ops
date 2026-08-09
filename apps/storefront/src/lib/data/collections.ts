@@ -4,8 +4,11 @@ import { sdk } from "@lib/config"
 import { decodeRouteSegment } from "@lib/util/decode-route-segment"
 import { HttpTypes } from "@medusajs/types"
 import { getCacheOptions } from "./cookies"
+import { getRequestLocale } from "@lib/i18n/request-locale"
+import { localizeCollection } from "@lib/i18n/catalog"
 
 export const retrieveCollection = async (id: string) => {
+  const locale = await getRequestLocale()
   const next = {
     ...(await getCacheOptions("collections")),
   }
@@ -18,12 +21,13 @@ export const retrieveCollection = async (id: string) => {
         cache: "force-cache",
       }
     )
-    .then(({ collection }) => collection)
+    .then(({ collection }) => localizeCollection(collection, locale))
 }
 
 export const listCollections = async (
   queryParams: Record<string, string> = {}
 ): Promise<{ collections: HttpTypes.StoreCollection[]; count: number }> => {
+  const locale = await getRequestLocale()
   const next = {
     ...(await getCacheOptions("collections")),
   }
@@ -40,13 +44,19 @@ export const listCollections = async (
         cache: "force-cache",
       }
     )
-    .then(({ collections }) => ({ collections, count: collections.length }))
+    .then(({ collections }) => ({
+      collections: collections.map((collection) =>
+        localizeCollection(collection, locale)
+      ),
+      count: collections.length,
+    }))
 }
 
 export const getCollectionByHandle = async (
   handle: string
 ): Promise<HttpTypes.StoreCollection | null> => {
   const decodedHandle = decodeRouteSegment(handle)
+  const locale = await getRequestLocale()
   const next = {
     ...(await getCacheOptions("collections")),
   }
@@ -57,5 +67,9 @@ export const getCollectionByHandle = async (
       next,
       cache: "force-cache",
     })
-    .then(({ collections }) => collections[0] || null)
+    .then(({ collections }) => {
+      const collection = collections[0]
+
+      return collection ? localizeCollection(collection, locale) : null
+    })
 }

@@ -13,7 +13,9 @@ const S3_PATHNAME = process.env.MEDUSA_CLOUD_S3_PATHNAME
  */
 const nextConfig = {
   reactStrictMode: true,
+  devIndicators: false,
   serverExternalPackages: [
+    "@floating-ui/react",
     "@medusajs/js-sdk",
     "@medusajs/types",
   ],

@@ -4,29 +4,71 @@ import { STOREFRONT_NAVIGATION_START } from "@lib/util/storefront-navigation"
 import { usePathname, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
 
+const SHOW_DELAY = 100
+const MINIMUM_VISIBLE_TIME = 280
 const SAFETY_TIMEOUT = 10000
+
+function clearTimer(
+  timer: React.RefObject<ReturnType<typeof setTimeout> | null>
+) {
+  if (timer.current) {
+    clearTimeout(timer.current)
+    timer.current = null
+  }
+}
 
 export default function NavigationProgress() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [pending, setPending] = useState(false)
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingRef = useRef(false)
+  const shownAt = useRef(0)
+  const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const safetyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const activeAnchor = useRef<HTMLAnchorElement | null>(null)
 
-  const stop = useCallback(() => {
-    setPending(false)
-    if (timer.current) {
-      clearTimeout(timer.current)
-      timer.current = null
-    }
+  const setVisible = useCallback((visible: boolean) => {
+    pendingRef.current = visible
+    setPending(visible)
   }, [])
 
-  const start = useCallback(() => {
-    setPending(true)
-    if (timer.current) {
-      clearTimeout(timer.current)
+  const stop = useCallback(() => {
+    clearTimer(showTimer)
+    clearTimer(safetyTimer)
+
+    if (activeAnchor.current) {
+      activeAnchor.current.removeAttribute("aria-busy")
+      activeAnchor.current = null
     }
-    timer.current = setTimeout(stop, SAFETY_TIMEOUT)
-  }, [stop])
+
+    if (!pendingRef.current) {
+      return
+    }
+
+    const remainingTime = Math.max(
+      0,
+      MINIMUM_VISIBLE_TIME - (Date.now() - shownAt.current)
+    )
+
+    clearTimer(hideTimer)
+    hideTimer.current = setTimeout(() => setVisible(false), remainingTime)
+  }, [setVisible])
+
+  const start = useCallback(() => {
+    clearTimer(hideTimer)
+    clearTimer(showTimer)
+    clearTimer(safetyTimer)
+
+    if (!pendingRef.current) {
+      showTimer.current = setTimeout(() => {
+        shownAt.current = Date.now()
+        setVisible(true)
+      }, SHOW_DELAY)
+    }
+
+    safetyTimer.current = setTimeout(stop, SAFETY_TIMEOUT)
+  }, [setVisible, stop])
 
   useEffect(() => {
     stop()
@@ -64,6 +106,9 @@ export default function NavigationProgress() {
         `${destination.pathname}${destination.search}` !==
           `${current.pathname}${current.search}`
       ) {
+        activeAnchor.current?.removeAttribute("aria-busy")
+        activeAnchor.current = anchor
+        anchor.setAttribute("aria-busy", "true")
         start()
       }
     }
@@ -74,20 +119,22 @@ export default function NavigationProgress() {
     return () => {
       window.removeEventListener(STOREFRONT_NAVIGATION_START, start)
       document.removeEventListener("click", handleClick, true)
-      if (timer.current) {
-        clearTimeout(timer.current)
-      }
+      clearTimer(showTimer)
+      clearTimer(hideTimer)
+      clearTimer(safetyTimer)
     }
   }, [start])
 
   return (
     <div
+      role="status"
+      aria-label="Đang chuyển trang"
       aria-hidden={!pending}
-      className={`pointer-events-none fixed inset-x-0 top-0 z-[1000] h-[3px] overflow-hidden transition-opacity duration-150 ${
-        pending ? "opacity-100" : "opacity-0"
+      className={`fixed inset-0 z-[1000] grid place-items-center bg-[#f4f7f5]/90 backdrop-blur-[2px] ${
+        pending ? "visible" : "invisible"
       }`}
     >
-      <div className="h-full w-2/3 animate-pulse bg-[#174b3d] shadow-[0_0_12px_rgba(23,75,61,0.55)]" />
+      <span className="navigation-screen-activator" aria-hidden="true" />
     </div>
   )
 }

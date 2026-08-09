@@ -77,7 +77,7 @@ export default function NavLanguageSelect({
             aria-pressed={isActive}
             disabled={isPending}
             onClick={() => selectLanguage(language.code)}
-            className={`rounded-full px-2.5 py-1 text-[11px] font-bold tracking-[0.04em] transition-colors disabled:cursor-wait ${
+            className={`rounded-full px-2.5 py-1 text-[11px] font-bold tracking-[0.04em] transition-colors ${
               isActive
                 ? "bg-[#174b3d] text-white shadow-sm"
                 : "text-[#527067] hover:bg-white hover:text-[#174b3d]"

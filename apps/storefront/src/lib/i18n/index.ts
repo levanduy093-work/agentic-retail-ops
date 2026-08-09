@@ -1,5 +1,5 @@
 import "server-only"
-import { getLocale } from "@lib/data/locale-actions"
+import { getRequestLocale } from "./request-locale"
 
 const dictionaries = {
   en: () => import("./dictionaries/en.json").then((module) => module.default),
@@ -7,7 +7,7 @@ const dictionaries = {
 }
 
 export const getDictionary = async () => {
-  const locale = await getLocale()
+  const locale = await getRequestLocale()
   
   // Return the selected locale dictionary, fallback to 'en'
   if (locale && dictionaries[locale as keyof typeof dictionaries]) {

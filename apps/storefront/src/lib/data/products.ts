@@ -7,6 +7,8 @@ import { HttpTypes } from "@medusajs/types"
 import { SortOptions } from "@modules/store/components/refinement-list/sort-products"
 import { getAuthHeaders, getCacheOptions } from "./cookies"
 import { getRegion, retrieveRegion } from "./regions"
+import { getRequestLocale } from "@lib/i18n/request-locale"
+import { localizeProduct } from "@lib/i18n/catalog"
 
 type ProductListQueryParams = (HttpTypes.FindParams &
   HttpTypes.StoreProductListParams) & {
@@ -55,6 +57,7 @@ export const listProducts = async ({
   const headers = {
     ...(await getAuthHeaders()),
   }
+  const locale = await getRequestLocale()
 
   const next = {
     revalidate: 60,
@@ -84,7 +87,9 @@ export const listProducts = async ({
 
       return {
         response: {
-          products,
+          products: products.map((product) =>
+            localizeProduct(product, locale)
+          ),
           count,
         },
         nextPage: nextPage,

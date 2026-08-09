@@ -88,7 +88,9 @@ export default async function Footer() {
                                     href={`/categories/${child.handle}`}
                                     data-testid="category-link"
                                   >
-                                    {child.name}
+                                    {dict.footer.category_names[
+                                      child.handle as keyof typeof dict.footer.category_names
+                                    ] ?? child.name}
                                   </LocalizedClientLink>
                                 </li>
                               ))}

@@ -150,14 +150,30 @@ export async function middleware(request: NextRequest) {
     : pathSegments[0]?.toLowerCase() === country.toLowerCase()
 
   if (urlHasLocale && urlHasCountry) {
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set("x-storefront-locale", locale)
+
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
+
     if (!cacheIdCookie) {
-      const response = NextResponse.next()
       response.cookies.set("_medusa_cache_id", cacheId, {
         maxAge: 60 * 60 * 24,
       })
-      return response
     }
-    return NextResponse.next()
+
+    if (request.cookies.get("_medusa_locale")?.value !== locale) {
+      response.cookies.set("_medusa_locale", locale, {
+        maxAge: 60 * 60 * 24 * 365,
+        sameSite: "strict",
+        secure: request.nextUrl.protocol === "https:",
+      })
+    }
+
+    return response
   }
 
   // if the url doesn't have the locale or country, redirect to it
@@ -179,7 +195,20 @@ export async function middleware(request: NextRequest) {
   const queryString = request.nextUrl.search || ""
   const redirectUrl = `${request.nextUrl.origin}/${locale}/${country}${redirectPath === "/" ? "" : redirectPath}${queryString}`
 
-  return NextResponse.redirect(redirectUrl, 307)
+  const response = NextResponse.redirect(redirectUrl, 307)
+  response.cookies.set("_medusa_locale", locale, {
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: "strict",
+    secure: request.nextUrl.protocol === "https:",
+  })
+
+  if (!cacheIdCookie) {
+    response.cookies.set("_medusa_cache_id", cacheId, {
+      maxAge: 60 * 60 * 24,
+    })
+  }
+
+  return response
 }
 export const config = {
   matcher: [

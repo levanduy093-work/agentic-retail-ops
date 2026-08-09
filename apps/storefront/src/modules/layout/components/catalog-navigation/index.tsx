@@ -82,10 +82,7 @@ export default function CatalogNavigation({
     }
   }
 
-  const startSelection = (
-    href: string,
-    details: React.RefObject<HTMLDetailsElement | null>
-  ) => {
+  const startSelection = (href: string) => {
     setPendingHref(href)
     startStorefrontNavigation()
 
@@ -94,12 +91,15 @@ export default function CatalogNavigation({
     }
 
     closeTimer.current = setTimeout(() => {
-      details.current?.removeAttribute("open")
-    }, 160)
+      categoryDetails.current?.removeAttribute("open")
+      collectionDetails.current?.removeAttribute("open")
+    }, 6000)
   }
 
   useEffect(() => {
     setPendingHref(null)
+    categoryDetails.current?.removeAttribute("open")
+    collectionDetails.current?.removeAttribute("open")
   }, [pathname])
 
   useEffect(() => {
@@ -149,7 +149,9 @@ export default function CatalogNavigation({
     [
       "block font-semibold text-[#174b3d] transition-[color,background-color,transform] duration-150 hover:bg-[#edf3ef] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#174b3d]/35 active:scale-[0.98] motion-reduce:transition-none",
       compact ? "rounded-lg py-1.5 text-sm" : "rounded-xl px-3 py-2.5",
-      isCurrent(href) ? "bg-[#e5eee8] text-[#103a2f]" : "",
+      pendingHref === href || (!pendingHref && isCurrent(href))
+        ? "bg-[#e5eee8] text-[#103a2f]"
+        : "",
     ].join(" ")
 
   return (
@@ -176,7 +178,7 @@ export default function CatalogNavigation({
                   <li key={category.id}>
                     <LocalizedClientLink
                       href={href}
-                      onClick={() => startSelection(href, categoryDetails)}
+                      onClick={() => startSelection(href)}
                       onPointerEnter={() => schedulePrefetch(href)}
                       onPointerLeave={() => cancelScheduledPrefetch(href)}
                       onFocus={() => prefetch(href)}
@@ -186,12 +188,6 @@ export default function CatalogNavigation({
                     >
                       <span className="flex items-center justify-between gap-2">
                         {category.name}
-                        {pendingHref === href && (
-                          <span
-                            className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-current"
-                            aria-hidden="true"
-                          />
-                        )}
                       </span>
                     </LocalizedClientLink>
                     {!!category.children.length && (
@@ -203,9 +199,7 @@ export default function CatalogNavigation({
                             <li key={child.id}>
                               <LocalizedClientLink
                                 href={childHref}
-                                onClick={() =>
-                                  startSelection(childHref, categoryDetails)
-                                }
+                                onClick={() => startSelection(childHref)}
                                 onPointerEnter={() =>
                                   schedulePrefetch(childHref)
                                 }
@@ -216,6 +210,7 @@ export default function CatalogNavigation({
                                 aria-current={
                                   isCurrent(childHref) ? "page" : undefined
                                 }
+                                aria-busy={pendingHref === childHref}
                                 className={`${getLinkClassName(
                                   childHref,
                                   true
@@ -258,7 +253,7 @@ export default function CatalogNavigation({
                   <li key={collection.id}>
                     <LocalizedClientLink
                       href={href}
-                      onClick={() => startSelection(href, collectionDetails)}
+                      onClick={() => startSelection(href)}
                       onPointerEnter={() => schedulePrefetch(href)}
                       onPointerLeave={() => cancelScheduledPrefetch(href)}
                       onFocus={() => prefetch(href)}
@@ -268,12 +263,6 @@ export default function CatalogNavigation({
                     >
                       <span className="flex items-center justify-between gap-2">
                         {collection.title}
-                        {pendingHref === href && (
-                          <span
-                            className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-current"
-                            aria-hidden="true"
-                          />
-                        )}
                       </span>
                     </LocalizedClientLink>
                   </li>
