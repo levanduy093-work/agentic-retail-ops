@@ -171,14 +171,12 @@ const bridge = `var SynapseThemeBridge = () => {
 
 module.exports = defineConfig({
   admin: {
-    vite: (config) => ({
-      ...config,
+    // Medusa merges this return value into its base Vite config. Return only
+    // additions here so the React Refresh plugin is not registered twice.
+    vite: () => ({
       optimizeDeps: {
-        ...config.optimizeDeps,
         esbuildOptions: {
-          ...config.optimizeDeps?.esbuildOptions,
           plugins: [
-            ...(config.optimizeDeps?.esbuildOptions?.plugins || []),
             {
               name: 'synapse-dashboard-theme-bridge',
               setup(build) {
@@ -205,7 +203,6 @@ module.exports = defineConfig({
         },
       },
       plugins: [
-        ...(config.plugins || []),
         {
           name: 'synapse-admin-title',
           transformIndexHtml(html: string) {
