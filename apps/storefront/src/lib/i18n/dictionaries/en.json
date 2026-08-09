@@ -21,7 +21,20 @@
   "footer": {
     "categories": "Categories",
     "collections": "Collections",
-    "rights": "All rights reserved."
+    "rights": "All rights reserved.",
+    "about": "Synapse",
+    "documentation": "Documentation",
+    "source_code": "Source code",
+    "powered_by": "Powered by Synapse",
+    "category_names": {
+      "sweatshirts": "Sweatshirts",
+      "shirts": "Shirts",
+      "pants": "Pants",
+      "merch": "Merch"
+    },
+    "collection_names": {
+      "summer": "Summer Collection"
+    }
   },
   "cart": {
     "title": "Cart",
@@ -35,6 +48,28 @@
   },
   "collection": {
     "view_all": "View all"
+  },
+  "product": {
+    "add_to_cart": "Add to cart",
+    "select_variant": "Select variant",
+    "select_options": "Select options",
+    "out_of_stock": "Out of stock",
+    "add_to_cart_error": "Unable to add this product to the cart. Please try again.",
+    "information": "Product Information",
+    "shipping_returns": "Shipping & Returns",
+    "material": "Material",
+    "country_of_origin": "Country of origin",
+    "type": "Type",
+    "weight": "Weight",
+    "dimensions": "Dimensions",
+    "fast_delivery": "Fast delivery",
+    "fast_delivery_description": "Your package will arrive in 3-5 business days at your pick up location or in the comfort of your home.",
+    "simple_exchanges": "Simple exchanges",
+    "simple_exchanges_description": "Is the fit not quite right? No worries - we'll exchange your product for a new one.",
+    "easy_returns": "Easy returns",
+    "easy_returns_description": "Just return your product and we'll refund your money. No questions asked – we'll do our best to make sure your return is hassle-free.",
+    "related_products": "Related products",
+    "related_products_description": "You might also want to check out these products."
   },
   "account": {
     "title": "Account",

@@ -10,6 +10,7 @@ import { getProductPrice } from "@lib/util/get-product-price"
 import OptionSelect from "./option-select"
 import { HttpTypes } from "@medusajs/types"
 import { isSimpleProduct } from "@lib/util/product"
+import { useTranslation } from "@lib/i18n/client"
 
 type MobileActionsProps = {
   product: HttpTypes.StoreProduct
@@ -34,6 +35,7 @@ const MobileActions: React.FC<MobileActionsProps> = ({
   show,
   optionsDisabled,
 }) => {
+  const t = useTranslation()
   const { state, open, close } = useToggleState()
 
   const price = getProductPrice({
@@ -111,7 +113,7 @@ const MobileActions: React.FC<MobileActionsProps> = ({
                   <span>
                     {variant
                       ? Object.values(options).join(" / ")
-                      : "Select Options"}
+                      : t("product.select_options")}
                   </span>
                   <ChevronDown />
                 </div>
@@ -124,10 +126,10 @@ const MobileActions: React.FC<MobileActionsProps> = ({
                 data-testid="mobile-cart-button"
               >
                 {!variant
-                  ? "Select variant"
+                  ? t("product.select_variant")
                   : !inStock
-                  ? "Out of stock"
-                  : "Add to cart"}
+                  ? t("product.out_of_stock")
+                  : t("product.add_to_cart")}
               </Button>
             </div>
           </div>

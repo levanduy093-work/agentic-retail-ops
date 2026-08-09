@@ -66,7 +66,9 @@ export default async function Footer() {
                           href={`/categories/${c.handle}`}
                           data-testid="category-link"
                         >
-                          {c.name}
+                          {dict.footer.category_names[
+                            c.handle as keyof typeof dict.footer.category_names
+                          ] ?? c.name}
                         </LocalizedClientLink>
                         {children && (
                           <ul className="grid grid-cols-1 ml-3 gap-2">
@@ -109,7 +111,9 @@ export default async function Footer() {
                         className="hover:text-ui-fg-base"
                         href={`/collections/${c.handle}`}
                       >
-                        {c.title}
+                        {dict.footer.collection_names[
+                          c.handle as keyof typeof dict.footer.collection_names
+                        ] ?? c.title}
                       </LocalizedClientLink>
                     </li>
                   ))}
@@ -117,11 +121,11 @@ export default async function Footer() {
               </div>
             )}
             <div className="flex flex-col gap-y-2">
-              <span className="txt-small-plus txt-ui-fg-base">Synapse</span>
+              <span className="txt-small-plus txt-ui-fg-base">{dict.footer.about}</span>
               <ul className="grid grid-cols-1 gap-y-2 text-ui-fg-subtle txt-small">
                 <li>
                   <a
-                    href="https://github.com/medusajs"
+                    href="https://github.com/levanduy093-work"
                     target="_blank"
                     rel="noreferrer"
                     className="hover:text-ui-fg-base"
@@ -136,17 +140,17 @@ export default async function Footer() {
                     rel="noreferrer"
                     className="hover:text-ui-fg-base"
                   >
-                    Documentation
+                    {dict.footer.documentation}
                   </a>
                 </li>
                 <li>
                   <a
-                    href="https://github.com/medusajs/dtc-starter"
+                    href="https://github.com/levanduy093-work"
                     target="_blank"
                     rel="noreferrer"
                     className="hover:text-ui-fg-base"
                   >
-                    Source code
+                    {dict.footer.source_code}
                   </a>
                 </li>
               </ul>
@@ -157,7 +161,7 @@ export default async function Footer() {
           <Text className="txt-compact-small">
             © {new Date().getFullYear()} Synapse Store. {dict.footer.rights}
           </Text>
-          <MedusaCTA />
+          <MedusaCTA label={dict.footer.powered_by} />
         </div>
       </div>
     </footer>

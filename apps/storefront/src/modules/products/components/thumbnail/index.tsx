@@ -1,6 +1,8 @@
+"use client"
+
 import { Container, clx } from "@modules/common/components/ui"
 import Image from "next/image"
-import React from "react"
+import React, { useState } from "react"
 
 import PlaceholderImage from "@modules/common/icons/placeholder-image"
 
@@ -49,7 +51,9 @@ const ImageOrPlaceholder = ({
   image,
   size,
 }: Pick<ThumbnailProps, "size"> & { image?: string }) => {
-  return image ? (
+  const [hasError, setHasError] = useState(false)
+
+  return image && !hasError ? (
     <Image
       src={image}
       alt="Thumbnail"
@@ -58,6 +62,7 @@ const ImageOrPlaceholder = ({
       quality={50}
       sizes="(max-width: 576px) 280px, (max-width: 768px) 360px, (max-width: 992px) 480px, 800px"
       fill
+      onError={() => setHasError(true)}
     />
   ) : (
     <div className="w-full h-full absolute inset-0 flex items-center justify-center">

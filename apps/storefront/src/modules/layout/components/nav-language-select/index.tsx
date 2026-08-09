@@ -1,8 +1,10 @@
 "use client"
 
-import { setLocaleCookie } from "@lib/data/locale-actions"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useTransition } from "react"
+
+const LOCALE_COOKIE_NAME = "_medusa_locale"
+const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 
 const languages = [
   { code: "en", label: "EN", title: "English" },
@@ -45,11 +47,17 @@ export default function NavLanguageSelect({
         queryString ? `?${queryString}` : ""
       }`
 
+      // Server components resolve their dictionary from this cookie. Write it
+      // synchronously so the first request for the new URL already renders the
+      // selected language instead of rendering once with the stale dictionary
+      // and refreshing again when a server action eventually updates the cookie.
+      document.cookie = `${LOCALE_COOKIE_NAME}=${locale}; Path=/; Max-Age=${LOCALE_COOKIE_MAX_AGE}; SameSite=Strict${
+        window.location.protocol === "https:" ? "; Secure" : ""
+      }`
+
       // The URL is the canonical locale state. Replacing it prevents language
       // changes from building a history chain that appears to toggle back and forth.
       router.replace(href)
-
-      void setLocaleCookie(locale)
     })
   }
 

@@ -21,7 +21,20 @@
   "footer": {
     "categories": "Danh mục",
     "collections": "Bộ sưu tập",
-    "rights": "Mọi quyền được bảo lưu."
+    "rights": "Mọi quyền được bảo lưu.",
+    "about": "Synapse",
+    "documentation": "Tài liệu",
+    "source_code": "Mã nguồn",
+    "powered_by": "Phát triển bởi Synapse",
+    "category_names": {
+      "sweatshirts": "Áo nỉ",
+      "shirts": "Áo sơ mi",
+      "pants": "Quần",
+      "merch": "Hàng lưu niệm"
+    },
+    "collection_names": {
+      "summer": "Bộ sưu tập mùa hè"
+    }
   },
   "cart": {
     "title": "Giỏ hàng",
@@ -35,6 +48,28 @@
   },
   "collection": {
     "view_all": "Xem tất cả"
+  },
+  "product": {
+    "add_to_cart": "Thêm vào giỏ",
+    "select_variant": "Chọn phiên bản",
+    "select_options": "Chọn tùy chọn",
+    "out_of_stock": "Hết hàng",
+    "add_to_cart_error": "Không thể thêm sản phẩm vào giỏ hàng. Vui lòng thử lại.",
+    "information": "Thông tin sản phẩm",
+    "shipping_returns": "Vận chuyển & đổi trả",
+    "material": "Chất liệu",
+    "country_of_origin": "Xuất xứ",
+    "type": "Loại sản phẩm",
+    "weight": "Trọng lượng",
+    "dimensions": "Kích thước",
+    "fast_delivery": "Giao hàng nhanh",
+    "fast_delivery_description": "Đơn hàng sẽ đến trong 3-5 ngày làm việc tại điểm nhận hoặc địa chỉ của bạn.",
+    "simple_exchanges": "Đổi hàng đơn giản",
+    "simple_exchanges_description": "Sản phẩm chưa vừa ý? Đừng lo, chúng tôi sẽ đổi sản phẩm mới cho bạn.",
+    "easy_returns": "Trả hàng dễ dàng",
+    "easy_returns_description": "Chỉ cần gửi trả sản phẩm, chúng tôi sẽ hoàn tiền. Chúng tôi sẽ cố gắng để việc trả hàng diễn ra thuận tiện nhất.",
+    "related_products": "Sản phẩm liên quan",
+    "related_products_description": "Có thể bạn cũng muốn xem các sản phẩm này."
   },
   "account": {
     "title": "Tài khoản",

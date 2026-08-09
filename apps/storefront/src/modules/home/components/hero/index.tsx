@@ -2,8 +2,9 @@ import { ArrowRightMini } from "@medusajs/icons"
 import { HttpTypes } from "@medusajs/types"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 import Image from "next/image"
+import type { ClientDictionary } from "@lib/i18n/types"
 
-const Hero = ({ product, dict }: { product?: HttpTypes.StoreProduct; dict?: Record<string, Record<string, string>> }) => {
+const Hero = ({ product, dict }: { product?: HttpTypes.StoreProduct; dict?: ClientDictionary }) => {
   return (
     <section className="content-container pt-6 small:pt-10">
       <div className="relative isolate grid min-h-[440px] overflow-hidden rounded-[28px] bg-[#dbe7e1] small:grid-cols-[0.92fr_1.08fr]">

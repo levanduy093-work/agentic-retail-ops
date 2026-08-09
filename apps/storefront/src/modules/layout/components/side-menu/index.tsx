@@ -10,6 +10,7 @@ import { Fragment } from "react"
 import CountrySelect from "../country-select"
 import LanguageSelect from "../language-select"
 import { Locale } from "@lib/data/locales"
+import type { ClientDictionary } from "@lib/i18n/types"
 
 
 const SideMenuItems = {
@@ -23,7 +24,7 @@ type SideMenuProps = {
   regions: HttpTypes.StoreRegion[] | null
   locales: Locale[] | null
   currentLocale: string | null
-  dict?: Record<string, Record<string, string>>
+  dict?: ClientDictionary
 }
 
 const SideMenu = ({ regions, locales, currentLocale, dict }: SideMenuProps) => {

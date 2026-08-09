@@ -4,11 +4,12 @@ import { MagnifyingGlass } from "@medusajs/icons"
 import { FormEvent, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { startStorefrontNavigation } from "@lib/util/storefront-navigation"
+import type { ClientDictionary } from "@lib/i18n/types"
 
 export default function CatalogSearch({
   dict,
 }: {
-  dict?: Record<string, Record<string, string>>
+  dict?: ClientDictionary
 }) {
   const [query, setQuery] = useState("")
   const router = useRouter()

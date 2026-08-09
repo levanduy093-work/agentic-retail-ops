@@ -1,7 +1,8 @@
 "use client"
 
 import { clx } from "@modules/common/components/ui"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import Link from "next/link"
+import { usePathname, useSearchParams } from "next/navigation"
 import { startStorefrontNavigation } from "@lib/util/storefront-navigation"
 
 export function Pagination({
@@ -13,7 +14,6 @@ export function Pagination({
   totalPages: number
   "data-testid"?: string
 }) {
-  const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
@@ -21,31 +21,44 @@ export function Pagination({
   const arrayRange = (start: number, stop: number) =>
     Array.from({ length: stop - start + 1 }, (_, index) => start + index)
 
-  // Function to handle page changes
-  const handlePageChange = (newPage: number) => {
-    const params = new URLSearchParams(searchParams)
+  const getPageHref = (newPage: number) => {
+    const params = new URLSearchParams(searchParams.toString())
     params.set("page", newPage.toString())
-    startStorefrontNavigation()
-    router.push(`${pathname}?${params.toString()}`)
+
+    return `${pathname}?${params.toString()}`
   }
 
-  // Function to render a page button
+  // Function to render a page control
   const renderPageButton = (
     p: number,
     label: string | number,
     isCurrent: boolean
-  ) => (
-    <button
-      key={p}
-      className={clx("txt-xlarge-plus text-ui-fg-muted", {
-        "text-ui-fg-base hover:text-ui-fg-subtle": isCurrent,
-      })}
-      disabled={isCurrent}
-      onClick={() => handlePageChange(p)}
-    >
-      {label}
-    </button>
-  )
+  ) => {
+    const className = clx("txt-xlarge-plus text-ui-fg-muted", {
+      "text-ui-fg-base": isCurrent,
+      "hover:text-ui-fg-subtle": !isCurrent,
+    })
+
+    if (isCurrent) {
+      return (
+        <span key={p} aria-current="page" className={className}>
+          {label}
+        </span>
+      )
+    }
+
+    return (
+      <Link
+        key={p}
+        href={getPageHref(p)}
+        className={className}
+        onClick={startStorefrontNavigation}
+        scroll
+      >
+        {label}
+      </Link>
+    )
+  }
 
   // Function to render ellipsis
   const renderEllipsis = (key: string) => (

@@ -16,13 +16,14 @@ import LocalizedClientLink from "@modules/common/components/localized-client-lin
 import Thumbnail from "@modules/products/components/thumbnail"
 import { usePathname } from "next/navigation"
 import { Fragment, useEffect, useRef, useState } from "react"
+import type { ClientDictionary } from "@lib/i18n/types"
 
 const CartDropdown = ({
   cart: cartState,
   dict,
 }: {
   cart?: HttpTypes.StoreCart | null
-  dict?: Record<string, Record<string, string>>
+  dict?: ClientDictionary
 }) => {
   const [activeTimer, setActiveTimer] = useState<NodeJS.Timer | undefined>(
     undefined
