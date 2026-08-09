@@ -130,3 +130,14 @@ The storefront is configured via environment variables in `apps/storefront/.env.
 
 - [Synapse Architecture & Docs](https://docs.medusajs.com)
 
+## Agent platform development
+
+Trước khi xây hoặc sửa agent, đọc theo thứ tự:
+
+1. [`AGENTS.md`](./AGENTS.md);
+2. [`docs/session-logs/2026-08-10-agent-platform-foundation-handoff.md`](./docs/session-logs/2026-08-10-agent-platform-foundation-handoff.md);
+3. [`AGENT_CATALOG.md`](./AGENT_CATALOG.md);
+4. [`AGENT_FOUNDATION.md`](./AGENT_FOUNDATION.md).
+
+Session handoff ghi source map, kiến trúc control plane, lệnh bootstrap/test và
+ranh giới giữa nền đã code với deployment gate còn thiếu.

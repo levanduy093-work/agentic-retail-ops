@@ -1,4 +1,8 @@
 import { MedusaContainer } from "@medusajs/framework";
+import type {
+  CreateProductWorkflowInputDTO,
+  ProductTypes,
+} from "@medusajs/framework/types";
 import { ContainerRegistrationKeys, Modules, ProductStatus } from "@medusajs/framework/utils";
 import {
   createInventoryLevelsWorkflow,
@@ -104,7 +108,7 @@ export default async function pumpClothingData({
   let sizeOption = existingOptions.find((o) => o.title === "Size");
   let colorOption = existingOptions.find((o) => o.title === "Color");
 
-  const optionsToCreate = [];
+  const optionsToCreate: ProductTypes.CreateProductOptionDTO[] = [];
   if (!sizeOption) optionsToCreate.push({ title: "Size", values: ["S", "M", "L", "XL"] });
   if (!colorOption) optionsToCreate.push({ title: "Color", values: ["Black", "White"] });
 
@@ -178,7 +182,7 @@ export default async function pumpClothingData({
   ];
 
   // Generate 105 distinct clothing products
-  const productsToCreate = [];
+  const productsToCreate: CreateProductWorkflowInputDTO[] = [];
 
   for (let i = 0; i < 105; i++) {
     const typeObj = types[i % types.length];
@@ -241,7 +245,7 @@ export default async function pumpClothingData({
 
   // Batch insert products (batch size = 15)
   const batchSize = 15;
-  const createdAllProducts = [];
+  const createdAllProducts: ProductTypes.ProductDTO[] = [];
 
   for (let b = 0; b < productsToCreate.length; b += batchSize) {
     const batch = productsToCreate.slice(b, b + batchSize);

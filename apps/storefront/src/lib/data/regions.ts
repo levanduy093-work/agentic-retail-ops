@@ -35,25 +35,28 @@ export const retrieveRegion = async (id: string) => {
 const regionMap = new Map<string, HttpTypes.StoreRegion>()
 
 export const getRegion = async (countryCode: string) => {
-  if (regionMap.has(countryCode)) {
-    return regionMap.get(countryCode)
+  const normalizedCode = countryCode?.toLowerCase()
+  if (normalizedCode && regionMap.has(normalizedCode)) {
+    return regionMap.get(normalizedCode)
   }
 
   const regions = await listRegions()
 
-  if (!regions) {
+  if (!regions || !regions.length) {
     return null
   }
 
   regions.forEach((region) => {
     region.countries?.forEach((c) => {
-      regionMap.set(c?.iso_2 ?? "", region)
+      if (c?.iso_2) {
+        regionMap.set(c.iso_2.toLowerCase(), region)
+      }
     })
   })
 
-  const region = countryCode
-    ? regionMap.get(countryCode)
-    : regionMap.get("us")
+  const region = normalizedCode
+    ? regionMap.get(normalizedCode) || regionMap.get("us") || regionMap.get("dk") || regions[0]
+    : regionMap.get("us") || regionMap.get("dk") || regions[0]
 
   return region
 }

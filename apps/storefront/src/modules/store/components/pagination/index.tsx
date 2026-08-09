@@ -34,10 +34,14 @@ export function Pagination({
     label: string | number,
     isCurrent: boolean
   ) => {
-    const className = clx("txt-xlarge-plus text-ui-fg-muted", {
-      "text-ui-fg-base": isCurrent,
-      "hover:text-ui-fg-subtle": !isCurrent,
-    })
+    const className = clx(
+      "flex h-11 min-w-11 items-center justify-center rounded-full px-3 text-large-semi transition-colors duration-200",
+      {
+        "bg-[var(--brand)] text-white shadow-sm": isCurrent,
+        "text-[var(--muted)] hover:bg-white hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]":
+          !isCurrent,
+      }
+    )
 
     if (isCurrent) {
       return (
@@ -51,6 +55,7 @@ export function Pagination({
       <Link
         key={p}
         href={getPageHref(p)}
+        aria-label={`Go to page ${p}`}
         className={className}
         onClick={startStorefrontNavigation}
         scroll
@@ -64,7 +69,8 @@ export function Pagination({
   const renderEllipsis = (key: string) => (
     <span
       key={key}
-      className="txt-xlarge-plus text-ui-fg-muted items-center cursor-default"
+      aria-hidden="true"
+      className="flex h-11 min-w-6 cursor-default items-center justify-center text-large-semi text-[var(--muted)]"
     >
       ...
     </span>
@@ -122,10 +128,13 @@ export function Pagination({
 
   // Render the component
   return (
-    <div className="flex justify-center w-full mt-12">
-      <div className="flex gap-3 items-end" data-testid={dataTestid}>
+    <nav
+      aria-label="Product pagination"
+      className="mt-12 flex w-full justify-center"
+    >
+      <div className="flex items-center gap-1" data-testid={dataTestid}>
         {renderPageButtons()}
       </div>
-    </div>
+    </nav>
   )
 }

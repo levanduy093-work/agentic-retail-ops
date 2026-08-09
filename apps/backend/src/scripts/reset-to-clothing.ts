@@ -1,4 +1,5 @@
 import { MedusaContainer } from "@medusajs/framework";
+import type { ProductTypes } from "@medusajs/framework/types";
 import { ContainerRegistrationKeys, Modules, ProductStatus } from "@medusajs/framework/utils";
 import {
   createInventoryLevelsWorkflow,
@@ -126,7 +127,7 @@ export default async function resetToClothing({
   let sizeOption = existingOptions.find((o) => o.title === "Size");
   let colorOption = existingOptions.find((o) => o.title === "Color");
 
-  const optionsToCreate = [];
+  const optionsToCreate: ProductTypes.CreateProductOptionDTO[] = [];
   if (!sizeOption) {
     optionsToCreate.push({
       title: "Size",

@@ -1,4 +1,4 @@
-import vi from "./json/vi.json" with { type: "json" }
+import vi from "./json/vi.json"
 
 export default {
   vi: {

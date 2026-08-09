@@ -29,20 +29,49 @@ vận hành chung để từng năng lực agent có thể:
   customer.
 - `AGENT_CATALOG.md` đã liệt kê 17 năng lực agent mục tiêu.
 
-### Chưa có
+### Đã bổ sung trong vertical slice đầu tiên
 
-- Agent runtime hoặc worker riêng.
-- Canonical event contract và event inbox.
-- Incident/case, agent run, recommendation, approval và task persistence.
-- Policy engine và Action Gateway.
-- Typed tool registry cho agent.
-- Transactional outbox, consumer deduplication và retry/lease cho agent worker.
+- Custom module `agent-operations` và migration cho event, incident, run,
+  recommendation, approval, audit và outbox.
+- Contract + validator cho `inventory.low`.
+- State machine, event dedupe, deterministic inventory recommendation và
+  approval decision idempotency.
+- Admin API cho event, incident và approval.
+- Policy declarations tương thích Medusa RBAC cho các resource agent.
+- Unit test và script kiểm chứng module service/database.
+- Scheduled outbox dispatcher có optimistic claim, lease expiry, exponential
+  backoff, dead-letter và message idempotency metadata.
+- Typed tool registry đầu tiên gồm `inventory.get-position@1.0.0` và
+  `inventory.execute-transfer@1.0.0`.
+- Action request/tool-call persistence, Action Gateway workflow và scheduled
+  action worker có lease, retry, dead-letter và idempotency.
+- Inventory Action Gateway đọc `available_quantity` live từ Medusa dưới khóa,
+  kiểm tra lại approval/state/tool contract rồi mới điều chỉnh hai stock level.
+- Safe conflict đưa incident từ `EXECUTING` về `OPTIONS_READY`; mutation thành
+  công có compensation và đi tiếp `MONITORING -> RESOLVED`.
+- Communication Gateway `IN_APP` có conversation/message persistence,
+  notification subscriber và structured `APPROVAL_DECISION` command idempotent.
+- Admin API đọc conversation/message và gửi command; command vẫn đi qua policy,
+  approval workflow và Action Gateway hiện có.
+
+### Vẫn chưa có
+
+- Agent runtime/worker riêng có LLM hoặc supervisor.
+- Task persistence.
+- Policy engine tổng quát cho nhiều action type.
+- Production Event Bus, distributed locking và subscriber
+  idempotent/replay tooling.
+- Mobile/PWA, push notification, provider adapter, channel identity mapping và
+  delivery receipt/retry cho Telegram/Zalo/Slack/Teams.
+- LLM chuyển câu chat tự do thành structured command có evaluation.
 - Knowledge ingestion/RAG có version, trạng thái phê duyệt và citation.
 - Incident Queue, Approval Inbox và Agent Trace trong Admin.
 - Bộ scenario và evaluation dùng để chứng minh agent hoạt động đúng.
 
-Vì vậy, `AGENT_CATALOG.md` hiện là danh mục thiết kế, chưa phải danh sách năng
-lực đã triển khai.
+Vì vậy, bốn capability đầu tiên vẫn ở mức `implemented-static`. Safe-conflict
+đã có bằng chứng database/runtime cục bộ, nhưng happy path chuyển tồn với hai
+stock location thật, RBAC bằng user thật và production Event Bus/locking vẫn là
+gate trước khi gọi `runtime-verified` end-to-end.
 
 ## 3. Ranh giới kiến trúc bắt buộc
 
@@ -545,8 +574,33 @@ Một agent chỉ được gọi là runtime verified khi:
 
 ## 12. Việc cần làm ngay
 
-1. Duyệt tài liệu nền này và chốt vertical slice đầu tiên.
-2. Chuyển bốn agent đầu tiên trong `AGENT_CATALOG.md` sang mẫu contract đầy đủ.
-3. Viết scenario và policy matrix trước migration/code.
-4. Chốt cấu trúc `agent-worker` và các shared package.
-5. Sau architecture gate mới tạo module, migration, API và Admin UI.
+Nền dùng chung đã đạt `implemented-static` và phần persistence/bootstrap đạt
+`runtime-verified` trên PostgreSQL local. Vì vậy việc tiếp theo chuyển sang xây
+vertical slice của từng agent, không tiếp tục dựng infrastructure chung chung:
+
+1. Gán role `operations_manager` cho tài khoản thật và kiểm thử allow/deny qua
+   Admin API.
+2. Chạy happy path chuyển tồn với hai stock location thật và kiểm thử hai action
+   cạnh tranh trên cùng inventory item bằng Redis locking.
+3. Xây Order Exception Agent bằng event, task, policy và evaluation primitive đã
+   có; không ghi thẳng bảng order.
+4. Xây Customer Support Agent bằng approved knowledge, citation và KNOW-001;
+   đầu ra chỉ là draft chờ người duyệt.
+5. Chọn secret manager/model provider và adapter mobile/chat sau khi có benchmark
+   và security gate; không đặt khóa bí mật trong database hoặc Admin client.
+
+## 13. Baseline nền tảng đã code ngày 2026-08-10
+
+- 17 agent được đăng ký trong catalog TypeScript đọc được bằng máy.
+- 20 RBAC policy được Medusa đồng bộ từ `definePolicies` và gắn vào role
+  `operations_manager` bằng bootstrap idempotent.
+- Có persistence và workflow cho task, policy definition, knowledge, prompt,
+  model run, evaluation, channel connection và delivery.
+- Có deterministic policy engine, task state machine, knowledge eligibility,
+  citation checksum, model redaction/budget/schema gate và assertion evaluator.
+- Có Admin Operations Console và readiness API phân biệt `code_ready` với
+  `deployment_ready`.
+- Redis Event Bus, Workflow Engine và distributed locking đã kết nối runtime khi
+  bật cờ; local mặc định vẫn an toàn với in-memory.
+- Model provider và external delivery provider vẫn disabled. Đây là chủ ý an
+  toàn, không phải phần đã triển khai giả.

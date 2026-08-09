@@ -53,7 +53,9 @@ async function getRegionMap(cacheId: string) {
     // Create a map of country codes to regions.
     regions.forEach((region: HttpTypes.StoreRegion) => {
       region.countries?.forEach((c) => {
-        regionMapCache.regionMap.set(c.iso_2 ?? "", region)
+        if (c?.iso_2) {
+          regionMapCache.regionMap.set(c.iso_2.toLowerCase(), region)
+        }
       })
     })
 

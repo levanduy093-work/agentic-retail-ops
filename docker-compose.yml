@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   postgres:
     image: postgres:16
@@ -9,3 +8,18 @@ services:
       POSTGRES_DB: medusa-dtc-starter
     ports:
       - "5432:5432"
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - agent-redis-data:/data
+
+volumes:
+  agent-redis-data:

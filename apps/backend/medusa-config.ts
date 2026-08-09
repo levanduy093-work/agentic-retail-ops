@@ -2,6 +2,7 @@ import {
   ContainerRegistrationKeys,
   defineConfig,
   loadEnv,
+  MedusaError,
   Modules,
 } from '@medusajs/framework/utils'
 import { readFile } from 'fs/promises'
@@ -10,6 +11,43 @@ import { resolve } from 'path'
 loadEnv(process.env.NODE_ENV || 'development', process.cwd())
 
 const isGoogleAuthConfigured = Boolean(process.env.GOOGLE_CLIENT_ID)
+const isRedisInfrastructureEnabled =
+  process.env.REDIS_INFRASTRUCTURE_ENABLED === 'true'
+const redisUrl = process.env.REDIS_URL
+const lockingRedisUrl = process.env.LOCKING_REDIS_URL || redisUrl
+
+if (isRedisInfrastructureEnabled && !redisUrl) {
+  throw new MedusaError(
+    MedusaError.Types.INVALID_DATA,
+    'REDIS_URL is required when REDIS_INFRASTRUCTURE_ENABLED=true'
+  )
+}
+
+const productionInfrastructureModules = isRedisInfrastructureEnabled
+  ? [
+      {
+        resolve: '@medusajs/medusa/event-bus-redis',
+        options: { redisUrl },
+      },
+      {
+        resolve: '@medusajs/medusa/workflow-engine-redis',
+        options: { redis: { redisUrl } },
+      },
+      {
+        resolve: '@medusajs/medusa/locking',
+        options: {
+          providers: [
+            {
+              resolve: '@medusajs/medusa/locking-redis',
+              id: 'locking-redis',
+              is_default: true,
+              options: { redisUrl: lockingRedisUrl },
+            },
+          ],
+        },
+      },
+    ]
+  : []
 
 const injectDashboardThemeBridge = (code: string, id: string) => {
   const normalizedId = id.replace(/\\/g, '/')
@@ -217,6 +255,13 @@ module.exports = defineConfig({
     }
   },
   modules: [
+    ...productionInfrastructureModules,
+    {
+      resolve: '@medusajs/medusa/rbac',
+    },
+    {
+      resolve: "./src/modules/agent-operations",
+    },
     {
       resolve: '@medusajs/medusa/auth',
       dependencies: [Modules.CACHE, ContainerRegistrationKeys.LOGGER],
