@@ -130,11 +130,9 @@ export default function NavigationProgress() {
       role="status"
       aria-label="Đang chuyển trang"
       aria-hidden={!pending}
-      className={`fixed inset-0 z-[1000] grid place-items-center bg-[#f4f7f5]/90 backdrop-blur-[2px] ${
+      className={`fixed inset-0 z-[1000] bg-[#f4f7f5]/90 backdrop-blur-[2px] ${
         pending ? "visible" : "invisible"
       }`}
-    >
-      <span className="navigation-screen-activator" aria-hidden="true" />
-    </div>
+    />
   )
 }

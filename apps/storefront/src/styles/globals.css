@@ -92,11 +92,6 @@
     @apply px-4 py-2 border border-[#174b3d] rounded-full hover:bg-[#174b3d] hover:text-white transition-colors duration-200 ease-in;
   }
 
-  .navigation-screen-activator {
-    @apply h-11 w-11 rounded-full border-[3px] border-[#174b3d]/15 border-t-[#174b3d] shadow-[0_8px_24px_rgba(17,49,39,0.1)];
-    animation: navigation-screen-spin 800ms linear infinite;
-  }
-
   .text-xsmall-regular {
     @apply text-[10px] leading-4 font-normal;
   }
@@ -155,20 +150,5 @@
     background: #ffffff;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
-  }
-}
-
-@keyframes navigation-screen-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .navigation-screen-activator {
-    animation: none;
   }
 }
