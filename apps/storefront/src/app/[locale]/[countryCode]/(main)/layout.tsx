@@ -8,10 +8,15 @@ import CartMismatchBanner from "@modules/layout/components/cart-mismatch-banner"
 import Footer from "@modules/layout/templates/footer"
 import Nav from "@modules/layout/templates/nav"
 import FreeShippingPriceNudge from "@modules/shipping/components/free-shipping-price-nudge"
+import NavigationProgress from "@modules/layout/components/navigation-progress"
 
 export const metadata: Metadata = {
   metadataBase: new URL(getBaseURL()),
 }
+
+// Customer and cart data come from request cookies, so every route under this
+// layout must render per request instead of being mixed with static product pages.
+export const dynamic = "force-dynamic"
 
 export default async function PageLayout(props: { children: React.ReactNode }) {
   const [customer, cart] = await Promise.all([
@@ -28,6 +33,7 @@ export default async function PageLayout(props: { children: React.ReactNode }) {
 
   return (
     <>
+      <NavigationProgress />
       <Nav />
       {customer && cart && (
         <CartMismatchBanner customer={customer} cart={cart} />

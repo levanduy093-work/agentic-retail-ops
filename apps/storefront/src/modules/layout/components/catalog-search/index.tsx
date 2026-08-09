@@ -3,27 +3,35 @@
 import { MagnifyingGlass } from "@medusajs/icons"
 import { FormEvent, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
+import { startStorefrontNavigation } from "@lib/util/storefront-navigation"
 
-export default function CatalogSearch({ dict }: { dict?: Record<string, Record<string, string>> }) {
+export default function CatalogSearch({
+  dict,
+}: {
+  dict?: Record<string, Record<string, string>>
+}) {
   const [query, setQuery] = useState("")
   const router = useRouter()
-  const { countryCode, locale } = useParams<{ countryCode: string, locale: string }>()
+  const { countryCode, locale } = useParams<{
+    countryCode: string
+    locale: string
+  }>()
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const trimmedQuery = query.trim()
     const href = trimmedQuery
-      ? `/${locale || "en"}/${countryCode}/store?q=${encodeURIComponent(trimmedQuery)}`
+      ? `/${locale || "en"}/${countryCode}/store?q=${encodeURIComponent(
+          trimmedQuery
+        )}`
       : `/${locale || "en"}/${countryCode}/store`
 
+    startStorefrontNavigation()
     router.push(href)
   }
 
   return (
-    <form
-      onSubmit={submit}
-      className="block min-w-0 flex-1 md:max-w-[430px]"
-    >
+    <form onSubmit={submit} className="block min-w-0 flex-1 md:max-w-[430px]">
       <label className="sr-only" htmlFor="catalog-search">
         {dict?.nav?.search || "Search the catalog"}
       </label>

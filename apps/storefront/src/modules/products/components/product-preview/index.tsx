@@ -5,31 +5,26 @@ import LocalizedClientLink from "@modules/common/components/localized-client-lin
 import Thumbnail from "../thumbnail"
 import PreviewPrice from "./price"
 
-export default async function ProductPreview({
+export default function ProductPreview({
   product,
   isFeatured,
-  region: _region,
 }: {
   product: HttpTypes.StoreProduct
   isFeatured?: boolean
-  region: HttpTypes.StoreRegion
 }) {
-  // const pricedProduct = await listProducts({
-  //   regionId: region.id,
-  //   queryParams: { id: [product.id!] },
-  // }).then(({ response }) => response.products[0])
-
-  // if (!pricedProduct) {
-  //   return null
-  // }
-
   const { cheapestPrice } = getProductPrice({
     product,
   })
 
   return (
-    <LocalizedClientLink href={`/products/${product.handle}`} className="group flex h-full">
-      <div data-testid="product-wrapper" className="flex w-full flex-col overflow-hidden rounded-large border border-[color:var(--line)] bg-white transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_18px_44px_rgba(17,49,39,0.12)]">
+    <LocalizedClientLink
+      href={`/products/${product.handle}`}
+      className="group flex h-full"
+    >
+      <div
+        data-testid="product-wrapper"
+        className="flex w-full flex-col overflow-hidden rounded-large border border-[color:var(--line)] bg-white transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_18px_44px_rgba(17,49,39,0.12)]"
+      >
         <div className="flex-grow bg-[#eef3f0]">
           <Thumbnail
             thumbnail={product.thumbnail}
@@ -40,7 +35,11 @@ export default async function ProductPreview({
           />
         </div>
         <div className="flex flex-col gap-2 p-5 pt-4">
-          <Text className="truncate text-base font-semibold tracking-[-0.02em] text-[#12231d]" data-testid="product-title" title={product.title}>
+          <Text
+            className="truncate text-base font-semibold tracking-[-0.02em] text-[#12231d]"
+            data-testid="product-title"
+            title={product.title}
+          >
             {product.title}
           </Text>
           <div className="flex items-center gap-x-2 font-semibold text-[#174b3d]">

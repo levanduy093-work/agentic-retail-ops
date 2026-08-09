@@ -57,6 +57,7 @@ export const listProducts = async ({
   }
 
   const next = {
+    revalidate: 60,
     ...(await getCacheOptions("products")),
   }
 
@@ -118,13 +119,34 @@ export const listProductsWithSort = async ({
     new Set((optionValueIds || []).filter(Boolean))
   )
 
+  const filteredQueryParams = {
+    ...queryParams,
+    ...(optionFilters.length ? { option_value_id: optionFilters } : {}),
+    fields:
+      queryParams?.fields ||
+      "id,handle,title,thumbnail,*variants.calculated_price",
+  }
+
+  // The Store API can paginate and sort by creation date itself. Avoid loading
+  // 100 products into the Next.js server for the default catalogue view.
+  if (sortBy === "created_at") {
+    return listProducts({
+      pageParam: Math.max(page, 1),
+      queryParams: {
+        ...filteredQueryParams,
+        order: "-created_at",
+        limit,
+      },
+      countryCode,
+    })
+  }
+
   const {
     response: { products },
   } = await listProducts({
-    pageParam: 0,
+    pageParam: 1,
     queryParams: {
-      ...queryParams,
-      ...(optionFilters.length ? { option_value_id: optionFilters } : {}),
+      ...filteredQueryParams,
       limit: 100,
     },
     countryCode,
@@ -132,13 +154,14 @@ export const listProductsWithSort = async ({
 
   const sortedProducts = sortProducts(products, sortBy)
 
-  const pageParam = (page - 1) * limit
+  const pageOffset = (Math.max(page, 1) - 1) * limit
 
   const filteredCount = products.length
 
-  const nextPage = filteredCount > pageParam + limit ? pageParam + limit : null
+  const nextPage =
+    filteredCount > pageOffset + limit ? Math.max(page, 1) + 1 : null
 
-  const paginatedProducts = sortedProducts.slice(pageParam, pageParam + limit)
+  const paginatedProducts = sortedProducts.slice(pageOffset, pageOffset + limit)
 
   return {
     response: {

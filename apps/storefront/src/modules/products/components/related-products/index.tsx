@@ -1,5 +1,4 @@
 import { listProducts } from "@lib/data/products"
-import { getRegion } from "@lib/data/regions"
 import { HttpTypes } from "@medusajs/types"
 import Product from "../product-preview"
 
@@ -12,16 +11,9 @@ export default async function RelatedProducts({
   product,
   countryCode,
 }: RelatedProductsProps) {
-  const region = await getRegion(countryCode)
-
-  if (!region) {
-    return null
-  }
-
   // edit this function to define your related products logic
-  const queryParams: HttpTypes.StoreProductListParams = {}
-  if (region?.id) {
-    queryParams.region_id = region.id
+  const queryParams: HttpTypes.StoreProductListParams = {
+    fields: "id,handle,title,thumbnail,*variants.calculated_price",
   }
   if (product.collection_id) {
     queryParams.collection_id = [product.collection_id]
@@ -60,7 +52,7 @@ export default async function RelatedProducts({
       <ul className="grid grid-cols-2 small:grid-cols-3 medium:grid-cols-4 gap-x-6 gap-y-8">
         {products.map((product) => (
           <li key={product.id}>
-            <Product region={region} product={product} />
+            <Product product={product} />
           </li>
         ))}
       </ul>

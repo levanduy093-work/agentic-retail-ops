@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useMemo } from "react"
+import { startStorefrontNavigation } from "@lib/util/storefront-navigation"
 
 import {
   OPTION_VALUE_QUERY_KEY,
@@ -41,6 +42,7 @@ const RefinementList = ({
         : pathname
 
       if (nextPath !== currentPath) {
+        startStorefrontNavigation()
         router.push(nextPath)
       }
     },

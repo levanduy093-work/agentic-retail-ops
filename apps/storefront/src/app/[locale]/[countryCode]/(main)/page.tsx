@@ -20,25 +20,23 @@ export default async function Home(props: {
 
   const { countryCode } = params
 
-  const region = await getRegion(countryCode)
-  const dict = await getDictionary()
-
-  const [{ collections }, heroProducts] = await Promise.all([
+  const [region, dict, { collections }] = await Promise.all([
+    getRegion(countryCode),
+    getDictionary(),
     listCollections({
       fields: "id,handle,title",
       limit: "3",
     }),
-    region
-      ? listProducts({
-          regionId: region.id,
-          queryParams: { limit: 1, fields: "id,handle,title,thumbnail,images" },
-        })
-      : Promise.resolve({ response: { products: [], count: 0 }, nextPage: null }),
   ])
 
   if (!collections || !region) {
     return null
   }
+
+  const heroProducts = await listProducts({
+    regionId: region.id,
+    queryParams: { limit: 1, fields: "id,handle,title,thumbnail,images" },
+  })
 
   return (
     <>

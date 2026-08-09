@@ -1,5 +1,4 @@
 import { listProductsWithSort } from "@lib/data/products"
-import { getRegion } from "@lib/data/regions"
 import { OptionValueIds } from "@lib/util/product-option-filters"
 import ProductPreview from "@modules/products/components/product-preview"
 import { Pagination } from "@modules/store/components/pagination"
@@ -59,12 +58,6 @@ export default async function PaginatedProducts({
     queryParams["order"] = "created_at"
   }
 
-  const region = await getRegion(countryCode)
-
-  if (!region) {
-    return null
-  }
-
   const {
     response: { products, count },
   } = await listProductsWithSort({
@@ -86,7 +79,7 @@ export default async function PaginatedProducts({
         {products.map((p) => {
           return (
             <li key={p.id}>
-              <ProductPreview product={p} region={region} />
+              <ProductPreview product={p} />
             </li>
           )
         })}

@@ -1,5 +1,6 @@
 import { MedusaContainer } from "@medusajs/framework";
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
+import { ensureVndVariantPrices } from "./repair-vnd-prices";
 
 export default async function setVietnamData({
   container,
@@ -46,14 +47,18 @@ export default async function setVietnamData({
     });
   }
   if (stores.length > 0 && regions.length > 0) {
-      await storeModuleService.updateStores(stores[0].id, {
-          default_region_id: regions[0].id
-      });
+    await storeModuleService.updateStores(stores[0].id, {
+      default_region_id: regions[0].id,
+    });
   }
   logger.info("Updated Regions.");
 
+  // A VND region cannot calculate cart line-item prices when legacy variants
+  // only have EUR/USD prices.
+  await ensureVndVariantPrices(container);
+
   // 3. Update Stock Locations
-  const locations = await stockLocationService.listStockLocations();
+  const locations = await stockLocationService.listStockLocations({});
   for (const location of locations) {
     await stockLocationService.updateStockLocations(location.id, {
       name: "Kho hàng Việt Nam",

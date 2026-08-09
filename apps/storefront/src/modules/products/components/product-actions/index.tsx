@@ -38,6 +38,7 @@ export default function ProductActions({
 
   const [options, setOptions] = useState<Record<string, string | undefined>>({})
   const [isAdding, setIsAdding] = useState(false)
+  const [addError, setAddError] = useState<string | null>(null)
   const countryCode = useParams().countryCode as string
 
   // If there is only 1 variant, preselect the options
@@ -90,7 +91,7 @@ export default function ProductActions({
     }
 
     router.replace(pathname + "?" + params.toString())
-  }, [selectedVariant, isValidVariant])
+  }, [isValidVariant, pathname, router, searchParams, selectedVariant])
 
   // check if the selected variant is in stock
   const inStock = useMemo(() => {
@@ -125,14 +126,24 @@ export default function ProductActions({
     if (!selectedVariant?.id) return null
 
     setIsAdding(true)
+    setAddError(null)
 
-    await addToCart({
-      variantId: selectedVariant.id,
-      quantity: 1,
-      countryCode,
-    })
-
-    setIsAdding(false)
+    try {
+      await addToCart({
+        variantId: selectedVariant.id,
+        quantity: 1,
+        countryCode,
+      })
+    } catch (error) {
+      console.error("Failed to add product to cart", error)
+      setAddError(
+        error instanceof Error
+          ? error.message
+          : "Unable to add this product to the cart. Please try again."
+      )
+    } finally {
+      setIsAdding(false)
+    }
   }
 
   return (
@@ -182,6 +193,11 @@ export default function ProductActions({
             ? "Out of stock"
             : "Add to cart"}
         </Button>
+        {addError && (
+          <p className="text-sm text-red-600" role="alert">
+            {addError}
+          </p>
+        )}
         <MobileActions
           product={product}
           variant={selectedVariant}
