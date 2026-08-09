@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { listCategories } from "@lib/data/categories";
 import { listCollections } from "@lib/data/collections";
 import { Text, clx } from "@modules/common/components/ui";
@@ -26,9 +27,16 @@ export default async function Footer() {
           <div>
             <LocalizedClientLink
               href="/"
-              className="text-xl font-bold tracking-[-0.04em] text-[#174b3d] hover:text-[#103a2f]"
+              className="flex items-center gap-3 text-xl font-bold tracking-[-0.04em] text-[#174b3d] hover:text-[#103a2f]"
             >
-              Synapse Store
+              <Image
+                src="/logo.png"
+                alt="Synapse Store Logo"
+                width={40}
+                height={40}
+                className="h-9 w-auto object-contain"
+              />
+              <span>Synapse Store</span>
             </LocalizedClientLink>
           </div>
           <div className="text-small-regular gap-10 md:gap-x-16 grid grid-cols-2 sm:grid-cols-3">
@@ -145,7 +153,7 @@ export default async function Footer() {
                 </li>
                 <li>
                   <a
-                    href="https://github.com/levanduy093-work"
+                    href="https://github.com/levanduy093-work/agentic-retail-ops"
                     target="_blank"
                     rel="noreferrer"
                     className="hover:text-ui-fg-base"

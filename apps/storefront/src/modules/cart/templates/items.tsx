@@ -1,32 +1,36 @@
+"use client"
+
 import repeat from "@lib/util/repeat"
 import { HttpTypes } from "@medusajs/types"
 import { Heading, Table } from "@modules/common/components/ui"
 
 import Item from "@modules/cart/components/item"
 import SkeletonLineItem from "@modules/skeletons/components/skeleton-line-item"
+import { useTranslation } from "@lib/i18n/client"
 
 type ItemsTemplateProps = {
   cart?: HttpTypes.StoreCart
 }
 
 const ItemsTemplate = ({ cart }: ItemsTemplateProps) => {
+  const t = useTranslation()
   const items = cart?.items
   return (
     <div>
       <div className="flex items-center pb-5">
-        <Heading className="text-3xl leading-tight tracking-[-0.05em] text-[#12231d]">Cart</Heading>
+        <Heading className="text-3xl leading-tight tracking-[-0.05em] text-[#12231d]">{t("cart.title")}</Heading>
       </div>
       <Table>
         <Table.Header className="border-t-0">
           <Table.Row className="text-ui-fg-subtle txt-medium-plus">
-            <Table.HeaderCell className="!pl-0">Item</Table.HeaderCell>
+            <Table.HeaderCell className="!pl-0">{t("cart.item")}</Table.HeaderCell>
             <Table.HeaderCell></Table.HeaderCell>
-            <Table.HeaderCell>Quantity</Table.HeaderCell>
+            <Table.HeaderCell>{t("cart.quantity")}</Table.HeaderCell>
             <Table.HeaderCell className="hidden small:table-cell">
-              Price
+              {t("cart.price")}
             </Table.HeaderCell>
             <Table.HeaderCell className="!pr-0 text-right">
-              Total
+              {t("cart.total")}
             </Table.HeaderCell>
           </Table.Row>
         </Table.Header>

@@ -5,10 +5,13 @@ import { ExclamationCircleSolid } from "@medusajs/icons"
 import { StoreCart, StoreCustomer } from "@medusajs/types"
 import { Button } from "@modules/common/components/ui"
 import { useState } from "react"
+import { useTranslation } from "@lib/i18n/client"
+
 function CartMismatchBanner(props: {
   customer: StoreCustomer
   cart: StoreCart
 }) {
+  const t = useTranslation()
   const { customer, cart } = props
   const [isPending, setIsPending] = useState(false)
   const [actionText, setActionText] = useState("Run transfer again")
@@ -34,7 +37,7 @@ function CartMismatchBanner(props: {
       <div className="flex flex-col small:flex-row small:gap-2 gap-1 items-center">
         <span className="flex items-center gap-1">
           <ExclamationCircleSolid className="inline" />
-          Something went wrong when we tried to transfer your cart
+          {t("common.cart_mismatch_title")}
         </span>
 
         <span>·</span>

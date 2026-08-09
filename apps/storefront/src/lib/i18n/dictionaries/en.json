@@ -4,7 +4,9 @@
     "store": "Store",
     "account": "Account",
     "cart": "Cart",
-    "search": "Search the catalog"
+    "search": "Search the catalog",
+    "categories": "Categories",
+    "collections": "Collections"
   },
   "hero": {
     "title": "Everyday pieces, thoughtfully chosen.",
@@ -16,7 +18,14 @@
   },
   "store": {
     "title": "Our Collection",
-    "subtitle": "Discover our premium selection of carefully curated products designed for modern living."
+    "subtitle": "Discover our premium selection of carefully curated products designed for modern living.",
+    "sort_by": "Sort by",
+    "price_asc": "Price: Low -> High",
+    "price_desc": "Price: High -> Low",
+    "created_at": "Latest arrivals",
+    "options": "Options",
+    "clear_all": "Clear all",
+    "no_products": "No products found"
   },
   "footer": {
     "categories": "Categories",
@@ -44,7 +53,57 @@
     "subtotal_tax": "(excl. taxes)",
     "go_to_cart": "Go to cart",
     "empty": "Your shopping bag is empty.",
-    "explore": "Explore products"
+    "explore": "Explore products",
+    "summary": "Summary",
+    "go_to_checkout": "Go to checkout",
+    "item": "Item",
+    "price": "Price",
+    "total": "Total",
+    "sign_in_title": "Already have an account?",
+    "sign_in_desc": "Sign in for a better experience."
+  },
+  "checkout": {
+    "title": "Checkout",
+    "shipping_address": "Shipping Address",
+    "billing_address": "Billing Address",
+    "same_as_shipping": "Billing address same as shipping address",
+    "shipping_method": "Shipping Method",
+    "shipping_method_desc": "How would you like your order delivered",
+    "pick_up": "Pick up your order",
+    "payment": "Payment",
+    "payment_method": "Payment Method",
+    "payment_details": "Payment details",
+    "discount_code": "Discount Code",
+    "add_discount_code": "Add Promotion Code",
+    "apply": "Apply",
+    "code_applied": "Code applied",
+    "review": "Review Order",
+    "place_order": "Place Order",
+    "terms_notice": "By clicking the Place Order button, you confirm that you have read, understand and accept our Terms of Use, Terms of Sale and Returns Policy and acknowledge that you have read Synapse Store's Privacy Policy.",
+    "in_your_cart": "In your Cart",
+    "continue_to_shipping": "Continue to shipping",
+    "continue_to_payment": "Continue to payment",
+    "continue_to_review": "Continue to review",
+    "enter_valid_email": "Enter a valid email address.",
+    "enter_promo_code": "Enter promo code"
+  },
+  "order": {
+    "thank_you": "Thank you!",
+    "order_placed_success": "Your order was placed successfully.",
+    "order_details": "Order Details",
+    "order_summary": "Order Summary",
+    "back_to_overview": "Back to overview",
+    "delivery": "Delivery",
+    "contact": "Contact",
+    "method": "Method",
+    "need_help": "Need help?",
+    "returns_exchanges": "Returns & Exchanges",
+    "accept_transfer": "Accept transfer",
+    "decline_transfer": "Decline transfer",
+    "transfer_success": "Order transferred successfully!",
+    "transfer_declined_success": "Order transfer declined successfully!",
+    "complete_setup_admin": "Complete setup in admin",
+    "complete_setup_admin_desc": "You can now complete setting up your store in the admin."
   },
   "collection": {
     "view_all": "View all"
@@ -69,7 +128,10 @@
     "easy_returns": "Easy returns",
     "easy_returns_description": "Just return your product and we'll refund your money. No questions asked – we'll do our best to make sure your return is hassle-free.",
     "related_products": "Related products",
-    "related_products_description": "You might also want to check out these products."
+    "related_products_description": "You might also want to check out these products.",
+    "original_price": "Original:",
+    "continue_setup_admin": "Continue setup in admin",
+    "continue_setup_admin_desc": "You can now continue setting up your store in the admin."
   },
   "account": {
     "title": "Account",
@@ -141,6 +203,42 @@
     "verifying_email": "Verifying your email...",
     "email_verified": "Your email is verified. You can now sign in to your account.",
     "verification_invalid": "This verification link is invalid or has expired. Sign in to receive a new verification email.",
-    "go_to_sign_in": "Go to sign in"
+    "go_to_sign_in": "Go to sign in",
+    "register_title": "Become a Synapse Member",
+    "register_desc": "Create your Synapse Member profile and get first access to the very best of Synapse products, inspiration and community.",
+    "already_member": "Already a member?",
+    "old_password": "Old password",
+    "new_password": "New password",
+    "confirm_password": "Confirm password",
+    "update_password": "Update password",
+    "password_updated": "Password updated successfully",
+    "transfer_order": "Transfer Order",
+    "transfer_order_desc": "Request order transfer to your current account.",
+    "order_id": "Order ID",
+    "transfer_code": "Transfer Code",
+    "submit": "Submit"
+  },
+  "shipping": {
+    "spend_more": "Spend {amount} more for free shipping!",
+    "unlocked": "You have unlocked free shipping!",
+    "view_cart": "View cart",
+    "view_products": "View products"
+  },
+  "common": {
+    "subtotal_excl": "Subtotal (excl. shipping and taxes)",
+    "shipping": "Shipping",
+    "discount": "Discount",
+    "taxes": "Taxes",
+    "total": "Total",
+    "original": "Original:",
+    "page_not_found": "Page not found",
+    "page_not_found_desc": "The page you tried to access does not exist.",
+    "cart_not_found": "Cart not found",
+    "cart_not_found_desc": "The cart you are trying to access does not exist.",
+    "go_to_frontpage": "Go to frontpage",
+    "cart_mismatch_title": "Something went wrong when we tried to transfer your cart",
+    "shipping_to": "Shipping to:",
+    "language": "Language",
+    "deleting": "Deleting..."
   }
 }

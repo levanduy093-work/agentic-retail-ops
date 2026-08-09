@@ -1,8 +1,9 @@
 "use client"
 
+import Image from "next/image"
 import { Popover, PopoverPanel, Transition } from "@headlessui/react"
 import useToggleState from "@lib/hooks/use-toggle-state"
-import { ArrowRightMini, XMark } from "@medusajs/icons"
+import { ArrowRightMini } from "@medusajs/icons"
 import { HttpTypes } from "@medusajs/types"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 import { Text, clx } from "@modules/common/components/ui"
@@ -11,7 +12,10 @@ import CountrySelect from "../country-select"
 import LanguageSelect from "../language-select"
 import { Locale } from "@lib/data/locales"
 import type { ClientDictionary } from "@lib/i18n/types"
-
+import type {
+  CatalogCategory,
+  CatalogCollection,
+} from "@modules/layout/components/catalog-navigation"
 
 const SideMenuItems = {
   Home: "/",
@@ -25,9 +29,18 @@ type SideMenuProps = {
   locales: Locale[] | null
   currentLocale: string | null
   dict?: ClientDictionary
+  categories?: CatalogCategory[]
+  collections?: CatalogCollection[]
 }
 
-const SideMenu = ({ regions, locales, currentLocale, dict }: SideMenuProps) => {
+const SideMenu = ({
+  regions,
+  locales,
+  currentLocale,
+  dict,
+  categories = [],
+  collections = [],
+}: SideMenuProps) => {
   const countryToggleState = useToggleState()
   const languageToggleState = useToggleState()
 
@@ -70,15 +83,30 @@ const SideMenu = ({ regions, locales, currentLocale, dict }: SideMenuProps) => {
                 leaveFrom="opacity-100"
                 leaveTo="opacity-0"
               >
-                <PopoverPanel className="flex flex-col absolute top-full left-0 mt-3 w-[85vw] max-w-[320px] z-[51] text-sm text-[#315248]">
+                <PopoverPanel className="absolute left-0 top-full z-[51] mt-3 flex max-h-[calc(100dvh-104px)] w-[85vw] max-w-[360px] flex-col overflow-y-auto text-sm text-[#315248]">
                   <div
                     data-testid="nav-menu-popup"
                     className="flex flex-col bg-white border border-[#12231d]/10 shadow-[0_18px_55px_rgba(17,49,39,0.12)] rounded-[22px] p-6 gap-6"
                   >
+                    <div className="flex items-center gap-2.5 pb-3 border-b border-[#12231d]/10">
+                      <Image
+                        src="/logo.png"
+                        alt="Synapse Store Logo"
+                        width={32}
+                        height={32}
+                        className="h-7 w-auto object-contain"
+                      />
+                      <span className="font-bold text-[#174b3d] text-lg">Synapse Store</span>
+                    </div>
                     <ul className="flex flex-col gap-4 items-start justify-start">
                       {Object.entries(SideMenuItems).map(([name, href]) => {
-                        const translationKey = name.toLowerCase() as "home" | "store" | "account" | "cart"
-                        const translatedName = dict?.nav?.[translationKey] || name
+                        const translationKey = name.toLowerCase() as
+                          | "home"
+                          | "store"
+                          | "account"
+                          | "cart"
+                        const translatedName =
+                          dict?.nav?.[translationKey] || name
 
                         return (
                           <li key={name}>
@@ -94,6 +122,46 @@ const SideMenu = ({ regions, locales, currentLocale, dict }: SideMenuProps) => {
                         )
                       })}
                     </ul>
+                    {!!categories.length && (
+                      <div className="border-t border-[#12231d]/10 pt-5">
+                        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#718078]">
+                          {dict?.nav?.categories || "Categories"}
+                        </p>
+                        <ul className="grid grid-cols-2 gap-1">
+                          {categories.map((category) => (
+                            <li key={category.id}>
+                              <LocalizedClientLink
+                                href={`/categories/${category.handle}`}
+                                className="block rounded-xl px-3 py-2 font-semibold text-[#174b3d] transition-colors hover:bg-[#edf3ef] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#174b3d]/35"
+                                onClick={close}
+                              >
+                                {category.name}
+                              </LocalizedClientLink>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {!!collections.length && (
+                      <div className="border-t border-[#12231d]/10 pt-5">
+                        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#718078]">
+                          {dict?.nav?.collections || "Collections"}
+                        </p>
+                        <ul className="flex flex-wrap gap-2">
+                          {collections.map((collection) => (
+                            <li key={collection.id}>
+                              <LocalizedClientLink
+                                href={`/collections/${collection.handle}`}
+                                className="block rounded-full bg-[#edf3ef] px-3 py-2 font-medium text-[#174b3d] transition-colors hover:bg-[#dfeae3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#174b3d]/35"
+                                onClick={close}
+                              >
+                                {collection.title}
+                              </LocalizedClientLink>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     <div className="flex flex-col gap-y-4 pt-4 border-t border-[#12231d]/10">
                       {!!locales?.length && (
                         <div

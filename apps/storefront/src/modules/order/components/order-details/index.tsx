@@ -1,5 +1,8 @@
+"use client"
+
 import { HttpTypes } from "@medusajs/types"
 import { Text } from "@modules/common/components/ui"
+import { useTranslation } from "@lib/i18n/client"
 
 type OrderDetailsProps = {
   order: HttpTypes.StoreOrder
@@ -7,6 +10,7 @@ type OrderDetailsProps = {
 }
 
 const OrderDetails = ({ order, showStatus }: OrderDetailsProps) => {
+  const t = useTranslation()
   const formatStatus = (str: string) => {
     const formatted = str.split("_").join(" ")
 
@@ -26,13 +30,13 @@ const OrderDetails = ({ order, showStatus }: OrderDetailsProps) => {
         .
       </Text>
       <Text className="mt-2">
-        Order date:{" "}
+        {t("account.date_placed")}:{" "}
         <span data-testid="order-date">
           {new Date(order.created_at).toDateString()}
         </span>
       </Text>
       <Text className="mt-2 text-ui-fg-interactive">
-        Order number: <span data-testid="order-id">{order.display_id}</span>
+        {t("account.order_number")}: <span data-testid="order-id">{order.display_id}</span>
       </Text>
 
       <div className="flex items-center text-compact-small gap-x-4 mt-4">

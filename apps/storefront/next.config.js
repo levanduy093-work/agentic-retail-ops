@@ -13,6 +13,14 @@ const S3_PATHNAME = process.env.MEDUSA_CLOUD_S3_PATHNAME
  */
 const nextConfig = {
   reactStrictMode: true,
+  serverExternalPackages: [
+    "@medusajs/js-sdk",
+    "@medusajs/types",
+  ],
+  transpilePackages: [
+    "@medusajs/icons",
+    "@medusajs/ui-preset",
+  ],
   logging: {
     fetches: {
       fullUrl: true,

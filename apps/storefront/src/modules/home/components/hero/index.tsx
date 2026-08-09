@@ -26,18 +26,19 @@ const Hero = ({ product, dict }: { product?: HttpTypes.StoreProduct; dict?: Clie
         </div>
         <div className="relative min-h-[300px] overflow-hidden">
           {product?.thumbnail || product?.images?.[0]?.url ? (
+            // Keep product colors intact by stacking media above the tint layer.
             <Image
               src={product.thumbnail || product.images?.[0]?.url || ""}
               alt={product.title || "Featured product"}
               fill
               priority
               sizes="(max-width: 1024px) 100vw, 58vw"
-              className="object-cover"
+              className="z-10 object-cover"
             />
           ) : (
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_65%_30%,rgba(255,255,255,.7),transparent_30%),linear-gradient(135deg,#bdcdc5,#e9efeb)]" />
           )}
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#dbe7e1]/70 via-transparent to-transparent" />
+          <div className="pointer-events-none absolute inset-0 z-0 bg-gradient-to-r from-[#dbe7e1]/70 via-transparent to-transparent" />
         </div>
       </div>
     </section>

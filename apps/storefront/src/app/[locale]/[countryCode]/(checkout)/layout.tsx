@@ -1,3 +1,4 @@
+import Image from "next/image"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 import ChevronDown from "@modules/common/icons/chevron-down"
 import MedusaCTA from "@modules/layout/components/medusa-cta"
@@ -29,10 +30,17 @@ export default async function CheckoutLayout({
           </LocalizedClientLink>
           <LocalizedClientLink
             href="/"
-            className="txt-compact-xlarge-plus text-ui-fg-subtle hover:text-ui-fg-base uppercase"
+            className="flex items-center gap-2 txt-compact-xlarge-plus text-ui-fg-subtle hover:text-ui-fg-base uppercase"
             data-testid="store-link"
           >
-            Synapse
+            <Image
+              src="/logo.png"
+              alt="Synapse Logo"
+              width={28}
+              height={28}
+              className="h-7 w-auto object-contain"
+            />
+            <span>Synapse</span>
           </LocalizedClientLink>
           <div className="flex-1 basis-0" />
         </nav>

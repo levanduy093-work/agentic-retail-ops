@@ -8,12 +8,14 @@ import { SubmitButton } from "@modules/checkout/components/submit-button"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 import { signup } from "@lib/data/customer"
 import GoogleSignInButton from "@modules/account/components/google-sign-in-button"
+import { useTranslation } from "@lib/i18n/client"
 
 type Props = {
   setCurrentView: (view: LOGIN_VIEW) => void
 }
 
 const Register = ({ setCurrentView }: Props) => {
+  const t = useTranslation()
   const [message, formAction] = useActionState(signup, null)
 
   return (
@@ -21,17 +23,16 @@ const Register = ({ setCurrentView }: Props) => {
       className="max-w-sm flex flex-col items-center"
       data-testid="register-page"
     >
-      <h1 className="text-large-semi uppercase mb-6">
-        Become a Synapse Store Member
+      <h1 className="text-large-semi uppercase mb-6 text-center">
+        {t("account.register_title")}
       </h1>
       <p className="text-center text-base-regular text-ui-fg-base mb-4">
-        Create your Synapse Store Member profile, and get access to an enhanced
-        shopping experience.
+        {t("account.register_desc")}
       </p>
-      <GoogleSignInButton label="Continue with Google" />
+      <GoogleSignInButton label={t("account.continue_with_google")} />
       <div className="w-full flex items-center gap-3 my-6 text-ui-fg-subtle text-small-regular">
         <div className="h-px flex-1 bg-ui-border-base" />
-        <span>or create an account with email</span>
+        <span>{t("account.or_sign_in_with_email")}</span>
         <div className="h-px flex-1 bg-ui-border-base" />
       </div>
       {message?.state === "verification_required" && (
@@ -46,21 +47,21 @@ const Register = ({ setCurrentView }: Props) => {
       <form className="w-full flex flex-col" action={formAction}>
         <div className="flex flex-col w-full gap-y-2">
           <Input
-            label="First name"
+            label={t("account.first_name")}
             name="first_name"
             required
             autoComplete="given-name"
             data-testid="first-name-input"
           />
           <Input
-            label="Last name"
+            label={t("account.last_name")}
             name="last_name"
             required
             autoComplete="family-name"
             data-testid="last-name-input"
           />
           <Input
-            label="Email"
+            label={t("account.email")}
             name="email"
             required
             type="email"
@@ -68,14 +69,14 @@ const Register = ({ setCurrentView }: Props) => {
             data-testid="email-input"
           />
           <Input
-            label="Phone"
+            label={t("account.phone")}
             name="phone"
             type="tel"
             autoComplete="tel"
             data-testid="phone-input"
           />
           <Input
-            label="Password"
+            label={t("account.password")}
             name="password"
             required
             type="password"
@@ -105,16 +106,16 @@ const Register = ({ setCurrentView }: Props) => {
           .
         </span>
         <SubmitButton className="w-full mt-6" data-testid="register-button">
-          Join
+          {t("account.join_us")}
         </SubmitButton>
       </form>
       <span className="text-center text-ui-fg-base text-small-regular mt-6">
-        Already a member?{" "}
+        {t("account.already_member")}{" "}
         <button
           onClick={() => setCurrentView(LOGIN_VIEW.SIGN_IN)}
           className="underline"
         >
-          Sign in
+          {t("account.sign_in")}
         </button>
         .
       </span>

@@ -7,6 +7,7 @@ import { ChevronDownMini } from "@medusajs/icons"
 import { sdk } from "@lib/config"
 import { HttpTypes } from "@medusajs/types"
 import clsx from "clsx"
+import { useTranslation } from "@lib/i18n/client"
 
 type OptionsPickerProps = {
   selectedValueIds: string[]
@@ -17,6 +18,7 @@ const OptionsPicker = ({
   selectedValueIds,
   setOptionValueIds,
 }: OptionsPickerProps) => {
+  const t = useTranslation()
   const [options, setOptions] = useState<HttpTypes.StoreProductOption[]>([])
   const [openItems, setOpenItems] = useState<string[]>([])
 
@@ -58,7 +60,7 @@ const OptionsPicker = ({
     <div className="flex flex-col gap-y-4">
       <div className="flex items-center justify-between px-1">
         <span className="txt-compact-small-plus text-ui-fg-subtle">
-          Options
+          {t("store.options")}
         </span>
       </div>
       <Accordion.Root

@@ -1,6 +1,7 @@
 "use server"
 
 import { sdk } from "@lib/config"
+import { decodeRouteSegment } from "@lib/util/decode-route-segment"
 import { HttpTypes } from "@medusajs/types"
 import { getCacheOptions } from "./cookies"
 
@@ -45,13 +46,14 @@ export const listCollections = async (
 export const getCollectionByHandle = async (
   handle: string
 ): Promise<HttpTypes.StoreCollection | null> => {
+  const decodedHandle = decodeRouteSegment(handle)
   const next = {
     ...(await getCacheOptions("collections")),
   }
 
   return await sdk.client
     .fetch<HttpTypes.StoreCollectionListResponse>(`/store/collections`, {
-      query: { handle, fields: "*products" },
+      query: { handle: decodedHandle, fields: "*products" },
       next,
       cache: "force-cache",
     })

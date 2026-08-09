@@ -4,7 +4,9 @@
     "store": "Cửa hàng",
     "account": "Tài khoản",
     "cart": "Giỏ hàng",
-    "search": "Tìm kiếm danh mục"
+    "search": "Tìm kiếm danh mục",
+    "categories": "Danh mục",
+    "collections": "Bộ sưu tập"
   },
   "hero": {
     "title": "Trang phục thường ngày, được chọn lọc kỹ càng.",
@@ -16,7 +18,14 @@
   },
   "store": {
     "title": "Bộ sưu tập",
-    "subtitle": "Khám phá các sản phẩm cao cấp được chúng tôi tuyển chọn kỹ lưỡng dành cho phong cách sống hiện đại."
+    "subtitle": "Khám phá các sản phẩm cao cấp được chúng tôi tuyển chọn kỹ lưỡng dành cho phong cách sống hiện đại.",
+    "sort_by": "Sắp xếp theo",
+    "price_asc": "Giá: Thấp -> Cao",
+    "price_desc": "Giá: Cao -> Thấp",
+    "created_at": "Mới nhất",
+    "options": "Tùy chọn",
+    "clear_all": "Xóa tất cả",
+    "no_products": "Không tìm thấy sản phẩm nào"
   },
   "footer": {
     "categories": "Danh mục",
@@ -44,7 +53,57 @@
     "subtotal_tax": "(chưa bao gồm thuế)",
     "go_to_cart": "Đến giỏ hàng",
     "empty": "Giỏ hàng của bạn đang trống.",
-    "explore": "Khám phá sản phẩm"
+    "explore": "Khám phá sản phẩm",
+    "summary": "Tóm tắt đơn hàng",
+    "go_to_checkout": "Tiến hành thanh toán",
+    "item": "Sản phẩm",
+    "price": "Giá",
+    "total": "Tổng cộng",
+    "sign_in_title": "Bạn đã có tài khoản?",
+    "sign_in_desc": "Đăng nhập để có trải nghiệm mua sắm tốt hơn."
+  },
+  "checkout": {
+    "title": "Thanh toán",
+    "shipping_address": "Địa chỉ giao hàng",
+    "billing_address": "Địa chỉ thanh toán",
+    "same_as_shipping": "Địa chỉ thanh toán giống địa chỉ giao hàng",
+    "shipping_method": "Phương thức vận chuyển",
+    "shipping_method_desc": "Bạn muốn đơn hàng được giao như thế nào",
+    "pick_up": "Nhận hàng tại cửa hàng",
+    "payment": "Thanh toán",
+    "payment_method": "Phương thức thanh toán",
+    "payment_details": "Chi tiết thanh toán",
+    "discount_code": "Mã giảm giá",
+    "add_discount_code": "Thêm mã ưu đãi",
+    "apply": "Áp dụng",
+    "code_applied": "Đã áp dụng mã",
+    "review": "Xem lại đơn hàng",
+    "place_order": "Đặt hàng",
+    "terms_notice": "Bằng cách nhấp vào nút Đặt hàng, bạn xác nhận đã đọc, hiểu và đồng ý với Điều khoản sử dụng, Điều khoản bán hàng và Chính sách đổi trả của chúng tôi, đồng thời xác nhận đã đọc Chính sách bảo mật của Synapse Store.",
+    "in_your_cart": "Trong giỏ hàng của bạn",
+    "continue_to_shipping": "Tiếp tục đến phương thức vận chuyển",
+    "continue_to_payment": "Tiếp tục đến thanh toán",
+    "continue_to_review": "Tiếp tục đến xem lại đơn hàng",
+    "enter_valid_email": "Vui lòng nhập địa chỉ email hợp lệ.",
+    "enter_promo_code": "Nhập mã khuyến mãi"
+  },
+  "order": {
+    "thank_you": "Cảm ơn bạn!",
+    "order_placed_success": "Đơn hàng của bạn đã được đặt thành công.",
+    "order_details": "Chi tiết đơn hàng",
+    "order_summary": "Tóm tắt đơn hàng",
+    "back_to_overview": "Quay lại trang tổng quan",
+    "delivery": "Giao hàng",
+    "contact": "Liên hệ",
+    "method": "Phương thức",
+    "need_help": "Bạn cần hỗ trợ?",
+    "returns_exchanges": "Đổi trả hàng",
+    "accept_transfer": "Chấp nhận chuyển nhượng",
+    "decline_transfer": "Từ chối chuyển nhượng",
+    "transfer_success": "Chuyển nhượng đơn hàng thành công!",
+    "transfer_declined_success": "Đã từ chối chuyển nhượng đơn hàng!",
+    "complete_setup_admin": "Hoàn tất cài đặt trong trang quản trị",
+    "complete_setup_admin_desc": "Bạn có thể hoàn tất cài đặt cửa hàng trong trang quản trị ngay bây giờ."
   },
   "collection": {
     "view_all": "Xem tất cả"
@@ -69,7 +128,10 @@
     "easy_returns": "Trả hàng dễ dàng",
     "easy_returns_description": "Chỉ cần gửi trả sản phẩm, chúng tôi sẽ hoàn tiền. Chúng tôi sẽ cố gắng để việc trả hàng diễn ra thuận tiện nhất.",
     "related_products": "Sản phẩm liên quan",
-    "related_products_description": "Có thể bạn cũng muốn xem các sản phẩm này."
+    "related_products_description": "Có thể bạn cũng muốn xem các sản phẩm này.",
+    "original_price": "Giá gốc:",
+    "continue_setup_admin": "Tiếp tục cài đặt trong trang quản trị",
+    "continue_setup_admin_desc": "Bạn có thể tiếp tục cài đặt cửa hàng trong trang quản trị."
   },
   "account": {
     "title": "Tài khoản",
@@ -141,6 +203,42 @@
     "verifying_email": "Đang xác minh email...",
     "email_verified": "Email của bạn đã được xác minh. Bây giờ bạn có thể đăng nhập vào tài khoản.",
     "verification_invalid": "Liên kết xác minh không hợp lệ hoặc đã hết hạn. Hãy đăng nhập để nhận email xác minh mới.",
-    "go_to_sign_in": "Đi tới đăng nhập"
+    "go_to_sign_in": "Đi tới đăng nhập",
+    "register_title": "Trở thành thành viên Synapse",
+    "register_desc": "Tạo hồ sơ thành viên Synapse để nhận quyền ưu tiên tiếp cận các sản phẩm, nguồn cảm hứng và cộng đồng Synapse.",
+    "already_member": "Đã là thành viên?",
+    "old_password": "Mật khẩu cũ",
+    "new_password": "Mật khẩu mới",
+    "confirm_password": "Xác nhận mật khẩu",
+    "update_password": "Cập nhật mật khẩu",
+    "password_updated": "Cập nhật mật khẩu thành công",
+    "transfer_order": "Chuyển nhượng đơn hàng",
+    "transfer_order_desc": "Yêu cầu chuyển nhượng đơn hàng sang tài khoản hiện tại của bạn.",
+    "order_id": "Mã đơn hàng",
+    "transfer_code": "Mã chuyển nhượng",
+    "submit": "Gửi yêu cầu"
+  },
+  "shipping": {
+    "spend_more": "Mua thêm {amount} để được miễn phí giao hàng!",
+    "unlocked": "Bạn đã đạt điều kiện miễn phí giao hàng!",
+    "view_cart": "Xem giỏ hàng",
+    "view_products": "Xem sản phẩm"
+  },
+  "common": {
+    "subtotal_excl": "Tạm tính (chưa gồm phí vận chuyển và thuế)",
+    "shipping": "Vận chuyển",
+    "discount": "Giảm giá",
+    "taxes": "Thuế",
+    "total": "Tổng cộng",
+    "original": "Giá gốc:",
+    "page_not_found": "Không tìm thấy trang",
+    "page_not_found_desc": "Trang bạn đang truy cập không tồn tại.",
+    "cart_not_found": "Không tìm thấy giỏ hàng",
+    "cart_not_found_desc": "Giỏ hàng bạn truy cập không tồn tại.",
+    "go_to_frontpage": "Về trang chủ",
+    "cart_mismatch_title": "Đã xảy ra lỗi khi chuyển đổi giỏ hàng của bạn",
+    "shipping_to": "Giao hàng tới:",
+    "language": "Ngôn ngữ",
+    "deleting": "Đang xóa..."
   }
 }

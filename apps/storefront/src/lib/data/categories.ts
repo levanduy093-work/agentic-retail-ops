@@ -1,4 +1,5 @@
 import { sdk } from "@lib/config"
+import { decodeRouteSegment } from "@lib/util/decode-route-segment"
 import { HttpTypes } from "@medusajs/types"
 import { getCacheOptions } from "./cookies"
 
@@ -27,7 +28,7 @@ export const listCategories = async (query?: Record<string, unknown>) => {
 }
 
 export const getCategoryByHandle = async (categoryHandle: string[]) => {
-  const handle = `${categoryHandle.join("/")}`
+  const handle = categoryHandle.map(decodeRouteSegment).join("/")
 
   const next = {
     ...(await getCacheOptions("categories")),

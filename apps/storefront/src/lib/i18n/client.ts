@@ -28,7 +28,8 @@ export const getTranslation = (
 }
 
 export const useTranslation = () => {
-  const { locale } = useParams<{ locale?: string }>()
+  const params = useParams<{ locale?: string }>()
+  const locale = params?.locale
 
   return (key: string, values?: TranslationValues) =>
     getTranslation(locale, key, values)
