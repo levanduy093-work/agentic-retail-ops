@@ -23,6 +23,7 @@ declare global {
             parent: HTMLElement,
             options: Record<string, unknown>,
           ) => void
+          prompt: () => void
         }
       }
     }
@@ -124,6 +125,7 @@ export default function GoogleSignInButton({ label }: GoogleSignInButtonProps) {
       width: Math.min(buttonRef.current.clientWidth, 360),
       locale,
     })
+    google.prompt()
 
     return () => {
       isInitializedRef.current = false

@@ -7,12 +7,14 @@ import Input from "@modules/common/components/input"
 import AccountInfo from "../account-info"
 import { HttpTypes } from "@medusajs/types"
 import { updateCustomer } from "@lib/data/customer"
+import { useTranslation } from "@lib/i18n/client"
 
 type MyInformationProps = {
   customer: HttpTypes.StoreCustomer
 }
 
 const ProfilePhone: React.FC<MyInformationProps> = ({ customer }) => {
+  const t = useTranslation()
   const [successState, setSuccessState] = React.useState(false)
 
   const updateCustomerPhone = async (
@@ -47,8 +49,8 @@ const ProfilePhone: React.FC<MyInformationProps> = ({ customer }) => {
   return (
     <form action={formAction} className="w-full">
       <AccountInfo
-        label="Phone"
-        currentInfo={customer.phone || "Not provided"}
+        label={t("account.phone")}
+        currentInfo={customer.phone || t("account.not_provided")}
         isSuccess={successState}
         isError={!!state.error}
         errorMessage={state.error || undefined}
@@ -57,7 +59,7 @@ const ProfilePhone: React.FC<MyInformationProps> = ({ customer }) => {
       >
         <div className="grid grid-cols-1 gap-y-2">
           <Input
-            label="Phone"
+            label={t("account.phone")}
             name="phone"
             type="tel"
             autoComplete="tel"

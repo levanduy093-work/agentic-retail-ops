@@ -279,19 +279,19 @@ export default async function initial_data_seed({
     input: {
       product_categories: [
         {
-          name: "Shirts",
+          name: "Điện thoại",
           is_active: true,
         },
         {
-          name: "Sweatshirts",
+          name: "Tủ lạnh",
           is_active: true,
         },
         {
-          name: "Pants",
+          name: "Tivi",
           is_active: true,
         },
         {
-          name: "Merch",
+          name: "Laptop",
           is_active: true,
         },
       ],
@@ -304,45 +304,45 @@ export default async function initial_data_seed({
     input: {
       product_options: [
         {
-          title: "Size",
-          values: ["S", "M", "L", "XL"],
+          title: "Phiên bản",
+          values: ["Tiêu chuẩn", "Plus", "Pro", "Pro Max"],
         },
         {
-          title: "Color",
-          values: ["Black", "White"],
+          title: "Màu sắc",
+          values: ["Đen", "Trắng"],
         },
       ],
     },
   });
-  const sizeOption = productOptionsResult.find((o) => o.title === "Size")!;
-  const colorOption = productOptionsResult.find((o) => o.title === "Color")!;
+  const sizeOption = productOptionsResult.find((o) => o.title === "Phiên bản")!;
+  const colorOption = productOptionsResult.find((o) => o.title === "Màu sắc")!;
 
   await createProductsWorkflow(container).run({
     input: {
       products: [
         {
-          title: "Medusa T-Shirt",
+          title: "iPhone 15",
           category_ids: [
-            categoryResult.find((cat) => cat.name === "Shirts")!.id,
+            categoryResult.find((cat) => cat.name === "Điện thoại")!.id,
           ],
           description:
-            "Reimagine the feeling of a classic T-shirt. With our cotton T-shirts, everyday essentials no longer have to be ordinary.",
-          handle: "t-shirt",
+            "Điện thoại thông minh cao cấp với camera sắc nét, hiệu năng siêu việt.",
+          handle: "iphone-15",
           weight: 400,
           status: ProductStatus.PUBLISHED,
           shipping_profile_id: shippingProfile.id,
           images: [
             {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/tee-black-front.png",
+              url: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=800",
             },
             {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/tee-black-back.png",
+              url: "https://images.unsplash.com/photo-1605236453806-6ff3685e219e?q=80&w=800",
             },
             {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/tee-white-front.png",
+              url: "https://images.unsplash.com/photo-1592750475338-74b7b21085ab?q=80&w=800",
             },
             {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/tee-white-back.png",
+              url: "https://images.unsplash.com/photo-1574944985070-8f3ebc6b79d2?q=80&w=800",
             },
           ],
           options: [
@@ -352,10 +352,10 @@ export default async function initial_data_seed({
           variants: [
             {
               title: "S / Black",
-              sku: "SHIRT-S-BLACK",
+              sku: "IPHONE-S-BLACK",
               options: {
-                Size: "S",
-                Color: "Black",
+                Size: "Tiêu chuẩn",
+                Color: "Đen",
               },
               prices: [
                 {
@@ -370,10 +370,10 @@ export default async function initial_data_seed({
             },
             {
               title: "S / White",
-              sku: "SHIRT-S-WHITE",
+              sku: "IPHONE-S-WHITE",
               options: {
-                Size: "S",
-                Color: "White",
+                Size: "Tiêu chuẩn",
+                Color: "Trắng",
               },
               prices: [
                 {
@@ -388,10 +388,10 @@ export default async function initial_data_seed({
             },
             {
               title: "M / Black",
-              sku: "SHIRT-M-BLACK",
+              sku: "IPHONE-M-BLACK",
               options: {
-                Size: "M",
-                Color: "Black",
+                Size: "Plus",
+                Color: "Đen",
               },
               prices: [
                 {
@@ -406,10 +406,10 @@ export default async function initial_data_seed({
             },
             {
               title: "M / White",
-              sku: "SHIRT-M-WHITE",
+              sku: "IPHONE-M-WHITE",
               options: {
-                Size: "M",
-                Color: "White",
+                Size: "Plus",
+                Color: "Trắng",
               },
               prices: [
                 {
@@ -424,10 +424,10 @@ export default async function initial_data_seed({
             },
             {
               title: "L / Black",
-              sku: "SHIRT-L-BLACK",
+              sku: "IPHONE-L-BLACK",
               options: {
-                Size: "L",
-                Color: "Black",
+                Size: "Pro",
+                Color: "Đen",
               },
               prices: [
                 {
@@ -442,10 +442,10 @@ export default async function initial_data_seed({
             },
             {
               title: "L / White",
-              sku: "SHIRT-L-WHITE",
+              sku: "IPHONE-L-WHITE",
               options: {
-                Size: "L",
-                Color: "White",
+                Size: "Pro",
+                Color: "Trắng",
               },
               prices: [
                 {
@@ -460,10 +460,10 @@ export default async function initial_data_seed({
             },
             {
               title: "XL / Black",
-              sku: "SHIRT-XL-BLACK",
+              sku: "IPHONE-XL-BLACK",
               options: {
-                Size: "XL",
-                Color: "Black",
+                Size: "Pro Max",
+                Color: "Đen",
               },
               prices: [
                 {
@@ -478,10 +478,10 @@ export default async function initial_data_seed({
             },
             {
               title: "XL / White",
-              sku: "SHIRT-XL-WHITE",
+              sku: "IPHONE-XL-WHITE",
               options: {
-                Size: "XL",
-                Color: "White",
+                Size: "Pro Max",
+                Color: "Trắng",
               },
               prices: [
                 {
@@ -502,31 +502,31 @@ export default async function initial_data_seed({
           ],
         },
         {
-          title: "Medusa Sweatshirt",
+          title: "Tủ lạnh Samsung Inverter",
           category_ids: [
-            categoryResult.find((cat) => cat.name === "Sweatshirts")!.id,
+            categoryResult.find((cat) => cat.name === "Tủ lạnh")!.id,
           ],
           description:
-            "Reimagine the feeling of a classic sweatshirt. With our cotton sweatshirt, everyday essentials no longer have to be ordinary.",
-          handle: "sweatshirt",
+            "Tủ lạnh công nghệ Inverter tiết kiệm điện năng, bảo quản thực phẩm luôn tươi ngon.",
+          handle: "tu-lanh-samsung",
           weight: 400,
           status: ProductStatus.PUBLISHED,
           shipping_profile_id: shippingProfile.id,
           images: [
             {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/sweatshirt-vintage-front.png",
+              url: "https://images.unsplash.com/photo-1584568694244-14fbdf83bd30?q=80&w=800",
             },
             {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/sweatshirt-vintage-back.png",
+              url: "https://images.unsplash.com/photo-1571175443880-49e1d25b2bc5?q=80&w=800",
             },
           ],
           options: [{ id: sizeOption.id }],
           variants: [
             {
-              title: "S",
-              sku: "SWEATSHIRT-S",
+              title: "Tiêu chuẩn",
+              sku: "SWEATIPHONE-S",
               options: {
-                Size: "S",
+                Size: "Tiêu chuẩn",
               },
               prices: [
                 {
@@ -540,10 +540,10 @@ export default async function initial_data_seed({
               ],
             },
             {
-              title: "M",
-              sku: "SWEATSHIRT-M",
+              title: "Plus",
+              sku: "SWEATIPHONE-M",
               options: {
-                Size: "M",
+                Size: "Plus",
               },
               prices: [
                 {
@@ -557,10 +557,10 @@ export default async function initial_data_seed({
               ],
             },
             {
-              title: "L",
-              sku: "SWEATSHIRT-L",
+              title: "Pro",
+              sku: "SWEATIPHONE-L",
               options: {
-                Size: "L",
+                Size: "Pro",
               },
               prices: [
                 {
@@ -574,10 +574,10 @@ export default async function initial_data_seed({
               ],
             },
             {
-              title: "XL",
-              sku: "SWEATSHIRT-XL",
+              title: "Pro Max",
+              sku: "SWEATIPHONE-XL",
               options: {
-                Size: "XL",
+                Size: "Pro Max",
               },
               prices: [
                 {
@@ -598,31 +598,31 @@ export default async function initial_data_seed({
           ],
         },
         {
-          title: "Medusa Sweatpants",
+          title: "Smart Tivi Sony 4K",
           category_ids: [
-            categoryResult.find((cat) => cat.name === "Pants")!.id,
+            categoryResult.find((cat) => cat.name === "Tivi")!.id,
           ],
           description:
-            "Reimagine the feeling of classic sweatpants. With our cotton sweatpants, everyday essentials no longer have to be ordinary.",
-          handle: "sweatpants",
+            "Tivi thông minh độ phân giải 4K sắc nét, tận hưởng thế giới giải trí tại gia.",
+          handle: "tivi-sony-4k",
           weight: 400,
           status: ProductStatus.PUBLISHED,
           shipping_profile_id: shippingProfile.id,
           images: [
             {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/sweatpants-gray-front.png",
+              url: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?q=80&w=800",
             },
             {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/sweatpants-gray-back.png",
+              url: "https://images.unsplash.com/photo-1593305841991-05c297ba4575?q=80&w=800",
             },
           ],
           options: [{ id: sizeOption.id }],
           variants: [
             {
-              title: "S",
-              sku: "SWEATPANTS-S",
+              title: "Tiêu chuẩn",
+              sku: "TV-S",
               options: {
-                Size: "S",
+                Size: "Tiêu chuẩn",
               },
               prices: [
                 {
@@ -636,10 +636,10 @@ export default async function initial_data_seed({
               ],
             },
             {
-              title: "M",
-              sku: "SWEATPANTS-M",
+              title: "Plus",
+              sku: "TV-M",
               options: {
-                Size: "M",
+                Size: "Plus",
               },
               prices: [
                 {
@@ -653,10 +653,10 @@ export default async function initial_data_seed({
               ],
             },
             {
-              title: "L",
-              sku: "SWEATPANTS-L",
+              title: "Pro",
+              sku: "TV-L",
               options: {
-                Size: "L",
+                Size: "Pro",
               },
               prices: [
                 {
@@ -670,10 +670,10 @@ export default async function initial_data_seed({
               ],
             },
             {
-              title: "XL",
-              sku: "SWEATPANTS-XL",
+              title: "Pro Max",
+              sku: "TV-XL",
               options: {
-                Size: "XL",
+                Size: "Pro Max",
               },
               prices: [
                 {
@@ -694,31 +694,31 @@ export default async function initial_data_seed({
           ],
         },
         {
-          title: "Medusa Shorts",
+          title: "MacBook Pro M3",
           category_ids: [
-            categoryResult.find((cat) => cat.name === "Merch")!.id,
+            categoryResult.find((cat) => cat.name === "Laptop")!.id,
           ],
           description:
-            "Reimagine the feeling of classic shorts. With our cotton shorts, everyday essentials no longer have to be ordinary.",
-          handle: "shorts",
+            "Laptop cấu hình khủng, thiết kế sang trọng mỏng nhẹ, đáp ứng mọi nhu cầu làm việc.",
+          handle: "macbook-pro-m3",
           weight: 400,
           status: ProductStatus.PUBLISHED,
           shipping_profile_id: shippingProfile.id,
           images: [
             {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/shorts-vintage-front.png",
+              url: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?q=80&w=800",
             },
             {
-              url: "https://medusa-public-images.s3.eu-west-1.amazonaws.com/shorts-vintage-back.png",
+              url: "https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?q=80&w=800",
             },
           ],
           options: [{ id: sizeOption.id }],
           variants: [
             {
-              title: "S",
-              sku: "SHORTS-S",
+              title: "Tiêu chuẩn",
+              sku: "MAC-S",
               options: {
-                Size: "S",
+                Size: "Tiêu chuẩn",
               },
               prices: [
                 {
@@ -732,10 +732,10 @@ export default async function initial_data_seed({
               ],
             },
             {
-              title: "M",
-              sku: "SHORTS-M",
+              title: "Plus",
+              sku: "MAC-M",
               options: {
-                Size: "M",
+                Size: "Plus",
               },
               prices: [
                 {
@@ -749,10 +749,10 @@ export default async function initial_data_seed({
               ],
             },
             {
-              title: "L",
-              sku: "SHORTS-L",
+              title: "Pro",
+              sku: "MAC-L",
               options: {
-                Size: "L",
+                Size: "Pro",
               },
               prices: [
                 {
@@ -766,10 +766,10 @@ export default async function initial_data_seed({
               ],
             },
             {
-              title: "XL",
-              sku: "SHORTS-XL",
+              title: "Pro Max",
+              sku: "MAC-XL",
               options: {
-                Size: "XL",
+                Size: "Pro Max",
               },
               prices: [
                 {

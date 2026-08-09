@@ -5,6 +5,7 @@ import { notFound } from "next/navigation"
 import { listOrders } from "@lib/data/orders"
 import Divider from "@modules/common/components/divider"
 import TransferRequestForm from "@modules/account/components/transfer-request-form"
+import { getDictionary } from "@lib/i18n"
 
 export const metadata: Metadata = {
   title: "Orders",
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
 }
 
 export default async function Orders() {
-  const orders = await listOrders()
+  const [orders, dict] = await Promise.all([listOrders(), getDictionary()])
 
   if (!orders) {
     notFound()
@@ -21,10 +22,9 @@ export default async function Orders() {
   return (
     <div className="w-full" data-testid="orders-page-wrapper">
       <div className="mb-8 flex flex-col gap-y-4">
-        <h1 className="text-2xl-semi">Orders</h1>
+        <h1 className="text-2xl-semi">{dict.account.orders}</h1>
         <p className="text-base-regular">
-          View your previous orders and their status. You can also create
-          returns or exchanges for your orders if needed.
+          {dict.account.orders_description}
         </p>
       </div>
       <div>

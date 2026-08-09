@@ -6,12 +6,14 @@ import Input from "@modules/common/components/input"
 import GoogleSignInButton from "@modules/account/components/google-sign-in-button"
 import { useSearchParams } from "next/navigation"
 import { useActionState } from "react"
+import { useTranslation } from "@lib/i18n/client"
 
 type Props = {
   setCurrentView: (view: LOGIN_VIEW) => void
 }
 
 const Login = ({ setCurrentView }: Props) => {
+  const t = useTranslation()
   const [message, formAction] = useActionState(login, null)
   const searchParams = useSearchParams()
   const googleAuthError = searchParams.get("google_auth_error")
@@ -21,11 +23,11 @@ const Login = ({ setCurrentView }: Props) => {
       className="max-w-sm w-full flex flex-col items-center"
       data-testid="login-page"
     >
-      <h1 className="text-large-semi uppercase mb-6">Welcome back</h1>
+      <h1 className="text-large-semi uppercase mb-6">{t("account.welcome_back")}</h1>
       <p className="text-center text-base-regular text-ui-fg-base mb-8">
-        Sign in to access an enhanced shopping experience.
+        {t("account.sign_in_description")}
       </p>
-      <GoogleSignInButton label="Continue with Google" />
+      <GoogleSignInButton label={t("account.continue_with_google")} />
       {googleAuthError && (
         <ErrorMessage
           error={googleAuthError}
@@ -34,7 +36,7 @@ const Login = ({ setCurrentView }: Props) => {
       )}
       <div className="w-full flex items-center gap-3 my-6 text-ui-fg-subtle text-small-regular">
         <div className="h-px flex-1 bg-ui-border-base" />
-        <span>or sign in with email</span>
+        <span>{t("account.or_sign_in_with_email")}</span>
         <div className="h-px flex-1 bg-ui-border-base" />
       </div>
       {message?.state === "verification_required" && (
@@ -49,7 +51,7 @@ const Login = ({ setCurrentView }: Props) => {
       <form className="w-full" action={formAction}>
         <div className="flex flex-col w-full gap-y-2">
           <Input
-            label="Email"
+            label={t("account.email_address")}
             name="email"
             type="email"
             title="Enter a valid email address."
@@ -58,7 +60,7 @@ const Login = ({ setCurrentView }: Props) => {
             data-testid="email-input"
           />
           <Input
-            label="Password"
+            label={t("account.password")}
             name="password"
             type="password"
             autoComplete="current-password"
@@ -71,17 +73,17 @@ const Login = ({ setCurrentView }: Props) => {
           data-testid="login-error-message"
         />
         <SubmitButton data-testid="sign-in-button" className="w-full mt-6">
-          Sign in
+          {t("account.sign_in")}
         </SubmitButton>
       </form>
       <span className="text-center text-ui-fg-base text-small-regular mt-6">
-        Not a member?{" "}
+        {t("account.not_a_member")} {" "}
         <button
           onClick={() => setCurrentView(LOGIN_VIEW.REGISTER)}
           className="underline"
           data-testid="register-button"
         >
-          Join us
+          {t("account.join_us")}
         </button>
         .
       </span>
