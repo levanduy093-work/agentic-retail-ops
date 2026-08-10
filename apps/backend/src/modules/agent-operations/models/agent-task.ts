@@ -23,6 +23,9 @@ const AgentTask = model
     started_at: model.dateTime().nullable(),
     completed_at: model.dateTime().nullable(),
     failure: model.text().nullable(),
+    escalation_reason: model.text().nullable(),
+    escalated_at: model.dateTime().nullable(),
+    escalated_by_id: model.text().nullable(),
   })
   .indexes([
     {

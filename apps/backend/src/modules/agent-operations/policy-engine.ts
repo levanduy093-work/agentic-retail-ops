@@ -51,6 +51,20 @@ export function evaluatePolicies(
       policy.action_type === actionType &&
       policy.conditions.every((condition) => conditionMatches(condition, input))
   )
+  const riskRank: Record<RiskLevel, number> = {
+    HIGH: 3,
+    LOW: 1,
+    MEDIUM: 2,
+    PROHIBITED: 4,
+    READ_ONLY: 0,
+  }
+  const highestRisk = matches.reduce<RiskLevel>(
+    (current, policy) =>
+      riskRank[policy.risk_level] > riskRank[current]
+        ? policy.risk_level
+        : current,
+    "READ_ONLY"
+  )
 
   return {
     allowed: !matches.some((policy) => policy.risk_level === "PROHIBITED"),
@@ -66,6 +80,6 @@ export function evaluatePolicies(
       ),
     ],
     requires_approval: matches.some((policy) => policy.requires_approval),
-    risk_level: matches.at(-1)?.risk_level ?? ("READ_ONLY" as RiskLevel),
+    risk_level: highestRisk,
   }
 }

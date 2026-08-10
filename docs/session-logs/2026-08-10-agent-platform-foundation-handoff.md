@@ -73,8 +73,8 @@ Approved knowledge + citation
 | Catalog cho 17 agent | `catalog-registry.ts` | Có ID/version, mission, trigger, tools, risk và dependency |
 | Event/incident/run | models và `service.ts` | Có dedupe, correlation, state machine |
 | Recommendation/approval | models, approval workflow | Có expiry, reason, actor, duplicate-safe decision |
-| Action Gateway | action request, tool call, worker | Có lease, retry, dead-letter, lock, live revalidation |
-| Typed tool runtime | `tool-contract.ts`, `tool-executor.ts`, `tool-registry.ts`, `read-tool-runtime.ts` | Schema input/output, version, permission, risk, approval, timeout/retry/idempotency; command bị chặn ngoài Action Gateway; 3 platform read tool chạy qua service/executor; coverage hiện 5/24 |
+| Action Gateway | action request, tool call, worker, `request-agent-action.ts` | Context incident/recommendation/approval tùy chọn; fail-closed nếu thiếu policy ACTIVE; có lease, retry, dead-letter, idempotency và live revalidation |
+| Typed tool runtime | `tool-contract.ts`, `tool-executor.ts`, `tool-registry.ts`, `read-tool-runtime.ts` | 3 platform read tool và 3 task command chạy qua executor; request và execution authority tách riêng; coverage hiện 8/24 |
 | Task orchestration | `agent-task`, task workflows | Có priority, assignee, due date, idempotency và state machine |
 | Policy engine | policy definition, `policy-engine.ts` | Có version/effectivity và `eq/gte/lte/in`; inventory flow đã sử dụng active policy |
 | RBAC | `src/policies/agent-operations.ts` | Medusa sync 20 policy; bootstrap gắn vào `operations_manager` |
@@ -173,12 +173,17 @@ pnpm run agent:verify-platform
 
 Baseline đã xác nhận:
 
-- 53/53 unit test pass;
+- 59/59 unit test pass;
 - backend TypeScript và Medusa lint sạch;
 - full workspace build pass;
 - migration PostgreSQL pass;
+- `Migration20260810073306` backfill action inventory cũ, cho phép action
+  context tùy chọn và bổ sung task escalation fields;
 - role `operations_manager` có 20 active policy;
 - task đi hết `TODO -> CLAIMED -> IN_PROGRESS -> COMPLETED`;
+- task Action Gateway fail-closed khi thiếu policy; create/assign/escalate đều
+  `SUCCEEDED`; stale expected state trả `CONFLICT`; request trùng bị suppress và
+  mỗi action ghi đúng một tool call;
 - knowledge đi `DRAFT -> APPROVED` và chỉ khi đó mới eligible;
 - SHIP-001 evaluation `PASSED`, duplicate run bị suppress;
 - Redis Event Bus, Workflow Engine và Locking đều kết nối runtime;
@@ -222,7 +227,7 @@ chung đã được phép coi là production-ready:
   identity mapping hoặc delivery receipt thật;
 - chưa có connector order/fulfillment/payment/return production cho các agent
   tiếp theo;
-- tool registry chạy thật có 5/24 tool catalog; 19 tool còn lại mới là tên hợp
+- tool registry chạy thật có 8/24 tool catalog; 16 tool còn lại mới là tên hợp
   đồng, dù một số workflow/API nền như approval/task/knowledge đã có;
 - chưa có load, recovery, penetration và multi-process contention test đầy đủ;
 - trace/replay detail, append-only enforcement và retention vẫn cần hardening;

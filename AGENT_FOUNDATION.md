@@ -43,13 +43,17 @@ vận hành chung để từng năng lực agent có thể:
   backoff, dead-letter và message idempotency metadata.
 - Typed tool registry gồm `inventory.get-position@1.0.0`,
   `inventory.execute-transfer@1.0.0`, `knowledge.search@1.0.0`,
-  `audit.search@1.0.0` và `trace.replay@1.0.0`.
+  `audit.search@1.0.0`, `trace.replay@1.0.0`, `task.create@1.0.0`,
+  `task.assign@1.0.0` và `task.escalate@1.0.0`.
 - `AgentToolDefinition` và executor dùng chung đã kiểm tra schema input/output,
   version, permission, risk/approval, timeout/retry/idempotency contract và chặn
   command không đi qua Action Gateway. Ba read tool platform có runtime thật đi
-  qua module service và executor; coverage hiện là 5/24 tool catalog.
+  qua module service và executor; ba task command đi qua request gateway,
+  policy và worker; coverage hiện là 8/24 tool catalog.
 - Action request/tool-call persistence, Action Gateway workflow và scheduled
-  action worker có lease, retry, dead-letter và idempotency.
+  action worker có lease, retry, dead-letter và idempotency. Action envelope hỗ
+  trợ context incident/recommendation/approval tùy chọn; không có policy ACTIVE
+  phù hợp thì từ chối và không tạo action.
 - Inventory Action Gateway đọc `available_quantity` live từ Medusa dưới khóa,
   kiểm tra lại approval/state/tool contract rồi mới điều chỉnh hai stock level.
 - Safe conflict đưa incident từ `EXECUTING` về `OPTIONS_READY`; mutation thành
@@ -61,17 +65,19 @@ vận hành chung để từng năng lực agent có thể:
 
 ### Vẫn chưa có
 
-- Agent runtime/worker riêng có LLM hoặc supervisor.
-- Task persistence.
-- Policy engine tổng quát cho nhiều action type.
-- Production Event Bus, distributed locking và subscriber
-  idempotent/replay tooling.
+- Agent planner/supervisor dùng LLM để tự chọn tool; hiện tool được gọi bằng
+  workflow deterministic và worker.
+- Trigger/SLA scheduler tự gọi `task.assign` và `task.escalate` từ
+  `task.created` hoặc `task.overdue`.
+- Bằng chứng multi-process cho production Event Bus, distributed locking và
+  subscriber idempotency/replay tooling.
 - Mobile/PWA, push notification, provider adapter, channel identity mapping và
   delivery receipt/retry cho Telegram/Zalo/Slack/Teams.
 - LLM chuyển câu chat tự do thành structured command có evaluation.
-- Knowledge ingestion/RAG có version, trạng thái phê duyệt và citation.
-- Incident Queue, Approval Inbox và Agent Trace trong Admin.
-- Bộ scenario và evaluation dùng để chứng minh agent hoạt động đúng.
+- Connector ingestion và semantic/vector retrieval cho Knowledge; lifecycle,
+  version, approval và citation cơ bản đã có.
+- UI chi tiết để yêu cầu/chạy task tool và xem timeline gateway trực tiếp.
+- Scenario riêng cho Workforce Coordinator ngoài runtime verification script.
 
 Vì vậy, bốn capability đầu tiên vẫn ở mức `implemented-static`. Safe-conflict
 đã có bằng chứng database/runtime cục bộ, nhưng happy path chuyển tồn với hai
@@ -610,6 +616,12 @@ vertical slice của từng agent, không tiếp tục dựng infrastructure chu
   model run, evaluation, channel connection và delivery.
 - Có deterministic policy engine, task state machine, knowledge eligibility,
   citation checksum, model redaction/budget/schema gate và assertion evaluator.
+- Typed registry có 8/24 tool; `task.create`, `task.assign`, `task.escalate`
+  đã chạy qua Action Gateway tổng quát với policy fail-closed, lease,
+  idempotency, tool-call, audit và outbox.
+- Migration `Migration20260810073306` đã chạy trên PostgreSQL local; runtime
+  xác nhận ba task command `SUCCEEDED`, stale state trả `CONFLICT`, request
+  thiếu policy không tạo action. Unit test hiện đạt 59/59.
 - Có Admin Operations Console và readiness API phân biệt `code_ready` với
   `deployment_ready`.
 - Redis Event Bus, Workflow Engine và distributed locking đã kết nối runtime khi

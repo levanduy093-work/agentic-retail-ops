@@ -5,7 +5,7 @@ const AgentToolCall = model
   .define("agent_tool_call", {
     id: model.id({ prefix: "agtcall" }).primaryKey(),
     action_request_id: model.text(),
-    incident_id: model.text(),
+    incident_id: model.text().nullable(),
     tool_name: model.text(),
     tool_version: model.text(),
     kind: model.enum([...TOOL_CALL_KINDS]),

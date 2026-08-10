@@ -41,8 +41,10 @@ import {
   isOutboxEventClaimable,
   sanitizeOutboxError,
 } from "./outbox-policy"
-import { evaluatePolicies } from "./policy-engine"
+import { conditionMatches, evaluatePolicies } from "./policy-engine"
 import { assertIncidentTransition } from "./state-machine"
+import { AGENT_TOOL_REGISTRY } from "./tool-registry"
+import { executeAgentTool, prepareAgentCommand } from "./tool-executor"
 import { InventoryTransferInput } from "./tools/inventory-tools"
 import {
   ApprovalDecisionInput,
@@ -54,12 +56,14 @@ import {
   CreateApprovalRequestedNotificationInput,
   CreateKnowledgeDocumentInput,
   EvaluationAssertion,
+  EscalateAgentTaskInput,
   FailAgentActionInput,
   FailAgentOutboxEventInput,
   IncidentStatus,
   InventoryLowEventInput,
   PolicyCondition,
   ProcessAgentConversationMessageInput,
+  RequestAgentActionInput,
   TransitionAgentTaskInput,
 } from "./types"
 import { evaluateAssertions } from "./evaluation"
@@ -77,6 +81,16 @@ import {
   TraceReplayOutput,
   TraceTimelineEntry,
 } from "./tools/platform-read-tools"
+import {
+  TASK_ASSIGN_TOOL,
+  TASK_CREATE_TOOL,
+  TASK_ESCALATE_TOOL,
+  TaskAssignInput,
+  TaskCommandOutput,
+  TaskCreateInput,
+  TaskEscalateInput,
+  toGovernedTaskSnapshot,
+} from "./tools/task-tools"
 
 class AgentOperationsModuleService extends MedusaService({
   AgentActionRequest,
@@ -218,6 +232,78 @@ class AgentOperationsModuleService extends MedusaService({
     )
 
     return updated
+  }
+
+  @InjectManager()
+  async escalateGovernedAgentTask(
+    input: EscalateAgentTaskInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.escalateGovernedAgentTask_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async escalateGovernedAgentTask_(
+    input: EscalateAgentTaskInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const task = await this.retrieveAgentTask(input.task_id, {}, sharedContext)
+
+    if (task.status !== input.expected_status) {
+      return {
+        code: "TASK_STATE_CONFLICT" as const,
+        message: `Task ${task.id} is ${task.status}, expected ${input.expected_status}.`,
+        outcome: "CONFLICT" as const,
+        task,
+      }
+    }
+
+    if (["COMPLETED", "CANCELLED", "DEAD"].includes(task.status)) {
+      return {
+        code: "TASK_TERMINAL" as const,
+        message: `Task ${task.id} is terminal and cannot be escalated.`,
+        outcome: "CONFLICT" as const,
+        task,
+      }
+    }
+
+    const now = new Date()
+    const updated = await this.updateAgentTasks(
+      {
+        assigned_to_id: input.assigned_to_id,
+        assigned_to_type: input.assigned_to_type,
+        escalated_at: now,
+        escalated_by_id: input.actor_id,
+        escalation_reason: input.reason,
+        id: task.id,
+        priority: input.priority,
+      },
+      sharedContext
+    )
+
+    await this.createAgentAuditEvents(
+      {
+        action: "task-escalated",
+        actor_id: input.actor_id,
+        actor_type: "agent",
+        correlation_id: task.incident_id ?? task.idempotency_key,
+        data: {
+          assigned_to_id: input.assigned_to_id,
+          assigned_to_type: input.assigned_to_type,
+          from_priority: task.priority,
+          reason: input.reason,
+          to_priority: input.priority,
+        },
+        event_type: "agent.task.escalated",
+        incident_id: task.incident_id,
+        recorded_at: now,
+        resource_id: task.id,
+        resource_type: "agent_task",
+      },
+      sharedContext
+    )
+
+    return { outcome: "SUCCEEDED" as const, task: updated }
   }
 
   @InjectManager()
@@ -1254,6 +1340,261 @@ class AgentOperationsModuleService extends MedusaService({
   }
 
   @InjectManager()
+  async requestGovernedAgentAction(
+    input: RequestAgentActionInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.requestGovernedAgentAction_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async requestGovernedAgentAction_(
+    input: RequestAgentActionInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const existing = await this.listAgentActionRequests(
+      { idempotency_key: input.idempotency_key },
+      { take: 1 },
+      sharedContext
+    )
+
+    if (existing[0]) {
+      return { action: existing[0], duplicate: true }
+    }
+
+    const prepared = prepareAgentCommand<Record<string, unknown>>(
+      AGENT_TOOL_REGISTRY,
+      {
+        authority: {
+          actor_id: input.requested_by_id,
+          approval_id: input.approval_id ?? null,
+          granted_permissions: input.granted_permissions,
+          idempotency_key: input.idempotency_key,
+          mode: "ACTION_GATEWAY_REQUEST",
+        },
+        input: input.input,
+        tool_name: input.tool_name,
+        tool_version: input.tool_version,
+      }
+    )
+    const now = new Date()
+    const tenantId = input.tenant_id ?? "default"
+    const declaredIncidentId = prepared.input.incident_id
+
+    if (
+      typeof declaredIncidentId === "string" &&
+      declaredIncidentId !== input.incident_id
+    ) {
+      throw new MedusaError(
+        MedusaError.Types.CONFLICT,
+        "Tool input incident_id must match the Action Gateway envelope."
+      )
+    }
+
+    const activePolicyRecords = await this.listAgentPolicyDefinitions(
+      {
+        action_type: prepared.definition.name,
+        status: "ACTIVE",
+        tenant_id: tenantId,
+      },
+      {},
+      sharedContext
+    )
+    const activePolicies = activePolicyRecords.filter(
+      (policy) =>
+        policy.effective_at <= now &&
+        (!policy.expires_at || policy.expires_at > now)
+    )
+    const policyInput = prepared.input as Record<string, unknown>
+    const policyDecision = evaluatePolicies(
+      activePolicies.map((policy) => ({
+        action_type: policy.action_type,
+        conditions: (policy.conditions.all ?? []) as PolicyCondition[],
+        policy_key: policy.policy_key,
+        policy_version: policy.version,
+        required_role: policy.required_role,
+        requires_approval: policy.requires_approval,
+        risk_level: policy.risk_level,
+      })),
+      prepared.definition.name,
+      policyInput
+    )
+    const matchingPolicies = activePolicies.filter((policy) =>
+      ((policy.conditions.all ?? []) as PolicyCondition[]).every((condition) =>
+        conditionMatches(condition, policyInput)
+      )
+    )
+    const riskRank = {
+      HIGH: 3,
+      LOW: 1,
+      MEDIUM: 2,
+      PROHIBITED: 4,
+      READ_ONLY: 0,
+    } as const
+    const selectedPolicy = [...matchingPolicies].sort(
+      (left, right) =>
+        riskRank[right.risk_level] - riskRank[left.risk_level] ||
+        left.policy_key.localeCompare(right.policy_key) ||
+        left.version.localeCompare(right.version)
+    )[0]
+
+    if (!selectedPolicy || !policyDecision.allowed) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        `No active policy allows agent tool ${prepared.definition.name}.`
+      )
+    }
+
+    if (
+      riskRank[policyDecision.risk_level] >
+      riskRank[prepared.definition.risk_level]
+    ) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        `Policy risk ${policyDecision.risk_level} exceeds tool ceiling ${prepared.definition.risk_level}.`
+      )
+    }
+
+    const requiresApproval =
+      prepared.definition.approval_required ||
+      policyDecision.requires_approval
+    let approval: Awaited<ReturnType<typeof this.retrieveAgentApproval>> | null =
+      null
+
+    if (requiresApproval) {
+      if (!input.approval_id) {
+        throw new MedusaError(
+          MedusaError.Types.NOT_ALLOWED,
+          `Agent tool ${prepared.definition.name} requires approval.`
+        )
+      }
+
+      approval = await this.retrieveAgentApproval(
+        input.approval_id,
+        {},
+        sharedContext
+      )
+      if (
+        approval.status !== "APPROVED" ||
+        new Date(approval.expires_at).getTime() <= now.getTime()
+      ) {
+        throw new MedusaError(
+          MedusaError.Types.NOT_ALLOWED,
+          `Approval ${approval.id} is not usable.`
+        )
+      }
+      if (input.incident_id && approval.incident_id !== input.incident_id) {
+        throw new MedusaError(
+          MedusaError.Types.CONFLICT,
+          `Approval ${approval.id} does not belong to incident ${input.incident_id}.`
+        )
+      }
+    }
+
+    if (input.incident_id) {
+      const incident = await this.retrieveAgentIncident(
+        input.incident_id,
+        {},
+        sharedContext
+      )
+      if (incident.correlation_id !== input.correlation_id) {
+        throw new MedusaError(
+          MedusaError.Types.CONFLICT,
+          `Incident ${incident.id} does not match correlation ${input.correlation_id}.`
+        )
+      }
+    }
+
+    if (input.recommendation_id) {
+      const recommendation = await this.retrieveAgentRecommendation(
+        input.recommendation_id,
+        {},
+        sharedContext
+      )
+      if (
+        input.incident_id &&
+        recommendation.incident_id !== input.incident_id
+      ) {
+        throw new MedusaError(
+          MedusaError.Types.CONFLICT,
+          `Recommendation ${recommendation.id} does not belong to incident ${input.incident_id}.`
+        )
+      }
+    }
+
+    const action = await this.createAgentActionRequests(
+      {
+        action_type: prepared.definition.name,
+        approval_id: approval?.id,
+        available_at: now,
+        correlation_id: input.correlation_id,
+        idempotency_key: input.idempotency_key,
+        incident_id: input.incident_id,
+        input: prepared.input,
+        permission: prepared.definition.permission,
+        policy_key: selectedPolicy.policy_key,
+        policy_version: selectedPolicy.version,
+        recommendation_id: input.recommendation_id,
+        requested_at: now,
+        requested_by_id: input.requested_by_id,
+        requested_by_type: input.requested_by_type,
+        risk_level: policyDecision.risk_level,
+        status: "PENDING",
+        tenant_id: tenantId,
+        tool_name: prepared.definition.name,
+        tool_version: prepared.definition.version,
+      },
+      sharedContext
+    )
+
+    await this.createAgentAuditEvents(
+      {
+        action: "agent-action-requested",
+        actor_id: input.requested_by_id,
+        actor_type: input.requested_by_type,
+        correlation_id: input.correlation_id,
+        data: {
+          approval_id: approval?.id,
+          permission: prepared.definition.permission,
+          policy_key: selectedPolicy.policy_key,
+          policy_version: selectedPolicy.version,
+          risk_level: policyDecision.risk_level,
+          tool_name: prepared.definition.name,
+          tool_version: prepared.definition.version,
+        },
+        event_type: "agent.action.requested",
+        incident_id: input.incident_id,
+        recorded_at: now,
+        resource_id: action.id,
+        resource_type: "agent_action_request",
+      },
+      sharedContext
+    )
+    await this.createAgentOutboxEvents(
+      {
+        aggregate_id: input.incident_id ?? action.id,
+        aggregate_type: input.incident_id
+          ? "agent_incident"
+          : "agent_action_request",
+        available_at: now,
+        event_type: "agent.action.requested",
+        event_version: 1,
+        idempotency_key: `action:${action.id}:requested`,
+        payload: {
+          action_request_id: action.id,
+          correlation_id: input.correlation_id,
+          incident_id: input.incident_id,
+          tool_name: action.tool_name,
+        },
+        status: "PENDING",
+      },
+      sharedContext
+    )
+
+    return { action, duplicate: false }
+  }
+
+  @InjectManager()
   async claimAgentAction(
     input: ClaimAgentActionInput,
     @MedusaContext() sharedContext: Context = {}
@@ -1319,21 +1660,27 @@ class AgentOperationsModuleService extends MedusaService({
       }
     }
 
-    const approval = await this.retrieveAgentApproval(
-      claimedAction.approval_id,
-      {},
-      sharedContext
-    )
-    const incident = await this.retrieveAgentIncident(
-      claimedAction.incident_id,
-      {},
-      sharedContext
-    )
-    const recommendation = await this.retrieveAgentRecommendation(
-      claimedAction.recommendation_id,
-      {},
-      sharedContext
-    )
+    const approval = claimedAction.approval_id
+      ? await this.retrieveAgentApproval(
+          claimedAction.approval_id,
+          {},
+          sharedContext
+        )
+      : null
+    const incident = claimedAction.incident_id
+      ? await this.retrieveAgentIncident(
+          claimedAction.incident_id,
+          {},
+          sharedContext
+        )
+      : null
+    const recommendation = claimedAction.recommendation_id
+      ? await this.retrieveAgentRecommendation(
+          claimedAction.recommendation_id,
+          {},
+          sharedContext
+        )
+      : null
 
     return {
       action: claimedAction,
@@ -1392,13 +1739,15 @@ class AgentOperationsModuleService extends MedusaService({
     const updatedAction = actions[0] ?? action
 
     if (actions[0] && retry.status === "DEAD") {
-      const incident = await this.retrieveAgentIncident(
-        action.incident_id,
-        {},
-        sharedContext
-      )
+      const incident = action.incident_id
+        ? await this.retrieveAgentIncident(
+            action.incident_id,
+            {},
+            sharedContext
+          )
+        : null
 
-      if (incident.status === "EXECUTING") {
+      if (incident?.status === "EXECUTING") {
         assertIncidentTransition("EXECUTING", "ESCALATED")
         await this.updateAgentIncidents(
           {
@@ -1416,23 +1765,25 @@ class AgentOperationsModuleService extends MedusaService({
         )
       }
 
-      await this.updateAgentRecommendations(
-        { id: action.recommendation_id, status: "FAILED" },
-        sharedContext
-      )
+      if (action.recommendation_id) {
+        await this.updateAgentRecommendations(
+          { id: action.recommendation_id, status: "FAILED" },
+          sharedContext
+        )
+      }
       await this.createAgentAuditEvents(
         {
-          action: "inventory-transfer-dead-lettered",
+          action: "agent-action-dead-lettered",
           actor_id: input.worker_id,
           actor_type: "worker",
-          correlation_id: incident.correlation_id,
+          correlation_id: action.correlation_id,
           data: {
             action_request_id: action.id,
             attempt_count: updatedAction.attempt_count,
             error: updatedAction.last_error,
           },
           event_type: "agent.action.dead-lettered",
-          incident_id: incident.id,
+          incident_id: incident?.id,
           recorded_at: failedAt,
           resource_id: action.id,
           resource_type: "agent_action_request",
@@ -1441,8 +1792,10 @@ class AgentOperationsModuleService extends MedusaService({
       )
       await this.createAgentOutboxEvents(
         {
-          aggregate_id: incident.id,
-          aggregate_type: "agent_incident",
+          aggregate_id: incident?.id ?? action.id,
+          aggregate_type: incident
+            ? "agent_incident"
+            : "agent_action_request",
           available_at: failedAt,
           event_type: "agent.action.dead-lettered",
           event_version: 1,
@@ -1451,7 +1804,7 @@ class AgentOperationsModuleService extends MedusaService({
             action_request_id: action.id,
             attempt_count: updatedAction.attempt_count,
             error: updatedAction.last_error,
-            incident_id: incident.id,
+            incident_id: incident?.id,
           },
           status: "PENDING",
         },
@@ -1460,6 +1813,389 @@ class AgentOperationsModuleService extends MedusaService({
     }
 
     return updatedAction
+  }
+
+  @InjectManager()
+  async executeClaimedTaskAgentAction(
+    input: {
+      action_request_id: string
+      actor_id: string
+      actor_type: "user" | "worker"
+      worker_id: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.executeClaimedTaskAgentAction_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async executeClaimedTaskAgentAction_(
+    input: {
+      action_request_id: string
+      actor_id: string
+      actor_type: "user" | "worker"
+      worker_id: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const action = await this.retrieveAgentActionRequest(
+      input.action_request_id,
+      {},
+      sharedContext
+    )
+
+    if (action.status === "SUCCEEDED" || action.status === "CONFLICT") {
+      return {
+        action,
+        duplicate: true,
+        result: action.result as TaskCommandOutput | null,
+      }
+    }
+
+    if (action.status !== "PROCESSING" || action.locked_by !== input.worker_id) {
+      throw new MedusaError(
+        MedusaError.Types.CONFLICT,
+        `Action ${action.id} is not leased by ${input.worker_id}.`
+      )
+    }
+
+    const definition = AGENT_TOOL_REGISTRY[action.tool_name]
+    if (
+      !definition ||
+      ![
+        TASK_CREATE_TOOL.name,
+        TASK_ASSIGN_TOOL.name,
+        TASK_ESCALATE_TOOL.name,
+      ].includes(action.tool_name as never) ||
+      definition.version !== action.tool_version ||
+      definition.permission !== action.permission
+    ) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        `Action ${action.id} does not reference a supported task tool contract.`
+      )
+    }
+
+    const now = new Date()
+    const policyRecords = await this.listAgentPolicyDefinitions(
+      {
+        policy_key: action.policy_key,
+        status: "ACTIVE",
+        tenant_id: action.tenant_id,
+        version: action.policy_version,
+      },
+      { take: 1 },
+      sharedContext
+    )
+    const policy = policyRecords[0]
+    const policyConditions = (policy?.conditions.all ?? []) as PolicyCondition[]
+    const actionPayload = action.input as Record<string, unknown>
+    const policyIsUsable = Boolean(
+      policy &&
+        policy.action_type === action.tool_name &&
+        policy.effective_at <= now &&
+        (!policy.expires_at || policy.expires_at > now) &&
+        policy.risk_level !== "PROHIBITED" &&
+        policyConditions.every((condition) =>
+          conditionMatches(condition, actionPayload)
+        )
+    )
+
+    if (!policyIsUsable) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        `Action ${action.id} policy is no longer usable.`
+      )
+    }
+
+    if (definition.approval_required || policy.requires_approval) {
+      if (!action.approval_id) {
+        throw new MedusaError(
+          MedusaError.Types.NOT_ALLOWED,
+          `Action ${action.id} requires approval.`
+        )
+      }
+      const approval = await this.retrieveAgentApproval(
+        action.approval_id,
+        {},
+        sharedContext
+      )
+      if (
+        approval.status !== "APPROVED" ||
+        new Date(approval.expires_at).getTime() <= now.getTime()
+      ) {
+        throw new MedusaError(
+          MedusaError.Types.NOT_ALLOWED,
+          `Action ${action.id} approval is no longer usable.`
+        )
+      }
+    }
+
+    const authority = {
+      action_request_id: action.id,
+      actor_id: input.actor_id,
+      approval_id: action.approval_id,
+      granted_permissions: [action.permission],
+      idempotency_key: action.idempotency_key,
+      mode: "ACTION_GATEWAY" as const,
+    }
+    let result: TaskCommandOutput
+
+    if (action.tool_name === TASK_CREATE_TOOL.name) {
+      const execution = await executeAgentTool<
+        TaskCreateInput,
+        TaskCommandOutput
+      >(
+        AGENT_TOOL_REGISTRY,
+        {
+          authority,
+          input: action.input,
+          tool_name: action.tool_name,
+          tool_version: action.tool_version,
+        },
+        async (taskInput) => {
+          if (
+            taskInput.incident_id &&
+            taskInput.incident_id !== action.incident_id
+          ) {
+            throw new MedusaError(
+              MedusaError.Types.CONFLICT,
+              "Task incident does not match the action envelope."
+            )
+          }
+          const created = await this.createGovernedAgentTask_(
+            {
+              ...taskInput,
+              created_by_id: action.requested_by_id,
+              created_by_type: action.requested_by_type as
+                | "agent"
+                | "system"
+                | "user",
+              idempotency_key: `action:${action.id}:task.create`,
+            },
+            sharedContext
+          )
+
+          return {
+            duplicate: created.duplicate,
+            outcome: "SUCCEEDED",
+            task: toGovernedTaskSnapshot(created.task),
+          }
+        }
+      )
+      result = execution.output
+    } else if (action.tool_name === TASK_ASSIGN_TOOL.name) {
+      const execution = await executeAgentTool<
+        TaskAssignInput,
+        TaskCommandOutput
+      >(
+        AGENT_TOOL_REGISTRY,
+        {
+          authority,
+          input: action.input,
+          tool_name: action.tool_name,
+          tool_version: action.tool_version,
+        },
+        async (taskInput) => {
+          const task = await this.retrieveAgentTask(
+            taskInput.task_id,
+            {},
+            sharedContext
+          )
+
+          if (task.status !== taskInput.expected_status) {
+            return {
+              code: "TASK_STATE_CONFLICT",
+              message: `Task ${task.id} is ${task.status}, expected ${taskInput.expected_status}.`,
+              outcome: "CONFLICT",
+              task: toGovernedTaskSnapshot(task),
+            }
+          }
+
+          if (
+            task.status === "CLAIMED" &&
+            task.assigned_to_id === taskInput.assigned_to_id &&
+            task.assigned_to_type === taskInput.assigned_to_type
+          ) {
+            return {
+              duplicate: true,
+              outcome: "SUCCEEDED",
+              task: toGovernedTaskSnapshot(task),
+            }
+          }
+
+          if (task.status === "TODO") {
+            assertAgentTaskTransition("TODO", "CLAIMED")
+          }
+          const assigned = await this.updateAgentTasks(
+            {
+              assigned_to_id: taskInput.assigned_to_id,
+              assigned_to_type: taskInput.assigned_to_type,
+              claimed_at: task.claimed_at ?? now,
+              id: task.id,
+              status: "CLAIMED",
+            },
+            sharedContext
+          )
+          await this.createAgentAuditEvents(
+            {
+              action: "task-assigned",
+              actor_id: action.requested_by_id,
+              actor_type: action.requested_by_type,
+              correlation_id: task.incident_id ?? action.correlation_id,
+              data: {
+                assigned_to_id: taskInput.assigned_to_id,
+                assigned_to_type: taskInput.assigned_to_type,
+              },
+              event_type: "agent.task.assigned",
+              incident_id: task.incident_id,
+              recorded_at: now,
+              resource_id: task.id,
+              resource_type: "agent_task",
+            },
+            sharedContext
+          )
+
+          return {
+            duplicate: false,
+            outcome: "SUCCEEDED",
+            task: toGovernedTaskSnapshot(assigned),
+          }
+        }
+      )
+      result = execution.output
+    } else {
+      const execution = await executeAgentTool<
+        TaskEscalateInput,
+        TaskCommandOutput
+      >(
+        AGENT_TOOL_REGISTRY,
+        {
+          authority,
+          input: action.input,
+          tool_name: action.tool_name,
+          tool_version: action.tool_version,
+        },
+        async (taskInput) => {
+          const escalated = await this.escalateGovernedAgentTask_(
+            {
+              ...taskInput,
+              actor_id: action.requested_by_id,
+            },
+            sharedContext
+          )
+
+          if (escalated.outcome === "CONFLICT") {
+            return {
+              code: escalated.code,
+              message: escalated.message,
+              outcome: "CONFLICT",
+              task: toGovernedTaskSnapshot(escalated.task),
+            }
+          }
+
+          return {
+            duplicate: false,
+            outcome: "SUCCEEDED",
+            task: toGovernedTaskSnapshot(escalated.task),
+          }
+        }
+      )
+      result = execution.output
+    }
+
+    const completedAt = new Date()
+    const updatedActions = await this.updateAgentActionRequests(
+      {
+        data: {
+          completed_at: completedAt,
+          last_error:
+            result.outcome === "CONFLICT" ? result.message : null,
+          lock_expires_at: null,
+          locked_at: null,
+          locked_by: null,
+          result,
+          status: result.outcome,
+        },
+        selector: {
+          id: action.id,
+          locked_by: input.worker_id,
+          status: "PROCESSING",
+        },
+      },
+      sharedContext
+    )
+    const updatedAction = updatedActions[0]
+
+    if (!updatedAction) {
+      throw new MedusaError(
+        MedusaError.Types.CONFLICT,
+        `Action ${action.id} lost its execution lease.`
+      )
+    }
+
+    await this.createAgentToolCalls(
+      {
+        action_request_id: action.id,
+        completed_at: completedAt,
+        error: result.outcome === "CONFLICT" ? result.message : null,
+        idempotency_key: `action:${action.id}:${action.tool_name}:1`,
+        incident_id: action.incident_id,
+        input: actionPayload,
+        kind: "COMMAND",
+        output: result,
+        started_at: action.locked_at ?? completedAt,
+        status: result.outcome,
+        tool_name: action.tool_name,
+        tool_version: action.tool_version,
+      },
+      sharedContext
+    )
+    const eventType =
+      result.outcome === "SUCCEEDED"
+        ? "agent.action.executed"
+        : "agent.action.conflicted"
+    await this.createAgentAuditEvents(
+      {
+        action:
+          result.outcome === "SUCCEEDED"
+            ? "agent-action-executed"
+            : "agent-action-conflicted",
+        actor_id: input.actor_id,
+        actor_type: input.actor_type,
+        correlation_id: action.correlation_id,
+        data: { result, tool_name: action.tool_name },
+        event_type: eventType,
+        incident_id: action.incident_id,
+        recorded_at: completedAt,
+        resource_id: action.id,
+        resource_type: "agent_action_request",
+      },
+      sharedContext
+    )
+    await this.createAgentOutboxEvents(
+      {
+        aggregate_id: action.incident_id ?? action.id,
+        aggregate_type: action.incident_id
+          ? "agent_incident"
+          : "agent_action_request",
+        available_at: completedAt,
+        event_type: eventType,
+        event_version: 1,
+        idempotency_key: `action:${action.id}:${result.outcome}`,
+        payload: {
+          action_request_id: action.id,
+          correlation_id: action.correlation_id,
+          incident_id: action.incident_id,
+          result,
+          tool_name: action.tool_name,
+        },
+        status: "PENDING",
+      },
+      sharedContext
+    )
+
+    return { action: updatedAction, duplicate: false, result }
   }
 
   @InjectManager()
@@ -1505,6 +2241,13 @@ class AgentOperationsModuleService extends MedusaService({
       throw new MedusaError(
         MedusaError.Types.CONFLICT,
         `Action ${action.id} is not leased by ${input.worker_id}.`
+      )
+    }
+
+    if (!action.incident_id || !action.recommendation_id) {
+      throw new MedusaError(
+        MedusaError.Types.UNEXPECTED_STATE,
+        `Inventory action ${action.id} is missing incident or recommendation context.`
       )
     }
 
@@ -1971,15 +2714,20 @@ class AgentOperationsModuleService extends MedusaService({
           action_type: recommendation.action_type,
           approval_id: approval.id,
           available_at: now,
+          correlation_id: incident.correlation_id,
           idempotency_key: `approval:${approval.id}:inventory-transfer:1`,
           incident_id: incident.id,
           input: actionInput,
+          permission: "agent_inventory:transfer",
+          policy_key: approval.policy_key,
+          policy_version: approval.policy_version,
           recommendation_id: recommendation.id,
           requested_at: now,
           requested_by_id: input.actor_id,
           requested_by_type: "user",
           risk_level: recommendation.risk_level,
           status: "PENDING",
+          tenant_id: incident.tenant_id,
           tool_name: "inventory.execute-transfer",
           tool_version: "1.0.0",
         },

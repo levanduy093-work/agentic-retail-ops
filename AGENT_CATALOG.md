@@ -16,7 +16,7 @@ vẫn là các gate riêng.
 
 | Agent capability | Trạng thái | Phạm vi đã có | Gate còn thiếu |
 | --- | --- | --- | --- |
-| Policy & Approval Agent | `implemented-static` | Policy HIGH cho đề xuất chuyển tồn; approval có expiry, reason, actor; approve/reject và quyết định lặp lại an toàn; Action Gateway revalidate; RBAC module, 20 policy và role Operations Manager đã bootstrap idempotent | Gán role cho tài khoản thật, kiểm thử allow/deny qua HTTP và mở rộng policy cho action khác |
+| Policy & Approval Agent | `implemented-static` | Policy HIGH cho đề xuất chuyển tồn; approval có expiry, reason, actor; Action Gateway tổng quát fail-closed khi không có policy và revalidate trước khi chạy; RBAC module, 20 policy và role Operations Manager đã bootstrap idempotent | Gán role cho tài khoản thật, kiểm thử allow/deny qua HTTP và thêm policy cho các command domain tiếp theo |
 | Event Triage Agent | `implemented-static` | Nhận `inventory.low`; validate envelope; unique theo `source + event_id`; tạo một incident cho event; duplicate trả lại record cũ | Subscriber/connector thật, retry/concurrency test, dead-letter và nhiều event type |
 | Inventory Agent | `implemented-static` | Rule deterministic, typed read/command tools, Action Gateway revalidate và safe conflict; Redis locking adapter đã kết nối runtime | Happy path với hai stock location thật và concurrency/reservation test nhiều process |
 | Audit & Compliance Agent | `implemented-static` | Audit/outbox/tool trace, lease, retry/backoff, dead-letter; Redis Event Bus, Workflow Engine và locking đã kết nối runtime | Subscriber idempotency mở rộng, append-only enforcement, trace/replay detail và retention |
@@ -28,7 +28,7 @@ vẫn là các gate riêng.
 | Payment & Fraud Watcher | `contracted` | Có event/incident/task/escalation và `PROHIBITED` policy primitive | Payment mapping, fraud rules và prohibited-action scenarios |
 | Catalog Quality Agent | `contracted` | Có task, evaluation và typed-tool contract | Catalog rules, scanner và remediation tools riêng |
 | Pricing & Promotion Analyst | `contracted` | Có model run, prompt version, evaluation và approval foundation | Metrics dataset, margin rules và pricing ownership |
-| Workforce Coordinator Agent | `contracted` | Task module có idempotency, assignee, due date, priority và state machine | Roster/shift integration, SLA scheduler và escalation policy |
+| Workforce Coordinator Agent | `implemented-static` | `task.create`, `task.assign`, `task.escalate` chạy qua Action Gateway, policy ACTIVE, lease, typed executor, tool-call/audit/outbox; PostgreSQL runtime đã xác nhận success và safe conflict | Trigger `task.created/task.overdue`, roster/shift thật, SLA scheduler, HTTP/RBAC user thật và multi-worker contention |
 | Integration Watchdog Agent | `contracted` | Có event/incident/task/outbox/channel foundation | Connector telemetry, health adapter và recovery playbook |
 | Incident Commander Agent | `contracted` | Có incident, task, channel, audit và policy foundation | Severity/SLA workflow, checklist và war-room adapter |
 | Owner Briefing Agent | `contracted` | Có read model, knowledge citation, channel và prompt contract | Metrics composition, scheduler và mobile delivery adapter |
@@ -46,11 +46,12 @@ Admin. Provider mobile/push/chat bên ngoài vẫn là adapter chưa triển kha
 - Tool runtime dùng `AgentToolDefinition` chung cho schema input/output,
   permission, risk, approval, timeout, retry, idempotency, error và audit fields.
   Executor kiểm tra registry/version/schema/permission và từ chối command không
-  có Action Gateway authority. Registry chạy thật hiện có 5/24 tool catalog;
-  ngoài hai inventory tool đã có thêm `knowledge.search`, `audit.search` và
-  `trace.replay`; coverage API công khai đúng 19 tool còn thiếu.
+  có Action Gateway authority. Registry chạy thật hiện có 8/24 tool catalog;
+  ngoài inventory và ba read tool platform đã có `task.create`, `task.assign`,
+  `task.escalate`; coverage API công khai đúng 16 tool còn thiếu.
 - Task orchestration có idempotency, assignee, deadline, priority, state machine
-  và audit; mutation đi qua Medusa workflow.
+  và audit; create/assign/escalate đi qua Action Gateway tổng quát, policy
+  ACTIVE, lease và Medusa workflow. Escalation lưu reason, actor và thời điểm.
 - Policy definition có version, hiệu lực và điều kiện deterministic `eq`, `gte`,
   `lte`, `in`; RBAC policy được đăng ký bằng `definePolicies`.
 - Knowledge có lifecycle `DRAFT -> APPROVED -> RETIRED`, checksum, citation,
@@ -201,7 +202,9 @@ Ngày kiểm chứng: 2026-08-10.
   thành công trên PostgreSQL local.
 - Migration `Migration20260809194213` tạo conversation/message và chạy thành
   công trên PostgreSQL local.
-- 53/53 unit test pass cho analyzer, state machines, validators, tool contract,
+- Migration `Migration20260810073306` tổng quát hóa action context và bổ sung
+  task escalation; migration chạy thành công, có backfill action inventory cũ.
+- 59/59 unit test pass cho analyzer, state machines, validators, tool contract,
   executor, registry coverage, tools, policy,
   knowledge, model boundary, evaluation, action/outbox và communication.
 - ESLint mục tiêu của toàn bộ source agent pass.
@@ -226,6 +229,9 @@ Ngày kiểm chứng: 2026-08-10.
 - Runtime platform xác nhận task `TODO -> CLAIMED -> IN_PROGRESS -> COMPLETED`,
   knowledge `DRAFT -> APPROVED`, `SHIP-001` đạt `PASSED` và evaluation trùng bị
   suppress.
+- Runtime task gateway xác nhận request trùng bị suppress; không có policy thì
+  fail-closed và không ghi action; create/assign/escalate đều `SUCCEEDED`; stale
+  expected state trả `CONFLICT`; mỗi action có đúng một tool call.
 - Redis container healthy; Event Bus Redis, Workflow Engine Redis và Locking
   Redis đều kết nối thành công khi bật production switch.
 - Production server trên cổng kiểm thử phục vụ `/app` với HTTP 200; catalog API
@@ -233,9 +239,10 @@ Ngày kiểm chứng: 2026-08-10.
 
 ## Gate tiếp theo
 
-1. Đóng gói 19 tool catalog còn lại bằng `AgentToolDefinition`; ưu tiên tổng
-   quát hóa Action Gateway cho nhóm platform command (`approval`, `incident`,
-   `task`, `knowledge`, `message`) trước các adapter commerce chưa có nghiệp vụ.
+1. Đóng gói 16 tool catalog còn lại bằng `AgentToolDefinition`; ưu tiên
+   `incident.create/update`, `approval.request/decide`, `knowledge.propose` và
+   `message.send` trên Action Gateway vừa tổng quát hóa trước các adapter
+   commerce chưa có nghiệp vụ.
 2. Gán role `operations_manager` cho tài khoản Admin thật và kiểm thử allow/deny
    trên từng policy qua HTTP.
 3. Chạy happy path bằng ít nhất hai stock location thật và kiểm thử hai action

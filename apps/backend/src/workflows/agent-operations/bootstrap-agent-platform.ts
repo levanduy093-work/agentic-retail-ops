@@ -9,6 +9,11 @@ import {
 import { AGENT_OPERATIONS_MODULE } from "../../modules/agent-operations"
 import { AGENT_RBAC_POLICY_DEFINITIONS } from "../../modules/agent-operations/rbac-policies"
 import AgentOperationsModuleService from "../../modules/agent-operations/service"
+import {
+  TASK_ASSIGN_TOOL,
+  TASK_CREATE_TOOL,
+  TASK_ESCALATE_TOOL,
+} from "../../modules/agent-operations/tools/task-tools"
 
 type BootstrapAgentPlatformInput = {
   actor_id: string
@@ -78,6 +83,53 @@ const bootstrapAgentPlatformStep = createStep(
         version: "1.0.0",
       })
       created.push("policy:inventory-transfer")
+    }
+
+    const taskToolPolicies = [
+      {
+        description: "Authorized agents may create governed operational tasks.",
+        name: "Agent task creation",
+        policy_key: "task.create.agent-authorized",
+        tool: TASK_CREATE_TOOL,
+      },
+      {
+        description: "Authorized coordinators may assign operational tasks.",
+        name: "Agent task assignment",
+        policy_key: "task.assign.agent-authorized",
+        tool: TASK_ASSIGN_TOOL,
+      },
+      {
+        description:
+          "Authorized coordinators may escalate tasks to a human or team.",
+        name: "Agent task escalation",
+        policy_key: "task.escalate.agent-authorized",
+        tool: TASK_ESCALATE_TOOL,
+      },
+    ]
+
+    for (const taskPolicy of taskToolPolicies) {
+      const existingTaskPolicies =
+        await service.listAgentPolicyDefinitions({
+          policy_key: taskPolicy.policy_key,
+          version: "1.0.0",
+        })
+      if (!existingTaskPolicies[0]) {
+        await service.createAgentPolicyDefinitions({
+          action_type: taskPolicy.tool.name,
+          conditions: { all: [] },
+          description: taskPolicy.description,
+          effective_at: now,
+          name: taskPolicy.name,
+          policy_key: taskPolicy.policy_key,
+          required_role: null,
+          requires_approval: taskPolicy.tool.approval_required,
+          risk_level: taskPolicy.tool.risk_level,
+          status: "ACTIVE",
+          tenant_id: "default",
+          version: "1.0.0",
+        })
+        created.push(`policy:${taskPolicy.tool.name}`)
+      }
     }
 
     const prompts = await service.listAgentPromptTemplates({

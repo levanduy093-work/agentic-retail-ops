@@ -1,6 +1,6 @@
 import { z } from "@medusajs/framework/zod"
 import { defineAgentTool } from "../tool-contract"
-import { executeAgentTool } from "../tool-executor"
+import { executeAgentTool, prepareAgentCommand } from "../tool-executor"
 
 const inputSchema = z.strictObject({ value: z.number().int() })
 const outputSchema = z.strictObject({ doubled: z.number().int() })
@@ -243,5 +243,47 @@ describe("agent tool executor", () => {
         async () => ({ doubled: 6 })
       )
     ).rejects.toThrow("requires an idempotency key")
+  })
+
+  test("prepares commands without executing their handler", () => {
+    const prepared = prepareAgentCommand<{ value: number }>(registry, {
+      authority: {
+        actor_id: "agent_test",
+        approval_id: "appr_test",
+        granted_permissions: [commandTool.permission],
+        idempotency_key: "request:test.command:1",
+        mode: "ACTION_GATEWAY_REQUEST",
+      },
+      input: { value: 5 },
+      tool_name: commandTool.name,
+      tool_version: commandTool.version,
+    })
+
+    expect(prepared.input).toEqual({ value: 5 })
+    expect(prepared.definition.name).toBe(commandTool.name)
+  })
+
+  test("does not execute a prepared gateway request", async () => {
+    const handler = jest.fn(async () => ({ doubled: 10 }))
+
+    await expect(
+      executeAgentTool(
+        registry,
+        {
+          authority: {
+            actor_id: "agent_test",
+            approval_id: "appr_test",
+            granted_permissions: [commandTool.permission],
+            idempotency_key: "request:test.command:1",
+            mode: "ACTION_GATEWAY_REQUEST",
+          },
+          input: { value: 5 },
+          tool_name: commandTool.name,
+          tool_version: commandTool.version,
+        },
+        handler
+      )
+    ).rejects.toThrow("cannot execute a tool handler")
+    expect(handler).not.toHaveBeenCalled()
   })
 })

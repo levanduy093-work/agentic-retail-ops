@@ -202,6 +202,16 @@ export type TransitionAgentTaskInput = {
   task_id: string
 }
 
+export type EscalateAgentTaskInput = {
+  actor_id: string
+  assigned_to_id: string
+  assigned_to_type: "team" | "user"
+  expected_status: AgentTaskStatus
+  priority: "HIGH" | "CRITICAL"
+  reason: string
+  task_id: string
+}
+
 export type CreateKnowledgeDocumentInput = {
   citation_locator: string
   content: string
@@ -335,6 +345,21 @@ export type ExecuteAgentActionInput = {
   max_retry_delay_ms?: number
   retry_base_delay_ms?: number
   worker_id: string
+}
+
+export type RequestAgentActionInput = {
+  approval_id?: string
+  correlation_id: string
+  granted_permissions: string[]
+  idempotency_key: string
+  incident_id?: string
+  input: Record<string, unknown>
+  recommendation_id?: string
+  requested_by_id: string
+  requested_by_type: "agent" | "system" | "user"
+  tenant_id?: string
+  tool_name: string
+  tool_version: string
 }
 
 export type InventoryRecommendation = {

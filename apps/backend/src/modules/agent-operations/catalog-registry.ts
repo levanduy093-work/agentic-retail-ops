@@ -110,7 +110,10 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
       "rbac",
     ],
     maximum_risk: "HIGH" as RiskLevel,
-    status: "contracted" as AgentCatalogStatus,
+    status:
+      id === "workforce-coordinator-agent"
+        ? ("implemented-static" as AgentCatalogStatus)
+        : ("contracted" as AgentCatalogStatus),
   })),
 ]
 

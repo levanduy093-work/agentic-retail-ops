@@ -10,10 +10,17 @@ export type AgentToolExecutionAuthority =
   | {
       action_request_id: string
       actor_id: string
-      approval_id: string
+      approval_id: string | null
       granted_permissions: readonly string[]
       idempotency_key: string
       mode: "ACTION_GATEWAY"
+    }
+  | {
+      actor_id: string
+      approval_id: string | null
+      granted_permissions: readonly string[]
+      idempotency_key: string
+      mode: "ACTION_GATEWAY_REQUEST"
     }
 
 export type AgentToolExecutionRequest = {
@@ -57,11 +64,23 @@ function resolveAgentTool<TInput, TOutput>(
 
   if (
     definition.kind === "COMMAND" &&
-    request.authority.mode !== "ACTION_GATEWAY"
+    request.authority.mode === "DIRECT"
   ) {
     throw new MedusaError(
       MedusaError.Types.NOT_ALLOWED,
       `Command tool ${request.tool_name} must execute through the Action Gateway.`
+    )
+  }
+
+  if (
+    definition.kind === "COMMAND" &&
+    definition.approval_required &&
+    request.authority.mode !== "DIRECT" &&
+    !request.authority.approval_id
+  ) {
+    throw new MedusaError(
+      MedusaError.Types.NOT_ALLOWED,
+      `Command tool ${request.tool_name} requires an approved request.`
     )
   }
 
@@ -74,7 +93,7 @@ function resolveAgentTool<TInput, TOutput>(
 
   if (
     definition.idempotency === "REQUIRED" &&
-    (request.authority.mode !== "ACTION_GATEWAY" ||
+    (request.authority.mode === "DIRECT" ||
       !request.authority.idempotency_key.trim())
   ) {
     throw new MedusaError(
@@ -84,6 +103,36 @@ function resolveAgentTool<TInput, TOutput>(
   }
 
   return definition
+}
+
+export function prepareAgentCommand<TInput>(
+  registry: AgentToolRegistry,
+  request: AgentToolExecutionRequest
+) {
+  if (request.authority.mode !== "ACTION_GATEWAY_REQUEST") {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      "Agent command preparation requires Action Gateway request authority."
+    )
+  }
+
+  const definition = resolveAgentTool<TInput, unknown>(registry, request)
+
+  if (definition.kind !== "COMMAND") {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      `Agent tool ${definition.name} is not a command tool.`
+    )
+  }
+
+  const input = parseToolValue(
+    definition,
+    definition.input_schema,
+    request.input,
+    "input"
+  )
+
+  return { definition, input }
 }
 
 function parseToolValue<T>(
@@ -112,6 +161,13 @@ export async function executeAgentTool<TInput, TOutput>(
     definition: AgentToolDefinition<TInput, TOutput>
   ) => Promise<TOutput>
 ): Promise<AgentToolExecutionResult<TInput, TOutput>> {
+  if (request.authority.mode === "ACTION_GATEWAY_REQUEST") {
+    throw new MedusaError(
+      MedusaError.Types.NOT_ALLOWED,
+      "Prepared Agent Gateway requests cannot execute a tool handler."
+    )
+  }
+
   const definition = resolveAgentTool<TInput, TOutput>(registry, request)
   const input = parseToolValue(
     definition,

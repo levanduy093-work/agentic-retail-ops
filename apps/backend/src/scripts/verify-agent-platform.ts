@@ -5,10 +5,18 @@ import { AGENT_CATALOG } from "../modules/agent-operations/catalog-registry"
 import { isKnowledgeEligible } from "../modules/agent-operations/knowledge"
 import { AGENT_OPERATIONS_MODULE } from "../modules/agent-operations"
 import AgentOperationsModuleService from "../modules/agent-operations/service"
+import {
+  TASK_ASSIGN_TOOL,
+  TASK_CREATE_TOOL,
+  TASK_ESCALATE_TOOL,
+  TaskCommandOutput,
+} from "../modules/agent-operations/tools/task-tools"
 import { AgentTaskStatus } from "../modules/agent-operations/types"
 import { approveKnowledgeDocumentWorkflow } from "../workflows/agent-operations/approve-knowledge-document"
 import { createAgentTaskWorkflow } from "../workflows/agent-operations/create-agent-task"
 import { createKnowledgeDocumentWorkflow } from "../workflows/agent-operations/create-knowledge-document"
+import { executeAgentActionWorkflow } from "../workflows/agent-operations/execute-agent-action"
+import { requestAgentActionWorkflow } from "../workflows/agent-operations/request-agent-action"
 import { runAgentEvaluationWorkflow } from "../workflows/agent-operations/run-agent-evaluation"
 import { transitionAgentTaskWorkflow } from "../workflows/agent-operations/transition-agent-task"
 
@@ -54,6 +62,197 @@ export default async function verifyAgentPlatform({ container }: ExecArgs) {
   }
   const completedTask = await service.retrieveAgentTask(taskCreated.task.id)
   assert.equal(completedTask.status, "COMPLETED")
+
+  const gatewayCorrelationId = `${verificationId}:task-gateway`
+  const noPolicyIdempotencyKey = `${verificationId}:action:no-policy`
+  await assert.rejects(
+    requestAgentActionWorkflow(container).run({
+      input: {
+        correlation_id: `${gatewayCorrelationId}:no-policy`,
+        granted_permissions: [TASK_CREATE_TOOL.permission],
+        idempotency_key: noPolicyIdempotencyKey,
+        input: {
+          priority: "LOW",
+          task_type: "GATEWAY_VERIFICATION",
+          title: "This request must fail closed",
+        },
+        requested_by_id: "workforce-coordinator-agent",
+        requested_by_type: "agent",
+        tenant_id: "tenant-without-policy",
+        tool_name: TASK_CREATE_TOOL.name,
+        tool_version: TASK_CREATE_TOOL.version,
+      },
+    })
+  )
+  assert.equal(
+    (
+      await service.listAgentActionRequests({
+        idempotency_key: noPolicyIdempotencyKey,
+      })
+    ).length,
+    0
+  )
+  const taskCreateRequestInput = {
+    correlation_id: gatewayCorrelationId,
+    granted_permissions: [TASK_CREATE_TOOL.permission],
+    idempotency_key: `${verificationId}:action:task-create`,
+    input: {
+      priority: "HIGH",
+      task_type: "GATEWAY_VERIFICATION",
+      title: "Verify task command gateway",
+    },
+    requested_by_id: "workforce-coordinator-agent",
+    requested_by_type: "agent" as const,
+    tool_name: TASK_CREATE_TOOL.name,
+    tool_version: TASK_CREATE_TOOL.version,
+  }
+  const { result: taskCreateRequest } = await requestAgentActionWorkflow(
+    container
+  ).run({ input: taskCreateRequestInput })
+  assert.equal(taskCreateRequest.duplicate, false)
+  const { result: duplicateTaskCreateRequest } =
+    await requestAgentActionWorkflow(container).run({
+      input: taskCreateRequestInput,
+    })
+  assert.equal(duplicateTaskCreateRequest.duplicate, true)
+  const { result: taskCreateExecution } = await executeAgentActionWorkflow(
+    container
+  ).run({
+    input: {
+      action_request_id: taskCreateRequest.action.id,
+      actor_id: "platform-action-worker",
+      actor_type: "worker",
+      worker_id: "platform-action-worker",
+    },
+  })
+  const taskCreateOutput =
+    taskCreateExecution.action.result as unknown as TaskCommandOutput
+  assert.equal(taskCreateOutput.outcome, "SUCCEEDED")
+  const gatewayTaskId = taskCreateOutput.task.task_id
+
+  const { result: taskAssignRequest } = await requestAgentActionWorkflow(
+    container
+  ).run({
+    input: {
+      correlation_id: gatewayCorrelationId,
+      granted_permissions: [TASK_ASSIGN_TOOL.permission],
+      idempotency_key: `${verificationId}:action:task-assign`,
+      input: {
+        assigned_to_id: "agent_shift_lead",
+        assigned_to_type: "agent",
+        expected_status: "TODO",
+        task_id: gatewayTaskId,
+      },
+      requested_by_id: "workforce-coordinator-agent",
+      requested_by_type: "agent",
+      tool_name: TASK_ASSIGN_TOOL.name,
+      tool_version: TASK_ASSIGN_TOOL.version,
+    },
+  })
+  const { result: taskAssignExecution } = await executeAgentActionWorkflow(
+    container
+  ).run({
+    input: {
+      action_request_id: taskAssignRequest.action.id,
+      actor_id: "platform-action-worker",
+      actor_type: "worker",
+      worker_id: "platform-action-worker",
+    },
+  })
+  const taskAssignOutput =
+    taskAssignExecution.action.result as unknown as TaskCommandOutput
+  assert.equal(taskAssignOutput.outcome, "SUCCEEDED")
+  assert.equal(taskAssignOutput.task.status, "CLAIMED")
+
+  const { result: taskEscalateRequest } = await requestAgentActionWorkflow(
+    container
+  ).run({
+    input: {
+      correlation_id: gatewayCorrelationId,
+      granted_permissions: [TASK_ESCALATE_TOOL.permission],
+      idempotency_key: `${verificationId}:action:task-escalate`,
+      input: {
+        assigned_to_id: "team_operations_manager",
+        assigned_to_type: "team",
+        expected_status: "CLAIMED",
+        priority: "CRITICAL",
+        reason: "Runtime verification escalation",
+        task_id: gatewayTaskId,
+      },
+      requested_by_id: "workforce-coordinator-agent",
+      requested_by_type: "agent",
+      tool_name: TASK_ESCALATE_TOOL.name,
+      tool_version: TASK_ESCALATE_TOOL.version,
+    },
+  })
+  const { result: taskEscalateExecution } = await executeAgentActionWorkflow(
+    container
+  ).run({
+    input: {
+      action_request_id: taskEscalateRequest.action.id,
+      actor_id: "platform-action-worker",
+      actor_type: "worker",
+      worker_id: "platform-action-worker",
+    },
+  })
+  const taskEscalateOutput =
+    taskEscalateExecution.action.result as unknown as TaskCommandOutput
+  assert.equal(taskEscalateOutput.outcome, "SUCCEEDED")
+  assert.equal(taskEscalateOutput.task.priority, "CRITICAL")
+  assert.equal(taskEscalateOutput.task.assigned_to_type, "team")
+
+  const { result: taskConflictRequest } = await requestAgentActionWorkflow(
+    container
+  ).run({
+    input: {
+      correlation_id: gatewayCorrelationId,
+      granted_permissions: [TASK_ASSIGN_TOOL.permission],
+      idempotency_key: `${verificationId}:action:task-conflict`,
+      input: {
+        assigned_to_id: "agent_other",
+        assigned_to_type: "agent",
+        expected_status: "TODO",
+        task_id: gatewayTaskId,
+      },
+      requested_by_id: "workforce-coordinator-agent",
+      requested_by_type: "agent",
+      tool_name: TASK_ASSIGN_TOOL.name,
+      tool_version: TASK_ASSIGN_TOOL.version,
+    },
+  })
+  const { result: taskConflictExecution } = await executeAgentActionWorkflow(
+    container
+  ).run({
+    input: {
+      action_request_id: taskConflictRequest.action.id,
+      actor_id: "platform-action-worker",
+      actor_type: "worker",
+      worker_id: "platform-action-worker",
+    },
+  })
+  const taskConflictOutput =
+    taskConflictExecution.action.result as unknown as TaskCommandOutput
+  assert.equal(taskConflictOutput.outcome, "CONFLICT")
+  assert.equal(taskConflictExecution.action.status, "CONFLICT")
+
+  const gatewayAuditEvents = await service.listAgentAuditEvents({
+    correlation_id: gatewayCorrelationId,
+  })
+  assert.ok(gatewayAuditEvents.length >= 8)
+  const gatewayToolCalls = await Promise.all(
+    [
+      taskCreateRequest.action.id,
+      taskAssignRequest.action.id,
+      taskEscalateRequest.action.id,
+      taskConflictRequest.action.id,
+    ].map((actionRequestId) =>
+      service.listAgentToolCalls({ action_request_id: actionRequestId })
+    )
+  )
+  assert.deepEqual(
+    gatewayToolCalls.map((calls) => calls.length),
+    [1, 1, 1, 1]
+  )
 
   const knowledgeInput = {
     citation_locator: `policy://verification/${verificationId}`,
@@ -109,7 +308,7 @@ export default async function verifyAgentPlatform({ container }: ExecArgs) {
   assert.equal(rolePolicies.length, 20)
   assert.equal(
     (await service.listAgentPolicyDefinitions({ status: "ACTIVE" })).length,
-    1
+    4
   )
   assert.equal(
     (await service.listAgentPromptTemplates({ status: "ACTIVE" })).length,
@@ -127,6 +326,12 @@ export default async function verifyAgentPlatform({ container }: ExecArgs) {
         evaluation_status: evaluation.run.status,
         knowledge_status: knowledgeApproved.document.status,
         operations_manager_policies: rolePolicies.length,
+        task_gateway_statuses: [
+          taskCreateExecution.action.status,
+          taskAssignExecution.action.status,
+          taskEscalateExecution.action.status,
+          taskConflictExecution.action.status,
+        ],
         task_status: completedTask.status,
       },
       null,

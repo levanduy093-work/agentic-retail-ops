@@ -8,6 +8,11 @@ import {
   TRACE_REPLAY_TOOL,
 } from "./tools/platform-read-tools"
 import {
+  TASK_ASSIGN_TOOL,
+  TASK_CREATE_TOOL,
+  TASK_ESCALATE_TOOL,
+} from "./tools/task-tools"
+import {
   AgentToolDefinition,
   toAgentToolMetadata,
 } from "./tool-contract"
@@ -18,6 +23,9 @@ export const AGENT_TOOL_REGISTRY = {
   [INVENTORY_GET_POSITION_TOOL.name]: INVENTORY_GET_POSITION_TOOL,
   [INVENTORY_EXECUTE_TRANSFER_TOOL.name]: INVENTORY_EXECUTE_TRANSFER_TOOL,
   [KNOWLEDGE_SEARCH_TOOL.name]: KNOWLEDGE_SEARCH_TOOL,
+  [TASK_ASSIGN_TOOL.name]: TASK_ASSIGN_TOOL,
+  [TASK_CREATE_TOOL.name]: TASK_CREATE_TOOL,
+  [TASK_ESCALATE_TOOL.name]: TASK_ESCALATE_TOOL,
   [TRACE_REPLAY_TOOL.name]: TRACE_REPLAY_TOOL,
 } as const satisfies Readonly<Record<string, AgentToolDefinition>>
 

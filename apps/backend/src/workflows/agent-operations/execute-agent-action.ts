@@ -2,7 +2,7 @@ import type {
   IInventoryService,
   ILockingModule,
 } from "@medusajs/framework/types"
-import { Modules } from "@medusajs/framework/utils"
+import { MedusaError, Modules } from "@medusajs/framework/utils"
 import {
   createStep,
   createWorkflow,
@@ -23,6 +23,12 @@ import {
   InventoryTransferInput,
   InventoryTransferOutput,
 } from "../../modules/agent-operations/tools/inventory-tools"
+import {
+  TASK_ASSIGN_TOOL,
+  TASK_CREATE_TOOL,
+  TASK_ESCALATE_TOOL,
+  TaskCommandOutput,
+} from "../../modules/agent-operations/tools/task-tools"
 import { ExecuteAgentActionInput } from "../../modules/agent-operations/types"
 
 const DEFAULT_LEASE_DURATION_MS = INVENTORY_EXECUTE_TRANSFER_TOOL.timeout_ms
@@ -59,17 +65,25 @@ const claimAgentActionStep = createStep(
         input.lease_duration_ms ?? DEFAULT_LEASE_DURATION_MS,
       worker_id: input.worker_id,
     })
+    const definition = AGENT_TOOL_REGISTRY[result.action.tool_name]
 
     return new StepResponse(
       result,
       result.claimed
         ? {
             action_request_id: input.action_request_id,
-            max_attempts: input.max_attempts ?? DEFAULT_MAX_ATTEMPTS,
+            max_attempts:
+              input.max_attempts ??
+              definition?.retry.max_attempts ??
+              DEFAULT_MAX_ATTEMPTS,
             max_retry_delay_ms:
-              input.max_retry_delay_ms ?? DEFAULT_MAX_RETRY_DELAY_MS,
+              input.max_retry_delay_ms ??
+              definition?.retry.max_delay_ms ??
+              DEFAULT_MAX_RETRY_DELAY_MS,
             retry_base_delay_ms:
-              input.retry_base_delay_ms ?? DEFAULT_RETRY_BASE_DELAY_MS,
+              input.retry_base_delay_ms ??
+              definition?.retry.base_delay_ms ??
+              DEFAULT_RETRY_BASE_DELAY_MS,
             worker_id: input.worker_id,
           }
         : null
@@ -110,12 +124,19 @@ const executeInventoryTransferStep = createStep<
 >(
   "execute-inventory-transfer",
   async ({ claim, dispatch }, { container }) => {
-    if (!claim.claimed || !claim.approval || !claim.incident || !claim.recommendation) {
+    if (
+      !claim.claimed ||
+      !claim.approval ||
+      !claim.incident ||
+      !claim.recommendation
+    ) {
       return new StepResponse<TransferResult, TransferCompensationInput>(
         { outcome: "SKIPPED" },
         null
       )
     }
+
+    const approval = claim.approval
 
     const actionInput = InventoryTransferInput.safeParse(claim.action.input)
 
@@ -132,8 +153,8 @@ const executeInventoryTransferStep = createStep<
 
     const now = Date.now()
     const approvalIsUsable =
-      claim.approval.status === "APPROVED" &&
-      new Date(claim.approval.expires_at).getTime() > now
+      approval.status === "APPROVED" &&
+      new Date(approval.expires_at).getTime() > now
     const recommendationIsUsable =
       claim.recommendation.status === "APPROVED" &&
       claim.recommendation.action_type === "INVENTORY_TRANSFER"
@@ -176,7 +197,7 @@ const executeInventoryTransferStep = createStep<
             authority: {
               action_request_id: claim.action.id,
               actor_id: dispatch.actor_id,
-              approval_id: claim.approval.id,
+              approval_id: approval.id,
               granted_permissions: [
                 INVENTORY_EXECUTE_TRANSFER_TOOL.permission,
               ],
@@ -336,12 +357,74 @@ const executeInventoryTransferStep = createStep<
 type FinalizeAgentActionStepInput = {
   claim: ClaimResult
   dispatch: ExecuteAgentActionInput
+  task: TaskExecutionResult
   transfer: TransferResult
 }
+
+type TaskExecutionResult =
+  | { outcome: "SKIPPED" }
+  | {
+      action: ClaimResult["action"]
+      duplicate: boolean
+      outcome: "FINALIZED"
+      result: TaskCommandOutput
+    }
+
+const executeTaskCommandStep = createStep(
+  "execute-task-command",
+  async (
+    input: { claim: ClaimResult; dispatch: ExecuteAgentActionInput },
+    { container }
+  ) => {
+    if (
+      !input.claim.claimed ||
+      ![
+        TASK_CREATE_TOOL.name,
+        TASK_ASSIGN_TOOL.name,
+        TASK_ESCALATE_TOOL.name,
+      ].includes(input.claim.action.tool_name as never)
+    ) {
+      return new StepResponse<TaskExecutionResult>({ outcome: "SKIPPED" })
+    }
+
+    const service = container.resolve<AgentOperationsModuleService>(
+      AGENT_OPERATIONS_MODULE
+    )
+    const execution = await service.executeClaimedTaskAgentAction({
+      action_request_id: input.claim.action.id,
+      actor_id: input.dispatch.actor_id,
+      actor_type: input.dispatch.actor_type,
+      worker_id: input.dispatch.worker_id,
+    })
+
+    if (!execution.result) {
+      throw new MedusaError(
+        MedusaError.Types.UNEXPECTED_STATE,
+        `Task action ${input.claim.action.id} returned no result.`
+      )
+    }
+
+    return new StepResponse<TaskExecutionResult>({
+      action: execution.action,
+      duplicate: execution.duplicate,
+      outcome: "FINALIZED",
+      result: execution.result,
+    })
+  }
+)
 
 const finalizeAgentActionStep = createStep(
   "finalize-agent-action",
   async (input: FinalizeAgentActionStepInput, { container }) => {
+    if (input.task.outcome === "FINALIZED") {
+      return new StepResponse({
+        action: input.task.action,
+        duplicate: input.task.duplicate,
+        result: input.task.result,
+        skipped: false,
+      })
+    }
+
     if (!input.claim.claimed || input.transfer.outcome === "SKIPPED") {
       return new StepResponse({
         action: input.claim.action,
@@ -372,7 +455,13 @@ export const executeAgentActionWorkflow = createWorkflow(
   function (input: ExecuteAgentActionInput) {
     const claim = claimAgentActionStep(input)
     const transfer = executeInventoryTransferStep({ claim, dispatch: input })
-    const result = finalizeAgentActionStep({ claim, dispatch: input, transfer })
+    const task = executeTaskCommandStep({ claim, dispatch: input })
+    const result = finalizeAgentActionStep({
+      claim,
+      dispatch: input,
+      task,
+      transfer,
+    })
 
     return new WorkflowResponse(result)
   }

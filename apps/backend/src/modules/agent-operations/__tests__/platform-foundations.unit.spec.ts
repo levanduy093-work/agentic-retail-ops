@@ -28,6 +28,11 @@ describe("agent platform foundations", () => {
         agent.foundation_coverage.every((item) => item.available)
       )
     ).toBe(true)
+    expect(
+      AGENT_CATALOG.find(
+        (agent) => agent.id === "workforce-coordinator-agent"
+      )?.status
+    ).toBe("implemented-static")
   })
 
   it("enforces the task lifecycle", () => {
@@ -76,6 +81,33 @@ describe("agent platform foundations", () => {
       {}
     )
     expect(prohibited.allowed).toBe(false)
+
+    const orderedRisk = evaluatePolicies(
+      [
+        {
+          action_type: "TASK_ASSIGN",
+          conditions: [],
+          policy_key: "higher-risk-first",
+          policy_version: "1",
+          requires_approval: true,
+          risk_level: "HIGH",
+        },
+        {
+          action_type: "TASK_ASSIGN",
+          conditions: [],
+          policy_key: "lower-risk-last",
+          policy_version: "1",
+          requires_approval: false,
+          risk_level: "LOW",
+        },
+      ],
+      "TASK_ASSIGN",
+      {}
+    )
+    expect(orderedRisk).toMatchObject({
+      requires_approval: true,
+      risk_level: "HIGH",
+    })
   })
 
   it("only cites approved knowledge that is in effect", () => {
