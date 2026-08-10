@@ -1,5 +1,6 @@
 import type { IInventoryService } from "@medusajs/framework/types"
 import { z } from "@medusajs/framework/zod"
+import { defineAgentTool } from "../tool-contract"
 
 export const InventoryGetPositionInput = z.strictObject({
   inventory_item_id: z.string().min(1),
@@ -13,20 +14,48 @@ export const InventoryTransferInput = z.strictObject({
   target_location_id: z.string().min(1),
 })
 
+export const InventoryPositionSchema = z.strictObject({
+  available_quantity: z.number().nullable(),
+  exists: z.boolean(),
+  incoming_quantity: z.number().nullable(),
+  inventory_item_id: z.string().min(1),
+  location_id: z.string().min(1),
+  reserved_quantity: z.number().nullable(),
+  stocked_quantity: z.number().nullable(),
+})
+
+export const InventoryGetPositionOutput = z.strictObject({
+  positions: z.array(InventoryPositionSchema),
+})
+
+export const InventoryTransferOutput = z.discriminatedUnion("outcome", [
+  z.strictObject({
+    code: z.enum([
+      "INVENTORY_LEVEL_MISSING",
+      "SAME_LOCATION",
+      "SOURCE_INSUFFICIENT",
+    ]),
+    message: z.string().min(1),
+    outcome: z.literal("CONFLICT"),
+    positions_before: z.array(InventoryPositionSchema),
+  }),
+  z.strictObject({
+    outcome: z.literal("SUCCEEDED"),
+    positions_after: z.array(InventoryPositionSchema),
+    positions_before: z.array(InventoryPositionSchema),
+    quantity: z.number().int().positive(),
+  }),
+])
+
 export type InventoryGetPositionInput = z.infer<
   typeof InventoryGetPositionInput
 >
 export type InventoryTransferInput = z.infer<typeof InventoryTransferInput>
-
-export type InventoryPosition = {
-  available_quantity: number | null
-  exists: boolean
-  incoming_quantity: number | null
-  inventory_item_id: string
-  location_id: string
-  reserved_quantity: number | null
-  stocked_quantity: number | null
-}
+export type InventoryGetPositionOutput = z.infer<
+  typeof InventoryGetPositionOutput
+>
+export type InventoryPosition = z.infer<typeof InventoryPositionSchema>
+export type InventoryTransferOutput = z.infer<typeof InventoryTransferOutput>
 
 export type InventoryTransferEvaluation =
   | {
@@ -45,23 +74,63 @@ export type InventoryTransferEvaluation =
       target: InventoryPosition | null
     }
 
-export const INVENTORY_GET_POSITION_TOOL = {
-  kind: "READ" as const,
+export const INVENTORY_GET_POSITION_TOOL = defineAgentTool({
+  approval_required: false,
+  audit_fields: ["inventory_item_id", "location_ids", "positions"],
+  description: "Read live inventory positions for one item across locations.",
+  error_codes: ["INVENTORY_READ_FAILED", "INVALID_TOOL_INPUT"],
+  idempotency: "NOT_REQUIRED",
+  input_schema: InventoryGetPositionInput,
+  kind: "READ",
   name: "inventory.get-position",
+  output_schema: InventoryGetPositionOutput,
   permission: "agent_inventory:read",
-  risk_level: "READ_ONLY" as const,
+  required_role: null,
+  retry: {
+    backoff: "EXPONENTIAL",
+    base_delay_ms: 250,
+    max_attempts: 2,
+    max_delay_ms: 1_000,
+  },
+  risk_level: "READ_ONLY",
+  timeout_ms: 5_000,
   version: "1.0.0",
-}
+})
 
-export const INVENTORY_EXECUTE_TRANSFER_TOOL = {
+export const INVENTORY_EXECUTE_TRANSFER_TOOL = defineAgentTool({
   approval_required: true,
-  kind: "COMMAND" as const,
+  audit_fields: [
+    "inventory_item_id",
+    "source_location_id",
+    "target_location_id",
+    "quantity",
+    "positions_before",
+    "positions_after",
+  ],
+  description: "Move approved inventory between two stock locations.",
+  error_codes: [
+    "ACTION_GATE_REJECTED",
+    "INVENTORY_LEVEL_MISSING",
+    "SAME_LOCATION",
+    "SOURCE_INSUFFICIENT",
+  ],
+  idempotency: "REQUIRED",
+  input_schema: InventoryTransferInput,
+  kind: "COMMAND",
   name: "inventory.execute-transfer",
+  output_schema: InventoryTransferOutput,
   permission: "agent_inventory:transfer",
   required_role: "operations_manager",
-  risk_level: "HIGH" as const,
+  retry: {
+    backoff: "EXPONENTIAL",
+    base_delay_ms: 5_000,
+    max_attempts: 5,
+    max_delay_ms: 15 * 60_000,
+  },
+  risk_level: "HIGH",
+  timeout_ms: 60_000,
   version: "1.0.0",
-}
+})
 
 export async function getInventoryPositions(
   inventoryService: IInventoryService,

@@ -3,12 +3,14 @@ import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Modules } from "@medusajs/framework/utils"
 import { AGENT_OPERATIONS_MODULE } from "../../../../../modules/agent-operations"
 import AgentOperationsModuleService from "../../../../../modules/agent-operations/service"
+import { getAgentToolCoverage } from "../../../../../modules/agent-operations/tool-registry"
 
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
   const service = req.scope.resolve<AgentOperationsModuleService>(
     AGENT_OPERATIONS_MODULE
   )
   const rbac = req.scope.resolve<IRbacModuleService>(Modules.RBAC)
+  const toolCoverage = getAgentToolCoverage()
   const [roles, policies, prompts, scenarios, channels] = await Promise.all([
     rbac.listRbacRoles({ name: "operations_manager" }),
     service.listAgentPolicyDefinitions({ status: "ACTIVE" }),
@@ -28,6 +30,8 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     redis_infrastructure_enabled:
       process.env.REDIS_INFRASTRUCTURE_ENABLED === "true" &&
       Boolean(process.env.REDIS_URL),
+    tool_catalog_complete: toolCoverage.complete,
+    typed_tool_executor: toolCoverage.registered_count > 0,
   }
 
   res.json({
@@ -40,9 +44,11 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
           "active_policy",
           "active_prompt",
           "operations_manager_role",
+          "typed_tool_executor",
         ].includes(key)
       )
       .every(([, value]) => value),
     deployment_ready: Object.values(checks).every(Boolean),
+    tool_coverage: toolCoverage,
   })
 }

@@ -11,30 +11,39 @@ import {
 } from "@medusajs/framework/workflows-sdk"
 import { AGENT_OPERATIONS_MODULE } from "../../modules/agent-operations"
 import AgentOperationsModuleService from "../../modules/agent-operations/service"
+import { AGENT_TOOL_REGISTRY } from "../../modules/agent-operations/tool-registry"
+import { executeAgentTool } from "../../modules/agent-operations/tool-executor"
 import {
   evaluateInventoryTransfer,
   getInventoryPositions,
+  INVENTORY_EXECUTE_TRANSFER_TOOL,
+  INVENTORY_GET_POSITION_TOOL,
+  InventoryGetPositionInput,
+  InventoryGetPositionOutput,
   InventoryTransferInput,
+  InventoryTransferOutput,
 } from "../../modules/agent-operations/tools/inventory-tools"
 import { ExecuteAgentActionInput } from "../../modules/agent-operations/types"
 
-const DEFAULT_LEASE_DURATION_MS = 60_000
-const DEFAULT_MAX_ATTEMPTS = 5
-const DEFAULT_MAX_RETRY_DELAY_MS = 15 * 60_000
-const DEFAULT_RETRY_BASE_DELAY_MS = 5_000
+const DEFAULT_LEASE_DURATION_MS = INVENTORY_EXECUTE_TRANSFER_TOOL.timeout_ms
+const DEFAULT_MAX_ATTEMPTS =
+  INVENTORY_EXECUTE_TRANSFER_TOOL.retry.max_attempts
+const DEFAULT_MAX_RETRY_DELAY_MS =
+  INVENTORY_EXECUTE_TRANSFER_TOOL.retry.max_delay_ms
+const DEFAULT_RETRY_BASE_DELAY_MS =
+  INVENTORY_EXECUTE_TRANSFER_TOOL.retry.base_delay_ms
 
 type ClaimResult = Awaited<
   ReturnType<AgentOperationsModuleService["claimAgentAction"]>
 >
 
-type TransferResult = {
-  code?: string
-  message?: string
-  outcome: "CONFLICT" | "SKIPPED" | "SUCCEEDED"
-  positions_after?: unknown
-  positions_before?: unknown
-  quantity?: number
-}
+type TransferResult =
+  | InventoryTransferOutput
+  | {
+      code?: string
+      message?: string
+      outcome: "CONFLICT" | "SKIPPED"
+    }
 
 const claimAgentActionStep = createStep(
   "claim-agent-action",
@@ -100,7 +109,7 @@ const executeInventoryTransferStep = createStep<
   TransferCompensationInput
 >(
   "execute-inventory-transfer",
-  async ({ claim }, { container }) => {
+  async ({ claim, dispatch }, { container }) => {
     if (!claim.claimed || !claim.approval || !claim.incident || !claim.recommendation) {
       return new StepResponse<TransferResult, TransferCompensationInput>(
         { outcome: "SKIPPED" },
@@ -130,8 +139,8 @@ const executeInventoryTransferStep = createStep<
       claim.recommendation.action_type === "INVENTORY_TRANSFER"
     const incidentIsExecutable = claim.incident.status === "EXECUTING"
     const toolIsAllowed =
-      claim.action.tool_name === "inventory.execute-transfer" &&
-      claim.action.tool_version === "1.0.0"
+      claim.action.tool_name === INVENTORY_EXECUTE_TRANSFER_TOOL.name &&
+      claim.action.tool_version === INVENTORY_EXECUTE_TRANSFER_TOOL.version
 
     if (
       !approvalIsUsable ||
@@ -154,66 +163,134 @@ const executeInventoryTransferStep = createStep<
       Modules.INVENTORY
     )
     const locking = container.resolve<ILockingModule>(Modules.LOCKING)
-    const transfer = actionInput.data
 
     const execution = await locking.execute(
-      `agent-inventory-transfer:${transfer.inventory_item_id}`,
+      `agent-inventory-transfer:${actionInput.data.inventory_item_id}`,
       async () => {
-        const positionsBefore = await getInventoryPositions(inventoryService, {
-          inventory_item_id: transfer.inventory_item_id,
-          location_ids: [
-            transfer.source_location_id,
-            transfer.target_location_id,
-          ],
-        })
-        const evaluation = evaluateInventoryTransfer(
-          transfer,
-          positionsBefore
+        const toolExecution = await executeAgentTool<
+          InventoryTransferInput,
+          InventoryTransferOutput
+        >(
+          AGENT_TOOL_REGISTRY,
+          {
+            authority: {
+              action_request_id: claim.action.id,
+              actor_id: dispatch.actor_id,
+              approval_id: claim.approval.id,
+              granted_permissions: [
+                INVENTORY_EXECUTE_TRANSFER_TOOL.permission,
+              ],
+              idempotency_key: claim.action.idempotency_key,
+              mode: "ACTION_GATEWAY",
+            },
+            input: actionInput.data,
+            tool_name: claim.action.tool_name,
+            tool_version: claim.action.tool_version,
+          },
+          async (transfer) => {
+            const positionsBeforeExecution = await executeAgentTool<
+              InventoryGetPositionInput,
+              InventoryGetPositionOutput
+            >(
+              AGENT_TOOL_REGISTRY,
+              {
+                authority: {
+                  actor_id: dispatch.actor_id,
+                  granted_permissions: [
+                    INVENTORY_GET_POSITION_TOOL.permission,
+                  ],
+                  mode: "DIRECT",
+                },
+                input: {
+                  inventory_item_id: transfer.inventory_item_id,
+                  location_ids: [
+                    transfer.source_location_id,
+                    transfer.target_location_id,
+                  ],
+                },
+                tool_name: INVENTORY_GET_POSITION_TOOL.name,
+                tool_version: INVENTORY_GET_POSITION_TOOL.version,
+              },
+              async (input) => ({
+                positions: await getInventoryPositions(
+                  inventoryService,
+                  input
+                ),
+              })
+            )
+            const positionsBefore = positionsBeforeExecution.output.positions
+            const evaluation = evaluateInventoryTransfer(
+              transfer,
+              positionsBefore
+            )
+
+            if (!evaluation.allowed) {
+              return {
+                code: evaluation.code,
+                message: evaluation.message,
+                outcome: "CONFLICT",
+                positions_before: positionsBefore,
+              }
+            }
+
+            await inventoryService.adjustInventory([
+              {
+                adjustment: -transfer.quantity,
+                inventoryItemId: transfer.inventory_item_id,
+                locationId: transfer.source_location_id,
+              },
+              {
+                adjustment: transfer.quantity,
+                inventoryItemId: transfer.inventory_item_id,
+                locationId: transfer.target_location_id,
+              },
+            ])
+            const positionsAfterExecution = await executeAgentTool<
+              InventoryGetPositionInput,
+              InventoryGetPositionOutput
+            >(
+              AGENT_TOOL_REGISTRY,
+              {
+                authority: {
+                  actor_id: dispatch.actor_id,
+                  granted_permissions: [
+                    INVENTORY_GET_POSITION_TOOL.permission,
+                  ],
+                  mode: "DIRECT",
+                },
+                input: {
+                  inventory_item_id: transfer.inventory_item_id,
+                  location_ids: [
+                    transfer.source_location_id,
+                    transfer.target_location_id,
+                  ],
+                },
+                tool_name: INVENTORY_GET_POSITION_TOOL.name,
+                tool_version: INVENTORY_GET_POSITION_TOOL.version,
+              },
+              async (input) => ({
+                positions: await getInventoryPositions(
+                  inventoryService,
+                  input
+                ),
+              })
+            )
+
+            return {
+              outcome: "SUCCEEDED",
+              positions_after: positionsAfterExecution.output.positions,
+              positions_before: positionsBefore,
+              quantity: transfer.quantity,
+            }
+          }
         )
 
-        if (!evaluation.allowed) {
-          return {
-            compensation: null,
-            result: {
-              code: evaluation.code,
-              message: evaluation.message,
-              outcome: "CONFLICT",
-              positions_before: positionsBefore,
-            },
-          } satisfies {
-            compensation: TransferCompensationInput
-            result: TransferResult
-          }
-        }
-
-        await inventoryService.adjustInventory([
-          {
-            adjustment: -transfer.quantity,
-            inventoryItemId: transfer.inventory_item_id,
-            locationId: transfer.source_location_id,
-          },
-          {
-            adjustment: transfer.quantity,
-            inventoryItemId: transfer.inventory_item_id,
-            locationId: transfer.target_location_id,
-          },
-        ])
-        const positionsAfter = await getInventoryPositions(inventoryService, {
-          inventory_item_id: transfer.inventory_item_id,
-          location_ids: [
-            transfer.source_location_id,
-            transfer.target_location_id,
-          ],
-        })
-
         return {
-          compensation: transfer,
-          result: {
-            outcome: "SUCCEEDED",
-            positions_after: positionsAfter,
-            positions_before: positionsBefore,
-            quantity: transfer.quantity,
-          },
+          compensation:
+            toolExecution.output.outcome === "SUCCEEDED"
+              ? toolExecution.input
+              : null,
+          result: toolExecution.output,
         } satisfies {
           compensation: TransferCompensationInput
           result: TransferResult

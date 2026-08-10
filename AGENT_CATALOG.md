@@ -41,8 +41,14 @@ Admin. Provider mobile/push/chat bên ngoài vẫn là adapter chưa triển kha
 
 ## Nền tảng dùng chung đã hoàn thiện để bắt đầu xây agent
 
-- Registry đọc được bằng máy đủ 17 agent: ID/version, mission, trigger, tool,
+- Catalog registry đọc được bằng máy đủ 17 agent: ID/version, mission, trigger, tool,
   risk ceiling và foundation dependency.
+- Tool runtime dùng `AgentToolDefinition` chung cho schema input/output,
+  permission, risk, approval, timeout, retry, idempotency, error và audit fields.
+  Executor kiểm tra registry/version/schema/permission và từ chối command không
+  có Action Gateway authority. Registry chạy thật hiện có 5/24 tool catalog;
+  ngoài hai inventory tool đã có thêm `knowledge.search`, `audit.search` và
+  `trace.replay`; coverage API công khai đúng 19 tool còn thiếu.
 - Task orchestration có idempotency, assignee, deadline, priority, state machine
   và audit; mutation đi qua Medusa workflow.
 - Policy definition có version, hiệu lực và điều kiện deterministic `eq`, `gte`,
@@ -85,6 +91,8 @@ Admin. Provider mobile/push/chat bên ngoài vẫn là adapter chưa triển kha
 - Typed tool `inventory.get-position@1.0.0` đọc tồn live từ Inventory Module.
 - Command `inventory.execute-transfer@1.0.0` chỉ chạy qua Action Gateway sau
   approval; source/target được điều chỉnh trong cùng lời gọi Inventory Module.
+- Cả read và command đều chạy qua executor dùng chung; command contract cung
+  cấp timeout/retry/idempotency và không thể gọi ở chế độ `DIRECT`.
 - Cấm: coi snapshot trong event là quyền thực thi hoặc bỏ qua revalidation.
 
 ### Policy & Approval Agent
@@ -144,7 +152,8 @@ Admin API:
 - `GET /admin/agent-operations/actions`;
 - `GET /admin/agent-operations/actions/:id`;
 - `POST /admin/agent-operations/actions/:id/execute`;
-- `GET /admin/agent-operations/tools`.
+- `GET /admin/agent-operations/tools` trả metadata serializable và coverage
+  catalog/registry.
 - `GET /admin/agent-operations/conversations`;
 - `GET /admin/agent-operations/conversations/:id`;
 - `POST /admin/agent-operations/conversations/:id/messages`.
@@ -192,7 +201,8 @@ Ngày kiểm chứng: 2026-08-10.
   thành công trên PostgreSQL local.
 - Migration `Migration20260809194213` tạo conversation/message và chạy thành
   công trên PostgreSQL local.
-- 35/35 unit test pass cho analyzer, state machines, validators, tools, policy,
+- 53/53 unit test pass cho analyzer, state machines, validators, tool contract,
+  executor, registry coverage, tools, policy,
   knowledge, model boundary, evaluation, action/outbox và communication.
 - ESLint mục tiêu của toàn bộ source agent pass.
 - Kịch bản Medusa runtime qua module service/database xác nhận: duplicate event
@@ -223,16 +233,19 @@ Ngày kiểm chứng: 2026-08-10.
 
 ## Gate tiếp theo
 
-1. Gán role `operations_manager` cho tài khoản Admin thật và kiểm thử allow/deny
+1. Đóng gói 19 tool catalog còn lại bằng `AgentToolDefinition`; ưu tiên tổng
+   quát hóa Action Gateway cho nhóm platform command (`approval`, `incident`,
+   `task`, `knowledge`, `message`) trước các adapter commerce chưa có nghiệp vụ.
+2. Gán role `operations_manager` cho tài khoản Admin thật và kiểm thử allow/deny
    trên từng policy qua HTTP.
-2. Chạy happy path bằng ít nhất hai stock location thật và kiểm thử hai action
+3. Chạy happy path bằng ít nhất hai stock location thật và kiểm thử hai action
    cạnh tranh trên cùng inventory item.
-3. Bổ sung trace/replay detail, append-only/retention và subscriber idempotency
+4. Bổ sung trace/replay detail, append-only/retention và subscriber idempotency
    cho từng connector production.
-4. Thêm delivery adapter/push provider, webhook signature, channel identity
+5. Thêm delivery adapter/push provider, webhook signature, channel identity
    mapping, delivery receipt/retry và mobile/PWA; sau đó mới thêm hiểu chat tự
    do bằng LLM.
-5. Chọn model provider, secret manager và budget; chỉ bật adapter sau khi
+6. Chọn model provider, secret manager và budget; chỉ bật adapter sau khi
    benchmark `KNOW-001` và security review đạt yêu cầu.
-6. Bổ sung connector nguồn thật và scenario approval expiry, retry/dead
+7. Bổ sung connector nguồn thật và scenario approval expiry, retry/dead
    recovery qua API/worker.

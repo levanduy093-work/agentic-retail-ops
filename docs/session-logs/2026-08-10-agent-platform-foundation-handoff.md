@@ -74,6 +74,7 @@ Approved knowledge + citation
 | Event/incident/run | models và `service.ts` | Có dedupe, correlation, state machine |
 | Recommendation/approval | models, approval workflow | Có expiry, reason, actor, duplicate-safe decision |
 | Action Gateway | action request, tool call, worker | Có lease, retry, dead-letter, lock, live revalidation |
+| Typed tool runtime | `tool-contract.ts`, `tool-executor.ts`, `tool-registry.ts`, `read-tool-runtime.ts` | Schema input/output, version, permission, risk, approval, timeout/retry/idempotency; command bị chặn ngoài Action Gateway; 3 platform read tool chạy qua service/executor; coverage hiện 5/24 |
 | Task orchestration | `agent-task`, task workflows | Có priority, assignee, due date, idempotency và state machine |
 | Policy engine | policy definition, `policy-engine.ts` | Có version/effectivity và `eq/gte/lte/in`; inventory flow đã sử dụng active policy |
 | RBAC | `src/policies/agent-operations.ts` | Medusa sync 20 policy; bootstrap gắn vào `operations_manager` |
@@ -116,6 +117,10 @@ sinh migration mới bằng skill/CLI Medusa.
 apps/backend/src/
   modules/agent-operations/
     catalog-registry.ts        # machine-readable catalog
+    tool-contract.ts           # typed tool contract dùng chung
+    tool-executor.ts           # registry/version/schema/permission/gateway gate
+    tool-registry.ts           # tool chạy thật và coverage so với catalog
+    tools/                     # domain tool schemas và deterministic helpers
     policy-engine.ts           # deterministic policy evaluation
     task-state-machine.ts      # task transitions
     knowledge.ts               # checksum, effectivity, citation
@@ -168,7 +173,7 @@ pnpm run agent:verify-platform
 
 Baseline đã xác nhận:
 
-- 35/35 unit test pass;
+- 53/53 unit test pass;
 - backend TypeScript và Medusa lint sạch;
 - full workspace build pass;
 - migration PostgreSQL pass;
@@ -187,7 +192,9 @@ Không bắt đầu bằng prompt. Thực hiện theo thứ tự:
 1. Chọn một agent trong catalog và chỉ rõ business owner.
 2. Chốt event schema/version và idempotency key.
 3. Chốt entity ownership; xác định dữ liệu nào Medusa sở hữu.
-4. Khai báo typed read tools và command tools trong registry.
+4. Khai báo typed read/command tool bằng `AgentToolDefinition`: input/output
+   schema, permission, risk, approval, timeout, retry, idempotency, error codes
+   và audit fields; sau đó đăng ký trong `tool-registry.ts`.
 5. Viết deterministic rules trước; thêm policy definition và risk ceiling.
 6. Viết scenario gồm initial state, event, expected assertions và forbidden
    assertions.
@@ -215,6 +222,8 @@ chung đã được phép coi là production-ready:
   identity mapping hoặc delivery receipt thật;
 - chưa có connector order/fulfillment/payment/return production cho các agent
   tiếp theo;
+- tool registry chạy thật có 5/24 tool catalog; 19 tool còn lại mới là tên hợp
+  đồng, dù một số workflow/API nền như approval/task/knowledge đã có;
 - chưa có load, recovery, penetration và multi-process contention test đầy đủ;
 - trace/replay detail, append-only enforcement và retention vẫn cần hardening;
 - Inventory Agent còn cần happy path với hai stock location thật và cạnh tranh

@@ -1,5 +1,7 @@
 import {
   evaluateInventoryTransfer,
+  INVENTORY_EXECUTE_TRANSFER_TOOL,
+  INVENTORY_GET_POSITION_TOOL,
   InventoryPosition,
   InventoryTransferInput,
 } from "../tools/inventory-tools"
@@ -27,6 +29,24 @@ function position(
 }
 
 describe("typed inventory tools", () => {
+  test("publishes versioned read and guarded command contracts", () => {
+    expect(INVENTORY_GET_POSITION_TOOL).toMatchObject({
+      approval_required: false,
+      kind: "READ",
+      name: "inventory.get-position",
+      risk_level: "READ_ONLY",
+      version: "1.0.0",
+    })
+    expect(INVENTORY_EXECUTE_TRANSFER_TOOL).toMatchObject({
+      approval_required: true,
+      kind: "COMMAND",
+      name: "inventory.execute-transfer",
+      required_role: "operations_manager",
+      risk_level: "HIGH",
+      version: "1.0.0",
+    })
+  })
+
   test("allows a transfer when live source availability covers the quantity", () => {
     const result = evaluateInventoryTransfer(input, [
       position(input.source_location_id, 10),

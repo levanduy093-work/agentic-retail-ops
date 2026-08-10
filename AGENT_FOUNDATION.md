@@ -41,8 +41,13 @@ vận hành chung để từng năng lực agent có thể:
 - Unit test và script kiểm chứng module service/database.
 - Scheduled outbox dispatcher có optimistic claim, lease expiry, exponential
   backoff, dead-letter và message idempotency metadata.
-- Typed tool registry đầu tiên gồm `inventory.get-position@1.0.0` và
-  `inventory.execute-transfer@1.0.0`.
+- Typed tool registry gồm `inventory.get-position@1.0.0`,
+  `inventory.execute-transfer@1.0.0`, `knowledge.search@1.0.0`,
+  `audit.search@1.0.0` và `trace.replay@1.0.0`.
+- `AgentToolDefinition` và executor dùng chung đã kiểm tra schema input/output,
+  version, permission, risk/approval, timeout/retry/idempotency contract và chặn
+  command không đi qua Action Gateway. Ba read tool platform có runtime thật đi
+  qua module service và executor; coverage hiện là 5/24 tool catalog.
 - Action request/tool-call persistence, Action Gateway workflow và scheduled
   action worker có lease, retry, dead-letter và idempotency.
 - Inventory Action Gateway đọc `available_quantity` live từ Medusa dưới khóa,
@@ -229,6 +234,13 @@ Mỗi tool phải có:
 - error taxonomy;
 - audit fields;
 - test contract.
+
+Source hiện thực hóa contract này nằm ở `tool-contract.ts`; mọi lời gọi dùng
+`tool-executor.ts`. API coverage phải phân biệt tool đã đăng ký chạy thật với
+tên tool mới được khai báo trong catalog. Read tool platform dùng
+`read-tool-runtime.ts`; knowledge search chỉ lấy tài liệu `APPROVED` còn hiệu
+lực, audit search bắt buộc có filter, và trace replay hợp nhất
+event/run/action/tool-call/audit/outbox theo thời gian.
 
 Ví dụ nhóm tool đầu tiên:
 

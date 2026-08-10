@@ -65,6 +65,18 @@ import {
 import { evaluateAssertions } from "./evaluation"
 import { checksumKnowledgeContent } from "./knowledge"
 import { assertAgentTaskTransition } from "./task-state-machine"
+import {
+  AuditSearchInput,
+  AuditSearchOutput,
+  buildTraceReplayOutput,
+  formatAuditSearchResult,
+  KnowledgeSearchInput,
+  KnowledgeSearchOutput,
+  searchKnowledgeDocuments,
+  TraceReplayInput,
+  TraceReplayOutput,
+  TraceTimelineEntry,
+} from "./tools/platform-read-tools"
 
 class AgentOperationsModuleService extends MedusaService({
   AgentActionRequest,
@@ -308,6 +320,226 @@ class AgentOperationsModuleService extends MedusaService({
     )
 
     return { document: updated, duplicate: false }
+  }
+
+  @InjectManager()
+  async searchGovernedKnowledge(
+    input: KnowledgeSearchInput,
+    @MedusaContext() sharedContext: Context = {}
+  ): Promise<KnowledgeSearchOutput> {
+    const parsed = KnowledgeSearchInput.parse(input)
+    const filters = {
+      locale: parsed.locale,
+      scope: parsed.scope,
+      status: "APPROVED",
+      tenant_id: parsed.tenant_id,
+    }
+    const documents = await this.listAgentKnowledgeDocuments(
+      filters,
+      {
+        order: { effective_at: "DESC" },
+        take: Math.min(Math.max(parsed.limit * 20, 100), 500),
+      },
+      sharedContext
+    )
+
+    return searchKnowledgeDocuments(parsed, documents)
+  }
+
+  @InjectManager()
+  async searchAgentAuditTrail(
+    input: AuditSearchInput,
+    @MedusaContext() sharedContext: Context = {}
+  ): Promise<AuditSearchOutput> {
+    const parsed = AuditSearchInput.parse(input)
+    const { limit, ...filters } = parsed
+    const events = await this.listAgentAuditEvents(
+      filters,
+      { order: { recorded_at: "DESC" }, take: limit },
+      sharedContext
+    )
+
+    return formatAuditSearchResult(events)
+  }
+
+  @InjectManager()
+  async replayAgentTrace(
+    input: TraceReplayInput,
+    @MedusaContext() sharedContext: Context = {}
+  ): Promise<TraceReplayOutput> {
+    const parsed = TraceReplayInput.parse(input)
+    let correlationId = parsed.correlation_id
+    const incidentIds = new Set<string>()
+
+    if (parsed.incident_id) {
+      const incident = await this.retrieveAgentIncident(
+        parsed.incident_id,
+        {},
+        sharedContext
+      )
+      incidentIds.add(incident.id)
+      correlationId = incident.correlation_id
+    } else if (correlationId) {
+      const incidents = await this.listAgentIncidents(
+        { correlation_id: correlationId },
+        { order: { created_at: "ASC" }, take: 100 },
+        sharedContext
+      )
+      incidents.forEach((incident) => incidentIds.add(incident.id))
+    }
+
+    const [sourceEvents, correlationAuditEvents] = correlationId
+      ? await Promise.all([
+          this.listAgentEvents(
+            { correlation_id: correlationId },
+            { order: { occurred_at: "ASC" }, take: parsed.limit },
+            sharedContext
+          ),
+          this.listAgentAuditEvents(
+            { correlation_id: correlationId },
+            { order: { recorded_at: "ASC" }, take: parsed.limit },
+            sharedContext
+          ),
+        ])
+      : [[], []]
+
+    correlationAuditEvents.forEach((event) => {
+      if (event.incident_id) incidentIds.add(event.incident_id)
+    })
+
+    const timeline: TraceTimelineEntry[] = sourceEvents.map((event) => ({
+      category: "EVENT",
+      data: {
+        causation_id: event.causation_id,
+        payload: event.payload,
+        source: event.source,
+        subject_id: event.subject_id,
+        subject_type: event.subject_type,
+      },
+      entry_id: event.id,
+      name: event.event_type,
+      occurred_at: new Date(event.occurred_at).toISOString(),
+      status: event.status,
+    }))
+
+    timeline.push(
+      ...correlationAuditEvents.map((event) => ({
+        category: "AUDIT" as const,
+        data: event.data ?? null,
+        entry_id: event.id,
+        name: event.event_type,
+        occurred_at: new Date(event.recorded_at).toISOString(),
+        status: null,
+      }))
+    )
+
+    for (const incidentId of incidentIds) {
+      const [runs, actions, toolCalls, auditEvents, outboxEvents] =
+        await Promise.all([
+          this.listAgentRuns(
+            { incident_id: incidentId },
+            { order: { started_at: "ASC" }, take: parsed.limit },
+            sharedContext
+          ),
+          this.listAgentActionRequests(
+            { incident_id: incidentId },
+            { order: { requested_at: "ASC" }, take: parsed.limit },
+            sharedContext
+          ),
+          this.listAgentToolCalls(
+            { incident_id: incidentId },
+            { order: { started_at: "ASC" }, take: parsed.limit },
+            sharedContext
+          ),
+          this.listAgentAuditEvents(
+            { incident_id: incidentId },
+            { order: { recorded_at: "ASC" }, take: parsed.limit },
+            sharedContext
+          ),
+          this.listAgentOutboxEvents(
+            { aggregate_id: incidentId, aggregate_type: "agent_incident" },
+            { order: { created_at: "ASC" }, take: parsed.limit },
+            sharedContext
+          ),
+        ])
+
+      timeline.push(
+        ...runs.map((run) => ({
+          category: "RUN" as const,
+          data: {
+            agent_id: run.agent_id,
+            agent_version: run.agent_version,
+            error: run.error,
+            output: run.output,
+          },
+          entry_id: run.id,
+          name: run.agent_id,
+          occurred_at: new Date(run.started_at).toISOString(),
+          status: run.status,
+        })),
+        ...actions.map((action) => ({
+          category: "ACTION" as const,
+          data: {
+            approval_id: action.approval_id,
+            attempt_count: action.attempt_count,
+            last_error: action.last_error,
+            risk_level: action.risk_level,
+            tool_version: action.tool_version,
+          },
+          entry_id: action.id,
+          name: action.tool_name,
+          occurred_at: new Date(action.requested_at).toISOString(),
+          status: action.status,
+        })),
+        ...toolCalls.map((toolCall) => ({
+          category: "TOOL_CALL" as const,
+          data: {
+            action_request_id: toolCall.action_request_id,
+            error: toolCall.error,
+            kind: toolCall.kind,
+            output: toolCall.output,
+            tool_version: toolCall.tool_version,
+          },
+          entry_id: toolCall.id,
+          name: toolCall.tool_name,
+          occurred_at: new Date(toolCall.started_at).toISOString(),
+          status: toolCall.status,
+        })),
+        ...auditEvents.map((event) => ({
+          category: "AUDIT" as const,
+          data: event.data ?? null,
+          entry_id: event.id,
+          name: event.event_type,
+          occurred_at: new Date(event.recorded_at).toISOString(),
+          status: null,
+        })),
+        ...outboxEvents.map((event) => ({
+          category: "OUTBOX" as const,
+          data: {
+            attempt_count: event.attempt_count,
+            idempotency_key: event.idempotency_key,
+            last_error: event.last_error,
+          },
+          entry_id: event.id,
+          name: event.event_type,
+          occurred_at: new Date(event.created_at).toISOString(),
+          status: event.status,
+        }))
+      )
+    }
+
+    const uniqueTimeline = [
+      ...new Map(
+        timeline.map((entry) => [`${entry.category}:${entry.entry_id}`, entry])
+      ).values(),
+    ]
+
+    return buildTraceReplayOutput({
+      correlation_id: correlationId,
+      incident_ids: [...incidentIds],
+      limit: parsed.limit,
+      timeline: uniqueTimeline,
+    })
   }
 
   @InjectManager()
