@@ -194,9 +194,15 @@ Baseline đã xác nhận:
 - Order Exception Agent đã có `order.exception` schema, live `order.read` qua
   Medusa order-detail workflow, deterministic analyzer và `task.create` qua
   Action Gateway; bootstrap đã seed `ORDER-001`.
-- `agent:verify-order-exception` chạy thành công nhưng PostgreSQL local hiện có
-  0 order, nên kết quả là `SKIPPED_NO_ACTIONABLE_ORDER`; trạng thái đúng vẫn là
-  `implemented-static`, chưa phải `runtime-verified`.
+- `agent:verify-order-exception` tự tạo order kiểm thử có metadata
+  `order-exception-agent-runtime-verification` bằng `createOrderWorkflow`, sau
+  đó chạy thành công event → `order.read` → recommendation → `task.create`.
+- Runtime evidence: đúng 1 event, 1 incident, 1 recommendation, 1 action request,
+  1 task và 1 tool call; có 4 audit event, 2 outbox event; gửi lại event trả
+  duplicate và không tạo record thứ hai.
+- So sánh trước/sau xác nhận order giữ nguyên status, version và canceled state.
+  Authenticated HTTP/RBAC chưa chạy nên trạng thái catalog vẫn là
+  `implemented-static`, chưa phải `runtime-verified` theo định nghĩa đầy đủ.
 
 ## 8. Cách xây một agent mới
 

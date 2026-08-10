@@ -631,8 +631,9 @@ vertical slice của từng agent, không tiếp tục dựng infrastructure chu
 - Migration `Migration20260810132610` đã chạy trên PostgreSQL local; runtime
   xác nhận `knowledge.propose` qua gateway là `SUCCEEDED`, ba task command vẫn
   chạy đúng, stale state trả `CONFLICT`, request thiếu policy không tạo action.
-  Unit test hiện đạt 72/72. Order Exception runtime verifier đã chạy nhưng local
-  chưa có order nên dừng an toàn ở `SKIPPED_NO_ACTIONABLE_ORDER`.
+  Unit test hiện đạt 72/72. Order Exception runtime verifier đã tự tạo order thử
+  qua workflow Medusa và xác nhận live read, Action Gateway, task, audit/outbox,
+  chống trùng và không thay đổi order; HTTP/RBAC vẫn là gate riêng.
 - Có Admin Operations Console và readiness API phân biệt `code_ready` với
   `deployment_ready`.
 - Redis Event Bus, Workflow Engine và distributed locking đã kết nối runtime khi

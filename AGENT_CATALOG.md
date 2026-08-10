@@ -244,9 +244,11 @@ Ngày kiểm chứng: 2026-08-10.
   attempt chuyển `DEAD`.
 - Request không xác thực tới event Admin API trả `401 Unauthorized`.
 - TypeScript, Medusa lint và full workspace build đều pass.
-- Bootstrap PostgreSQL đã seed `ORDER-001`. Runtime verifier đã chạy nhưng local
-  hiện có 0 order nên trả `SKIPPED_NO_ACTIONABLE_ORDER`; chưa coi vertical slice
-  order là `runtime-verified`.
+- Bootstrap PostgreSQL đã seed `ORDER-001`. Runtime verifier tạo order kiểm thử
+  bằng workflow Medusa và chạy thành công event → live read → recommendation →
+  Action Gateway → task trên PostgreSQL; event trùng bị suppress và order giữ
+  nguyên status/version/canceled state. Authenticated HTTP/RBAC vẫn chưa được
+  kiểm chứng nên catalog chưa nâng thành `runtime-verified`.
 - Migration `Migration20260809200756` tạo 9 bảng nền mới; migration RBAC chính
   thức của Medusa cũng chạy thành công.
 - Bootstrap có tính idempotent; role `operations_manager` có đúng 21

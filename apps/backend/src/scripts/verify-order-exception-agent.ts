@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { createOrderWorkflow } from "@medusajs/core-flows"
 import type { ExecArgs, IOrderModuleService } from "@medusajs/framework/types"
 import { Modules } from "@medusajs/framework/utils"
 import { AGENT_OPERATIONS_MODULE } from "../modules/agent-operations"
@@ -15,26 +16,39 @@ export default async function verifyOrderExceptionAgent({
     AGENT_OPERATIONS_MODULE
   )
   const candidates = await orders.listOrders({}, { take: 100 })
-  const order = candidates.find(
+  let order = candidates.find(
     (candidate) =>
       !["archived", "canceled", "completed"].includes(candidate.status)
   )
+  let testOrderCreated = false
 
   if (!order) {
-    console.log(
-      JSON.stringify(
-        {
-          checked_orders: candidates.length,
-          reason: "No non-terminal local order is available.",
-          status: "SKIPPED_NO_ACTIONABLE_ORDER",
+    const { result } = await createOrderWorkflow(container).run({
+      input: {
+        currency_code: "vnd",
+        items: [
+          {
+            is_discountable: false,
+            is_tax_inclusive: true,
+            quantity: 1,
+            requires_shipping: false,
+            title: "Agent runtime verification item",
+            unit_price: 99.99,
+          },
+        ],
+        metadata: {
+          purpose: "order-exception-agent-runtime-verification",
         },
-        null,
-        2
-      )
-    )
-    return
+        no_notification: true,
+        status: "pending",
+      },
+    })
+    order = result
+    testOrderCreated = true
   }
 
+  assert.ok(order)
+  const orderBefore = await orders.retrieveOrder(order.id)
   const verificationId = `verify-order-exception-${Date.now()}`
   const input = {
     correlation_id: verificationId,
@@ -87,6 +101,40 @@ export default async function verifyOrderExceptionAgent({
   assert.equal(tasks.length, 1)
   assert.equal(tasks[0].id, output.task.task_id)
   assert.equal(tasks[0].task_type, "ORDER_MANUAL_REVIEW")
+  const events = await service.listAgentEvents({
+    event_id: verificationId,
+    source: input.source,
+  })
+  const incidents = await service.listAgentIncidents({
+    trigger_event_id: events[0].id,
+  })
+  const recommendations = await service.listAgentRecommendations({
+    incident_id: first.incident.id,
+  })
+  const actionRequests = await service.listAgentActionRequests({
+    incident_id: first.incident.id,
+  })
+  const toolCalls = await service.listAgentToolCalls({
+    action_request_id: first.action_request.id,
+  })
+  const auditEvents = await service.listAgentAuditEvents({
+    incident_id: first.incident.id,
+  })
+  const outboxEvents = await service.listAgentOutboxEvents({
+    aggregate_id: first.incident.id,
+  })
+  const orderAfter = await orders.retrieveOrder(order.id)
+
+  assert.equal(events.length, 1)
+  assert.equal(incidents.length, 1)
+  assert.equal(recommendations.length, 1)
+  assert.equal(actionRequests.length, 1)
+  assert.equal(toolCalls.length, 1)
+  assert.ok(auditEvents.length >= 3)
+  assert.ok(outboxEvents.length >= 2)
+  assert.equal(orderAfter.status, orderBefore.status)
+  assert.equal(orderAfter.version, orderBefore.version)
+  assert.equal(orderAfter.canceled_at, orderBefore.canceled_at)
 
   console.log(
     JSON.stringify(
@@ -94,11 +142,27 @@ export default async function verifyOrderExceptionAgent({
         action_request_id: first.action_request.id,
         action_status: execution.action.status,
         duplicate_suppressed: duplicate.duplicate,
+        evidence: {
+          action_requests: actionRequests.length,
+          audit_events: auditEvents.length,
+          events: events.length,
+          incidents: incidents.length,
+          outbox_events: outboxEvents.length,
+          recommendations: recommendations.length,
+          tasks: tasks.length,
+          tool_calls: toolCalls.length,
+        },
         incident_id: first.incident.id,
         live_order_version: first.live_order.version,
+        order_unchanged: {
+          canceled_at: orderAfter.canceled_at === orderBefore.canceled_at,
+          status: orderAfter.status === orderBefore.status,
+          version: orderAfter.version === orderBefore.version,
+        },
         order_id: order.id,
         status: "VERIFIED",
         task_id: tasks[0].id,
+        test_order_created: testOrderCreated,
       },
       null,
       2
