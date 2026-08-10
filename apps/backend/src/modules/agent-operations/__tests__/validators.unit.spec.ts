@@ -2,6 +2,7 @@ import {
   AdminDecideAgentApproval,
   AdminIngestInventoryLowEvent,
   AdminIngestOrderExceptionEvent,
+  AdminIngestSupportRequest,
   AdminRequestAgentAction,
   AdminSendAgentConversationMessage,
 } from "../../../api/admin/agent-operations/validators"
@@ -97,6 +98,52 @@ describe("agent operations API validators", () => {
     const result = AdminDecideAgentApproval.safeParse({
       decision: "APPROVED",
       reason: "",
+    })
+
+    expect(result.success).toBe(false)
+  })
+
+  test("accepts a bounded support request", () => {
+    const result = AdminIngestSupportRequest.safeParse({
+      correlation_id: "support-42",
+      event_id: "support-42",
+      event_type: "support.requested",
+      event_version: 1,
+      occurred_at: "2026-08-10T00:15:00.000Z",
+      payload: {
+        customer_id: "cus_42",
+        locale: "vi",
+        order_id: "order_42",
+        question: "Đơn hàng của tôi đang ở đâu?",
+        request_type: "ORDER_STATUS",
+        requested_at: "2026-08-10T00:15:00.000Z",
+      },
+      source: "support-app",
+      subject_id: "order_42",
+      subject_type: "order",
+    })
+
+    expect(result.success).toBe(true)
+  })
+
+  test("rejects a support request whose subject does not match", () => {
+    const result = AdminIngestSupportRequest.safeParse({
+      correlation_id: "support-42",
+      event_id: "support-42",
+      event_type: "support.requested",
+      event_version: 1,
+      occurred_at: "2026-08-10T00:15:00.000Z",
+      payload: {
+        customer_id: "cus_42",
+        locale: "vi",
+        order_id: "order_42",
+        question: "Đơn hàng của tôi đang ở đâu?",
+        request_type: "ORDER_STATUS",
+        requested_at: "2026-08-10T00:15:00.000Z",
+      },
+      source: "support-app",
+      subject_id: "order_99",
+      subject_type: "order",
     })
 
     expect(result.success).toBe(false)

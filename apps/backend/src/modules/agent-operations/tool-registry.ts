@@ -21,6 +21,7 @@ import {
   MESSAGE_SEND_TOOL,
 } from "./tools/platform-command-tools"
 import { ORDER_READ_TOOL } from "./tools/order-tools"
+import { RESPONSE_DRAFT_TOOL } from "./tools/response-tools"
 import { AgentToolDefinition, toAgentToolMetadata } from "./tool-contract"
 import { AGENT_CATALOG } from "./catalog-registry"
 
@@ -36,6 +37,7 @@ export const AGENT_TOOL_REGISTRY = {
   [KNOWLEDGE_PROPOSE_TOOL.name]: KNOWLEDGE_PROPOSE_TOOL,
   [MESSAGE_SEND_TOOL.name]: MESSAGE_SEND_TOOL,
   [ORDER_READ_TOOL.name]: ORDER_READ_TOOL,
+  [RESPONSE_DRAFT_TOOL.name]: RESPONSE_DRAFT_TOOL,
   [TASK_ASSIGN_TOOL.name]: TASK_ASSIGN_TOOL,
   [TASK_CREATE_TOOL.name]: TASK_CREATE_TOOL,
   [TASK_ESCALATE_TOOL.name]: TASK_ESCALATE_TOOL,

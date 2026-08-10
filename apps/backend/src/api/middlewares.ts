@@ -9,6 +9,7 @@ import {
   AdminDecideAgentApproval,
   AdminIngestInventoryLowEvent,
   AdminIngestOrderExceptionEvent,
+  AdminIngestSupportRequest,
   AdminRunAgentEvaluation,
   AdminRequestAgentAction,
   AdminSendAgentConversationMessage,
@@ -34,6 +35,12 @@ export default defineMiddlewares({
       matcher: "/admin/agent-operations/order-exceptions",
       method: "POST",
       middlewares: [validateAndTransformBody(AdminIngestOrderExceptionEvent)],
+      policies: [{ resource: "agent_event", operation: "create" }],
+    },
+    {
+      matcher: "/admin/agent-operations/support-requests",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminIngestSupportRequest)],
       policies: [{ resource: "agent_event", operation: "create" }],
     },
     {
@@ -131,6 +138,11 @@ export default defineMiddlewares({
       matcher: "/admin/agent-operations/tasks/:id/transition",
       method: "POST",
       middlewares: [validateAndTransformBody(AdminTransitionAgentTask)],
+      policies: [{ resource: "agent_task", operation: "update" }],
+    },
+    {
+      matcher: "/admin/agent-operations/tasks/:id/release",
+      method: "POST",
       policies: [{ resource: "agent_task", operation: "update" }],
     },
     {

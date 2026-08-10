@@ -201,6 +201,11 @@ export type TransitionAgentTaskInput = {
   task_id: string
 }
 
+export type ReleaseAgentTaskInput = {
+  actor_id: string
+  task_id: string
+}
+
 export type EscalateAgentTaskInput = {
   actor_id: string
   assigned_to_id: string
@@ -278,6 +283,29 @@ export type OrderExceptionEventInput = {
   event_version: number
   occurred_at: string
   payload: OrderExceptionPayload
+  source: string
+  subject_id: string
+  subject_type: "order"
+  tenant_id: string
+}
+
+export type SupportRequestPayload = {
+  customer_id: string
+  locale: "en" | "vi"
+  order_id: string
+  question: string
+  request_type: "ORDER_STATUS"
+  requested_at: string
+}
+
+export type SupportRequestEventInput = {
+  causation_id?: string
+  correlation_id: string
+  event_id: string
+  event_type: "support.requested"
+  event_version: number
+  occurred_at: string
+  payload: SupportRequestPayload
   source: string
   subject_id: string
   subject_type: "order"

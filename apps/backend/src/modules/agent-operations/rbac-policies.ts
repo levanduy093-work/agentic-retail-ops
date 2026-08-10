@@ -21,3 +21,14 @@ export const AGENT_RBAC_POLICY_DEFINITIONS = [
   { name: "AgentPlatformRead", resource: "agent_platform", operation: "read" },
   { name: "AgentPlatformConfigure", resource: "agent_platform", operation: "configure" },
 ] as const
+
+export const CUSTOMER_SUPPORT_STAFF_ROLE_NAME = "customer_support_staff"
+
+export const CUSTOMER_SUPPORT_STAFF_POLICY_KEYS = [
+  "agent_action:create",
+  "agent_action:execute",
+  "agent_task:read",
+  "agent_task:update",
+  "customer:read",
+  "order:read",
+] as const

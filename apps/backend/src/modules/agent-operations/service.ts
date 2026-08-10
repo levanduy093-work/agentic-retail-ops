@@ -62,12 +62,17 @@ import {
   OrderExceptionEventInput,
   PolicyCondition,
   ProcessAgentConversationMessageInput,
+  ReleaseAgentTaskInput,
   RequestAgentActionInput,
+  SupportRequestEventInput,
   TransitionAgentTaskInput,
 } from "./types"
 import { evaluateAssertions } from "./evaluation"
 import { checksumKnowledgeContent } from "./knowledge"
-import { assertAgentTaskTransition } from "./task-state-machine"
+import {
+  assertAgentTaskRelease,
+  assertAgentTaskTransition,
+} from "./task-state-machine"
 import {
   AuditSearchInput,
   AuditSearchOutput,
@@ -100,6 +105,7 @@ import {
   PlatformCommandOutput,
 } from "./tools/platform-command-tools"
 import { OrderReadOutput } from "./tools/order-tools"
+import { ResponseDraftOutput } from "./tools/response-tools"
 
 class AgentOperationsModuleService extends MedusaService({
   AgentActionRequest,
@@ -232,6 +238,55 @@ class AgentOperationsModuleService extends MedusaService({
         correlation_id: task.incident_id ?? task.idempotency_key,
         data: { from: input.expected_status, to: input.status },
         event_type: "agent.task.transitioned",
+        incident_id: task.incident_id,
+        recorded_at: now,
+        resource_id: task.id,
+        resource_type: "agent_task",
+      },
+      sharedContext
+    )
+
+    return updated
+  }
+
+  @InjectManager()
+  async releaseGovernedAgentTask(
+    input: ReleaseAgentTaskInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.releaseGovernedAgentTask_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async releaseGovernedAgentTask_(
+    input: ReleaseAgentTaskInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const task = await this.retrieveAgentTask(input.task_id, {}, sharedContext)
+
+    assertAgentTaskRelease(task, input.actor_id)
+
+    const now = new Date()
+    const updated = await this.updateAgentTasks(
+      {
+        assigned_to_id: null,
+        assigned_to_type: null,
+        claimed_at: null,
+        id: task.id,
+        started_at: null,
+        status: "TODO",
+      },
+      sharedContext
+    )
+
+    await this.createAgentAuditEvents(
+      {
+        action: "task-returned-to-queue",
+        actor_id: input.actor_id,
+        actor_type: "user",
+        correlation_id: task.incident_id ?? task.idempotency_key,
+        data: { from: task.status, to: "TODO" },
+        event_type: "agent.task.returned-to-queue",
         incident_id: task.incident_id,
         recorded_at: now,
         resource_id: task.id,
@@ -1238,6 +1293,273 @@ class AgentOperationsModuleService extends MedusaService({
       ),
       live_order: liveOrder,
       recommendation: recommendationRecord,
+    }
+  }
+
+  @InjectManager()
+  async processSupportRequest(
+    input: SupportRequestEventInput,
+    liveOrder: OrderReadOutput,
+    knowledge: KnowledgeSearchOutput,
+    draft: ResponseDraftOutput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.processSupportRequest_(
+      input,
+      liveOrder,
+      knowledge,
+      draft,
+      sharedContext
+    )
+  }
+
+  @InjectTransactionManager()
+  protected async processSupportRequest_(
+    input: SupportRequestEventInput,
+    liveOrder: OrderReadOutput,
+    knowledge: KnowledgeSearchOutput,
+    draft: ResponseDraftOutput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    if (
+      input.subject_id !== input.payload.order_id ||
+      liveOrder.order_id !== input.payload.order_id
+    ) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "Support request subject, payload, and live order must reference the same order."
+      )
+    }
+
+    if (liveOrder.customer_id !== input.payload.customer_id) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        "The support customer does not own the referenced order."
+      )
+    }
+
+    const existingEvents = await this.listAgentEvents(
+      { event_id: input.event_id, source: input.source },
+      { take: 1 },
+      sharedContext
+    )
+    const existingEvent = existingEvents[0]
+
+    if (existingEvent) {
+      const incident = (
+        await this.listAgentIncidents(
+          { trigger_event_id: existingEvent.id },
+          { take: 1 },
+          sharedContext
+        )
+      )[0]
+      const actions = incident
+        ? await this.listAgentActionRequests(
+            { incident_id: incident.id, tool_name: "task.create" },
+            { take: 1 },
+            sharedContext
+          )
+        : []
+
+      return {
+        action_request: actions[0] ?? null,
+        draft,
+        duplicate: true,
+        event: existingEvent,
+        incident,
+        knowledge,
+        live_order: liveOrder,
+        recommendation: await this.findRecommendationForIncident(
+          incident?.id,
+          sharedContext
+        ),
+      }
+    }
+
+    const now = new Date()
+    const event = await this.createAgentEvents(
+      {
+        causation_id: input.causation_id,
+        correlation_id: input.correlation_id,
+        event_id: input.event_id,
+        event_type: input.event_type,
+        event_version: input.event_version,
+        occurred_at: new Date(input.occurred_at),
+        payload: input.payload,
+        processed_at: now,
+        received_at: now,
+        source: input.source,
+        status: "PROCESSED",
+        subject_id: input.subject_id,
+        subject_type: input.subject_type,
+        tenant_id: input.tenant_id,
+      },
+      sharedContext
+    )
+    const incident = await this.createAgentIncidents(
+      {
+        context: {
+          customer_id: input.payload.customer_id,
+          draft_grounded: draft.grounded,
+          live_order: liveOrder,
+          request_type: input.payload.request_type,
+        },
+        correlation_id: input.correlation_id,
+        incident_type: "CUSTOMER_SUPPORT",
+        priority: "MEDIUM",
+        status: "RECEIVED",
+        subject_id: liveOrder.order_id,
+        subject_type: "order",
+        summary: input.payload.question,
+        tenant_id: input.tenant_id,
+        title: `Customer support request for #${liveOrder.display_id}`,
+        trigger_event_id: event.id,
+      },
+      sharedContext
+    )
+    const run = await this.createAgentRuns(
+      {
+        agent_id: "customer-support-agent",
+        agent_version: "0.1.0",
+        incident_id: incident.id,
+        input: {
+          question: input.payload.question,
+          request_type: input.payload.request_type,
+        },
+        started_at: now,
+        status: "RECEIVED",
+        trigger_event_id: event.id,
+      },
+      sharedContext
+    )
+
+    await this.transitionIncident(
+      incident.id,
+      "RECEIVED",
+      "INVESTIGATING",
+      sharedContext
+    )
+
+    const recommendation = await this.createAgentRecommendations(
+      {
+        action_type: "REVIEW_SUPPORT_RESPONSE",
+        evidence: {
+          citations: draft.citations,
+          knowledge_candidate_count: knowledge.total_candidates,
+          live_order_version: liveOrder.version,
+        },
+        incident_id: incident.id,
+        proposal: {
+          draft: draft.body,
+          grounded: draft.grounded,
+          message_sent: false,
+          requires_human_review: true,
+        },
+        rationale: draft.grounded
+          ? "Draft uses a live order snapshot and approved cited knowledge."
+          : "No matching approved knowledge was found; manual review is required.",
+        risk_level: "LOW",
+        run_id: run.id,
+        status: "PROPOSED",
+        summary: `Review customer response draft for order #${liveOrder.display_id}`,
+      },
+      sharedContext
+    )
+
+    await this.transitionIncident(
+      incident.id,
+      "INVESTIGATING",
+      "OPTIONS_READY",
+      sharedContext
+    )
+
+    const dueAt = new Date(now.getTime() + 30 * 60 * 1_000).toISOString()
+    const actionResult = await this.requestGovernedAgentAction_(
+      {
+        correlation_id: input.correlation_id,
+        granted_permissions: ["agent_task:create"],
+        idempotency_key: `${input.source}:${input.event_id}:support-review-task`,
+        incident_id: incident.id,
+        input: {
+          description:
+            "Review the grounded draft, verify the live order state, and edit before sending to the customer.",
+          due_at: dueAt,
+          incident_id: incident.id,
+          input: {
+            citations: draft.citations,
+            customer_id: input.payload.customer_id,
+            draft: draft.body,
+            grounded: draft.grounded,
+            order_id: liveOrder.order_id,
+            question: input.payload.question,
+            requires_human_review: true,
+          },
+          priority: "MEDIUM",
+          task_type: "SUPPORT_RESPONSE_REVIEW",
+          tenant_id: input.tenant_id,
+          title: `Review response for order #${liveOrder.display_id}`,
+        },
+        recommendation_id: recommendation.id,
+        requested_by_id: run.id,
+        requested_by_type: "agent",
+        tenant_id: input.tenant_id,
+        tool_name: "task.create",
+        tool_version: "1.0.0",
+      },
+      sharedContext
+    )
+
+    await this.updateAgentRuns(
+      {
+        completed_at: now,
+        id: run.id,
+        output: {
+          action_request_id: actionResult.action.id,
+          citations: draft.citations,
+          draft_grounded: draft.grounded,
+          message_sent: false,
+          requires_human_review: true,
+        },
+        status: "OPTIONS_READY",
+      },
+      sharedContext
+    )
+    await this.createAgentAuditEvents(
+      {
+        action: "support-response-drafted",
+        actor_id: run.id,
+        actor_type: "agent_run",
+        correlation_id: input.correlation_id,
+        data: {
+          action_request_id: actionResult.action.id,
+          citation_count: draft.citations.length,
+          grounded: draft.grounded,
+          message_sent: false,
+          recommendation_id: recommendation.id,
+        },
+        event_type: "agent.support-response.drafted",
+        incident_id: incident.id,
+        recorded_at: now,
+        resource_id: recommendation.id,
+        resource_type: "agent_recommendation",
+        run_id: run.id,
+      },
+      sharedContext
+    )
+
+    return {
+      action_request: actionResult.action,
+      draft,
+      duplicate: false,
+      event,
+      incident: await this.retrieveAgentIncident(
+        incident.id,
+        {},
+        sharedContext
+      ),
+      knowledge,
+      live_order: liveOrder,
+      recommendation,
     }
   }
 

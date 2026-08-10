@@ -20,9 +20,9 @@ vẫn là các gate riêng.
 | Event Triage Agent | `implemented-static` | Nhận `inventory.low`; validate envelope; unique theo `source + event_id`; tạo một incident cho event; duplicate trả lại record cũ | Subscriber/connector thật, retry/concurrency test, dead-letter và nhiều event type |
 | Inventory Agent | `implemented-static` | Rule deterministic, typed read/command tools, Action Gateway revalidate và safe conflict; Redis locking adapter đã kết nối runtime | Happy path với hai stock location thật và concurrency/reservation test nhiều process |
 | Audit & Compliance Agent | `implemented-static` | Audit/outbox/tool trace, lease, retry/backoff, dead-letter; Redis Event Bus, Workflow Engine và locking đã kết nối runtime | Subscriber idempotency mở rộng, append-only enforcement, trace/replay detail và retention |
-| Order Exception Agent | `runtime-verified` | `order.exception` có schema riêng; `order.read` lấy live payment/fulfillment status; detector quét SLA mỗi 5 phút; HTTP/RBAC xác nhận allow 201, deny 403, unauthenticated 401; action execute `SUCCEEDED`; tạo đúng một task/tool call, chống trùng và không đổi order | Chuẩn hóa nguồn ghi SLA, Redis production, cursor/index cho volume lớn và concurrency nhiều worker |
+| Order Exception Agent | `runtime-verified` | Checkout `order.placed` và luồng API/OMS tự gán SLA UTC; `order.read` lấy live status; detector quét phân trang mỗi 5 phút và khóa từng order bằng Redis; HTTP/RBAC đã xác nhận; hai worker cạnh tranh vẫn chỉ tạo một event/incident/action | Hiệu chỉnh SLA theo vận hành thật và SLA table/index hoặc durable cursor cho volume lớn |
 | Fulfillment Agent | `contracted` | Có trigger fulfillment, read/task tool và foundation dependency | SLA contract, workflow và connector vận chuyển thật |
-| Customer Support Agent | `contracted` | Có knowledge/citation, prompt version, model gateway disabled-by-default và KNOW-001 | Retrieval, order context, model provider và human-review UI riêng |
+| Customer Support Agent | `runtime-verified` | API/worker/PostgreSQL đã xác nhận `support.requested` đọc live order, kiểm tra chủ sở hữu, dùng knowledge `APPROVED`, tạo draft có citation và task; RBAC 201/403/401; luồng nhân viên nhận/hoàn tất và chuyển quản lý chạy qua HTTP; tuyệt đối chưa gửi khách | Browser interaction sau đăng nhập bằng tài khoản nhân viên thật, customer channel/identity mapping, consent và delivery adapter thật |
 | Knowledge Curator Agent | `contracted` | Có knowledge lifecycle, checksum, citation và approval workflow | Gap detector, diff/review UI và nguồn tri thức thật |
 | Returns & Refund Agent | `contracted` | Có policy/approval, task, audit và evaluation foundation | Ownership, evidence contract và Medusa workflow riêng |
 | Payment & Fraud Watcher | `contracted` | Có event/incident/task/escalation và `PROHIBITED` policy primitive | Payment mapping, fraud rules và prohibited-action scenarios |
@@ -47,9 +47,10 @@ Admin. Provider mobile/push/chat bên ngoài vẫn là adapter chưa triển kha
   permission, risk, approval, timeout, retry, idempotency, error và audit fields.
   Executor kiểm tra registry/version/schema/permission và từ chối command không
   có Action Gateway authority và kiểm tra cả permission lẫn required role.
-  Registry chạy thật hiện có 15/24 tool catalog; ngoài inventory, order read, platform read
-  và task đã có `incident.create/update`, `approval.request/decide`,
-  `knowledge.propose`, `message.send`; coverage API công khai đúng 9 tool còn
+  Registry chạy thật hiện có 16/24 tool catalog; ngoài inventory, order read,
+  response draft, platform read và task đã có `incident.create/update`,
+  `approval.request/decide`, `knowledge.propose`, `message.send`; coverage API
+  công khai đúng 8 tool còn
   thiếu.
 - Task orchestration có idempotency, assignee, deadline, priority, state machine
   và audit; create/assign/escalate đi qua Action Gateway tổng quát, policy
@@ -57,6 +58,10 @@ Admin. Provider mobile/push/chat bên ngoài vẫn là adapter chưa triển kha
   request cho task quá hạn. Escalation lưu reason, actor và thời điểm.
 - Policy definition có version, hiệu lực và điều kiện deterministic `eq`, `gte`,
   `lte`, `in`; RBAC policy được đăng ký bằng `definePolicies`.
+- Bootstrap tạo role tối thiểu `customer_support_staff` với đúng quyền đọc
+  order/customer, đọc/cập nhật support task và tạo/thực thi yêu cầu chuyển quản
+  lý. Script onboarding thay role `Super Admin` do Medusa CLI gán mặc định bằng
+  role nhân viên này.
 - Knowledge có lifecycle `DRAFT -> APPROVED -> RETIRED`, checksum, citation,
   owner, locale, scope, hiệu lực và expiry. Agent chỉ được dùng bản approved còn
   hiệu lực.
@@ -68,6 +73,10 @@ Admin. Provider mobile/push/chat bên ngoài vẫn là adapter chưa triển kha
   Slack, Teams; hiện chỉ `IN_APP` active và secret chỉ lưu reference.
 - Medusa Admin có trang `Agent Operations` xem readiness, incident, approval,
   task, knowledge, evaluation và catalog; quyết định approval bắt buộc có reason.
+- Medusa Admin có route nghiệp vụ `Customer Support / Hỗ trợ khách hàng` tách
+  khỏi control plane kỹ thuật. Nhân viên chỉ thấy câu hỏi, khách, trạng thái đơn,
+  bản nháp, nguồn tham khảo và các nút nhận việc/hoàn tất/chuyển quản lý. Toàn bộ
+  nội dung màn hình có resource tiếng Việt và tiếng Anh.
 - Có production switch cho Redis Event Bus, Workflow Engine và distributed
   locking; local vẫn dùng in-memory khi cờ môi trường chưa bật.
 
@@ -115,10 +124,47 @@ Admin. Provider mobile/push/chat bên ngoài vẫn là adapter chưa triển kha
 - `ORDER-001` kiểm tra có live read và task, đồng thời cấm order/refund mutation.
 - Job `detect-order-exceptions` chạy mỗi 5 phút và chỉ xét order có metadata
   `agent_payment_due_at` hoặc `agent_fulfillment_due_at`; không tự suy diễn SLA.
+- Hook `createOrderWorkflow.orderCreated` phủ luồng API/OMS; subscriber
+  `order.placed` gọi workflow idempotent để phủ checkout Medusa. Draft order bị
+  bỏ qua, hàng không cần giao không nhận fulfillment SLA.
+- Chính sách mặc định là 120 phút cho payment và 2.880 phút cho fulfillment;
+  deadline OMS hợp lệ được giữ nguyên, deadline sai được thay bằng mặc định.
+  Payment `authorized` không bị báo nhầm là payment stuck.
+- Mỗi lượt quét đọc tối đa 5 trang x 100 order theo mặc định; cả page size và
+  số trang đều cấu hình được nhưng có giới hạn cứng để bảo vệ database.
 - Payment quá hạn được ưu tiên trước fulfillment; event ID ghép từ order, loại
   ngoại lệ và SLA due time nên quét lại không tạo incident/action/task trùng.
 - Mỗi order lỗi được cô lập; detector re-read qua typed tool rồi ingestion
-  workflow lại revalidate trước khi tạo task.
+  workflow lại revalidate trước khi tạo task. Toàn bộ đoạn xử lý một order nằm
+  trong distributed lock `agent-order-sla:<order_id>`.
+
+### Customer Support Agent
+
+- ID/version: `customer-support-agent@0.1.0`.
+- Trigger đầu tiên: `support.requested@1`, hiện chỉ hỗ trợ câu hỏi
+  `ORDER_STATUS` bằng tiếng Việt hoặc tiếng Anh.
+- `order.read@1.0.0` lấy trạng thái order/payment/fulfillment trực tiếp từ
+  Medusa. Customer ID trong request phải đúng chủ sở hữu của order, nếu không
+  workflow fail-closed trước khi ghi event hay incident.
+- `knowledge.search@1.0.0` chỉ lấy tài liệu scope `customer_support` đang
+  `APPROVED`, còn hiệu lực và đúng locale; citation giữ document, locator,
+  checksum và version.
+- `response.draft@1.0.0` tạo câu trả lời deterministic từ live order và
+  knowledge. Nếu thiếu knowledge phù hợp thì ghi rõ cần kiểm tra thủ công.
+- Mọi bản nháp đều có `requires_human_review=true`. Agent tạo recommendation
+  `REVIEW_SUPPORT_RESPONSE` và request `task.create` qua Action Gateway với loại
+  `SUPPORT_RESPONSE_REVIEW`.
+- Lát cắt này không tạo conversation, không gọi `message.send`, không tự gửi
+  khách và không thay đổi order. Xác nhận gửi và delivery adapter là gate tiếp
+  theo.
+- Route Admin `customer-support` dùng SDK session và query cache; nhân viên có
+  thể nhận task, sửa draft, hoàn tất với `message_sent=false`, hoặc chuyển quản
+  lý qua `task.escalate` trong Action Gateway. Màn hình không hiển thị event ID,
+  correlation ID, tool call, model run hay JSON kỹ thuật.
+- Nhân viên đang soạn có thể chọn “Trả lại cho nhân viên khác”. Workflow khóa
+  theo task, chỉ chấp nhận đúng user đang phụ trách, xóa assignee và đưa task về
+  `TODO`; mọi lần trả lại đều có audit. UI xác nhận trước và cảnh báo nội dung
+  chưa lưu sẽ bị bỏ.
 
 ### Policy & Approval Agent
 
@@ -171,6 +217,7 @@ Admin API:
 
 - `POST /admin/agent-operations/events`;
 - `POST /admin/agent-operations/order-exceptions`;
+- `POST /admin/agent-operations/support-requests`;
 - `GET /admin/agent-operations/incidents`;
 - `GET /admin/agent-operations/incidents/:id`;
 - `GET /admin/agent-operations/approvals`;
@@ -220,7 +267,7 @@ Persistence:
 
 ## Bằng chứng hiện tại
 
-Ngày kiểm chứng: 2026-08-10.
+Ngày kiểm chứng: 2026-08-11.
 
 - Migration `Migration20260809174339` chạy thành công trên PostgreSQL local.
 - Migration `Migration20260809180247` bổ sung lease expiry và chạy thành công.
@@ -232,7 +279,7 @@ Ngày kiểm chứng: 2026-08-10.
   task escalation; migration chạy thành công, có backfill action inventory cũ.
 - Migration `Migration20260810132610` lưu snapshot role được ủy quyền trên
   action request và đã chạy thành công trên PostgreSQL local.
-- 77/77 unit test pass cho analyzer, detector, state machines, validators, tool contract,
+- 89/89 unit test pass cho analyzer, detector, response draft, state machines, validators, tool contract,
   executor, registry coverage, tools, policy,
   knowledge, model boundary, evaluation, action/outbox và communication.
 - ESLint mục tiêu của toàn bộ source agent pass.
@@ -263,6 +310,28 @@ Ngày kiểm chứng: 2026-08-10.
 - Detector runtime tạo một order có payment SLA quá hạn: lần quét đầu tạo đúng
   một incident/action/task, lần quét hai trả duplicate, không có lỗi và order
   giữ nguyên status/version/canceled state.
+- Redis race verifier chạy hai tiến trình Medusa đồng thời trên cùng tập order;
+  cả hai kết nối `locking-redis`, không có scan error và order mục tiêu chỉ có
+  đúng một event, một incident, một action request.
+- SLA assignment verifier xác nhận cả hook tạo order và event checkout đều ghi
+  policy `order-sla-default@1.0.0`; deadline tự sinh đi qua detector rồi tạo task
+  `ORDER_PAYMENT_REVIEW`, action `SUCCEEDED` và không mutation order.
+- Customer Support verifier tạo customer/order/knowledge thật, duyệt knowledge,
+  rồi chạy `support.requested -> order.read -> knowledge.search ->
+  response.draft -> task.create`. Kết quả có đúng 1 event, incident,
+  recommendation, action, task và tool call; event trùng bị suppress; customer
+  không sở hữu order bị từ chối và tạo 0 event; order không đổi; có 0
+  conversation và 0 `message.send` action.
+- Customer Support staff-flow verifier dùng hai User record tạm và JWT ngắn
+  hạn: user có role nhận 201, user thiếu role nhận 403, request chưa đăng nhập
+  nhận 401; hai nhánh bị chặn tạo 0 event. Worker tạo task thật; nhân viên nhận
+  `TODO -> CLAIMED -> IN_PROGRESS -> COMPLETED`, lưu bản trả lời đã duyệt với
+  `message_sent=false`; nhánh `task.escalate` chuyển việc cho team
+  `operations_manager` với priority HIGH. Verifier giữ lại một customer, một
+  order và hai task TODO Việt/Anh làm dữ liệu demo, nhưng tự xóa user tạm.
+- Customer Support UI lint/build thành công bằng Medusa Admin; cả `vi` và `en`
+  resource được compile. Browser unauthenticated chuyển đúng về `/app/login`;
+  kiểm chứng tương tác sau đăng nhập còn là runtime gate riêng.
 - Migration `Migration20260809200756` tạo 9 bảng nền mới; migration RBAC chính
   thức của Medusa cũng chạy thành công.
 - Bootstrap có tính idempotent; role `operations_manager` có đúng 21
@@ -285,8 +354,8 @@ Ngày kiểm chứng: 2026-08-10.
 
 ## Gate tiếp theo
 
-1. Đóng gói 9 tool nghiệp vụ catalog còn lại theo từng vertical slice; ưu tiên
-   Customer Support Agent, không tạo placeholder chưa có business handler.
+1. Kiểm thử Customer Support UI sau đăng nhập bằng tài khoản nhân viên thật,
+   rồi bổ sung delivery adapter có identity mapping; chưa bật tự gửi.
 2. Gán role `operations_manager` cho tài khoản Admin thật và kiểm thử allow/deny
    trên từng policy qua HTTP.
 3. Chạy happy path bằng ít nhất hai stock location thật và kiểm thử hai action
@@ -300,3 +369,7 @@ Ngày kiểm chứng: 2026-08-10.
    benchmark `KNOW-001` và security review đạt yêu cầu.
 7. Bổ sung connector nguồn thật và scenario approval expiry, retry/dead
    recovery qua API/worker.
+8. Hiệu chỉnh số phút SLA theo vận hành thật; khi vượt giới hạn batch cấu hình,
+   chuyển detector sang SLA table có index hoặc durable cursor.
+9. Sau lát cắt hỗ trợ khách hàng, triển khai Fulfillment Agent từ SLA contract
+   và connector vận chuyển thật; không tạo tool placeholder.

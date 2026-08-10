@@ -23,3 +23,29 @@ export function assertAgentTaskTransition(
     )
   }
 }
+
+export function assertAgentTaskRelease(
+  task: {
+    assigned_to_id?: string | null
+    assigned_to_type?: string | null
+    status: AgentTaskStatus
+  },
+  actorId: string
+) {
+  if (
+    task.assigned_to_type !== "user" ||
+    task.assigned_to_id !== actorId
+  ) {
+    throw new MedusaError(
+      MedusaError.Types.NOT_ALLOWED,
+      "Only the employee handling this task can return it to the queue."
+    )
+  }
+
+  if (!["CLAIMED", "IN_PROGRESS", "WAITING"].includes(task.status)) {
+    throw new MedusaError(
+      MedusaError.Types.NOT_ALLOWED,
+      "Only an active task can be returned to the queue."
+    )
+  }
+}

@@ -6,6 +6,7 @@ const liveOrder: OrderReadOutput = {
   canceled_at: null,
   created_at: "2026-08-10T00:00:00.000Z",
   currency_code: "vnd",
+  customer_id: "cus_1",
   display_id: 42,
   fulfillment_count: 0,
   fulfillment_status: "not_fulfilled",

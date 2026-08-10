@@ -9,6 +9,7 @@ const order: OrderReadOutput = {
   canceled_at: null,
   created_at: "2026-08-11T00:00:00.000Z",
   currency_code: "vnd",
+  customer_id: "cus_1",
   display_id: 99,
   fulfillment_count: 0,
   fulfillment_status: "not_fulfilled",
@@ -67,6 +68,16 @@ describe("order exception SLA detector", () => {
         now
       )
     ).toMatchObject({ exception_type: "FULFILLMENT_OVERDUE" })
+  })
+
+  test("does not flag an authorized checkout payment", () => {
+    expect(
+      detectOrderSlaException(
+        { ...order, payment_status: "authorized" },
+        { agent_payment_due_at: "2026-08-11T02:00:00.000Z" },
+        now
+      )
+    ).toBeNull()
   })
 
   test("ignores terminal orders", () => {

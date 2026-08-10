@@ -33,6 +33,7 @@ export async function executeOrderRead(
             "canceled_at",
             "created_at",
             "currency_code",
+            "customer_id",
             "display_id",
             "items.quantity",
             "status",

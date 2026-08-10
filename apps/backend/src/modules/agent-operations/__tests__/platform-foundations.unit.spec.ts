@@ -16,7 +16,10 @@ import {
   redactModelInput,
 } from "../model-gateway"
 import { evaluatePolicies } from "../policy-engine"
-import { assertAgentTaskTransition } from "../task-state-machine"
+import {
+  assertAgentTaskRelease,
+  assertAgentTaskTransition,
+} from "../task-state-machine"
 
 describe("agent platform foundations", () => {
   it("registers every catalog agent against known shared foundations", () => {
@@ -40,6 +43,25 @@ describe("agent platform foundations", () => {
     expect(() =>
       assertAgentTaskTransition("COMPLETED", "IN_PROGRESS")
     ).toThrow("Invalid agent task transition")
+  })
+
+  it("only lets the assigned employee return an active task", () => {
+    const activeTask = {
+      assigned_to_id: "user_staff",
+      assigned_to_type: "user",
+      status: "IN_PROGRESS" as const,
+    }
+
+    expect(() => assertAgentTaskRelease(activeTask, "user_staff")).not.toThrow()
+    expect(() => assertAgentTaskRelease(activeTask, "user_other")).toThrow(
+      "Only the employee handling this task"
+    )
+    expect(() =>
+      assertAgentTaskRelease(
+        { ...activeTask, status: "COMPLETED" },
+        "user_staff"
+      )
+    ).toThrow("Only an active task")
   })
 
   it("evaluates deterministic approval and prohibited policies", () => {

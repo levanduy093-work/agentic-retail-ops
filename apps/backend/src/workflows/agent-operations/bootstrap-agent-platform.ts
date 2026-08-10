@@ -7,7 +7,11 @@ import {
   WorkflowResponse,
 } from "@medusajs/framework/workflows-sdk"
 import { AGENT_OPERATIONS_MODULE } from "../../modules/agent-operations"
-import { AGENT_RBAC_POLICY_DEFINITIONS } from "../../modules/agent-operations/rbac-policies"
+import {
+  AGENT_RBAC_POLICY_DEFINITIONS,
+  CUSTOMER_SUPPORT_STAFF_POLICY_KEYS,
+  CUSTOMER_SUPPORT_STAFF_ROLE_NAME,
+} from "../../modules/agent-operations/rbac-policies"
 import AgentOperationsModuleService from "../../modules/agent-operations/service"
 import {
   TASK_ASSIGN_TOOL,
@@ -66,6 +70,40 @@ const bootstrapAgentPlatformStep = createStep(
           role_id: role.id,
         })
         created.push(`rbac-link:${key}`)
+      }
+    }
+
+    let supportStaffRole = (
+      await rbac.listRbacRoles({ name: CUSTOMER_SUPPORT_STAFF_ROLE_NAME })
+    )[0]
+    if (!supportStaffRole) {
+      supportStaffRole = await rbac.createRbacRoles({
+        description:
+          "May review customer-support tasks and request manager escalation.",
+        name: CUSTOMER_SUPPORT_STAFF_ROLE_NAME,
+      })
+      created.push(`rbac-role:${CUSTOMER_SUPPORT_STAFF_ROLE_NAME}`)
+    }
+
+    for (const key of CUSTOMER_SUPPORT_STAFF_POLICY_KEYS) {
+      const policy = (await rbac.listRbacPolicies({ key }))[0]
+      if (!policy) {
+        throw new MedusaError(
+          MedusaError.Types.UNEXPECTED_STATE,
+          `Registered RBAC policy ${key} was not synchronized by the RBAC module.`
+        )
+      }
+
+      const links = await rbac.listRbacRolePolicies({
+        policy_id: policy.id,
+        role_id: supportStaffRole.id,
+      })
+      if (!links[0]) {
+        await rbac.createRbacRolePolicies({
+          policy_id: policy.id,
+          role_id: supportStaffRole.id,
+        })
+        created.push(`rbac-link:${CUSTOMER_SUPPORT_STAFF_ROLE_NAME}:${key}`)
       }
     }
 
@@ -305,6 +343,7 @@ const bootstrapAgentPlatformStep = createStep(
 
     return new StepResponse({
       created,
+      customer_support_staff_role_id: supportStaffRole.id,
       operations_manager_role_id: role.id,
       ready: true,
     })

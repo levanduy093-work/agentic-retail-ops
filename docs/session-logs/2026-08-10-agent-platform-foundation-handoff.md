@@ -74,7 +74,7 @@ Approved knowledge + citation
 | Event/incident/run | models và `service.ts` | Có dedupe, correlation, state machine |
 | Recommendation/approval | models, approval workflow | Có expiry, reason, actor, duplicate-safe decision |
 | Action Gateway | action request, tool call, worker, `request-agent-action.ts` | Context incident/recommendation/approval tùy chọn; fail-closed nếu thiếu policy ACTIVE; có lease, retry, dead-letter, idempotency và live revalidation |
-| Typed tool runtime | `tool-contract.ts`, `tool-executor.ts`, `tool-registry.ts`, `read-tool-runtime.ts` | 15/24 tool chạy thật, gồm `order.read`; permission và required role đều được kiểm tra; request và execution authority tách riêng |
+| Typed tool runtime | `tool-contract.ts`, `tool-executor.ts`, `tool-registry.ts`, `read-tool-runtime.ts` | 16/24 tool chạy thật, gồm `order.read` và `response.draft`; permission và required role đều được kiểm tra; request và execution authority tách riêng |
 | Task orchestration | `agent-task`, task workflows | Có priority, assignee, due date, idempotency và state machine |
 | Supervisor | `supervise-agent-operations.ts`, expiry workflow | Mỗi phút hết hạn approval quá giờ và tạo task escalation qua Action Gateway; lỗi cô lập theo record |
 | Policy engine | policy definition, `policy-engine.ts` | Có version/effectivity và `eq/gte/lte/in`; inventory flow đã sử dụng active policy |
@@ -208,8 +208,8 @@ Baseline đã xác nhận:
   không role và 401 khi thiếu token; hai request bị chặn tạo 0 event. HTTP execute
   action trả 202/`SUCCEEDED`, tạo đúng 1 task và 1 tool call. Hai User record tạm
   được xóa trong `finally`.
-- Order Exception Agent đạt `runtime-verified`; detector/SLA scheduler, Redis
-  production và multi-worker contention vẫn là gate tiếp theo.
+- Order Exception Agent đạt `runtime-verified`; detector/SLA scheduler đã có
+  distributed lock và đã qua kiểm thử hai tiến trình với Redis.
 - Ngày 2026-08-11: thêm job `detect-order-exceptions` chạy mỗi 5 phút. Detector
   chỉ đọc hai metadata SLA rõ ràng `agent_payment_due_at` và
   `agent_fulfillment_due_at`, re-read order qua `order.read`, phát event ID cố
@@ -217,9 +217,12 @@ Baseline đã xác nhận:
 - Runtime detector: 2 candidate, 1 order có SLA; lần đầu tạo 1 event/incident/
   action/task, lần hai trả 1 duplicate, 0 error; action `SUCCEEDED` và order
   không đổi. Unit suite tăng thành 77/77.
-- Gate detector còn lại: nguồn checkout/OMS phải ghi SLA metadata nhất quán;
-  volume lớn cần cursor/index riêng thay vì chỉ quét bounded batch cập nhật gần
-  nhất; multi-instance race cần Redis/concurrency evidence.
+- Detector hiện quét nhiều trang có giới hạn và khóa theo order. Race local với
+  hai tiến trình Redis tạo đúng một event/incident/action, không có scan error.
+- Checkout `order.placed` và luồng API/OMS hiện tự gán SLA UTC bằng policy có
+  version; runtime đã xác nhận deadline tự sinh đi hết detector → action → task.
+- Gate detector còn lại: business owner duyệt thời lượng SLA thật; volume vượt
+  giới hạn batch cần SLA table/index hoặc durable cursor riêng.
 
 ## 8. Cách xây một agent mới
 
@@ -258,12 +261,19 @@ chung đã được phép coi là production-ready:
   identity mapping hoặc delivery receipt thật;
 - chưa có connector order/fulfillment/payment/return production cho các agent
   tiếp theo;
-- tool registry chạy thật có 15/24 tool catalog; 9 tool còn lại mới là tên hợp
+- tool registry chạy thật có 16/24 tool catalog; 8 tool còn lại mới là tên hợp
   đồng, dù một số workflow/API nền như approval/task/knowledge đã có;
 - chưa có load, recovery, penetration và multi-process contention test đầy đủ;
 - trace/replay detail, append-only enforcement và retention vẫn cần hardening;
 - Inventory Agent còn cần happy path với hai stock location thật và cạnh tranh
   reservation/action thật.
+- Customer Support Agent đã có workflow/database runtime proof cho live order,
+  ownership, approved knowledge, cited draft và human-review task. Còn thiếu
+  HTTP/RBAC proof, browser test sau đăng nhập và delivery adapter nên chưa gọi
+  `runtime-verified` end-to-end.
+- Màn hình nhân viên `customer-support` đã có i18n Việt/Anh, nhận việc, sửa và
+  hoàn tất draft, chuyển quản lý; che toàn bộ thuật ngữ agent/tool/event kỹ thuật
+  và không có khả năng gửi khách ở giai đoạn này.
 
 ## 10. Những điều không được làm
 

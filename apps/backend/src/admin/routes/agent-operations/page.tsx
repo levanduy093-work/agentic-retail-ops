@@ -344,9 +344,6 @@ const AgentOperationsPage = () => {
   )
 }
 
-export const config = defineRouteConfig({
-  label: "Agent Operations",
-  rank: 30,
-})
+export const config = defineRouteConfig({})
 
 export default AgentOperationsPage

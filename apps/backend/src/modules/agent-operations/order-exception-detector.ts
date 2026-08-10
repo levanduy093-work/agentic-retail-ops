@@ -7,6 +7,7 @@ export const ORDER_FULFILLMENT_DUE_AT_METADATA_KEY =
 
 const TERMINAL_ORDER_STATUSES = new Set(["archived", "canceled", "completed"])
 const SETTLED_PAYMENT_STATUSES = new Set([
+  "authorized",
   "captured",
   "completed",
   "partially_refunded",
