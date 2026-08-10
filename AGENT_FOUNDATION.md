@@ -602,13 +602,13 @@ Nền dùng chung đã đạt `implemented-static` và phần persistence/bootst
 `runtime-verified` trên PostgreSQL local. Vì vậy việc tiếp theo chuyển sang xây
 vertical slice của từng agent, không tiếp tục dựng infrastructure chung chung:
 
-1. Gán role `operations_manager` cho tài khoản thật và kiểm thử allow/deny qua
-   Admin API.
+1. Gán role `operations_manager` cho tài khoản vận hành production; HTTP verifier
+   bằng User record tạm đã xác nhận allow 201, deny 403 và unauthenticated 401.
 2. Chạy happy path chuyển tồn với hai stock location thật và kiểm thử hai action
    cạnh tranh trên cùng inventory item bằng Redis locking.
-3. Nối detector/SLA scheduler thật vào Order Exception Agent và chạy HTTP với
-   order thật; vertical slice đã có live read, deterministic rule,
-   `task.create`, audit/outbox và `ORDER-001`, không ghi thẳng bảng order.
+3. Chuẩn hóa nơi checkout/OMS ghi `agent_payment_due_at` và
+   `agent_fulfillment_due_at`; detector SLA 5 phút đã chạy thật và không ghi
+   thẳng bảng order.
 4. Xây Customer Support Agent bằng approved knowledge, citation và KNOW-001;
    đầu ra chỉ là draft chờ người duyệt.
 5. Chọn secret manager/model provider và adapter mobile/chat sau khi có benchmark
@@ -631,9 +631,11 @@ vertical slice của từng agent, không tiếp tục dựng infrastructure chu
 - Migration `Migration20260810132610` đã chạy trên PostgreSQL local; runtime
   xác nhận `knowledge.propose` qua gateway là `SUCCEEDED`, ba task command vẫn
   chạy đúng, stale state trả `CONFLICT`, request thiếu policy không tạo action.
-  Unit test hiện đạt 72/72. Order Exception runtime verifier đã tự tạo order thử
-  qua workflow Medusa và xác nhận live read, Action Gateway, task, audit/outbox,
-  chống trùng và không thay đổi order; HTTP/RBAC vẫn là gate riêng.
+  Unit test hiện đạt 77/77. Order Exception runtime verifier đã tự tạo order thử
+  qua workflow Medusa và xác nhận live read, HTTP/RBAC, Action Gateway, task,
+  audit/outbox, chống trùng và không thay đổi order. Agent này đạt
+  `runtime-verified`; detector/SLA 5 phút đã xác nhận first-create/second-dedupe,
+  còn production cursor/index và concurrency nhiều worker.
 - Có Admin Operations Console và readiness API phân biệt `code_ready` với
   `deployment_ready`.
 - Redis Event Bus, Workflow Engine và distributed locking đã kết nối runtime khi

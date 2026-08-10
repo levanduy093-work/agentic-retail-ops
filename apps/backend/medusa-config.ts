@@ -10,6 +10,11 @@ import { resolve } from 'path'
 
 loadEnv(process.env.NODE_ENV || 'development', process.cwd())
 
+// Agent Admin routes declare Medusa policies and must never silently run with
+// HTTP permission enforcement disabled. Deployments can still set this value
+// explicitly, while local development is secure by default.
+process.env.MEDUSA_FF_RBAC ??= 'true'
+
 const isGoogleAuthConfigured = Boolean(process.env.GOOGLE_CLIENT_ID)
 const isRedisInfrastructureEnabled =
   process.env.REDIS_INFRASTRUCTURE_ENABLED === 'true'

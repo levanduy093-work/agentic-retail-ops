@@ -21,6 +21,8 @@
     "agent:verify": "medusa exec ./src/scripts/verify-agent-foundation.ts",
     "agent:verify-platform": "medusa exec ./src/scripts/verify-agent-platform.ts",
     "agent:verify-order-exception": "medusa exec ./src/scripts/verify-order-exception-agent.ts",
+    "agent:verify-http-rbac": "medusa exec ./src/scripts/verify-agent-http-rbac.ts",
+    "agent:verify-order-detector": "medusa exec ./src/scripts/verify-order-exception-detector.ts",
     "lint": "medusa lint",
     "test:integration:http": "TEST_TYPE=integration:http NODE_OPTIONS=--experimental-vm-modules jest --silent=false --runInBand --forceExit",
     "test:integration:modules": "TEST_TYPE=integration:modules NODE_OPTIONS=--experimental-vm-modules jest --silent=false --runInBand --forceExit",

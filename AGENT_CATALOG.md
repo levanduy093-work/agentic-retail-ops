@@ -20,7 +20,7 @@ vẫn là các gate riêng.
 | Event Triage Agent | `implemented-static` | Nhận `inventory.low`; validate envelope; unique theo `source + event_id`; tạo một incident cho event; duplicate trả lại record cũ | Subscriber/connector thật, retry/concurrency test, dead-letter và nhiều event type |
 | Inventory Agent | `implemented-static` | Rule deterministic, typed read/command tools, Action Gateway revalidate và safe conflict; Redis locking adapter đã kết nối runtime | Happy path với hai stock location thật và concurrency/reservation test nhiều process |
 | Audit & Compliance Agent | `implemented-static` | Audit/outbox/tool trace, lease, retry/backoff, dead-letter; Redis Event Bus, Workflow Engine và locking đã kết nối runtime | Subscriber idempotency mở rộng, append-only enforcement, trace/replay detail và retention |
-| Order Exception Agent | `implemented-static` | `order.exception` có schema riêng; `order.read` gọi Medusa order-detail workflow để lấy live payment/fulfillment status; luật deterministic đóng tín hiệu cũ hoặc tạo `task.create` qua Action Gateway; có audit/outbox/idempotency và `ORDER-001` | Chạy HTTP với order thật, nối detector/SLA scheduler và kiểm thử concurrency nhiều worker |
+| Order Exception Agent | `runtime-verified` | `order.exception` có schema riêng; `order.read` lấy live payment/fulfillment status; detector quét SLA mỗi 5 phút; HTTP/RBAC xác nhận allow 201, deny 403, unauthenticated 401; action execute `SUCCEEDED`; tạo đúng một task/tool call, chống trùng và không đổi order | Chuẩn hóa nguồn ghi SLA, Redis production, cursor/index cho volume lớn và concurrency nhiều worker |
 | Fulfillment Agent | `contracted` | Có trigger fulfillment, read/task tool và foundation dependency | SLA contract, workflow và connector vận chuyển thật |
 | Customer Support Agent | `contracted` | Có knowledge/citation, prompt version, model gateway disabled-by-default và KNOW-001 | Retrieval, order context, model provider và human-review UI riêng |
 | Knowledge Curator Agent | `contracted` | Có knowledge lifecycle, checksum, citation và approval workflow | Gap detector, diff/review UI và nguồn tri thức thật |
@@ -113,6 +113,12 @@ Admin. Provider mobile/push/chat bên ngoài vẫn là adapter chưa triển kha
 - Event, action và task đều có idempotency; recommendation lưu live order
   version làm bằng chứng; audit/outbox ghi lại quyết định.
 - `ORDER-001` kiểm tra có live read và task, đồng thời cấm order/refund mutation.
+- Job `detect-order-exceptions` chạy mỗi 5 phút và chỉ xét order có metadata
+  `agent_payment_due_at` hoặc `agent_fulfillment_due_at`; không tự suy diễn SLA.
+- Payment quá hạn được ưu tiên trước fulfillment; event ID ghép từ order, loại
+  ngoại lệ và SLA due time nên quét lại không tạo incident/action/task trùng.
+- Mỗi order lỗi được cô lập; detector re-read qua typed tool rồi ingestion
+  workflow lại revalidate trước khi tạo task.
 
 ### Policy & Approval Agent
 
@@ -226,7 +232,7 @@ Ngày kiểm chứng: 2026-08-10.
   task escalation; migration chạy thành công, có backfill action inventory cũ.
 - Migration `Migration20260810132610` lưu snapshot role được ủy quyền trên
   action request và đã chạy thành công trên PostgreSQL local.
-- 72/72 unit test pass cho analyzer, state machines, validators, tool contract,
+- 77/77 unit test pass cho analyzer, detector, state machines, validators, tool contract,
   executor, registry coverage, tools, policy,
   knowledge, model boundary, evaluation, action/outbox và communication.
 - ESLint mục tiêu của toàn bộ source agent pass.
@@ -247,8 +253,16 @@ Ngày kiểm chứng: 2026-08-10.
 - Bootstrap PostgreSQL đã seed `ORDER-001`. Runtime verifier tạo order kiểm thử
   bằng workflow Medusa và chạy thành công event → live read → recommendation →
   Action Gateway → task trên PostgreSQL; event trùng bị suppress và order giữ
-  nguyên status/version/canceled state. Authenticated HTTP/RBAC vẫn chưa được
-  kiểm chứng nên catalog chưa nâng thành `runtime-verified`.
+  nguyên status/version/canceled state.
+- HTTP/RBAC verifier dùng hai User record tạm và JWT ngắn hạn: user có
+  `operations_manager` nhận 201 rồi execute action nhận 202/`SUCCEEDED`; user
+  không role nhận 403; request không đăng nhập nhận 401; hai nhánh bị chặn tạo
+  0 event và user tạm được xóa trong `finally`.
+- RBAC được bật mặc định trong `medusa-config.ts`; `.env.template` cũng khai báo
+  `MEDUSA_FF_RBAC=true`, tránh route có policy nhưng vô tình chạy không enforce.
+- Detector runtime tạo một order có payment SLA quá hạn: lần quét đầu tạo đúng
+  một incident/action/task, lần quét hai trả duplicate, không có lỗi và order
+  giữ nguyên status/version/canceled state.
 - Migration `Migration20260809200756` tạo 9 bảng nền mới; migration RBAC chính
   thức của Medusa cũng chạy thành công.
 - Bootstrap có tính idempotent; role `operations_manager` có đúng 21

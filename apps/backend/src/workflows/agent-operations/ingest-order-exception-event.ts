@@ -1,4 +1,3 @@
-import { getOrderDetailWorkflow } from "@medusajs/core-flows"
 import {
   createStep,
   createWorkflow,
@@ -6,52 +5,21 @@ import {
   WorkflowResponse,
 } from "@medusajs/framework/workflows-sdk"
 import { AGENT_OPERATIONS_MODULE } from "../../modules/agent-operations"
+import { executeOrderRead } from "../../modules/agent-operations/order-read-runtime"
 import AgentOperationsModuleService from "../../modules/agent-operations/service"
-import { AGENT_TOOL_REGISTRY } from "../../modules/agent-operations/tool-registry"
-import { executeAgentTool } from "../../modules/agent-operations/tool-executor"
 import {
   OrderReadInput,
   OrderReadOutput,
-  toOrderReadOutput,
 } from "../../modules/agent-operations/tools/order-tools"
 import { OrderExceptionEventInput } from "../../modules/agent-operations/types"
 
 const readLiveOrderStep = createStep(
   "read-live-order",
   async (input: OrderReadInput, { container }) => {
-    const execution = await executeAgentTool<OrderReadInput, OrderReadOutput>(
-      AGENT_TOOL_REGISTRY,
-      {
-        authority: {
-          actor_id: "order-exception-agent",
-          granted_permissions: ["agent_order:read"],
-          mode: "DIRECT",
-        },
-        input,
-        tool_name: "order.read",
-        tool_version: "1.0.0",
-      },
-      async ({ order_id }) => {
-        const { result } = await getOrderDetailWorkflow(container).run({
-          input: {
-            fields: [
-              "id",
-              "canceled_at",
-              "created_at",
-              "currency_code",
-              "display_id",
-              "items.quantity",
-              "status",
-              "total",
-              "updated_at",
-              "version",
-            ],
-            order_id,
-          },
-        })
-
-        return toOrderReadOutput(result)
-      }
+    const execution = await executeOrderRead(
+      container,
+      input,
+      "order-exception-agent"
     )
 
     return new StepResponse(execution.output)

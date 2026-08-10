@@ -174,7 +174,7 @@ pnpm run agent:verify-platform
 
 Baseline đã xác nhận:
 
-- 72/72 unit test pass;
+- 77/77 unit test pass;
 - backend TypeScript và Medusa lint sạch;
 - full workspace build pass;
 - migration PostgreSQL pass;
@@ -201,8 +201,25 @@ Baseline đã xác nhận:
   1 task và 1 tool call; có 4 audit event, 2 outbox event; gửi lại event trả
   duplicate và không tạo record thứ hai.
 - So sánh trước/sau xác nhận order giữ nguyên status, version và canceled state.
-  Authenticated HTTP/RBAC chưa chạy nên trạng thái catalog vẫn là
-  `implemented-static`, chưa phải `runtime-verified` theo định nghĩa đầy đủ.
+- Lần đầu HTTP verifier phát hiện RBAC feature flag chưa bật: user không role vẫn
+  nhận 201. Đã sửa fail-open này bằng cách bật `MEDUSA_FF_RBAC` mặc định trong
+  `medusa-config.ts` và ghi biến vào `.env.template`.
+- Sau sửa, cùng route trả 201 cho user có `operations_manager`, 403 cho user
+  không role và 401 khi thiếu token; hai request bị chặn tạo 0 event. HTTP execute
+  action trả 202/`SUCCEEDED`, tạo đúng 1 task và 1 tool call. Hai User record tạm
+  được xóa trong `finally`.
+- Order Exception Agent đạt `runtime-verified`; detector/SLA scheduler, Redis
+  production và multi-worker contention vẫn là gate tiếp theo.
+- Ngày 2026-08-11: thêm job `detect-order-exceptions` chạy mỗi 5 phút. Detector
+  chỉ đọc hai metadata SLA rõ ràng `agent_payment_due_at` và
+  `agent_fulfillment_due_at`, re-read order qua `order.read`, phát event ID cố
+  định và gọi ingestion workflow hiện có; lỗi từng order không chặn cả batch.
+- Runtime detector: 2 candidate, 1 order có SLA; lần đầu tạo 1 event/incident/
+  action/task, lần hai trả 1 duplicate, 0 error; action `SUCCEEDED` và order
+  không đổi. Unit suite tăng thành 77/77.
+- Gate detector còn lại: nguồn checkout/OMS phải ghi SLA metadata nhất quán;
+  volume lớn cần cursor/index riêng thay vì chỉ quét bounded batch cập nhật gần
+  nhất; multi-instance race cần Redis/concurrency evidence.
 
 ## 8. Cách xây một agent mới
 
