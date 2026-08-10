@@ -27,6 +27,40 @@ export const AdminIngestInventoryLowEvent = z.object({
   tenant_id: z.string().min(1).default("default"),
 })
 
+export const AdminIngestOrderExceptionEvent = z
+  .strictObject({
+    causation_id: z.string().min(1).optional(),
+    correlation_id: z.string().min(1),
+    event_id: z.string().min(1),
+    event_type: z.literal("order.exception"),
+    event_version: z.number().int().positive().default(1),
+    occurred_at: z.string().datetime(),
+    payload: z.strictObject({
+      details: z.record(z.string(), z.unknown()).optional(),
+      detected_at: z.string().datetime(),
+      exception_type: z.enum([
+        "FULFILLMENT_OVERDUE",
+        "MANUAL_REVIEW",
+        "PAYMENT_STUCK",
+      ]),
+      order_id: z.string().min(1),
+      sla_due_at: z.string().datetime().optional(),
+    }),
+    source: z.string().min(1),
+    subject_id: z.string().min(1),
+    subject_type: z.literal("order"),
+    tenant_id: z.string().min(1).default("default"),
+  })
+  .superRefine((value, context) => {
+    if (value.subject_id !== value.payload.order_id) {
+      context.addIssue({
+        code: "custom",
+        message: "subject_id must match payload.order_id",
+        path: ["subject_id"],
+      })
+    }
+  })
+
 export const AdminDecideAgentApproval = z.object({
   decision: z.enum(["APPROVED", "REJECTED"]),
   reason: z.string().trim().min(3).max(1000),
@@ -102,8 +136,23 @@ export const AdminRunAgentEvaluation = z.strictObject({
   scenario_id: z.string().trim().min(1),
 })
 
+export const AdminRequestAgentAction = z.strictObject({
+  approval_id: z.string().trim().min(1).optional(),
+  correlation_id: z.string().trim().min(1).max(200),
+  idempotency_key: z.string().trim().min(1).max(300),
+  incident_id: z.string().trim().min(1).optional(),
+  input: z.record(z.string(), z.unknown()),
+  recommendation_id: z.string().trim().min(1).optional(),
+  tenant_id: z.string().trim().min(1).default("default"),
+  tool_name: z.string().trim().min(1).max(200),
+  tool_version: z.string().trim().min(1).max(50),
+})
+
 export type AdminIngestInventoryLowEventType = z.infer<
   typeof AdminIngestInventoryLowEvent
+>
+export type AdminIngestOrderExceptionEventType = z.infer<
+  typeof AdminIngestOrderExceptionEvent
 >
 export type AdminDecideAgentApprovalType = z.infer<
   typeof AdminDecideAgentApproval
@@ -120,4 +169,7 @@ export type AdminCreateKnowledgeDocumentType = z.infer<
 >
 export type AdminRunAgentEvaluationType = z.infer<
   typeof AdminRunAgentEvaluation
+>
+export type AdminRequestAgentActionType = z.infer<
+  typeof AdminRequestAgentAction
 >

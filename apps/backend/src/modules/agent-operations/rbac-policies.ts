@@ -4,6 +4,7 @@ export const AGENT_RBAC_POLICY_DEFINITIONS = [
   { name: "AgentApprovalRead", resource: "agent_approval", operation: "read" },
   { name: "AgentApprovalApprove", resource: "agent_approval", operation: "approve" },
   { name: "AgentActionRead", resource: "agent_action", operation: "read" },
+  { name: "AgentActionCreate", resource: "agent_action", operation: "create" },
   { name: "AgentActionExecute", resource: "agent_action", operation: "execute" },
   { name: "AgentToolRead", resource: "agent_tool", operation: "read" },
   { name: "AgentConversationRead", resource: "agent_conversation", operation: "read" },

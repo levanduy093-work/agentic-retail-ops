@@ -64,6 +64,7 @@ describe("agent read tool runtime", () => {
       {
         actor_id: "agent_auditor",
         granted_permissions: ["agent_audit:read"],
+        granted_roles: ["operations_manager"],
       },
       { correlation_id: "corr_1" }
     )

@@ -147,8 +147,7 @@ export type RecommendationStatus = (typeof RECOMMENDATION_STATUSES)[number]
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number]
 export type RiskLevel = (typeof RISK_LEVELS)[number]
 export type OutboxStatus = (typeof OUTBOX_STATUSES)[number]
-export type AgentActionRequestStatus =
-  (typeof ACTION_REQUEST_STATUSES)[number]
+export type AgentActionRequestStatus = (typeof ACTION_REQUEST_STATUSES)[number]
 export type ToolCallKind = (typeof TOOL_CALL_KINDS)[number]
 export type ToolCallStatus = (typeof TOOL_CALL_STATUSES)[number]
 export type ConversationChannel = (typeof CONVERSATION_CHANNELS)[number]
@@ -258,6 +257,33 @@ export type InventoryLowEventInput = {
   tenant_id: string
 }
 
+export type OrderExceptionType =
+  | "FULFILLMENT_OVERDUE"
+  | "MANUAL_REVIEW"
+  | "PAYMENT_STUCK"
+
+export type OrderExceptionPayload = {
+  details?: Record<string, unknown>
+  detected_at: string
+  exception_type: OrderExceptionType
+  order_id: string
+  sla_due_at?: string
+}
+
+export type OrderExceptionEventInput = {
+  causation_id?: string
+  correlation_id: string
+  event_id: string
+  event_type: "order.exception"
+  event_version: number
+  occurred_at: string
+  payload: OrderExceptionPayload
+  source: string
+  subject_id: string
+  subject_type: "order"
+  tenant_id: string
+}
+
 export type ApprovalDecisionInput = {
   actor_id: string
   approval_id: string
@@ -351,6 +377,7 @@ export type RequestAgentActionInput = {
   approval_id?: string
   correlation_id: string
   granted_permissions: string[]
+  granted_roles?: string[]
   idempotency_key: string
   incident_id?: string
   input: Record<string, unknown>
@@ -362,6 +389,12 @@ export type RequestAgentActionInput = {
   tool_version: string
 }
 
+export type ExpireAgentApprovalInput = {
+  actor_id: string
+  approval_id: string
+  expired_at: string
+}
+
 export type InventoryRecommendation = {
   action_type: "NO_ACTION" | "INVENTORY_TRANSFER" | "ESCALATE"
   evidence: Record<string, unknown>
@@ -371,4 +404,14 @@ export type InventoryRecommendation = {
   risk_level: RiskLevel
   summary: string
   terminal_status?: "RESOLVED" | "ESCALATED"
+}
+
+export type OrderExceptionRecommendation = {
+  action_type: "CREATE_TASK" | "NO_ACTION"
+  evidence: Record<string, unknown>
+  proposal: Record<string, unknown>
+  rationale: string
+  risk_level: RiskLevel
+  summary: string
+  terminal_status?: "RESOLVED"
 }

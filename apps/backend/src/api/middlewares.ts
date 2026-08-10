@@ -8,7 +8,9 @@ import {
   AdminCreateKnowledgeDocument,
   AdminDecideAgentApproval,
   AdminIngestInventoryLowEvent,
+  AdminIngestOrderExceptionEvent,
   AdminRunAgentEvaluation,
+  AdminRequestAgentAction,
   AdminSendAgentConversationMessage,
   AdminTransitionAgentTask,
 } from "./admin/agent-operations/validators"
@@ -26,6 +28,12 @@ export default defineMiddlewares({
       matcher: "/admin/agent-operations/events",
       method: "POST",
       middlewares: [validateAndTransformBody(AdminIngestInventoryLowEvent)],
+      policies: [{ resource: "agent_event", operation: "create" }],
+    },
+    {
+      matcher: "/admin/agent-operations/order-exceptions",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminIngestOrderExceptionEvent)],
       policies: [{ resource: "agent_event", operation: "create" }],
     },
     {
@@ -53,6 +61,12 @@ export default defineMiddlewares({
       matcher: "/admin/agent-operations/actions",
       method: "GET",
       policies: [{ resource: "agent_action", operation: "read" }],
+    },
+    {
+      matcher: "/admin/agent-operations/actions/requests",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminRequestAgentAction)],
+      policies: [{ resource: "agent_action", operation: "create" }],
     },
     {
       matcher: "/admin/agent-operations/actions/:id",

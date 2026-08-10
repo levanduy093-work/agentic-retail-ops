@@ -11,10 +11,10 @@ import {
   TASK_ESCALATE_TOOL,
   TaskCommandOutput,
 } from "../modules/agent-operations/tools/task-tools"
+import { KNOWLEDGE_PROPOSE_TOOL } from "../modules/agent-operations/tools/platform-command-tools"
 import { AgentTaskStatus } from "../modules/agent-operations/types"
 import { approveKnowledgeDocumentWorkflow } from "../workflows/agent-operations/approve-knowledge-document"
 import { createAgentTaskWorkflow } from "../workflows/agent-operations/create-agent-task"
-import { createKnowledgeDocumentWorkflow } from "../workflows/agent-operations/create-knowledge-document"
 import { executeAgentActionWorkflow } from "../workflows/agent-operations/execute-agent-action"
 import { requestAgentActionWorkflow } from "../workflows/agent-operations/request-agent-action"
 import { runAgentEvaluationWorkflow } from "../workflows/agent-operations/run-agent-evaluation"
@@ -41,7 +41,9 @@ export default async function verifyAgentPlatform({ container }: ExecArgs) {
     input: taskInput,
   })
   assert.equal(taskCreated.duplicate, false)
-  const { result: taskDuplicate } = await createAgentTaskWorkflow(container).run({
+  const { result: taskDuplicate } = await createAgentTaskWorkflow(
+    container
+  ).run({
     input: taskInput,
   })
   assert.equal(taskDuplicate.duplicate, true)
@@ -125,8 +127,8 @@ export default async function verifyAgentPlatform({ container }: ExecArgs) {
       worker_id: "platform-action-worker",
     },
   })
-  const taskCreateOutput =
-    taskCreateExecution.action.result as unknown as TaskCommandOutput
+  const taskCreateOutput = taskCreateExecution.action
+    .result as unknown as TaskCommandOutput
   assert.equal(taskCreateOutput.outcome, "SUCCEEDED")
   const gatewayTaskId = taskCreateOutput.task.task_id
 
@@ -159,8 +161,8 @@ export default async function verifyAgentPlatform({ container }: ExecArgs) {
       worker_id: "platform-action-worker",
     },
   })
-  const taskAssignOutput =
-    taskAssignExecution.action.result as unknown as TaskCommandOutput
+  const taskAssignOutput = taskAssignExecution.action
+    .result as unknown as TaskCommandOutput
   assert.equal(taskAssignOutput.outcome, "SUCCEEDED")
   assert.equal(taskAssignOutput.task.status, "CLAIMED")
 
@@ -195,8 +197,8 @@ export default async function verifyAgentPlatform({ container }: ExecArgs) {
       worker_id: "platform-action-worker",
     },
   })
-  const taskEscalateOutput =
-    taskEscalateExecution.action.result as unknown as TaskCommandOutput
+  const taskEscalateOutput = taskEscalateExecution.action
+    .result as unknown as TaskCommandOutput
   assert.equal(taskEscalateOutput.outcome, "SUCCEEDED")
   assert.equal(taskEscalateOutput.task.priority, "CRITICAL")
   assert.equal(taskEscalateOutput.task.assigned_to_type, "team")
@@ -230,8 +232,8 @@ export default async function verifyAgentPlatform({ container }: ExecArgs) {
       worker_id: "platform-action-worker",
     },
   })
-  const taskConflictOutput =
-    taskConflictExecution.action.result as unknown as TaskCommandOutput
+  const taskConflictOutput = taskConflictExecution.action
+    .result as unknown as TaskCommandOutput
   assert.equal(taskConflictOutput.outcome, "CONFLICT")
   assert.equal(taskConflictExecution.action.status, "CONFLICT")
 
@@ -259,22 +261,48 @@ export default async function verifyAgentPlatform({ container }: ExecArgs) {
     content: "This content is approved only for platform runtime verification.",
     document_key: verificationId,
     effective_at: new Date(Date.now() - 1_000).toISOString(),
-    owner_id: "platform-verifier",
     title: "Platform verification knowledge",
     version: "1.0.0",
   }
-  const { result: knowledgeCreated } =
-    await createKnowledgeDocumentWorkflow(container).run({
+  const { result: knowledgeRequest } = await requestAgentActionWorkflow(
+    container
+  ).run({
+    input: {
+      correlation_id: `${verificationId}:knowledge`,
+      granted_permissions: [KNOWLEDGE_PROPOSE_TOOL.permission],
+      idempotency_key: `${verificationId}:action:knowledge-propose`,
       input: knowledgeInput,
-    })
-  assert.equal(knowledgeCreated.document.status, "DRAFT")
-  const { result: knowledgeApproved } =
-    await approveKnowledgeDocumentWorkflow(container).run({
-      input: {
-        actor_id: "platform-verifier",
-        document_id: knowledgeCreated.document.id,
-      },
-    })
+      requested_by_id: "knowledge-curator-agent",
+      requested_by_type: "agent",
+      tool_name: KNOWLEDGE_PROPOSE_TOOL.name,
+      tool_version: KNOWLEDGE_PROPOSE_TOOL.version,
+    },
+  })
+  const { result: knowledgeExecution } = await executeAgentActionWorkflow(
+    container
+  ).run({
+    input: {
+      action_request_id: knowledgeRequest.action.id,
+      actor_id: "platform-action-worker",
+      actor_type: "worker",
+      worker_id: "platform-action-worker",
+    },
+  })
+  const knowledgeOutput = knowledgeExecution.action.result as unknown as {
+    document_id: string
+    outcome: "SUCCEEDED"
+    status: "DRAFT"
+  }
+  assert.equal(knowledgeOutput.outcome, "SUCCEEDED")
+  assert.equal(knowledgeOutput.status, "DRAFT")
+  const { result: knowledgeApproved } = await approveKnowledgeDocumentWorkflow(
+    container
+  ).run({
+    input: {
+      actor_id: "platform-verifier",
+      document_id: knowledgeOutput.document_id,
+    },
+  })
   assert.equal(knowledgeApproved.document.status, "APPROVED")
   assert.equal(isKnowledgeEligible(knowledgeApproved.document), true)
 
@@ -305,10 +333,10 @@ export default async function verifyAgentPlatform({ container }: ExecArgs) {
   const roles = await rbac.listRbacRoles({ name: "operations_manager" })
   assert.equal(roles.length, 1)
   const rolePolicies = await rbac.listPoliciesForRole(roles[0].id)
-  assert.equal(rolePolicies.length, 20)
+  assert.equal(rolePolicies.length, 21)
   assert.equal(
     (await service.listAgentPolicyDefinitions({ status: "ACTIVE" })).length,
-    4
+    10
   )
   assert.equal(
     (await service.listAgentPromptTemplates({ status: "ACTIVE" })).length,
@@ -325,6 +353,7 @@ export default async function verifyAgentPlatform({ container }: ExecArgs) {
         catalog_agents: AGENT_CATALOG.length,
         evaluation_status: evaluation.run.status,
         knowledge_status: knowledgeApproved.document.status,
+        knowledge_tool_status: knowledgeExecution.action.status,
         operations_manager_policies: rolePolicies.length,
         task_gateway_statuses: [
           taskCreateExecution.action.status,

@@ -29,11 +29,19 @@ import {
   TASK_ESCALATE_TOOL,
   TaskCommandOutput,
 } from "../../modules/agent-operations/tools/task-tools"
+import {
+  APPROVAL_DECIDE_TOOL,
+  APPROVAL_REQUEST_TOOL,
+  INCIDENT_CREATE_TOOL,
+  INCIDENT_UPDATE_TOOL,
+  KNOWLEDGE_PROPOSE_TOOL,
+  MESSAGE_SEND_TOOL,
+  PlatformCommandOutput,
+} from "../../modules/agent-operations/tools/platform-command-tools"
 import { ExecuteAgentActionInput } from "../../modules/agent-operations/types"
 
 const DEFAULT_LEASE_DURATION_MS = INVENTORY_EXECUTE_TRANSFER_TOOL.timeout_ms
-const DEFAULT_MAX_ATTEMPTS =
-  INVENTORY_EXECUTE_TRANSFER_TOOL.retry.max_attempts
+const DEFAULT_MAX_ATTEMPTS = INVENTORY_EXECUTE_TRANSFER_TOOL.retry.max_attempts
 const DEFAULT_MAX_RETRY_DELAY_MS =
   INVENTORY_EXECUTE_TRANSFER_TOOL.retry.max_delay_ms
 const DEFAULT_RETRY_BASE_DELAY_MS =
@@ -61,8 +69,7 @@ const claimAgentActionStep = createStep(
     const result = await service.claimAgentAction({
       action_request_id: input.action_request_id,
       claimed_at: claimedAt,
-      lease_duration_ms:
-        input.lease_duration_ms ?? DEFAULT_LEASE_DURATION_MS,
+      lease_duration_ms: input.lease_duration_ms ?? DEFAULT_LEASE_DURATION_MS,
       worker_id: input.worker_id,
     })
     const definition = AGENT_TOOL_REGISTRY[result.action.tool_name]
@@ -198,9 +205,10 @@ const executeInventoryTransferStep = createStep<
               action_request_id: claim.action.id,
               actor_id: dispatch.actor_id,
               approval_id: approval.id,
-              granted_permissions: [
-                INVENTORY_EXECUTE_TRANSFER_TOOL.permission,
-              ],
+              granted_permissions: [INVENTORY_EXECUTE_TRANSFER_TOOL.permission],
+              granted_roles: Array.isArray(claim.action.authorized_roles.values)
+                ? (claim.action.authorized_roles.values as string[])
+                : [],
               idempotency_key: claim.action.idempotency_key,
               mode: "ACTION_GATEWAY",
             },
@@ -217,9 +225,7 @@ const executeInventoryTransferStep = createStep<
               {
                 authority: {
                   actor_id: dispatch.actor_id,
-                  granted_permissions: [
-                    INVENTORY_GET_POSITION_TOOL.permission,
-                  ],
+                  granted_permissions: [INVENTORY_GET_POSITION_TOOL.permission],
                   mode: "DIRECT",
                 },
                 input: {
@@ -233,10 +239,7 @@ const executeInventoryTransferStep = createStep<
                 tool_version: INVENTORY_GET_POSITION_TOOL.version,
               },
               async (input) => ({
-                positions: await getInventoryPositions(
-                  inventoryService,
-                  input
-                ),
+                positions: await getInventoryPositions(inventoryService, input),
               })
             )
             const positionsBefore = positionsBeforeExecution.output.positions
@@ -274,9 +277,7 @@ const executeInventoryTransferStep = createStep<
               {
                 authority: {
                   actor_id: dispatch.actor_id,
-                  granted_permissions: [
-                    INVENTORY_GET_POSITION_TOOL.permission,
-                  ],
+                  granted_permissions: [INVENTORY_GET_POSITION_TOOL.permission],
                   mode: "DIRECT",
                 },
                 input: {
@@ -290,10 +291,7 @@ const executeInventoryTransferStep = createStep<
                 tool_version: INVENTORY_GET_POSITION_TOOL.version,
               },
               async (input) => ({
-                positions: await getInventoryPositions(
-                  inventoryService,
-                  input
-                ),
+                positions: await getInventoryPositions(inventoryService, input),
               })
             )
 
@@ -357,6 +355,7 @@ const executeInventoryTransferStep = createStep<
 type FinalizeAgentActionStepInput = {
   claim: ClaimResult
   dispatch: ExecuteAgentActionInput
+  platform: PlatformExecutionResult
   task: TaskExecutionResult
   transfer: TransferResult
 }
@@ -369,6 +368,60 @@ type TaskExecutionResult =
       outcome: "FINALIZED"
       result: TaskCommandOutput
     }
+
+type PlatformExecutionResult =
+  | { outcome: "SKIPPED" }
+  | {
+      action: ClaimResult["action"]
+      duplicate: boolean
+      outcome: "FINALIZED"
+      result: PlatformCommandOutput
+    }
+
+const executePlatformCommandStep = createStep(
+  "execute-platform-command",
+  async (
+    input: { claim: ClaimResult; dispatch: ExecuteAgentActionInput },
+    { container }
+  ) => {
+    const platformTools = [
+      APPROVAL_DECIDE_TOOL.name,
+      APPROVAL_REQUEST_TOOL.name,
+      INCIDENT_CREATE_TOOL.name,
+      INCIDENT_UPDATE_TOOL.name,
+      KNOWLEDGE_PROPOSE_TOOL.name,
+      MESSAGE_SEND_TOOL.name,
+    ] as string[]
+    if (
+      !input.claim.claimed ||
+      !platformTools.includes(input.claim.action.tool_name)
+    ) {
+      return new StepResponse<PlatformExecutionResult>({ outcome: "SKIPPED" })
+    }
+
+    const service = container.resolve<AgentOperationsModuleService>(
+      AGENT_OPERATIONS_MODULE
+    )
+    const execution = await service.executeClaimedPlatformAgentAction({
+      action_request_id: input.claim.action.id,
+      actor_id: input.dispatch.actor_id,
+      actor_type: input.dispatch.actor_type,
+      worker_id: input.dispatch.worker_id,
+    })
+    if (!execution.result) {
+      throw new MedusaError(
+        MedusaError.Types.UNEXPECTED_STATE,
+        `Platform action ${input.claim.action.id} returned no result.`
+      )
+    }
+    return new StepResponse<PlatformExecutionResult>({
+      action: execution.action,
+      duplicate: execution.duplicate,
+      outcome: "FINALIZED",
+      result: execution.result,
+    })
+  }
+)
 
 const executeTaskCommandStep = createStep(
   "execute-task-command",
@@ -416,6 +469,15 @@ const executeTaskCommandStep = createStep(
 const finalizeAgentActionStep = createStep(
   "finalize-agent-action",
   async (input: FinalizeAgentActionStepInput, { container }) => {
+    if (input.platform.outcome === "FINALIZED") {
+      return new StepResponse({
+        action: input.platform.action,
+        duplicate: input.platform.duplicate,
+        result: input.platform.result,
+        skipped: false,
+      })
+    }
+
     if (input.task.outcome === "FINALIZED") {
       return new StepResponse({
         action: input.task.action,
@@ -456,9 +518,11 @@ export const executeAgentActionWorkflow = createWorkflow(
     const claim = claimAgentActionStep(input)
     const transfer = executeInventoryTransferStep({ claim, dispatch: input })
     const task = executeTaskCommandStep({ claim, dispatch: input })
+    const platform = executePlatformCommandStep({ claim, dispatch: input })
     const result = finalizeAgentActionStep({
       claim,
       dispatch: input,
+      platform,
       task,
       transfer,
     })

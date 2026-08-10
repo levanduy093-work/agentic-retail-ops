@@ -16,11 +16,11 @@ vẫn là các gate riêng.
 
 | Agent capability | Trạng thái | Phạm vi đã có | Gate còn thiếu |
 | --- | --- | --- | --- |
-| Policy & Approval Agent | `implemented-static` | Policy HIGH cho đề xuất chuyển tồn; approval có expiry, reason, actor; Action Gateway tổng quát fail-closed khi không có policy và revalidate trước khi chạy; RBAC module, 20 policy và role Operations Manager đã bootstrap idempotent | Gán role cho tài khoản thật, kiểm thử allow/deny qua HTTP và thêm policy cho các command domain tiếp theo |
+| Policy & Approval Agent | `implemented-static` | Policy HIGH cho đề xuất chuyển tồn; `approval.request/decide` đã có typed contract, role gate và Action Gateway; approval có expiry, reason, actor; RBAC module, 21 policy và role Operations Manager đã bootstrap idempotent | Gán role cho tài khoản thật và kiểm thử allow/deny qua HTTP |
 | Event Triage Agent | `implemented-static` | Nhận `inventory.low`; validate envelope; unique theo `source + event_id`; tạo một incident cho event; duplicate trả lại record cũ | Subscriber/connector thật, retry/concurrency test, dead-letter và nhiều event type |
 | Inventory Agent | `implemented-static` | Rule deterministic, typed read/command tools, Action Gateway revalidate và safe conflict; Redis locking adapter đã kết nối runtime | Happy path với hai stock location thật và concurrency/reservation test nhiều process |
 | Audit & Compliance Agent | `implemented-static` | Audit/outbox/tool trace, lease, retry/backoff, dead-letter; Redis Event Bus, Workflow Engine và locking đã kết nối runtime | Subscriber idempotency mở rộng, append-only enforcement, trace/replay detail và retention |
-| Order Exception Agent | `contracted` | Có ID/version, mission, trigger, tool và foundation dependency trong registry | Event payload riêng, workflow và scenario theo order thật |
+| Order Exception Agent | `implemented-static` | `order.exception` có schema riêng; `order.read` gọi Medusa order-detail workflow để lấy live payment/fulfillment status; luật deterministic đóng tín hiệu cũ hoặc tạo `task.create` qua Action Gateway; có audit/outbox/idempotency và `ORDER-001` | Chạy HTTP với order thật, nối detector/SLA scheduler và kiểm thử concurrency nhiều worker |
 | Fulfillment Agent | `contracted` | Có trigger fulfillment, read/task tool và foundation dependency | SLA contract, workflow và connector vận chuyển thật |
 | Customer Support Agent | `contracted` | Có knowledge/citation, prompt version, model gateway disabled-by-default và KNOW-001 | Retrieval, order context, model provider và human-review UI riêng |
 | Knowledge Curator Agent | `contracted` | Có knowledge lifecycle, checksum, citation và approval workflow | Gap detector, diff/review UI và nguồn tri thức thật |
@@ -46,12 +46,15 @@ Admin. Provider mobile/push/chat bên ngoài vẫn là adapter chưa triển kha
 - Tool runtime dùng `AgentToolDefinition` chung cho schema input/output,
   permission, risk, approval, timeout, retry, idempotency, error và audit fields.
   Executor kiểm tra registry/version/schema/permission và từ chối command không
-  có Action Gateway authority. Registry chạy thật hiện có 8/24 tool catalog;
-  ngoài inventory và ba read tool platform đã có `task.create`, `task.assign`,
-  `task.escalate`; coverage API công khai đúng 16 tool còn thiếu.
+  có Action Gateway authority và kiểm tra cả permission lẫn required role.
+  Registry chạy thật hiện có 15/24 tool catalog; ngoài inventory, order read, platform read
+  và task đã có `incident.create/update`, `approval.request/decide`,
+  `knowledge.propose`, `message.send`; coverage API công khai đúng 9 tool còn
+  thiếu.
 - Task orchestration có idempotency, assignee, deadline, priority, state machine
   và audit; create/assign/escalate đi qua Action Gateway tổng quát, policy
-  ACTIVE, lease và Medusa workflow. Escalation lưu reason, actor và thời điểm.
+  ACTIVE, lease và Medusa workflow. Supervisor mỗi phút chủ động tạo escalation
+  request cho task quá hạn. Escalation lưu reason, actor và thời điểm.
 - Policy definition có version, hiệu lực và điều kiện deterministic `eq`, `gte`,
   `lte`, `in`; RBAC policy được đăng ký bằng `definePolicies`.
 - Knowledge có lifecycle `DRAFT -> APPROVED -> RETIRED`, checksum, citation,
@@ -60,7 +63,7 @@ Admin. Provider mobile/push/chat bên ngoài vẫn là adapter chưa triển kha
 - Model Gateway có adapter contract, redaction, token budget và structured
   output bắt buộc. Adapter mặc định chủ động từ chối khi chưa cấu hình provider.
 - Evaluation harness lưu scenario/run, expected/forbidden assertions và score.
-  Baseline đã seed `SHIP-001` và `KNOW-001`.
+  Baseline đã seed `SHIP-001`, `KNOW-001` và `ORDER-001`.
 - Channel registry và delivery ledger hỗ trợ `IN_APP`, web push, Telegram, Zalo,
   Slack, Teams; hiện chỉ `IN_APP` active và secret chỉ lưu reference.
 - Medusa Admin có trang `Agent Operations` xem readiness, incident, approval,
@@ -95,6 +98,21 @@ Admin. Provider mobile/push/chat bên ngoài vẫn là adapter chưa triển kha
 - Cả read và command đều chạy qua executor dùng chung; command contract cung
   cấp timeout/retry/idempotency và không thể gọi ở chế độ `DIRECT`.
 - Cấm: coi snapshot trong event là quyền thực thi hoặc bỏ qua revalidation.
+
+### Order Exception Agent
+
+- ID/version: `order-exception-agent@0.1.0`.
+- Trigger: `order.exception@1` với ba loại `PAYMENT_STUCK`,
+  `FULFILLMENT_OVERDUE`, `MANUAL_REVIEW`.
+- `order.read@1.0.0` gọi `getOrderDetailWorkflow` của Medusa và lấy trạng thái
+  order/payment/fulfillment mới nhất trước khi quyết định.
+- Luật deterministic đóng incident `RESOLVED` nếu tín hiệu đã cũ; nếu vẫn còn
+  hiệu lực thì tạo recommendation và request `task.create` qua Action Gateway.
+- Task chỉ yêu cầu người vận hành điều tra; contract cấm tự hủy đơn, capture hay
+  hoàn tiền và cấm thay đổi fulfillment.
+- Event, action và task đều có idempotency; recommendation lưu live order
+  version làm bằng chứng; audit/outbox ghi lại quyết định.
+- `ORDER-001` kiểm tra có live read và task, đồng thời cấm order/refund mutation.
 
 ### Policy & Approval Agent
 
@@ -146,11 +164,13 @@ Admin. Provider mobile/push/chat bên ngoài vẫn là adapter chưa triển kha
 Admin API:
 
 - `POST /admin/agent-operations/events`;
+- `POST /admin/agent-operations/order-exceptions`;
 - `GET /admin/agent-operations/incidents`;
 - `GET /admin/agent-operations/incidents/:id`;
 - `GET /admin/agent-operations/approvals`;
 - `POST /admin/agent-operations/approvals/:id/decision`.
 - `GET /admin/agent-operations/actions`;
+- `POST /admin/agent-operations/actions/requests` tạo command qua Action Gateway;
 - `GET /admin/agent-operations/actions/:id`;
 - `POST /admin/agent-operations/actions/:id/execute`;
 - `GET /admin/agent-operations/tools` trả metadata serializable và coverage
@@ -204,7 +224,9 @@ Ngày kiểm chứng: 2026-08-10.
   công trên PostgreSQL local.
 - Migration `Migration20260810073306` tổng quát hóa action context và bổ sung
   task escalation; migration chạy thành công, có backfill action inventory cũ.
-- 59/59 unit test pass cho analyzer, state machines, validators, tool contract,
+- Migration `Migration20260810132610` lưu snapshot role được ủy quyền trên
+  action request và đã chạy thành công trên PostgreSQL local.
+- 72/72 unit test pass cho analyzer, state machines, validators, tool contract,
   executor, registry coverage, tools, policy,
   knowledge, model boundary, evaluation, action/outbox và communication.
 - ESLint mục tiêu của toàn bộ source agent pass.
@@ -222,9 +244,12 @@ Ngày kiểm chứng: 2026-08-10.
   attempt chuyển `DEAD`.
 - Request không xác thực tới event Admin API trả `401 Unauthorized`.
 - TypeScript, Medusa lint và full workspace build đều pass.
+- Bootstrap PostgreSQL đã seed `ORDER-001`. Runtime verifier đã chạy nhưng local
+  hiện có 0 order nên trả `SKIPPED_NO_ACTIONABLE_ORDER`; chưa coi vertical slice
+  order là `runtime-verified`.
 - Migration `Migration20260809200756` tạo 9 bảng nền mới; migration RBAC chính
   thức của Medusa cũng chạy thành công.
-- Bootstrap chạy lại trả `created: []`; role `operations_manager` có đúng 20
+- Bootstrap có tính idempotent; role `operations_manager` có đúng 21
   policy active do Medusa tự đồng bộ từ `definePolicies`.
 - Runtime platform xác nhận task `TODO -> CLAIMED -> IN_PROGRESS -> COMPLETED`,
   knowledge `DRAFT -> APPROVED`, `SHIP-001` đạt `PASSED` và evaluation trùng bị
@@ -232,6 +257,11 @@ Ngày kiểm chứng: 2026-08-10.
 - Runtime task gateway xác nhận request trùng bị suppress; không có policy thì
   fail-closed và không ghi action; create/assign/escalate đều `SUCCEEDED`; stale
   expected state trả `CONFLICT`; mỗi action có đúng một tool call.
+- Runtime platform xác nhận `knowledge.propose` tạo đúng tài liệu `DRAFT` qua
+  Action Gateway rồi mới được workflow người dùng duyệt thành `APPROVED`.
+- Supervisor định kỳ hết hạn approval quá giờ thành `EXPIRED`, đưa incident đang
+  chờ sang `ESCALATED`, và tạo task escalation qua Action Gateway; từng record
+  lỗi được cô lập để không chặn cả batch.
 - Redis container healthy; Event Bus Redis, Workflow Engine Redis và Locking
   Redis đều kết nối thành công khi bật production switch.
 - Production server trên cổng kiểm thử phục vụ `/app` với HTTP 200; catalog API
@@ -239,10 +269,8 @@ Ngày kiểm chứng: 2026-08-10.
 
 ## Gate tiếp theo
 
-1. Đóng gói 16 tool catalog còn lại bằng `AgentToolDefinition`; ưu tiên
-   `incident.create/update`, `approval.request/decide`, `knowledge.propose` và
-   `message.send` trên Action Gateway vừa tổng quát hóa trước các adapter
-   commerce chưa có nghiệp vụ.
+1. Đóng gói 9 tool nghiệp vụ catalog còn lại theo từng vertical slice; ưu tiên
+   Customer Support Agent, không tạo placeholder chưa có business handler.
 2. Gán role `operations_manager` cho tài khoản Admin thật và kiểm thử allow/deny
    trên từng policy qua HTTP.
 3. Chạy happy path bằng ít nhất hai stock location thật và kiểm thử hai action

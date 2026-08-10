@@ -111,7 +111,9 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     ],
     maximum_risk: "HIGH" as RiskLevel,
     status:
-      id === "workforce-coordinator-agent"
+      ["order-exception-agent", "workforce-coordinator-agent"].includes(
+        id as string
+      )
         ? ("implemented-static" as AgentCatalogStatus)
         : ("contracted" as AgentCatalogStatus),
   })),

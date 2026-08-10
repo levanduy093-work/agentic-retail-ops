@@ -74,13 +74,14 @@ Approved knowledge + citation
 | Event/incident/run | models và `service.ts` | Có dedupe, correlation, state machine |
 | Recommendation/approval | models, approval workflow | Có expiry, reason, actor, duplicate-safe decision |
 | Action Gateway | action request, tool call, worker, `request-agent-action.ts` | Context incident/recommendation/approval tùy chọn; fail-closed nếu thiếu policy ACTIVE; có lease, retry, dead-letter, idempotency và live revalidation |
-| Typed tool runtime | `tool-contract.ts`, `tool-executor.ts`, `tool-registry.ts`, `read-tool-runtime.ts` | 3 platform read tool và 3 task command chạy qua executor; request và execution authority tách riêng; coverage hiện 8/24 |
+| Typed tool runtime | `tool-contract.ts`, `tool-executor.ts`, `tool-registry.ts`, `read-tool-runtime.ts` | 15/24 tool chạy thật, gồm `order.read`; permission và required role đều được kiểm tra; request và execution authority tách riêng |
 | Task orchestration | `agent-task`, task workflows | Có priority, assignee, due date, idempotency và state machine |
+| Supervisor | `supervise-agent-operations.ts`, expiry workflow | Mỗi phút hết hạn approval quá giờ và tạo task escalation qua Action Gateway; lỗi cô lập theo record |
 | Policy engine | policy definition, `policy-engine.ts` | Có version/effectivity và `eq/gte/lte/in`; inventory flow đã sử dụng active policy |
-| RBAC | `src/policies/agent-operations.ts` | Medusa sync 20 policy; bootstrap gắn vào `operations_manager` |
+| RBAC | `src/policies/agent-operations.ts` | Medusa sync 21 policy; bootstrap gắn vào `operations_manager` |
 | Knowledge | knowledge model/workflows/helpers | Draft/approved/retired, checksum, citation, owner, scope, locale, expiry |
 | Model boundary | prompt/model-run models, `model-gateway.ts` | Redaction, token/schema gate; provider mặc định disabled |
-| Evaluation | scenario/run models và workflow | Expected/forbidden assertions; seed SHIP-001, KNOW-001 |
+| Evaluation | scenario/run models và workflow | Expected/forbidden assertions; seed SHIP-001, KNOW-001, ORDER-001 |
 | Audit/outbox | audit/outbox models và dispatcher | Có trace, lease, retry/backoff và dead-letter |
 | Communication | conversation/message/channel/delivery | IN_APP hoạt động; external adapter contract mặc định từ chối |
 | Admin console | `src/admin/routes/agent-operations/page.tsx` | Readiness, incident, approval, task, knowledge, evaluation, catalog |
@@ -173,13 +174,14 @@ pnpm run agent:verify-platform
 
 Baseline đã xác nhận:
 
-- 59/59 unit test pass;
+- 72/72 unit test pass;
 - backend TypeScript và Medusa lint sạch;
 - full workspace build pass;
 - migration PostgreSQL pass;
 - `Migration20260810073306` backfill action inventory cũ, cho phép action
   context tùy chọn và bổ sung task escalation fields;
-- role `operations_manager` có 20 active policy;
+- `Migration20260810132610` lưu snapshot role được ủy quyền trên action request;
+- role `operations_manager` có 21 active policy;
 - task đi hết `TODO -> CLAIMED -> IN_PROGRESS -> COMPLETED`;
 - task Action Gateway fail-closed khi thiếu policy; create/assign/escalate đều
   `SUCCEEDED`; stale expected state trả `CONFLICT`; request trùng bị suppress và
@@ -189,6 +191,12 @@ Baseline đã xác nhận:
 - Redis Event Bus, Workflow Engine và Locking đều kết nối runtime;
 - Admin production shell `/app` trả 200;
 - Admin API không có session trả 401.
+- Order Exception Agent đã có `order.exception` schema, live `order.read` qua
+  Medusa order-detail workflow, deterministic analyzer và `task.create` qua
+  Action Gateway; bootstrap đã seed `ORDER-001`.
+- `agent:verify-order-exception` chạy thành công nhưng PostgreSQL local hiện có
+  0 order, nên kết quả là `SKIPPED_NO_ACTIONABLE_ORDER`; trạng thái đúng vẫn là
+  `implemented-static`, chưa phải `runtime-verified`.
 
 ## 8. Cách xây một agent mới
 
@@ -227,7 +235,7 @@ chung đã được phép coi là production-ready:
   identity mapping hoặc delivery receipt thật;
 - chưa có connector order/fulfillment/payment/return production cho các agent
   tiếp theo;
-- tool registry chạy thật có 8/24 tool catalog; 16 tool còn lại mới là tên hợp
+- tool registry chạy thật có 15/24 tool catalog; 9 tool còn lại mới là tên hợp
   đồng, dù một số workflow/API nền như approval/task/knowledge đã có;
 - chưa có load, recovery, penetration và multi-process contention test đầy đủ;
 - trace/replay detail, append-only enforcement và retention vẫn cần hardening;

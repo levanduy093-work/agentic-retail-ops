@@ -210,6 +210,7 @@ describe("agent tool executor", () => {
           actor_id: "agent_test",
           approval_id: "appr_test",
           granted_permissions: [commandTool.permission],
+          granted_roles: ["operations_manager"],
           idempotency_key: "act_test:test.command:1",
           mode: "ACTION_GATEWAY",
         },
@@ -233,6 +234,7 @@ describe("agent tool executor", () => {
             actor_id: "agent_test",
             approval_id: "appr_test",
             granted_permissions: [commandTool.permission],
+            granted_roles: ["operations_manager"],
             idempotency_key: "",
             mode: "ACTION_GATEWAY",
           },
@@ -245,12 +247,36 @@ describe("agent tool executor", () => {
     ).rejects.toThrow("requires an idempotency key")
   })
 
+  test("rejects command actors without the required role", async () => {
+    await expect(
+      executeAgentTool(
+        registry,
+        {
+          authority: {
+            action_request_id: "act_test",
+            actor_id: "agent_test",
+            approval_id: "appr_test",
+            granted_permissions: [commandTool.permission],
+            granted_roles: [],
+            idempotency_key: "act_test:test.command:role",
+            mode: "ACTION_GATEWAY",
+          },
+          input: { value: 3 },
+          tool_name: commandTool.name,
+          tool_version: commandTool.version,
+        },
+        async () => ({ doubled: 6 })
+      )
+    ).rejects.toThrow("requires role operations_manager")
+  })
+
   test("prepares commands without executing their handler", () => {
     const prepared = prepareAgentCommand<{ value: number }>(registry, {
       authority: {
         actor_id: "agent_test",
         approval_id: "appr_test",
         granted_permissions: [commandTool.permission],
+        granted_roles: ["operations_manager"],
         idempotency_key: "request:test.command:1",
         mode: "ACTION_GATEWAY_REQUEST",
       },
@@ -274,6 +300,7 @@ describe("agent tool executor", () => {
             actor_id: "agent_test",
             approval_id: "appr_test",
             granted_permissions: [commandTool.permission],
+            granted_roles: ["operations_manager"],
             idempotency_key: "request:test.command:1",
             mode: "ACTION_GATEWAY_REQUEST",
           },

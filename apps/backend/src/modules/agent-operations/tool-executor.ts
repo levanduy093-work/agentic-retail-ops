@@ -5,6 +5,7 @@ export type AgentToolExecutionAuthority =
   | {
       actor_id: string
       granted_permissions: readonly string[]
+      granted_roles?: readonly string[]
       mode: "DIRECT"
     }
   | {
@@ -12,6 +13,7 @@ export type AgentToolExecutionAuthority =
       actor_id: string
       approval_id: string | null
       granted_permissions: readonly string[]
+      granted_roles?: readonly string[]
       idempotency_key: string
       mode: "ACTION_GATEWAY"
     }
@@ -19,6 +21,7 @@ export type AgentToolExecutionAuthority =
       actor_id: string
       approval_id: string | null
       granted_permissions: readonly string[]
+      granted_roles?: readonly string[]
       idempotency_key: string
       mode: "ACTION_GATEWAY_REQUEST"
     }
@@ -36,9 +39,7 @@ export type AgentToolExecutionResult<TInput, TOutput> = {
   output: TOutput
 }
 
-export type AgentToolRegistry = Readonly<
-  Record<string, AgentToolDefinition>
->
+export type AgentToolRegistry = Readonly<Record<string, AgentToolDefinition>>
 
 function resolveAgentTool<TInput, TOutput>(
   registry: AgentToolRegistry,
@@ -62,10 +63,7 @@ function resolveAgentTool<TInput, TOutput>(
     )
   }
 
-  if (
-    definition.kind === "COMMAND" &&
-    request.authority.mode === "DIRECT"
-  ) {
+  if (definition.kind === "COMMAND" && request.authority.mode === "DIRECT") {
     throw new MedusaError(
       MedusaError.Types.NOT_ALLOWED,
       `Command tool ${request.tool_name} must execute through the Action Gateway.`
@@ -88,6 +86,16 @@ function resolveAgentTool<TInput, TOutput>(
     throw new MedusaError(
       MedusaError.Types.NOT_ALLOWED,
       `Actor ${request.authority.actor_id} is not allowed to use agent tool ${request.tool_name}.`
+    )
+  }
+
+  if (
+    definition.required_role &&
+    !request.authority.granted_roles?.includes(definition.required_role)
+  ) {
+    throw new MedusaError(
+      MedusaError.Types.NOT_ALLOWED,
+      `Actor ${request.authority.actor_id} requires role ${definition.required_role} to use agent tool ${request.tool_name}.`
     )
   }
 

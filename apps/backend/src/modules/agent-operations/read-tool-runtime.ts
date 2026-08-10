@@ -15,6 +15,7 @@ import {
 export type AgentReadToolAuthority = {
   actor_id: string
   granted_permissions: readonly string[]
+  granted_roles?: readonly string[]
 }
 
 export type AgentReadToolService = {

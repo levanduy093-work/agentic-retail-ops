@@ -44,16 +44,22 @@ vận hành chung để từng năng lực agent có thể:
 - Typed tool registry gồm `inventory.get-position@1.0.0`,
   `inventory.execute-transfer@1.0.0`, `knowledge.search@1.0.0`,
   `audit.search@1.0.0`, `trace.replay@1.0.0`, `task.create@1.0.0`,
-  `task.assign@1.0.0` và `task.escalate@1.0.0`.
+  `task.assign@1.0.0`, `task.escalate@1.0.0`, `incident.create@1.0.0`,
+  `incident.update@1.0.0`, `approval.request@1.0.0`,
+  `approval.decide@1.0.0`, `knowledge.propose@1.0.0` và
+  `message.send@1.0.0`.
 - `AgentToolDefinition` và executor dùng chung đã kiểm tra schema input/output,
   version, permission, risk/approval, timeout/retry/idempotency contract và chặn
   command không đi qua Action Gateway. Ba read tool platform có runtime thật đi
-  qua module service và executor; ba task command đi qua request gateway,
-  policy và worker; coverage hiện là 8/24 tool catalog.
+  qua module service và executor; chín platform/task command đi qua request
+  gateway, policy và worker; coverage hiện là 15/24 tool catalog.
 - Action request/tool-call persistence, Action Gateway workflow và scheduled
   action worker có lease, retry, dead-letter và idempotency. Action envelope hỗ
   trợ context incident/recommendation/approval tùy chọn; không có policy ACTIVE
   phù hợp thì từ chối và không tạo action.
+- Supervisor job chạy mỗi phút: hết hạn approval quá giờ bằng workflow có
+  audit/outbox, đồng thời phát `task.escalate` request idempotent cho task quá
+  deadline; supervisor không tự ghi nghiệp vụ commerce.
 - Inventory Action Gateway đọc `available_quantity` live từ Medusa dưới khóa,
   kiểm tra lại approval/state/tool contract rồi mới điều chỉnh hai stock level.
 - Safe conflict đưa incident từ `EXECUTING` về `OPTIONS_READY`; mutation thành
@@ -600,8 +606,9 @@ vertical slice của từng agent, không tiếp tục dựng infrastructure chu
    Admin API.
 2. Chạy happy path chuyển tồn với hai stock location thật và kiểm thử hai action
    cạnh tranh trên cùng inventory item bằng Redis locking.
-3. Xây Order Exception Agent bằng event, task, policy và evaluation primitive đã
-   có; không ghi thẳng bảng order.
+3. Nối detector/SLA scheduler thật vào Order Exception Agent và chạy HTTP với
+   order thật; vertical slice đã có live read, deterministic rule,
+   `task.create`, audit/outbox và `ORDER-001`, không ghi thẳng bảng order.
 4. Xây Customer Support Agent bằng approved knowledge, citation và KNOW-001;
    đầu ra chỉ là draft chờ người duyệt.
 5. Chọn secret manager/model provider và adapter mobile/chat sau khi có benchmark
@@ -610,18 +617,22 @@ vertical slice của từng agent, không tiếp tục dựng infrastructure chu
 ## 13. Baseline nền tảng đã code ngày 2026-08-10
 
 - 17 agent được đăng ký trong catalog TypeScript đọc được bằng máy.
-- 20 RBAC policy được Medusa đồng bộ từ `definePolicies` và gắn vào role
+- 21 RBAC policy được Medusa đồng bộ từ `definePolicies` và gắn vào role
   `operations_manager` bằng bootstrap idempotent.
 - Có persistence và workflow cho task, policy definition, knowledge, prompt,
   model run, evaluation, channel connection và delivery.
 - Có deterministic policy engine, task state machine, knowledge eligibility,
   citation checksum, model redaction/budget/schema gate và assertion evaluator.
-- Typed registry có 8/24 tool; `task.create`, `task.assign`, `task.escalate`
-  đã chạy qua Action Gateway tổng quát với policy fail-closed, lease,
-  idempotency, tool-call, audit và outbox.
-- Migration `Migration20260810073306` đã chạy trên PostgreSQL local; runtime
-  xác nhận ba task command `SUCCEEDED`, stale state trả `CONFLICT`, request
-  thiếu policy không tạo action. Unit test hiện đạt 59/59.
+- Typed registry có 15/24 tool. Sáu platform command
+  `incident.create/update`, `approval.request/decide`, `knowledge.propose` và
+  `message.send` đã được nối vào Action Gateway cùng ba task command.
+- Action request lưu snapshot `authorized_roles`; executor kiểm tra permission
+  và required role tại cả lúc yêu cầu lẫn lúc thực thi.
+- Migration `Migration20260810132610` đã chạy trên PostgreSQL local; runtime
+  xác nhận `knowledge.propose` qua gateway là `SUCCEEDED`, ba task command vẫn
+  chạy đúng, stale state trả `CONFLICT`, request thiếu policy không tạo action.
+  Unit test hiện đạt 72/72. Order Exception runtime verifier đã chạy nhưng local
+  chưa có order nên dừng an toàn ở `SKIPPED_NO_ACTIONABLE_ORDER`.
 - Có Admin Operations Console và readiness API phân biệt `code_ready` với
   `deployment_ready`.
 - Redis Event Bus, Workflow Engine và distributed locking đã kết nối runtime khi

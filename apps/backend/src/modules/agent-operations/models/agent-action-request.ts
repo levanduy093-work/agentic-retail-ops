@@ -13,6 +13,7 @@ const AgentActionRequest = model
     tool_name: model.text(),
     tool_version: model.text(),
     permission: model.text(),
+    authorized_roles: model.json().default({ values: [] }),
     policy_key: model.text(),
     policy_version: model.text(),
     risk_level: model.enum([...RISK_LEVELS]),

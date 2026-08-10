@@ -1,7 +1,5 @@
 {
-  "namespaces": [
-    "public"
-  ],
+  "namespaces": ["public"],
   "name": "public",
   "tables": [
     {
@@ -166,6 +164,22 @@
           "enumItems": [],
           "mappedType": "text"
         },
+        "authorized_roles": {
+          "name": "authorized_roles",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'{\"values\":[]}'",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "json"
+        },
         "policy_key": {
           "name": "policy_key",
           "type": "text",
@@ -211,13 +225,7 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": [
-            "READ_ONLY",
-            "LOW",
-            "MEDIUM",
-            "HIGH",
-            "PROHIBITED"
-          ],
+          "enumItems": ["READ_ONLY", "LOW", "MEDIUM", "HIGH", "PROHIBITED"],
           "mappedType": "enum"
         },
         "status": {
@@ -560,9 +568,7 @@
         },
         {
           "keyName": "agent_action_request_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -911,9 +917,7 @@
         },
         {
           "keyName": "agent_approval_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -1199,9 +1203,7 @@
         },
         {
           "keyName": "agent_audit_event_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -1266,11 +1268,7 @@
           "scale": null,
           "default": "'DISABLED'",
           "comment": null,
-          "enumItems": [
-            "ACTIVE",
-            "PAUSED",
-            "DISABLED"
-          ],
+          "enumItems": ["ACTIVE", "PAUSED", "DISABLED"],
           "mappedType": "enum"
         },
         "tenant_id": {
@@ -1418,9 +1416,7 @@
         },
         {
           "keyName": "agent_channel_connection_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -1581,10 +1577,7 @@
           "scale": null,
           "default": "'OPEN'",
           "comment": null,
-          "enumItems": [
-            "OPEN",
-            "CLOSED"
-          ],
+          "enumItems": ["OPEN", "CLOSED"],
           "mappedType": "enum"
         },
         "opened_at": {
@@ -1741,9 +1734,7 @@
         },
         {
           "keyName": "agent_conversation_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -1840,13 +1831,7 @@
           "scale": null,
           "default": "'PENDING'",
           "comment": null,
-          "enumItems": [
-            "PENDING",
-            "PROCESSING",
-            "DELIVERED",
-            "FAILED",
-            "DEAD"
-          ],
+          "enumItems": ["PENDING", "PROCESSING", "DELIVERED", "FAILED", "DEAD"],
           "mappedType": "enum"
         },
         "idempotency_key": {
@@ -2074,9 +2059,7 @@
         },
         {
           "keyName": "agent_delivery_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -2150,12 +2133,7 @@
           "scale": null,
           "default": "'RUNNING'",
           "comment": null,
-          "enumItems": [
-            "RUNNING",
-            "PASSED",
-            "FAILED",
-            "ERROR"
-          ],
+          "enumItems": ["RUNNING", "PASSED", "FAILED", "ERROR"],
           "mappedType": "enum"
         },
         "idempotency_key": {
@@ -2351,9 +2329,7 @@
         },
         {
           "keyName": "agent_evaluation_run_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -2475,11 +2451,7 @@
           "scale": null,
           "default": "'DRAFT'",
           "comment": null,
-          "enumItems": [
-            "DRAFT",
-            "ACTIVE",
-            "RETIRED"
-          ],
+          "enumItems": ["DRAFT", "ACTIVE", "RETIRED"],
           "mappedType": "enum"
         },
         "initial_state": {
@@ -2643,9 +2615,7 @@
         },
         {
           "keyName": "agent_evaluation_scenario_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -2879,11 +2849,7 @@
           "scale": null,
           "default": "'RECEIVED'",
           "comment": null,
-          "enumItems": [
-            "RECEIVED",
-            "PROCESSED",
-            "FAILED"
-          ],
+          "enumItems": ["RECEIVED", "PROCESSED", "FAILED"],
           "mappedType": "enum"
         },
         "processed_at": {
@@ -3008,9 +2974,7 @@
         },
         {
           "keyName": "agent_event_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -3116,12 +3080,7 @@
           "scale": null,
           "default": "'MEDIUM'",
           "comment": null,
-          "enumItems": [
-            "LOW",
-            "MEDIUM",
-            "HIGH",
-            "CRITICAL"
-          ],
+          "enumItems": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
           "mappedType": "enum"
         },
         "status": {
@@ -3370,9 +3329,7 @@
         },
         {
           "keyName": "agent_incident_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -3494,11 +3451,7 @@
           "scale": null,
           "default": "'DRAFT'",
           "comment": null,
-          "enumItems": [
-            "DRAFT",
-            "APPROVED",
-            "RETIRED"
-          ],
+          "enumItems": ["DRAFT", "APPROVED", "RETIRED"],
           "mappedType": "enum"
         },
         "owner_id": {
@@ -3726,9 +3679,7 @@
         },
         {
           "keyName": "agent_knowledge_document_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -3809,10 +3760,7 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": [
-            "INBOUND",
-            "OUTBOUND"
-          ],
+          "enumItems": ["INBOUND", "OUTBOUND"],
           "mappedType": "enum"
         },
         "message_type": {
@@ -3828,12 +3776,7 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": [
-            "NOTIFICATION",
-            "COMMAND",
-            "COMMAND_RESULT",
-            "TEXT"
-          ],
+          "enumItems": ["NOTIFICATION", "COMMAND", "COMMAND_RESULT", "TEXT"],
           "mappedType": "enum"
         },
         "status": {
@@ -3849,12 +3792,7 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": [
-            "RECEIVED",
-            "AVAILABLE",
-            "PROCESSED",
-            "REJECTED"
-          ],
+          "enumItems": ["RECEIVED", "AVAILABLE", "PROCESSED", "REJECTED"],
           "mappedType": "enum"
         },
         "sender_type": {
@@ -4107,9 +4045,7 @@
         },
         {
           "keyName": "agent_message_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -4545,9 +4481,7 @@
         },
         {
           "keyName": "agent_model_run_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -4669,13 +4603,7 @@
           "scale": null,
           "default": "'PENDING'",
           "comment": null,
-          "enumItems": [
-            "PENDING",
-            "PROCESSING",
-            "DELIVERED",
-            "FAILED",
-            "DEAD"
-          ],
+          "enumItems": ["PENDING", "PROCESSING", "DELIVERED", "FAILED", "DEAD"],
           "mappedType": "enum"
         },
         "idempotency_key": {
@@ -4887,9 +4815,7 @@
         },
         {
           "keyName": "agent_outbox_event_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -4995,11 +4921,7 @@
           "scale": null,
           "default": "'DRAFT'",
           "comment": null,
-          "enumItems": [
-            "DRAFT",
-            "ACTIVE",
-            "RETIRED"
-          ],
+          "enumItems": ["DRAFT", "ACTIVE", "RETIRED"],
           "mappedType": "enum"
         },
         "action_type": {
@@ -5031,13 +4953,7 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": [
-            "READ_ONLY",
-            "LOW",
-            "MEDIUM",
-            "HIGH",
-            "PROHIBITED"
-          ],
+          "enumItems": ["READ_ONLY", "LOW", "MEDIUM", "HIGH", "PROHIBITED"],
           "mappedType": "enum"
         },
         "requires_approval": {
@@ -5217,9 +5133,7 @@
         },
         {
           "keyName": "agent_policy_definition_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -5309,11 +5223,7 @@
           "scale": null,
           "default": "'DRAFT'",
           "comment": null,
-          "enumItems": [
-            "DRAFT",
-            "ACTIVE",
-            "RETIRED"
-          ],
+          "enumItems": ["DRAFT", "ACTIVE", "RETIRED"],
           "mappedType": "enum"
         },
         "system_prompt": {
@@ -5493,9 +5403,7 @@
         },
         {
           "keyName": "agent_prompt_template_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -5585,13 +5493,7 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": [
-            "READ_ONLY",
-            "LOW",
-            "MEDIUM",
-            "HIGH",
-            "PROHIBITED"
-          ],
+          "enumItems": ["READ_ONLY", "LOW", "MEDIUM", "HIGH", "PROHIBITED"],
           "mappedType": "enum"
         },
         "status": {
@@ -5779,9 +5681,7 @@
         },
         {
           "keyName": "agent_recommendation_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -6063,9 +5963,7 @@
         },
         {
           "keyName": "agent_run_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -6171,12 +6069,7 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": [
-            "LOW",
-            "MEDIUM",
-            "HIGH",
-            "CRITICAL"
-          ],
+          "enumItems": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
           "mappedType": "enum"
         },
         "status": {
@@ -6550,9 +6443,7 @@
         },
         {
           "keyName": "agent_task_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -6658,10 +6549,7 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": [
-            "READ",
-            "COMMAND"
-          ],
+          "enumItems": ["READ", "COMMAND"],
           "mappedType": "enum"
         },
         "status": {
@@ -6677,12 +6565,7 @@
           "scale": null,
           "default": "'RUNNING'",
           "comment": null,
-          "enumItems": [
-            "RUNNING",
-            "SUCCEEDED",
-            "CONFLICT",
-            "FAILED"
-          ],
+          "enumItems": ["RUNNING", "SUCCEEDED", "CONFLICT", "FAILED"],
           "mappedType": "enum"
         },
         "idempotency_key": {
@@ -6871,9 +6754,7 @@
         },
         {
           "keyName": "agent_tool_call_pkey",
-          "columnNames": [
-            "id"
-          ],
+          "columnNames": ["id"],
           "composite": false,
           "constraint": true,
           "primary": true,
