@@ -1,0 +1,6 @@
+question,answer,product,locale,scope,citation_locator
+"NovaSound Mini được bảo hành bao lâu?","NovaSound Mini có bảo hành giới hạn 12 tháng kể từ ngày giao hàng.","NovaSound Mini",en,customer_support,"fixture://rag/catalog-warranty-faq-csv#row-2"
+"What does the warranty cover?","The warranty covers manufacturing defects in the speaker, charging port, and battery under normal consumer use.","NovaSound Mini",en,customer_support,"fixture://rag/catalog-warranty-faq-csv#row-3"
+"Does warranty cover water damage?","No. Liquid damage is excluded from the limited warranty.","NovaSound Mini",en,customer_support,"fixture://rag/catalog-warranty-faq-csv#row-4"
+"Can support promise a replacement?","No. Support must wait for a completed diagnostic assessment before promising replacement.","NovaSound Mini",en,customer_support,"fixture://rag/catalog-warranty-faq-csv#row-5"
+"What is needed to start assessment?","The customer needs an order number or another proof of purchase.","NovaSound Mini",en,customer_support,"fixture://rag/catalog-warranty-faq-csv#row-6"

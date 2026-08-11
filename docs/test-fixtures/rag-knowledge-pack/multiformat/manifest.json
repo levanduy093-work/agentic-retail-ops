@@ -1,0 +1,50 @@
+[
+  {
+    "file": "customer-support-escalation-playbook.docx",
+    "document_key": "CS-ESCALATE-008",
+    "version": "1.0.0",
+    "title": "Sổ tay xử lý escalation hỗ trợ khách hàng",
+    "tenant_id": "default",
+    "scope": "customer_support",
+    "locale": "vi",
+    "citation_locator": "fixture://rag/customer-support-escalation-playbook",
+    "effective_at": "2026-08-01T00:00:00.000Z",
+    "expected_status": "APPROVED_FOR_TEST"
+  },
+  {
+    "file": "warehouse-transfer-approval-policy.pdf",
+    "document_key": "OPS-TRANSFER-009",
+    "version": "1.0.0",
+    "title": "Chính sách phê duyệt điều chuyển tồn kho",
+    "tenant_id": "default",
+    "scope": "operations",
+    "locale": "vi",
+    "citation_locator": "fixture://rag/warehouse-transfer-approval-policy",
+    "effective_at": "2026-08-01T00:00:00.000Z",
+    "expected_status": "APPROVED_FOR_TEST"
+  },
+  {
+    "file": "shipping-sla-matrix.xlsx",
+    "document_key": "CS-SLA-MATRIX-007",
+    "version": "1.0.0",
+    "title": "Ma trận SLA giao hàng",
+    "tenant_id": "default",
+    "scope": "customer_support",
+    "locale": "vi",
+    "citation_locator": "fixture://rag/shipping-sla-matrix-xlsx",
+    "effective_at": "2026-08-01T00:00:00.000Z",
+    "expected_status": "APPROVED_FOR_TEST"
+  },
+  {
+    "file": "catalog-warranty-faq.csv",
+    "document_key": "CAT-WARRANTY-010",
+    "version": "1.0.0",
+    "title": "NovaSound Mini warranty FAQ export",
+    "tenant_id": "default",
+    "scope": "customer_support",
+    "locale": "en",
+    "citation_locator": "fixture://rag/catalog-warranty-faq-csv",
+    "effective_at": "2026-08-01T00:00:00.000Z",
+    "expected_status": "APPROVED_FOR_TEST"
+  }
+]

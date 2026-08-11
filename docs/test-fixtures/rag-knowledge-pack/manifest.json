@@ -1,0 +1,75 @@
+[
+  {
+    "file": "cs-return-policy-v1.md",
+    "document_key": "CS-RETURN-001",
+    "version": "1.0.0",
+    "title": "Chính sách đổi trả tiêu chuẩn",
+    "tenant_id": "default",
+    "scope": "customer_support",
+    "locale": "vi",
+    "citation_locator": "fixture://rag/cs-return-policy-v1",
+    "effective_at": "2026-08-01T00:00:00.000Z",
+    "expected_status": "APPROVED_FOR_TEST"
+  },
+  {
+    "file": "cs-shipping-sla.md",
+    "document_key": "CS-SHIP-002",
+    "version": "1.0.0",
+    "title": "Cam kết giao hàng và xử lý chậm trễ",
+    "tenant_id": "default",
+    "scope": "customer_support",
+    "locale": "vi",
+    "citation_locator": "fixture://rag/cs-shipping-sla",
+    "effective_at": "2026-08-01T00:00:00.000Z",
+    "expected_status": "APPROVED_FOR_TEST"
+  },
+  {
+    "file": "ops-stock-transfer.md",
+    "document_key": "OPS-STOCK-003",
+    "version": "1.0.0",
+    "title": "Điều chuyển tồn kho giữa kho HN và HCM",
+    "tenant_id": "default",
+    "scope": "operations",
+    "locale": "vi",
+    "citation_locator": "fixture://rag/ops-stock-transfer",
+    "effective_at": "2026-08-01T00:00:00.000Z",
+    "expected_status": "APPROVED_FOR_TEST"
+  },
+  {
+    "file": "catalog-warranty-en.md",
+    "document_key": "CAT-WARRANTY-004",
+    "version": "1.0.0",
+    "title": "Warranty coverage for NovaSound Mini",
+    "tenant_id": "default",
+    "scope": "customer_support",
+    "locale": "en",
+    "citation_locator": "fixture://rag/catalog-warranty-en",
+    "effective_at": "2026-08-01T00:00:00.000Z",
+    "expected_status": "APPROVED_FOR_TEST"
+  },
+  {
+    "file": "draft-vip-refund.md",
+    "document_key": "CS-VIP-DRAFT-005",
+    "version": "0.1.0",
+    "title": "Dự thảo hoàn tiền khách VIP",
+    "tenant_id": "default",
+    "scope": "customer_support",
+    "locale": "vi",
+    "citation_locator": "fixture://rag/draft-vip-refund",
+    "effective_at": "2026-08-01T00:00:00.000Z",
+    "expected_status": "DRAFT_ONLY"
+  },
+  {
+    "file": "expired-promotion.md",
+    "document_key": "MKT-PROMO-006",
+    "version": "1.0.0",
+    "title": "Khuyến mãi tháng 7 đã hết hạn",
+    "tenant_id": "default",
+    "scope": "customer_support",
+    "locale": "vi",
+    "citation_locator": "fixture://rag/expired-promotion",
+    "effective_at": "2026-07-01T00:00:00.000Z",
+    "expires_at": "2026-07-31T23:59:59.000Z",
+    "expected_status": "EXPIRED_ONLY"
+  }
+]
