@@ -312,11 +312,11 @@
     },
     "sources": {
       "title": "Nguồn hướng dẫn đã kết nối",
-      "subtitle": "Lấy hướng dẫn của cửa hàng từ tài liệu Markdown hoặc văn bản được kiểm soát.",
+      "subtitle": "Kết nối tài liệu để hệ thống tạo hướng dẫn có nguồn và chờ quản lý duyệt.",
       "simpleSubtitle": "Khi bạn kiểm tra cập nhật, nội dung thay đổi sẽ thành bản nháp để quản lý xem và duyệt.",
       "connectAction": "Kết nối tài liệu",
       "loading": "Đang tải các nguồn đã kết nối...",
-      "empty": "Chưa kết nối nguồn nào. Hãy kết nối một tài liệu HTTPS để hệ thống tạo bản nháp từ nội dung đó.",
+      "empty": "Chưa có tài liệu nào. Hãy chọn một tài liệu để hệ thống chuẩn bị bản nháp đầu tiên.",
       "connectionErrorHint": "Không thể đọc tài liệu. Hãy kiểm tra địa chỉ, tên miền được cho phép và định dạng văn bản hoặc Markdown.",
       "googleReadyTitle": "Kết nối Google đã sẵn sàng",
       "googleShareHint": "Chia sẻ tài liệu cho {{email}} với quyền Người xem, sau đó dán liên kết vào ô phía trên.",
@@ -345,7 +345,16 @@
       "syncAction": "Kiểm tra cập nhật",
       "saveAction": "Lưu kết nối",
       "createTitle": "Kết nối nguồn hướng dẫn",
-      "createHint": "Nguồn phải trả về văn bản thuần hoặc Markdown. Đồng bộ chỉ tạo bản nháp, không tự đưa hướng dẫn vào sử dụng.",
+      "createHint": "Bạn chỉ cần chọn tài liệu. Hệ thống tự lấy tên, nhận biết loại tệp và chỉ tạo bản nháp để quản lý duyệt.",
+      "automatic": {
+        "supportedTitle": "Các loại tài liệu được hỗ trợ",
+        "supportedHint": "Nếu bạn chọn loại khác, hệ thống sẽ nhận biết và báo rõ trước khi lưu.",
+        "selectedTitle": "Tài liệu đã chọn",
+        "noSelection": "Chưa chọn tài liệu nào. Tên và loại tài liệu sẽ được điền tự động.",
+        "changeFileAction": "Chọn tài liệu khác",
+        "unsupportedTitle": "Tài liệu này chưa được hỗ trợ",
+        "unsupportedHint": "{{name}} không phải Google Docs, Google Sheets, TXT, Markdown hoặc CSV. Hãy chọn tài liệu khác."
+      },
       "safetyTitle": "Vẫn bắt buộc quản lý duyệt",
       "safetyHint": "Hệ thống kiểm tra nguồn và chỉ tạo bản nháp mới khi nội dung thay đổi. Quản lý có quyền phải đọc và duyệt thì agent mới được sử dụng.",
       "fields": {

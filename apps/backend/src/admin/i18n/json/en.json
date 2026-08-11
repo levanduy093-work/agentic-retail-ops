@@ -67,11 +67,11 @@
     },
     "sources": {
       "title": "Connected knowledge sources",
-      "subtitle": "Bring approved store guidance in from controlled Markdown or text documents.",
+      "subtitle": "Connect documents so the system can prepare sourced guidance for manager approval.",
       "simpleSubtitle": "When you check for updates, changed content becomes a draft for a manager to review.",
       "connectAction": "Connect a document",
       "loading": "Loading connected sources...",
-      "empty": "No source is connected yet. Connect a controlled HTTPS document to create drafts from it.",
+      "empty": "No document is connected yet. Choose one to prepare the first draft.",
       "connectionErrorHint": "The document could not be read. Check its address, approved host, and text or Markdown format.",
       "googleReadyTitle": "Google connection is ready",
       "googleShareHint": "Share this document with {{email}} as a Viewer, then paste its link above.",
@@ -100,7 +100,16 @@
       "syncAction": "Check for updates",
       "saveAction": "Save connection",
       "createTitle": "Connect a knowledge source",
-      "createHint": "The source must return plain text or Markdown. Synchronizing creates a draft; it never publishes guidance automatically.",
+      "createHint": "Just choose a document. The system fills its name, detects its type, and creates only a draft for manager approval.",
+      "automatic": {
+        "supportedTitle": "Supported document types",
+        "supportedHint": "If you choose another type, the system identifies it and explains the problem before saving.",
+        "selectedTitle": "Selected document",
+        "noSelection": "No document selected. Its name and type will be filled automatically.",
+        "changeFileAction": "Choose another document",
+        "unsupportedTitle": "This document type is not supported",
+        "unsupportedHint": "{{name}} is not a Google Doc, Google Sheet, TXT, Markdown, or CSV file. Choose another document."
+      },
       "safetyTitle": "Approval remains required",
       "safetyHint": "The system checks the source and creates a new draft only when its content changes. An authorized manager must review and approve that draft before agents can use it.",
       "fields": {

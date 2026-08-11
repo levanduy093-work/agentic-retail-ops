@@ -1,5 +1,11 @@
 import {
+  MedusaRequest,
+  MedusaResponse,
+  validateAndTransformQuery,
+} from "@medusajs/framework/http"
+import {
   AdminDecideAgentApproval,
+  AdminGoogleKnowledgeOAuthCallback,
   AdminIngestInventoryLowEvent,
   AdminIngestOrderExceptionEvent,
   AdminIngestSupportRequest,
@@ -8,6 +14,38 @@ import {
 } from "../../../api/admin/agent-operations/validators"
 
 describe("agent operations API validators", () => {
+  test("accepts Google-owned OAuth callback query fields", async () => {
+    const request = {
+      query: {
+        authuser: "0",
+        code: "authorization-code",
+        iss: "https://accounts.google.com",
+        prompt: "consent",
+        scope: "openid email https://www.googleapis.com/auth/drive.file",
+        state: "signed-state",
+      },
+    } as unknown as MedusaRequest
+
+    await new Promise<void>((resolve, reject) => {
+      validateAndTransformQuery(AdminGoogleKnowledgeOAuthCallback, {})(
+        request,
+        {} as MedusaResponse,
+        (error?: unknown) => {
+          if (error) {
+            reject(error)
+            return
+          }
+          resolve()
+        }
+      )
+    })
+
+    expect(request.validatedQuery).toEqual({
+      code: "authorization-code",
+      state: "signed-state",
+    })
+  })
+
   test("accepts a complete inventory.low event", () => {
     const result = AdminIngestInventoryLowEvent.safeParse({
       correlation_id: "correlation-1",

@@ -88,4 +88,25 @@ describe("Google knowledge OAuth", () => {
       }).platform_ready
     ).toBe(false)
   })
+
+  it("reuses the existing sign-in OAuth client when dedicated values are empty", () => {
+    const sharedClientEnvironment = {
+      ...environment,
+      GOOGLE_CLIENT_ID: "shared-client.apps.googleusercontent.com",
+      GOOGLE_CLIENT_SECRET: "shared-client-secret",
+      GOOGLE_KNOWLEDGE_OAUTH_CLIENT_ID: "",
+      GOOGLE_KNOWLEDGE_OAUTH_CLIENT_SECRET: "",
+    }
+
+    expect(
+      getGoogleKnowledgeOAuthPlatformStatus(sharedClientEnvironment).platform_ready
+    ).toBe(true)
+    expect(
+      createGoogleKnowledgeAuthorization(
+        { actor_id: "user_1" },
+        sharedClientEnvironment,
+        1_000
+      ).authorization_url
+    ).toContain("shared-client.apps.googleusercontent.com")
+  })
 })

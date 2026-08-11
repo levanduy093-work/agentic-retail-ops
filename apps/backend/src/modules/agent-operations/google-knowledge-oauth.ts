@@ -29,9 +29,13 @@ function oauthConfiguration(environment: NodeJS.ProcessEnv) {
     api_key: environment.GOOGLE_KNOWLEDGE_PICKER_API_KEY?.trim() ?? "",
     app_id: environment.GOOGLE_KNOWLEDGE_CLOUD_PROJECT_NUMBER?.trim() ?? "",
     client_id:
-      environment.GOOGLE_KNOWLEDGE_OAUTH_CLIENT_ID?.trim() ?? "",
+      environment.GOOGLE_KNOWLEDGE_OAUTH_CLIENT_ID?.trim() ||
+      environment.GOOGLE_CLIENT_ID?.trim() ||
+      "",
     client_secret:
-      environment.GOOGLE_KNOWLEDGE_OAUTH_CLIENT_SECRET?.trim() ?? "",
+      environment.GOOGLE_KNOWLEDGE_OAUTH_CLIENT_SECRET?.trim() ||
+      environment.GOOGLE_CLIENT_SECRET?.trim() ||
+      "",
     redirect_uri:
       environment.GOOGLE_KNOWLEDGE_OAUTH_REDIRECT_URI?.trim() ?? "",
   }

@@ -233,11 +233,16 @@ export const AdminCreateKnowledgeSource = z.strictObject({
   tenant_id: z.string().trim().min(1).default("default"),
 })
 
-export const AdminGoogleKnowledgeOAuthCallback = z.looseObject({
-  code: z.string().trim().min(1).optional(),
-  error: z.string().trim().min(1).max(200).optional(),
-  state: z.string().trim().min(1).max(4_000).optional(),
-})
+// Medusa makes top-level ZodObject query schemas strict before parsing. Google
+// may append provider-owned callback fields such as iss, scope, authuser and
+// prompt, so wrap the object in a transform and retain only fields we consume.
+export const AdminGoogleKnowledgeOAuthCallback = z
+  .object({
+    code: z.string().trim().min(1).optional(),
+    error: z.string().trim().min(1).max(200).optional(),
+    state: z.string().trim().min(1).max(4_000).optional(),
+  })
+  .transform((callback) => callback)
 
 export const AdminRunAgentEvaluation = z.strictObject({
   idempotency_key: z.string().trim().min(1).max(200),

@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next"
 import { sdk } from "../../lib/sdk"
 import {
   GooglePickerCredential,
+  type GooglePickerSelection,
   openGoogleKnowledgePicker,
 } from "./google-picker"
 
@@ -138,6 +139,9 @@ const KnowledgeHubPage = () => {
   const [searchLocale, setSearchLocale] = useState("vi")
   const [searchScope, setSearchScope] = useState("customer_support")
   const [pickerLoading, setPickerLoading] = useState(false)
+  const [unsupportedGoogleFile, setUnsupportedGoogleFile] = useState<
+    Extract<GooglePickerSelection, { supported: false }> | undefined
+  >()
   const [form, setForm] = useState({
     citation_locator: "policy://customer-support/",
     content: "",
@@ -152,7 +156,7 @@ const KnowledgeHubPage = () => {
     locale: "vi",
     name: "",
     scope: "customer_support",
-    source_type: "GOOGLE_DOC" as KnowledgeSource["source_type"],
+    source_type: "GOOGLE_DRIVE" as KnowledgeSource["source_type"],
     source_url: "",
   })
 
@@ -322,9 +326,10 @@ const KnowledgeHubPage = () => {
         locale: "vi",
         name: "",
         scope: "customer_support",
-        source_type: "GOOGLE_DOC",
+        source_type: "GOOGLE_DRIVE",
         source_url: "",
       })
+      setUnsupportedGoogleFile(undefined)
       await refreshSources()
       toast.success(t("knowledgeHub.sources.messages.connected"))
     },
@@ -393,13 +398,32 @@ const KnowledgeHubPage = () => {
 
   const chooseGoogleDocument = async () => {
     setPickerLoading(true)
+    let shouldReopenSourceDrawer = false
     try {
       const credential = await sdk.client.fetch<GooglePickerCredential>(
         "/admin/agent-operations/knowledge/sources/google-oauth/picker-token",
         { method: "POST" }
       )
+
+      // Google Picker renders its own top-level modal. Fully close the Radix
+      // Drawer first so its focus and pointer lock cannot block Picker's iframe.
+      shouldReopenSourceDrawer = true
+      setSourceOpen(false)
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 220))
+
       const selection = await openGoogleKnowledgePicker(credential)
       if (!selection) return
+      if (!selection.supported) {
+        setUnsupportedGoogleFile(selection)
+        setSourceForm((current) => ({
+          ...current,
+          name: "",
+          source_type: "GOOGLE_DRIVE",
+          source_url: "",
+        }))
+        return
+      }
+      setUnsupportedGoogleFile(undefined)
       setSourceForm((current) => ({
         ...current,
         name: selection.name,
@@ -409,6 +433,7 @@ const KnowledgeHubPage = () => {
     } catch {
       toast.error(t("knowledgeHub.sources.oauth.pickerError"))
     } finally {
+      if (shouldReopenSourceDrawer) setSourceOpen(true)
       setPickerLoading(false)
     }
   }
@@ -420,6 +445,18 @@ const KnowledgeHubPage = () => {
   const submitSource = (event: FormEvent) => {
     event.preventDefault()
     createSource.mutate()
+  }
+
+  const openSourceConnection = () => {
+    setUnsupportedGoogleFile(undefined)
+    setSourceForm({
+      locale: "vi",
+      name: "",
+      scope: "customer_support",
+      source_type: "GOOGLE_DRIVE",
+      source_url: "",
+    })
+    setSourceOpen(true)
   }
 
   return (
@@ -438,7 +475,7 @@ const KnowledgeHubPage = () => {
             </Button>
           )}
           {activeView === "sources" && (
-            <Button size="small" onClick={() => setSourceOpen(true)}>
+            <Button size="small" onClick={openSourceConnection}>
               {t("knowledgeHub.sources.connectAction")}
             </Button>
           )}
@@ -880,89 +917,72 @@ const KnowledgeHubPage = () => {
               <Text className="text-ui-fg-subtle" size="small">
                 {t("knowledgeHub.sources.createHint")}
               </Text>
-              <div className="flex flex-col gap-2">
-                <Label>{t("knowledgeHub.sources.fields.type")}</Label>
-                <Select
-                  onValueChange={(sourceType) =>
-                    setSourceForm((current) => ({
-                      ...current,
-                      source_type: sourceType as KnowledgeSource["source_type"],
-                      source_url: "",
-                    }))
-                  }
-                  value={sourceForm.source_type}
-                >
-                  <Select.Trigger><Select.Value /></Select.Trigger>
-                  <Select.Content>
-                    <Select.Item value="GOOGLE_DOC">
-                      {t("knowledgeHub.sources.types.googleDoc")}
-                    </Select.Item>
-                    <Select.Item value="GOOGLE_SHEET">
-                      {t("knowledgeHub.sources.types.googleSheet")}
-                    </Select.Item>
-                    <Select.Item value="GOOGLE_DRIVE">
-                      {t("knowledgeHub.sources.types.googleDrive")}
-                    </Select.Item>
-                    <Select.Item value="HTTPS_TEXT">
-                      {t("knowledgeHub.sources.types.httpsText")}
-                    </Select.Item>
-                  </Select.Content>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="source-name">
-                  {t("knowledgeHub.sources.fields.name")}
-                </Label>
-                <Input
-                  id="source-name"
-                  onChange={(event) =>
-                    setSourceForm((current) => ({
-                      ...current,
-                      name: event.target.value,
-                    }))
-                  }
-                  required
-                  value={sourceForm.name}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="source-url">
-                  {t("knowledgeHub.sources.fields.url")}
-                </Label>
-                {sourceForm.source_type !== "HTTPS_TEXT" &&
-                  googleConnector.data?.connected && (
-                    <Button
-                      isLoading={pickerLoading}
-                      onClick={chooseGoogleDocument}
-                      size="small"
-                      type="button"
-                      variant="secondary"
-                    >
-                      {t("knowledgeHub.sources.oauth.chooseFileAction")}
-                    </Button>
+              <div className="flex flex-col gap-4">
+                  <div className="rounded-lg border bg-ui-bg-subtle p-4">
+                    <Text weight="plus">
+                      {t("knowledgeHub.sources.automatic.supportedTitle")}
+                    </Text>
+                    <Text className="mt-1 text-ui-fg-subtle" size="small">
+                      {t("knowledgeHub.sources.automatic.supportedHint")}
+                    </Text>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {["Google Docs", "Google Sheets", "TXT", "Markdown", "CSV"].map(
+                        (type) => (
+                          <span
+                            className="rounded-md border bg-ui-bg-base px-2 py-1 text-ui-fg-subtle txt-compact-small"
+                            key={type}
+                          >
+                            {type}
+                          </span>
+                        )
+                      )}
+                    </div>
+                  </div>
+
+                  {unsupportedGoogleFile && (
+                    <div className="rounded-lg border border-ui-border-error bg-ui-bg-subtle p-4">
+                      <Text className="text-ui-fg-error" weight="plus">
+                        {t("knowledgeHub.sources.automatic.unsupportedTitle")}
+                      </Text>
+                      <Text className="mt-1 text-ui-fg-subtle" size="small">
+                        {t("knowledgeHub.sources.automatic.unsupportedHint", {
+                          name: unsupportedGoogleFile.name,
+                        })}
+                      </Text>
+                    </div>
                   )}
-                <Input
-                  id="source-url"
-                  onChange={(event) =>
-                    setSourceForm((current) => ({
-                      ...current,
-                      source_url: event.target.value,
-                    }))
-                  }
-                  placeholder={
-                    sourceForm.source_type === "HTTPS_TEXT"
-                      ? "https://docs.example.com/customer-support.md"
-                      : "https://docs.google.com/document/d/..."
-                  }
-                  required
-                  type="url"
-                  value={sourceForm.source_url}
-                />
-                <Text className="text-ui-fg-subtle" size="xsmall">
-                  {sourceForm.source_type === "HTTPS_TEXT"
-                    ? t("knowledgeHub.sources.fields.urlHint")
-                    : t("knowledgeHub.sources.fields.googleUrlHint")}
-                </Text>
+
+                  {sourceForm.source_url ? (
+                    <div className="rounded-lg border border-ui-border-interactive bg-ui-bg-base p-4">
+                      <Text className="text-ui-fg-subtle" size="xsmall">
+                        {t("knowledgeHub.sources.automatic.selectedTitle")}
+                      </Text>
+                      <Text className="mt-1" weight="plus">
+                        {sourceForm.name}
+                      </Text>
+                      <Text className="text-ui-fg-subtle" size="small">
+                        {t(
+                          `knowledgeHub.sources.types.${sourceTypeTranslationKey(sourceForm.source_type)}`
+                        )}
+                      </Text>
+                    </div>
+                  ) : (
+                    <Text className="text-ui-fg-subtle" size="small">
+                      {t("knowledgeHub.sources.automatic.noSelection")}
+                    </Text>
+                  )}
+
+                  <Button
+                    disabled={!googleConnector.data?.connected}
+                    isLoading={pickerLoading}
+                    onClick={chooseGoogleDocument}
+                    type="button"
+                  >
+                    {sourceForm.source_url
+                      ? t("knowledgeHub.sources.automatic.changeFileAction")
+                      : t("knowledgeHub.sources.oauth.chooseFileAction")}
+                  </Button>
+
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="flex flex-col gap-2">
@@ -1007,16 +1027,7 @@ const KnowledgeHubPage = () => {
                 </div>
               </div>
               <div className="rounded-lg border bg-ui-bg-subtle p-4">
-                {sourceForm.source_type === "HTTPS_TEXT" ? (
-                  <>
-                    <Text weight="plus">
-                      {t("knowledgeHub.sources.safetyTitle")}
-                    </Text>
-                    <Text className="text-ui-fg-subtle" size="small">
-                      {t("knowledgeHub.sources.safetyHint")}
-                    </Text>
-                  </>
-                ) : googleConnector.data?.connected ? (
+                {googleConnector.data?.connected ? (
                   <>
                     <Text weight="plus">
                       {t("knowledgeHub.sources.googleReadyTitle")}
@@ -1053,8 +1064,9 @@ const KnowledgeHubPage = () => {
               <Button
                 disabled={
                   createSource.isPending ||
-                  (sourceForm.source_type !== "HTTPS_TEXT" &&
-                    !googleConnector.data?.connected)
+                  !sourceForm.name ||
+                  !sourceForm.source_url ||
+                  !googleConnector.data?.connected
                 }
                 form="knowledge-source-form"
                 isLoading={createSource.isPending}

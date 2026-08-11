@@ -4,11 +4,24 @@ export type GooglePickerCredential = {
   picker_api_key: string
 }
 
-export type GooglePickerSelection = {
-  name: string
-  source_type: "GOOGLE_DOC" | "GOOGLE_DRIVE" | "GOOGLE_SHEET"
-  source_url: string
-}
+type GoogleKnowledgeSourceType =
+  | "GOOGLE_DOC"
+  | "GOOGLE_DRIVE"
+  | "GOOGLE_SHEET"
+
+export type GooglePickerSelection =
+  | {
+      mime_type: string
+      name: string
+      source_type: GoogleKnowledgeSourceType
+      source_url: string
+      supported: true
+    }
+  | {
+      mime_type: string
+      name: string
+      supported: false
+    }
 
 type PickerDocument = {
   id?: string
@@ -24,7 +37,7 @@ type PickerResponse = {
 
 type PickerView = {
   setIncludeFolders(value: boolean): PickerView
-  setMimeTypes(value: string): PickerView
+  setMode(value: string): PickerView
   setSelectFolderEnabled(value: boolean): PickerView
 }
 
@@ -44,6 +57,7 @@ type PickerBuilder = {
 
 type GooglePickerApi = {
   DocsView: new () => PickerView
+  DocsViewMode: { LIST: string }
   PickerBuilder: new () => PickerBuilder
 }
 
@@ -81,14 +95,19 @@ function loadPickerScript() {
   return pickerScriptPromise
 }
 
-function sourceTypeFor(mimeType: string) {
+export function classifyGooglePickerMimeType(
+  mimeType: string
+): GoogleKnowledgeSourceType | null {
   if (mimeType === "application/vnd.google-apps.document") {
-    return "GOOGLE_DOC" as const
+    return "GOOGLE_DOC"
   }
   if (mimeType === "application/vnd.google-apps.spreadsheet") {
-    return "GOOGLE_SHEET" as const
+    return "GOOGLE_SHEET"
   }
-  return "GOOGLE_DRIVE" as const
+  if (["text/csv", "text/markdown", "text/plain"].includes(mimeType)) {
+    return "GOOGLE_DRIVE"
+  }
+  return null
 }
 
 export async function openGoogleKnowledgePicker(
@@ -110,15 +129,9 @@ export async function openGoogleKnowledgePicker(
     const view = new pickerApi.DocsView()
       .setIncludeFolders(false)
       .setSelectFolderEnabled(false)
-      .setMimeTypes(
-        [
-          "application/vnd.google-apps.document",
-          "application/vnd.google-apps.spreadsheet",
-          "text/plain",
-          "text/csv",
-          "text/markdown",
-        ].join(",")
-      )
+      // Google recommends LIST with drive.file because thumbnail access is not
+      // guaranteed until the user explicitly selects a file.
+      .setMode(pickerApi.DocsViewMode.LIST)
     new pickerApi.PickerBuilder()
       .setAppId(credential.app_id)
       .setDeveloperKey(credential.picker_api_key)
@@ -130,7 +143,14 @@ export async function openGoogleKnowledgePicker(
         if (data.action !== "picked") return
         const document = data.docs?.[0]
         if (!document?.id || !document.mimeType) return resolve(null)
-        const sourceType = sourceTypeFor(document.mimeType)
+        const sourceType = classifyGooglePickerMimeType(document.mimeType)
+        if (!sourceType) {
+          return resolve({
+            mime_type: document.mimeType,
+            name: document.name ?? "Google Drive document",
+            supported: false,
+          })
+        }
         const sourceUrl =
           sourceType === "GOOGLE_DOC"
             ? `https://docs.google.com/document/d/${document.id}`
@@ -138,9 +158,11 @@ export async function openGoogleKnowledgePicker(
               ? `https://docs.google.com/spreadsheets/d/${document.id}`
               : `https://drive.google.com/file/d/${document.id}`
         resolve({
+          mime_type: document.mimeType,
           name: document.name ?? "Google Drive document",
           source_type: sourceType,
           source_url: sourceUrl,
+          supported: true,
         })
       })
       .build()
