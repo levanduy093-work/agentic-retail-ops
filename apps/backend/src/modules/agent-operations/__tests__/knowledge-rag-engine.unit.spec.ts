@@ -9,19 +9,26 @@ import {
 describe("knowledge RAG engine", () => {
   it("stays disabled unless the open-source RAG runtime is explicitly enabled", () => {
     expect(getKnowledgeRagRuntimeStatus({})).toMatchObject({
-      embedding_provider: "disabled",
       enabled: false,
       provider: "disabled",
     })
     expect(createKnowledgeRagEngine({}).provider).toBe("disabled")
   })
 
-  it("requires complete LangChain, embedding, and Qdrant configuration", () => {
+  it("requires an Admin credential and Qdrant infrastructure", () => {
+    expect(
+      createKnowledgeRagEngine({ QDRANT_URL: "http://localhost:6333" })
+        .provider
+    ).toBe("disabled")
     expect(() =>
-      createKnowledgeRagEngine({
-        AGENT_EMBEDDING_PROVIDER: "openai",
-        AGENT_RAG_PROVIDER: "langchain-qdrant",
-      })
+      createKnowledgeRagEngine(
+        {},
+        {
+          api_key: "admin-managed-key",
+          model: "text-embedding-3-small",
+          provider: "openai",
+        }
+      )
     ).toThrow("Admin-managed AI provider")
   })
 

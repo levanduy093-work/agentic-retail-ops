@@ -122,8 +122,7 @@
       "types": {
         "googleDoc": "Google Docs",
         "googleSheet": "Google Sheets",
-        "googleDrive": "Text, Markdown, or CSV file on Google Drive",
-        "httpsText": "Markdown or text from another website"
+        "googleDrive": "Text, Markdown, or CSV file on Google Drive"
       },
       "status": {
         "never": "Not checked yet",
@@ -133,7 +132,7 @@
       },
       "messages": {
         "connected": "Source connection saved. Check it to create the first draft.",
-        "createError": "The source could not be connected. Check the HTTPS address and server allowlist.",
+        "createError": "The Google document could not be connected. Check its access permission and select it again.",
         "synced": "Source checked and a new knowledge draft was created for review.",
         "unchanged": "Source checked. Its content has not changed, so no duplicate draft was created.",
         "syncError": "The source could not be synchronized. Review the connection status for details."
@@ -275,6 +274,7 @@
     "purposeBoth": "Search guidance and prepare replies",
     "purposeSearch": "Only search store guidance",
     "purposeAnswers": "Only prepare replies",
+    "generationOnlyHint": "DeepSeek currently supports reply drafting in this system. Use OpenAI or Gemini as the embedding provider for knowledge search.",
     "embeddingModel": "Embedding model",
     "generationModel": "Reasoning and reply drafting model",
     "modelHint": "The list is loaded automatically from the provider for this API key.",

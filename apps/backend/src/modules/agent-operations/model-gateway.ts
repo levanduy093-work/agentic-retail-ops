@@ -266,40 +266,90 @@ export class GeminiModelAdapter implements ModelGatewayAdapter {
   }
 }
 
+export class DeepSeekChatModelAdapter implements ModelGatewayAdapter {
+  provider = "deepseek"
+
+  constructor(
+    private readonly apiKey: string,
+    public readonly model: string,
+    private readonly baseUrl = "https://api.deepseek.com",
+    private readonly fetchImpl: FetchLike = fetch
+  ) {}
+
+  async invoke(input: ModelInvocation): Promise<Record<string, unknown>> {
+    assertModelInvocation(input)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 30_000)
+    try {
+      const response = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
+        body: JSON.stringify({
+          max_tokens: input.max_tokens,
+          messages: [
+            { content: input.system_prompt, role: "system" },
+            {
+              content: JSON.stringify(redactModelInput(input.input)),
+              role: "user",
+            },
+          ],
+          model: this.model,
+          response_format: { type: "json_object" },
+          stream: false,
+          thinking: { type: "disabled" },
+        }),
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+        signal: controller.signal,
+      })
+      if (!response.ok) {
+        throw new MedusaError(
+          MedusaError.Types.UNEXPECTED_STATE,
+          `Model provider returned HTTP ${response.status}.`
+        )
+      }
+      const payload = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string | null } }>
+      }
+      const outputText = payload.choices?.[0]?.message?.content
+      if (!outputText) {
+        throw new MedusaError(
+          MedusaError.Types.UNEXPECTED_STATE,
+          "The model provider returned no structured output."
+        )
+      }
+      return JSON.parse(outputText) as Record<string, unknown>
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new MedusaError(
+          MedusaError.Types.INVALID_DATA,
+          "The model provider returned invalid structured output."
+        )
+      }
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new MedusaError(
+          MedusaError.Types.UNEXPECTED_STATE,
+          "The model provider timed out."
+        )
+      }
+      throw error
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+}
+
 export function createModelAdapter(input: {
   apiKey: string
   model: string
-  provider: "gemini" | "openai"
+  provider: "deepseek" | "gemini" | "openai"
 }): ModelGatewayAdapter {
   if (input.provider === "gemini") {
     return new GeminiModelAdapter(input.apiKey, input.model)
   }
+  if (input.provider === "deepseek") {
+    return new DeepSeekChatModelAdapter(input.apiKey, input.model)
+  }
   return new OpenAIResponsesModelAdapter(input.apiKey, input.model)
-}
-
-export function createConfiguredModelAdapter(
-  environment: NodeJS.ProcessEnv = process.env
-): ModelGatewayAdapter {
-  const provider = environment.AGENT_MODEL_PROVIDER?.trim().toLowerCase()
-  if (!provider || provider === "disabled") return new DisabledModelAdapter()
-
-  if (provider !== "openai" && provider !== "gemini") {
-    throw new MedusaError(
-      MedusaError.Types.INVALID_DATA,
-      `Unsupported model provider ${provider}.`
-    )
-  }
-  const apiKey =
-    provider === "gemini"
-      ? environment.GEMINI_API_KEY?.trim()
-      : environment.OPENAI_API_KEY?.trim()
-  const model = environment.AGENT_MODEL?.trim()
-  if (!apiKey || !model) {
-    throw new MedusaError(
-      MedusaError.Types.INVALID_DATA,
-      "The provider API key and AGENT_MODEL are required when a model provider is enabled."
-    )
-  }
-
-  return createModelAdapter({ apiKey, model, provider })
 }

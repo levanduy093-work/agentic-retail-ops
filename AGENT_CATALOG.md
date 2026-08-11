@@ -73,14 +73,17 @@ mobile/push/Zalo/Slack/Teams vẫn chưa triển khai.
   retire tự xóa vectors; truy vấn semantic được lọc tenant/scope/locale rồi
   kiểm tra lại chunk thuộc tài liệu approved còn hiệu lực. Khi Qdrant hoặc
   embedding provider lỗi/chưa bật, `knowledge.search` tự rơi về lexical search.
-- OpenAI và Gemini đều có thể làm embedding hoặc soạn câu trả lời. Chủ cửa hàng
-  kết nối provider từ Admin; API key được mã hóa trong PostgreSQL, không trả về
-  browser. Workflow tự reindex knowledge khi đổi provider/model và Qdrant dùng
-  collection tách biệt theo provider/model.
+- OpenAI và Gemini có thể làm embedding hoặc soạn câu trả lời; DeepSeek được
+  hỗ trợ cho suy luận và soạn câu trả lời vì API chính thức chưa cung cấp
+  embedding. Chủ cửa hàng kết nối provider từ Admin; API key được mã hóa trong
+  PostgreSQL, không trả về browser. Workflow tự reindex knowledge khi đổi
+  embedding provider/model và Qdrant dùng collection tách biệt theo
+  provider/model.
 - Model Gateway có adapter contract, redaction, token budget và structured
   output bắt buộc. OpenAI Responses adapter dùng JSON Schema strict, timeout,
   `store=false`, input tối thiểu và model-run ledger; Gemini adapter dùng JSON
-  Schema và khóa server-side tương tự. Prompt Customer Support là cấu hình có
+  Schema; DeepSeek adapter dùng Chat Completions JSON mode và khóa server-side
+  tương tự. Prompt Customer Support là cấu hình có
   phiên bản trong PostgreSQL, hiển thị và tùy chỉnh từ Admin, có prompt mặc định
   để khôi phục; model run ghi đúng prompt key/version đã dùng. Thiếu
   provider/key/model thì Customer Support giữ draft deterministic thay vì làm
@@ -183,9 +186,10 @@ mobile/push/Zalo/Slack/Teams vẫn chưa triển khai.
   thử nội bộ có thể tạo conversation `IN_APP`; chỉ nhân viên đã nhận task, hoàn
   tất kiểm tra và bấm xác nhận mới tạo action `message.send` qua Action Gateway.
   Action có idempotency key nên bấm lại không tạo tin thứ hai.
-- Simulator chỉ bật trong môi trường phát triển, hoặc phải được chủ động bật
-  bằng `AGENT_SUPPORT_SIMULATOR_ENABLED=true` ở production. Tin nhắn chỉ nằm
-  trong database nội bộ, không gọi email, Telegram, Zalo hay khách thật.
+- Simulator được bảo vệ bằng đăng nhập Admin và quyền RBAC riêng
+  `agent_support_simulator:create`; không còn công tắc môi trường riêng. Tin
+  nhắn chỉ nằm trong database nội bộ, không gọi email, Telegram, Zalo hay khách
+  thật.
 - Route Admin `customer-support` dùng SDK session và query cache; nhân viên có
   thể nhận task, sửa draft, hoàn tất với `message_sent=false`, hoặc chuyển quản
   lý qua `task.escalate` trong Action Gateway. Màn hình không hiển thị event ID,
@@ -372,14 +376,15 @@ Ngày kiểm chứng: 2026-08-11.
   công với tìm kiếm theo đoạn, draft grounded và vẫn bắt buộc người duyệt.
 - OpenAI Responses adapter có unit test kiểm tra JSON Schema strict,
   `store=false`, parse structured output và không đưa credential vào payload.
-  Toàn bộ suite hiện đạt 103/103. Chưa gọi API model thật vì workspace chưa được
-  cấp `OPENAI_API_KEY` và `AGENT_MODEL`; model path là `RUNTIME-PENDING`.
-- Knowledge Source Connector đầu tiên đã hỗ trợ tài liệu Markdown/văn bản qua
-  HTTPS. Giao diện Knowledge Hub cho phép lưu nguồn và chủ động đồng bộ; nội
-  dung thay đổi chỉ tạo `DRAFT`, không tự xuất bản cho agent.
-- Migration `Migration20260811060537` đã chạy trên PostgreSQL local. Runtime
-  connector đã tải tài liệu HTTPS thật, tạo 4 chunks và xác nhận lần đồng bộ
-  thứ hai trả `UNCHANGED`, không tạo bản nháp trùng.
+  API key, provider và model chỉ được lấy từ credential vault do quản lý cấu
+  hình trong Admin; không còn fallback bí mật qua `.env`. Live model path chỉ
+  được xác nhận sau khi kết nối provider thật và chạy kiểm thử nghiệp vụ.
+- Knowledge Source Connector hiện chỉ nhận tài liệu người dùng chủ động chọn từ
+  Google Drive. Google Docs, Google Sheets và tệp TXT/Markdown/CSV được nhận
+  diện tự động; nội dung thay đổi chỉ tạo `DRAFT`, không tự xuất bản cho agent.
+- Connector tải văn bản tùy ý từ website đã được gỡ khỏi API, workflow, Admin
+  và cấu hình triển khai. Migration `Migration20260811122426` loại kiểu nguồn
+  cũ nhưng giữ nguyên những knowledge document đã được tạo trước đó.
 - Google knowledge adapter đã hỗ trợ Google Docs, Google Sheets và tệp
   TXT/Markdown/CSV bằng OAuth connector và Google Picker. Chủ shop đăng nhập rồi
   chọn từng tệp; quyền `drive.file` không mở toàn bộ Drive. Refresh token được

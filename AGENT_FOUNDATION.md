@@ -656,21 +656,24 @@ vertical slice của từng agent, không tiếp tục dựng infrastructure chu
 
 - Có model nguồn knowledge, API Admin, workflow kết nối/đồng bộ và giao diện
   Việt/Anh trong Knowledge Hub.
-- Connector đầu tiên chỉ nhận tài liệu Markdown hoặc văn bản qua HTTPS, bắt
-  buộc hostname nằm trong `KNOWLEDGE_CONNECTOR_ALLOWED_HOSTS`, từ chối URL có
-  credential, custom port, địa chỉ private, HTML, redirect không an toàn và tài
-  liệu lớn hơn 1 MB.
+- Nguồn knowledge hiện chỉ đi qua Google OAuth và Google Picker: người dùng chủ
+  động chọn Google Docs, Google Sheets hoặc tệp TXT/Markdown/CSV trên Drive.
+  Connector tải văn bản tùy ý từ website và cấu hình allowlist liên quan đã bị
+  gỡ để giảm bề mặt tấn công và tránh thao tác kỹ thuật cho chủ shop.
 - Mỗi lần nội dung thay đổi tạo một knowledge document `DRAFT`; quản lý vẫn phải
   duyệt thì agent mới tìm thấy. Checksum ngăn bản nháp trùng khi nguồn không đổi.
 - Migration `Migration20260811060537` và runtime verifier đã chạy thành công
   trên PostgreSQL local. Migration `Migration20260811064334` mở rộng nguồn cho
-  Google Docs, Google Sheets và tệp TXT/Markdown/CSV trên Drive.
+  Google Docs, Google Sheets và tệp TXT/Markdown/CSV trên Drive. Migration
+  `Migration20260811122426` đã chạy và loại kiểu nguồn website cũ khỏi schema
+  hiện hành. Hai knowledge document verifier liên quan vẫn ở trạng thái
+  `RETIRED`, nên agent không thể tìm hoặc sử dụng chúng.
 - Google adapter đã chuyển sang connector OAuth theo từng shop. Chủ shop bấm
   kết nối, đăng nhập Google và chọn tệp qua Google Picker; quyền `drive.file`
   chỉ cho phép đọc những tệp được chọn. Refresh token được mã hóa AES-256-GCM
   trong `agent_connector_credential`, callback kiểm tra state ký số, nonce và
   thời hạn; kết nối/ngắt kết nối có workflow và audit.
-- Migration `Migration20260811080525` đã chạy; build, lint và 112 unit test đạt.
+- Migration `Migration20260811080525` đã chạy; build, lint và 128 unit test đạt.
   Acceptance Google thật vẫn `RUNTIME-PENDING` đến khi bên triển khai cấu hình
   OAuth Client, Picker API key và project number. Chưa có Notion/PDF, lịch đồng
   bộ nền hoặc review diff.

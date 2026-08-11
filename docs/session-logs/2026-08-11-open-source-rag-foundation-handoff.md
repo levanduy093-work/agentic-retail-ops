@@ -30,13 +30,9 @@
   `agent-qdrant-data`.
 - Backend dùng `@langchain/core`, `@langchain/openai`,
   `@langchain/google-genai` và `@langchain/qdrant`.
-- `.env.template` có các biến:
+- `.env.template` chỉ giữ cấu hình hạ tầng Qdrant:
 
 ```env
-AGENT_RAG_PROVIDER=langchain-qdrant
-AGENT_EMBEDDING_PROVIDER=disabled
-AGENT_EMBEDDING_MODEL=<approved-embedding-model>
-AGENT_EMBEDDING_DIMENSIONS=
 QDRANT_URL=http://localhost:6333
 QDRANT_API_KEY=
 QDRANT_COLLECTION=agent_knowledge
@@ -44,9 +40,9 @@ QDRANT_COLLECTION=agent_knowledge
 
 OpenAI/Gemini API key được chủ cửa hàng nhập tại trang **AI** trong Admin. Khóa
 được mã hóa AES-256-GCM trong PostgreSQL; API chỉ trả trạng thái và bốn ký tự
-cuối, không trả ciphertext hay khóa rõ. Các biến provider/key trong `.env` chỉ
-còn là fallback tương thích cho deployment cũ. `AGENT_CREDENTIAL_ENCRYPTION_KEY`
-và cấu hình Qdrant vẫn là cấu hình hạ tầng do người triển khai quản lý.
+cuối, không trả ciphertext hay khóa rõ. Runtime không đọc API key, provider hay
+model AI từ `.env`; `AGENT_CREDENTIAL_ENCRYPTION_KEY` và cấu hình Qdrant vẫn là
+cấu hình hạ tầng do người triển khai quản lý.
 
 ## Bổ sung provider và quản trị khóa
 
@@ -86,7 +82,8 @@ pnpm --dir apps/backend run build
 ```
 
 Chủ cửa hàng chỉ cần vào Admin > **AI**, chọn OpenAI hoặc Gemini, dán API key và
-chọn dùng cho tìm kiếm, chuẩn bị câu trả lời hoặc cả hai. Workflow tự reindex;
+chọn dùng cho tìm kiếm, chuẩn bị câu trả lời hoặc cả hai. DeepSeek chỉ dùng để
+chuẩn bị câu trả lời vì không có embedding API chính thức. Workflow tự reindex;
 `agent:reindex-knowledge` vẫn được giữ làm lệnh vận hành khôi phục.
 
 ## Prompt hệ thống và model soạn trả lời
@@ -131,3 +128,15 @@ nguyên để tránh dịch sai dữ liệu nghiệp vụ.
 - Unit test mới xác nhận header chứa key nhưng response catalog không có key và
   hai loại model được tách đúng. Tổng hiện tại: 29 suites, 129 tests passed;
   lint và backend/Admin build passed.
+
+## DeepSeek provider
+
+- Admin > **AI** có thêm DeepSeek; API key được mã hóa trong cùng credential
+  vault và model được tải tự động từ `GET https://api.deepseek.com/models`.
+- DeepSeek chỉ được bật cho soạn câu trả lời. Backend từ chối cấu hình DeepSeek
+  làm embedding provider; giao diện không hiển thị lựa chọn tìm kiếm kiến thức.
+- Runtime gọi OpenAI-compatible `POST /chat/completions`, bật JSON mode, tắt
+  streaming và ghi provider/model/prompt version vào model-run ledger như các
+  provider khác.
+- DeepSeek, OpenAI và Gemini đều chỉ nhận API key/model từ Admin; không còn
+  fallback key hoặc model trong `.env`.

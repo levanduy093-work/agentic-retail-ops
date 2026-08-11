@@ -6,8 +6,8 @@ import {
   StepResponse,
   WorkflowResponse,
 } from "@medusajs/framework/workflows-sdk"
-import { validateKnowledgeSource } from "../../modules/agent-operations/knowledge-connector"
 import { AGENT_OPERATIONS_MODULE } from "../../modules/agent-operations"
+import { validateGoogleKnowledgeSourceUrl } from "../../modules/agent-operations/google-drive-knowledge-connector"
 import AgentOperationsModuleService from "../../modules/agent-operations/service"
 import { CreateKnowledgeSourceInput } from "../../modules/agent-operations/types"
 
@@ -18,20 +18,18 @@ const createKnowledgeSourceStep = createStep(
       AGENT_OPERATIONS_MODULE
     )
     const locking = container.resolve<ILockingModule>(Modules.LOCKING)
-    const normalizedUrl = await validateKnowledgeSource(
+    const normalizedUrl = validateGoogleKnowledgeSourceUrl(
       input.source_url,
       input.source_type
+    ).canonical_url
+    const status = await service.getGoogleKnowledgeConnectorStatus(
+      input.tenant_id ?? "default"
     )
-    if (input.source_type !== "HTTPS_TEXT") {
-      const status = await service.getGoogleKnowledgeConnectorStatus(
-        input.tenant_id ?? "default"
+    if (!status.connected) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        "Connect a Google account before adding Google documents."
       )
-      if (!status.connected) {
-        throw new MedusaError(
-          MedusaError.Types.NOT_ALLOWED,
-          "Connect a Google account before adding Google documents."
-        )
-      }
     }
     return new StepResponse(
       await locking.execute(

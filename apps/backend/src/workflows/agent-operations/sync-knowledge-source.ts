@@ -7,7 +7,7 @@ import {
   WorkflowResponse,
 } from "@medusajs/framework/workflows-sdk"
 import { AGENT_OPERATIONS_MODULE } from "../../modules/agent-operations"
-import { fetchKnowledgeSource } from "../../modules/agent-operations/knowledge-connector"
+import { fetchGoogleDriveKnowledgeSource } from "../../modules/agent-operations/google-drive-knowledge-connector"
 import AgentOperationsModuleService from "../../modules/agent-operations/service"
 import { SyncKnowledgeSourceInput } from "../../modules/agent-operations/types"
 
@@ -23,18 +23,17 @@ const syncKnowledgeSourceStep = createStep(
       await locking.execute(`agent-knowledge-source:${input.source_id}`, async () => {
         const source = await service.retrieveAgentKnowledgeSource(input.source_id)
         try {
-          const googleAuthorizationHeader =
-            source.source_type === "HTTPS_TEXT"
-              ? undefined
-              : `Bearer ${
-                  (await service.getGoogleKnowledgePickerToken(
-                    source.tenant_id
-                  )).access_token
-                }`
-          const fetchResult = await fetchKnowledgeSource(source.source_url, {
-            googleAuthorizationHeader,
-            sourceType: source.source_type,
-          })
+          const googleAuthorizationHeader = `Bearer ${
+            (await service.getGoogleKnowledgePickerToken(source.tenant_id))
+              .access_token
+          }`
+          const fetchResult = await fetchGoogleDriveKnowledgeSource(
+            source.source_url,
+            source.source_type,
+            {
+              authorizationHeader: googleAuthorizationHeader,
+            }
+          )
           return service.recordKnowledgeSourceSync({
             ...input,
             fetch_result: fetchResult,

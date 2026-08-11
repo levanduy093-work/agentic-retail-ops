@@ -246,7 +246,7 @@ export type CreateKnowledgeSourceInput = {
   name: string
   owner_id: string
   scope: string
-  source_type: "GOOGLE_DOC" | "GOOGLE_DRIVE" | "GOOGLE_SHEET" | "HTTPS_TEXT"
+  source_type: "GOOGLE_DOC" | "GOOGLE_DRIVE" | "GOOGLE_SHEET"
   source_url: string
   tenant_id?: string
 }
@@ -269,7 +269,7 @@ export type DisconnectGoogleKnowledgeConnectorInput = {
   tenant_id?: string
 }
 
-export type AiProvider = "GEMINI" | "OPENAI"
+export type AiProvider = "DEEPSEEK" | "GEMINI" | "OPENAI"
 
 export type ConfigureAiProviderInput = {
   actor_id: string

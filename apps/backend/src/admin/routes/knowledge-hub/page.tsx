@@ -77,7 +77,7 @@ type KnowledgeSource = {
   name: string
   owner_id: string
   scope: string
-  source_type: "GOOGLE_DOC" | "GOOGLE_DRIVE" | "GOOGLE_SHEET" | "HTTPS_TEXT"
+  source_type: "GOOGLE_DOC" | "GOOGLE_DRIVE" | "GOOGLE_SHEET"
   source_url: string
 }
 
@@ -118,8 +118,7 @@ const sourceHostname = (sourceUrl: string) => {
 const sourceTypeTranslationKey = (sourceType: KnowledgeSource["source_type"]) => {
   if (sourceType === "GOOGLE_DOC") return "googleDoc"
   if (sourceType === "GOOGLE_SHEET") return "googleSheet"
-  if (sourceType === "GOOGLE_DRIVE") return "googleDrive"
-  return "httpsText"
+  return "googleDrive"
 }
 
 const KnowledgeHubPage = () => {

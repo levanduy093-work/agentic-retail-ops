@@ -17,6 +17,7 @@ import {
 } from "../tools/platform-read-tools"
 import {
   assertModelInvocation,
+  DeepSeekChatModelAdapter,
   DisabledModelAdapter,
   GeminiModelAdapter,
   OpenAIResponsesModelAdapter,
@@ -397,6 +398,62 @@ describe("agent platform foundations", () => {
         system_prompt: "Configured Gemini support prompt",
       })
     ).resolves.toEqual({ body: "Đơn đang xử lý." })
+  })
+
+  it("uses DeepSeek JSON chat completion without exposing its API key", async () => {
+    const request = jest.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe("https://api.deepseek.test/chat/completions")
+      expect(new Headers(init?.headers).get("Authorization")).toBe(
+        "Bearer deepseek-key"
+      )
+      const body = JSON.parse(String(init?.body))
+      expect(String(init?.body)).not.toContain("deepseek-key")
+      expect(body).toMatchObject({
+        max_tokens: 100,
+        model: "deepseek-v4-flash",
+        response_format: { type: "json_object" },
+        stream: false,
+        thinking: { type: "disabled" },
+      })
+      expect(body.messages[0]).toEqual({
+        content: "Configured DeepSeek support prompt",
+        role: "system",
+      })
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({ body: "Đơn đang được chuẩn bị." }),
+              },
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    })
+    const adapter = new DeepSeekChatModelAdapter(
+      "deepseek-key",
+      "deepseek-v4-flash",
+      "https://api.deepseek.test",
+      request as typeof fetch
+    )
+
+    await expect(
+      adapter.invoke({
+        agent_id: "customer-support-agent",
+        input: { question: "Đơn hàng ở đâu?" },
+        max_tokens: 100,
+        output_schema: {
+          properties: { body: { type: "string" } },
+          required: ["body"],
+          type: "object",
+        },
+        prompt_key: "support",
+        prompt_version: "1",
+        system_prompt: "Configured DeepSeek support prompt",
+      })
+    ).resolves.toEqual({ body: "Đơn đang được chuẩn bị." })
   })
 
   it("scores structured evaluation assertions", () => {

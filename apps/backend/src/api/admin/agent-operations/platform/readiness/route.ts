@@ -26,10 +26,9 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     active_evaluation_scenarios: scenarios.length >= 2,
     active_policy: policies.length > 0,
     active_prompt: prompts.length > 0,
-    model_provider_configured:
-      aiProviders.some((provider) => provider.generation_enabled) ||
-      (Boolean(process.env.AGENT_MODEL_PROVIDER) &&
-        process.env.AGENT_MODEL_PROVIDER !== "disabled"),
+    model_provider_configured: aiProviders.some(
+      (provider) => provider.generation_enabled
+    ),
     operations_manager_role: roles.length > 0,
     redis_infrastructure_enabled:
       process.env.REDIS_INFRASTRUCTURE_ENABLED === "true" &&
@@ -37,9 +36,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     rag_provider_configured:
       ragStatus.enabled &&
       ragStatus.qdrant_configured &&
-      (aiProviders.some((provider) => provider.embedding_enabled) ||
-        (Boolean(ragStatus.embedding_model) &&
-          ragStatus.embedding_provider !== "disabled")),
+      aiProviders.some((provider) => provider.embedding_enabled),
     tool_catalog_complete: toolCoverage.complete,
     typed_tool_executor: toolCoverage.registered_count > 0,
   }

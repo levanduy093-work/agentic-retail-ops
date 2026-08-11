@@ -151,6 +151,48 @@ async function listGeminiModels(
   }
 }
 
+async function listDeepSeekModels(
+  apiKey: string,
+  fetchImpl: FetchLike,
+  signal: AbortSignal
+): Promise<AiProviderModelCatalog> {
+  const response = await fetchImpl("https://api.deepseek.com/models", {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    signal,
+  })
+  if (!response.ok) {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      `DeepSeek could not list models (HTTP ${response.status}).`
+    )
+  }
+  const payload = (await response.json()) as {
+    data?: Array<{ id?: string; owned_by?: string }>
+  }
+  const generationModels = uniqueModels(
+    (payload.data ?? [])
+      .flatMap((model) => {
+        if (!model.id) return []
+        return [
+          {
+            description: model.owned_by
+              ? `Provided by ${model.owned_by}`
+              : null,
+            id: model.id,
+            label: model.id,
+          },
+        ]
+      })
+      .sort((left, right) => left.id.localeCompare(right.id))
+  )
+
+  return {
+    embedding_models: [],
+    generation_models: generationModels,
+    provider: "DEEPSEEK",
+  }
+}
+
 export async function listAiProviderModels(
   input: { api_key: string; provider: AiProvider },
   fetchImpl: FetchLike = fetch
@@ -158,9 +200,21 @@ export async function listAiProviderModels(
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 12_000)
   try {
-    return input.provider === "GEMINI"
-      ? await listGeminiModels(input.api_key, fetchImpl, controller.signal)
-      : await listOpenAiModels(input.api_key, fetchImpl, controller.signal)
+    if (input.provider === "GEMINI") {
+      return await listGeminiModels(
+        input.api_key,
+        fetchImpl,
+        controller.signal
+      )
+    }
+    if (input.provider === "DEEPSEEK") {
+      return await listDeepSeekModels(
+        input.api_key,
+        fetchImpl,
+        controller.signal
+      )
+    }
+    return await listOpenAiModels(input.api_key, fetchImpl, controller.signal)
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new MedusaError(

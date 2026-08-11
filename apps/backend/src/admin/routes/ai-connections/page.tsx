@@ -18,7 +18,7 @@ import { FormEvent, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { sdk } from "../../lib/sdk"
 
-type AiProvider = "GEMINI" | "OPENAI"
+type AiProvider = "DEEPSEEK" | "GEMINI" | "OPENAI"
 
 type AiProviderStatus = {
   configured: boolean
@@ -29,6 +29,8 @@ type AiProviderStatus = {
   generation_model: string
   provider: AiProvider
   secret_hint: string | null
+  supports_embedding: boolean
+  supports_generation: boolean
   updated_at: string | null
 }
 
@@ -65,9 +67,19 @@ type AiModelCatalog = {
 type Purpose = "answers" | "both" | "search"
 
 const purposeOf = (provider: AiProviderStatus): Purpose => {
+  if (!provider.supports_embedding) return "answers"
   if (provider.embedding_enabled && provider.generation_enabled) return "both"
   return provider.embedding_enabled ? "search" : "answers"
 }
+
+const PROVIDER_LABELS: Record<AiProvider, string> = {
+  DEEPSEEK: "DeepSeek",
+  GEMINI: "Google Gemini",
+  OPENAI: "OpenAI",
+}
+
+const providerLabel = (provider: AiProvider) =>
+  PROVIDER_LABELS[provider] ?? provider
 
 const includeCurrentModel = (
   models: AiModelOption[],
@@ -299,7 +311,7 @@ const AiConnectionsPage = () => {
             <div>
               <div className="flex items-center gap-2">
                 <Heading level="h2">
-                  {provider.provider === "GEMINI" ? "Google Gemini" : "OpenAI"}
+                  {providerLabel(provider.provider)}
                 </Heading>
                 <StatusBadge color={provider.configured ? "green" : "grey"}>
                   {t(
@@ -406,7 +418,9 @@ const AiConnectionsPage = () => {
         <Drawer.Content>
           <Drawer.Header>
             <Drawer.Title>
-              {t("aiProviders.drawerTitle", { provider: selected?.provider })}
+              {t("aiProviders.drawerTitle", {
+                provider: selected ? providerLabel(selected.provider) : "",
+              })}
             </Drawer.Title>
           </Drawer.Header>
           <Drawer.Body className="overflow-y-auto">
@@ -436,19 +450,33 @@ const AiConnectionsPage = () => {
 
               <div className="flex flex-col gap-2">
                 <Label>{t("aiProviders.purpose")}</Label>
-                <Select
-                  onValueChange={(value) =>
-                    setForm((current) => ({ ...current, purpose: value as Purpose }))
-                  }
-                  value={form.purpose}
-                >
-                  <Select.Trigger><Select.Value /></Select.Trigger>
-                  <Select.Content>
-                    <Select.Item value="both">{t("aiProviders.purposeBoth")}</Select.Item>
-                    <Select.Item value="search">{t("aiProviders.purposeSearch")}</Select.Item>
-                    <Select.Item value="answers">{t("aiProviders.purposeAnswers")}</Select.Item>
-                  </Select.Content>
-                </Select>
+                {selected?.supports_embedding ? (
+                  <Select
+                    onValueChange={(value) =>
+                      setForm((current) => ({
+                        ...current,
+                        purpose: value as Purpose,
+                      }))
+                    }
+                    value={form.purpose}
+                  >
+                    <Select.Trigger><Select.Value /></Select.Trigger>
+                    <Select.Content>
+                      <Select.Item value="both">{t("aiProviders.purposeBoth")}</Select.Item>
+                      <Select.Item value="search">{t("aiProviders.purposeSearch")}</Select.Item>
+                      <Select.Item value="answers">{t("aiProviders.purposeAnswers")}</Select.Item>
+                    </Select.Content>
+                  </Select>
+                ) : (
+                  <div className="rounded-lg border border-ui-border-base bg-ui-bg-subtle p-3">
+                    <Text size="small" weight="plus">
+                      {t("aiProviders.purposeAnswers")}
+                    </Text>
+                    <Text className="mt-1 text-ui-fg-subtle" size="xsmall">
+                      {t("aiProviders.generationOnlyHint")}
+                    </Text>
+                  </div>
+                )}
               </div>
 
               {modelsLoading && (

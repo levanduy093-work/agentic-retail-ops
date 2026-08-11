@@ -5,8 +5,8 @@ const AgentKnowledgeSource = model
     id: model.id({ prefix: "agksrc" }).primaryKey(),
     name: model.text(),
     source_type: model
-      .enum(["HTTPS_TEXT", "GOOGLE_DOC", "GOOGLE_SHEET", "GOOGLE_DRIVE"])
-      .default("HTTPS_TEXT"),
+      .enum(["GOOGLE_DOC", "GOOGLE_SHEET", "GOOGLE_DRIVE"])
+      .default("GOOGLE_DRIVE"),
     source_url: model.text(),
     status: model.enum(["ACTIVE", "DISABLED"]).default("ACTIVE"),
     owner_id: model.text(),

@@ -58,7 +58,7 @@ export type KnowledgeEmbeddingCredential = {
   api_key: string
   dimensions?: number
   model: string
-  provider: "gemini" | "openai"
+  provider: "deepseek" | "gemini" | "openai"
 }
 
 class DisabledKnowledgeRagEngine implements KnowledgeRagEngine {
@@ -75,18 +75,6 @@ class DisabledKnowledgeRagEngine implements KnowledgeRagEngine {
   async search(_input: KnowledgeRagSearchInput) {
     return []
   }
-}
-
-function parsePositiveInteger(value: string | undefined, name: string) {
-  if (!value) return undefined
-  const parsed = Number(value)
-  if (!Number.isInteger(parsed) || parsed < 1) {
-    throw new MedusaError(
-      MedusaError.Types.INVALID_DATA,
-      `${name} must be a positive integer.`
-    )
-  }
-  return parsed
 }
 
 function assertCollectionName(value: string) {
@@ -228,18 +216,14 @@ export class LangChainQdrantKnowledgeRagEngine implements KnowledgeRagEngine {
 export function getKnowledgeRagRuntimeStatus(
   environment: NodeJS.ProcessEnv = process.env
 ) {
-  const provider = environment.AGENT_RAG_PROVIDER?.trim().toLowerCase()
-  const embeddingProvider =
-    environment.AGENT_EMBEDDING_PROVIDER?.trim().toLowerCase()
+  const qdrantConfigured = Boolean(environment.QDRANT_URL?.trim())
 
   return {
     collection:
       environment.QDRANT_COLLECTION?.trim() || DEFAULT_COLLECTION,
-    embedding_model: environment.AGENT_EMBEDDING_MODEL?.trim() || null,
-    embedding_provider: embeddingProvider || "disabled",
-    enabled: provider === "langchain-qdrant",
-    provider: provider || "disabled",
-    qdrant_configured: Boolean(environment.QDRANT_URL?.trim()),
+    enabled: qdrantConfigured,
+    provider: qdrantConfigured ? "langchain-qdrant" : "disabled",
+    qdrant_configured: qdrantConfigured,
   }
 }
 
@@ -247,22 +231,9 @@ export function createKnowledgeRagEngine(
   environment: NodeJS.ProcessEnv = process.env,
   credential?: KnowledgeEmbeddingCredential | null
 ): KnowledgeRagEngine {
-  const provider = credential
-    ? "langchain-qdrant"
-    : environment.AGENT_RAG_PROVIDER?.trim().toLowerCase()
-  if (!provider || provider === "disabled") {
-    return new DisabledKnowledgeRagEngine()
-  }
-  if (provider !== "langchain-qdrant") {
-    throw new MedusaError(
-      MedusaError.Types.INVALID_DATA,
-      `Unsupported RAG provider ${provider}.`
-    )
-  }
+  if (!credential) return new DisabledKnowledgeRagEngine()
 
-  const embeddingProvider =
-    credential?.provider ??
-    environment.AGENT_EMBEDDING_PROVIDER?.trim().toLowerCase()
+  const embeddingProvider = credential.provider
   if (embeddingProvider !== "openai" && embeddingProvider !== "gemini") {
     throw new MedusaError(
       MedusaError.Types.INVALID_DATA,
@@ -270,13 +241,8 @@ export function createKnowledgeRagEngine(
     )
   }
 
-  const apiKey =
-    credential?.api_key ??
-    (embeddingProvider === "gemini"
-      ? environment.GEMINI_API_KEY?.trim()
-      : environment.OPENAI_API_KEY?.trim())
-  const embeddingModel =
-    credential?.model ?? environment.AGENT_EMBEDDING_MODEL?.trim()
+  const apiKey = credential.api_key
+  const embeddingModel = credential.model
   const qdrantUrl = environment.QDRANT_URL?.trim()
   if (!apiKey || !embeddingModel || !qdrantUrl) {
     throw new MedusaError(
@@ -285,23 +251,16 @@ export function createKnowledgeRagEngine(
     )
   }
 
-  const dimensions =
-    credential?.dimensions ??
-    parsePositiveInteger(
-      environment.AGENT_EMBEDDING_DIMENSIONS,
-      "AGENT_EMBEDDING_DIMENSIONS"
-    )
+  const dimensions = credential.dimensions
   const baseCollectionName = assertCollectionName(
     environment.QDRANT_COLLECTION?.trim() || DEFAULT_COLLECTION
   )
-  const collectionName = credential
-    ? assertCollectionName(
-        `${baseCollectionName}_${embeddingProvider}_${createHash("sha256")
-          .update(embeddingModel)
-          .digest("hex")
-          .slice(0, 8)}`
-      )
-    : baseCollectionName
+  const collectionName = assertCollectionName(
+    `${baseCollectionName}_${embeddingProvider}_${createHash("sha256")
+      .update(embeddingModel)
+      .digest("hex")
+      .slice(0, 8)}`
+  )
   let embeddings: EmbeddingsInterface
   if (embeddingProvider === "gemini") {
     embeddings = new GoogleGenerativeAIEmbeddings({

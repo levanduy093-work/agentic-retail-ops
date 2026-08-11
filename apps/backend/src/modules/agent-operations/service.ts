@@ -15,8 +15,8 @@ import {
 import { analyzeInventoryLow } from "./inventory-low-analyzer"
 import { analyzeOrderException } from "./order-exception-analyzer"
 import {
-  createConfiguredModelAdapter,
   createModelAdapter,
+  DisabledModelAdapter,
   redactModelInput,
 } from "./model-gateway"
 import {
@@ -290,23 +290,34 @@ class AgentOperationsModuleService extends MedusaService({
       credentials.map((credential) => [credential.provider, credential])
     )
 
-    return (["OPENAI", "GEMINI"] as const).map((provider) => {
+    return (["OPENAI", "GEMINI", "DEEPSEEK"] as const).map((provider) => {
       const credential = byProvider.get(provider)
+      const defaults =
+        provider === "OPENAI"
+          ? {
+              embedding_model: "text-embedding-3-small",
+              generation_model: "gpt-4.1-mini",
+            }
+          : provider === "GEMINI"
+            ? {
+                embedding_model: "gemini-embedding-001",
+                generation_model: "gemini-2.5-flash",
+              }
+            : {
+                embedding_model: "unsupported",
+                generation_model: "deepseek-v4-flash",
+              }
       return {
         configured: Boolean(credential),
         embedding_dimensions: credential?.embedding_dimensions ?? null,
         embedding_enabled: credential?.embedding_enabled ?? false,
-        embedding_model:
-          credential?.embedding_model ??
-          (provider === "OPENAI"
-            ? "text-embedding-3-small"
-            : "gemini-embedding-001"),
+        embedding_model: credential?.embedding_model ?? defaults.embedding_model,
         generation_enabled: credential?.generation_enabled ?? false,
-        generation_model:
-          credential?.generation_model ??
-          (provider === "OPENAI" ? "gpt-4.1-mini" : "gemini-2.5-flash"),
+        generation_model: credential?.generation_model ?? defaults.generation_model,
         provider,
         secret_hint: credential?.secret_hint ?? null,
+        supports_embedding: provider !== "DEEPSEEK",
+        supports_generation: true,
         updated_at: credential?.updated_at ?? null,
       }
     })
@@ -372,7 +383,10 @@ class AgentOperationsModuleService extends MedusaService({
         purpose === "embedding"
           ? credential.embedding_model
           : credential.generation_model,
-      provider: credential.provider.toLowerCase() as "gemini" | "openai",
+      provider: credential.provider.toLowerCase() as
+        | "deepseek"
+        | "gemini"
+        | "openai",
     }
   }
 
@@ -406,6 +420,12 @@ class AgentOperationsModuleService extends MedusaService({
       throw new MedusaError(
         MedusaError.Types.INVALID_DATA,
         "Enable at least one AI capability for this provider."
+      )
+    }
+    if (input.provider === "DEEPSEEK" && input.embedding_enabled) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "DeepSeek does not provide an embedding API. Use OpenAI or Gemini for knowledge search."
       )
     }
 
@@ -2431,7 +2451,7 @@ class AgentOperationsModuleService extends MedusaService({
             model: credential.model,
             provider: credential.provider,
           })
-        : createConfiguredModelAdapter()
+        : new DisabledModelAdapter()
     } catch {
       return deterministic
     }

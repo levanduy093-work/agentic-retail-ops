@@ -22,16 +22,6 @@ export type RecordSupportSimulatorMessageInput = {
 const recordSupportSimulatorMessageStep = createStep(
   "record-support-simulator-message",
   async (input: RecordSupportSimulatorMessageInput, { container }) => {
-    if (
-      process.env.NODE_ENV === "production" &&
-      process.env.AGENT_SUPPORT_SIMULATOR_ENABLED !== "true"
-    ) {
-      throw new MedusaError(
-        MedusaError.Types.NOT_ALLOWED,
-        "The support simulator is disabled in production."
-      )
-    }
-
     const service = container.resolve<AgentOperationsModuleService>(
       AGENT_OPERATIONS_MODULE
     )

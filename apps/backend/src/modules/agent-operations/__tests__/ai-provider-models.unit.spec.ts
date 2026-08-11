@@ -68,4 +68,34 @@ describe("AI provider model discovery", () => {
       id: "gemini-2.5-flash",
     })
   })
+
+  it("lists DeepSeek generation models without claiming embedding support", async () => {
+    const request = jest.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe("https://api.deepseek.com/models")
+      expect(new Headers(init?.headers).get("Authorization")).toBe(
+        "Bearer deepseek-test-key"
+      )
+      return new Response(
+        JSON.stringify({
+          data: [
+            { id: "deepseek-v4-pro", object: "model", owned_by: "deepseek" },
+            { id: "deepseek-v4-flash", object: "model", owned_by: "deepseek" },
+          ],
+          object: "list",
+        }),
+        { status: 200 }
+      )
+    })
+
+    const catalog = await listAiProviderModels(
+      { api_key: "deepseek-test-key", provider: "DEEPSEEK" },
+      request as typeof fetch
+    )
+
+    expect(catalog.embedding_models).toEqual([])
+    expect(catalog.generation_models.map((model) => model.id)).toEqual([
+      "deepseek-v4-flash",
+      "deepseek-v4-pro",
+    ])
+  })
 })

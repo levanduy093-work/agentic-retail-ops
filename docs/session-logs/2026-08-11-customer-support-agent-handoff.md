@@ -92,6 +92,9 @@
   ra; gửi trước khi duyệt bị chặn, nhân viên khác gửi bị chặn và gửi lại không
   tạo bản thứ hai. Role nhân viên đã bổ sung quyền conversation read,
   message create và simulator create.
+- Simulator không còn dùng công tắc môi trường riêng. Quyền truy cập được kiểm
+  soát thống nhất bằng đăng nhập Admin và RBAC
+  `agent_support_simulator:create`; đây vẫn chỉ là kênh `IN_APP` nội bộ.
 
 ## Cách chạy lại
 

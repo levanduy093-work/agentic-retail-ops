@@ -245,7 +245,6 @@ export const AdminCreateKnowledgeSource = z.strictObject({
     "GOOGLE_DOC",
     "GOOGLE_DRIVE",
     "GOOGLE_SHEET",
-    "HTTPS_TEXT",
   ]),
   source_url: z.url().max(2000),
   tenant_id: z.string().trim().min(1).default("default"),

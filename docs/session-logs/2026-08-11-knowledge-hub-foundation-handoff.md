@@ -61,9 +61,8 @@ role `customer_support_staff`.
   citation/chunk đã sẵn sàng để thay retrieval engine mà không đổi workflow.
 - Chưa có gap detector, so sánh phiên bản, phát hiện quy định xung đột hoặc
   Knowledge Curator Agent tự đề xuất cập nhật.
-- Model provider mặc định vẫn disabled. OpenAI adapter đã code nhưng chưa chạy
-  API thật vì chưa có `OPENAI_API_KEY` và `AGENT_MODEL`; trạng thái model path
-  là `RUNTIME-PENDING`. Customer Support đang dùng fallback deterministic.
+- Nếu chưa kết nối provider trong Admin, Customer Support dùng fallback
+  deterministic. Runtime không đọc API key hoặc model AI từ `.env`.
 
 ## Lệnh vận hành
 
@@ -77,15 +76,9 @@ pnpm --dir apps/backend run lint
 pnpm --dir apps/backend run build
 ```
 
-Chỉ sau khi benchmark và security gate đạt yêu cầu mới cấu hình local:
-
-```env
-AGENT_MODEL_PROVIDER=openai
-AGENT_MODEL=<approved-model-id>
-OPENAI_API_KEY=<server-side-secret>
-```
-
-Không đặt các giá trị này trong Admin client hoặc database.
+Chỉ sau khi benchmark và security gate đạt yêu cầu mới kết nối provider tại
+Admin > **AI**. API key được mã hóa trong credential vault ở PostgreSQL và
+không bao giờ trả lại trình duyệt.
 
 ## Bước tiếp theo đề xuất
 

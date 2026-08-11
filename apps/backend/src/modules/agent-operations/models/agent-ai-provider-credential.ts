@@ -3,7 +3,7 @@ import { model } from "@medusajs/framework/utils"
 const AgentAiProviderCredential = model
   .define("agent_ai_provider_credential", {
     id: model.id({ prefix: "agaicred" }).primaryKey(),
-    provider: model.enum(["OPENAI", "GEMINI"]),
+    provider: model.enum(["OPENAI", "GEMINI", "DEEPSEEK"]),
     tenant_id: model.text().default("default"),
     encrypted_secret: model.text(),
     encryption_iv: model.text(),

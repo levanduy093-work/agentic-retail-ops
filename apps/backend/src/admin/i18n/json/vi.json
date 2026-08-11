@@ -367,8 +367,7 @@
       "types": {
         "googleDoc": "Google Docs",
         "googleSheet": "Google Sheets",
-        "googleDrive": "Tệp văn bản, Markdown hoặc CSV trên Google Drive",
-        "httpsText": "Markdown hoặc văn bản từ website khác"
+        "googleDrive": "Tệp văn bản, Markdown hoặc CSV trên Google Drive"
       },
       "status": {
         "never": "Chưa kiểm tra",
@@ -378,7 +377,7 @@
       },
       "messages": {
         "connected": "Đã lưu kết nối. Hãy kiểm tra nguồn để tạo bản nháp đầu tiên.",
-        "createError": "Không thể kết nối nguồn. Hãy kiểm tra địa chỉ HTTPS và danh sách tên miền được phép.",
+        "createError": "Không thể kết nối tài liệu Google. Hãy kiểm tra quyền truy cập và chọn lại tài liệu.",
         "synced": "Đã kiểm tra nguồn và tạo bản hướng dẫn mới để quản lý xem xét.",
         "unchanged": "Đã kiểm tra nguồn. Nội dung không thay đổi nên hệ thống không tạo bản nháp trùng.",
         "syncError": "Không thể đồng bộ nguồn. Hãy xem trạng thái kết nối để biết nguyên nhân."
@@ -520,6 +519,7 @@
     "purposeBoth": "Tìm kiến thức và chuẩn bị câu trả lời",
     "purposeSearch": "Chỉ tìm trong kho hướng dẫn",
     "purposeAnswers": "Chỉ chuẩn bị câu trả lời",
+    "generationOnlyHint": "DeepSeek hiện chỉ dùng để soạn câu trả lời trong hệ thống này. Hãy dùng OpenAI hoặc Gemini làm embedding provider để tìm kiếm kiến thức.",
     "embeddingModel": "Embedding model",
     "generationModel": "Model soạn câu trả lời",
     "modelHint": "Danh sách được tự động tải từ nhà cung cấp bằng API key này.",

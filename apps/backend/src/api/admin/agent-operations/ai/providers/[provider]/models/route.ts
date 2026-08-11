@@ -10,7 +10,11 @@ import { AdminDiscoverAiModelsType } from "../../../../validators"
 
 function parseProvider(value: string): AiProvider {
   const provider = value.toUpperCase()
-  if (provider !== "OPENAI" && provider !== "GEMINI") {
+  if (
+    provider !== "OPENAI" &&
+    provider !== "GEMINI" &&
+    provider !== "DEEPSEEK"
+  ) {
     throw new MedusaError(
       MedusaError.Types.INVALID_DATA,
       `Unsupported AI provider ${value}.`

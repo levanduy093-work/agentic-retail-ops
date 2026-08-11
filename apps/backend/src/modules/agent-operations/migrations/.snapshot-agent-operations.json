@@ -622,7 +622,8 @@
           "comment": null,
           "enumItems": [
             "OPENAI",
-            "GEMINI"
+            "GEMINI",
+            "DEEPSEEK"
           ],
           "mappedType": "enum"
         },
@@ -4571,10 +4572,9 @@
           "length": null,
           "precision": null,
           "scale": null,
-          "default": "'HTTPS_TEXT'",
+          "default": "'GOOGLE_DRIVE'",
           "comment": null,
           "enumItems": [
-            "HTTPS_TEXT",
             "GOOGLE_DOC",
             "GOOGLE_SHEET",
             "GOOGLE_DRIVE"

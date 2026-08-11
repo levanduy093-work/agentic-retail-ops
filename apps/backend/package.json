@@ -35,7 +35,6 @@
     "agent:verify-telegram": "medusa exec ./src/scripts/verify-telegram-adapter.ts",
     "agent:reindex-knowledge": "medusa exec ./src/scripts/reindex-agent-knowledge.ts",
     "agent:verify-knowledge-hub": "medusa exec ./src/scripts/verify-knowledge-hub.ts",
-    "agent:verify-knowledge-connector": "medusa exec ./src/scripts/verify-knowledge-source-connector.ts",
     "agent:verify-rag": "medusa exec ./src/scripts/verify-knowledge-rag.ts",
     "agent:verify-ai-provider-vault": "medusa exec ./src/scripts/verify-ai-provider-vault.ts",
     "agent:check-config": "medusa exec ./src/scripts/check-agent-runtime-configuration.ts",
