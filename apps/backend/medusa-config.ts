@@ -121,6 +121,25 @@ const bridge = `var SynapseThemeBridge = () => {
       window.location.reload();
     };
 
+    const mountSynapseBranding = () => {
+      document.querySelectorAll('svg[viewBox="0 0 400 400"]').forEach((logo) => {
+        const container = logo.parentElement?.parentElement;
+        if (!container) {
+          return;
+        }
+        container.classList.add("synapse-admin-logo");
+        container.setAttribute("role", "img");
+        container.setAttribute("aria-label", "Synapse");
+        logo.setAttribute("aria-hidden", "true");
+      });
+    };
+
+    const syncSynapseTitle = () => {
+      if (document.title.includes("Medusa")) {
+        document.title = document.title.replace(/Medusa/g, "Synapse");
+      }
+    };
+
     const mountInHeader = () => {
       const customizeButton = document.querySelector('button[aria-label="Customize layout"], button[aria-label="Tùy chỉnh bố cục"]');
       const headerActions = customizeButton?.parentElement;
@@ -147,13 +166,23 @@ const bridge = `var SynapseThemeBridge = () => {
       mountFrame = window.requestAnimationFrame(() => {
         mountFrame = undefined;
         mountInHeader();
+        mountSynapseBranding();
       });
     };
     mountInHeader();
+    mountSynapseBranding();
+    syncSynapseTitle();
     const observer = new MutationObserver(scheduleHeaderMount);
     observer.observe(document.body, { childList: true, subtree: true });
+    const titleObserver = new MutationObserver(syncSynapseTitle);
+    titleObserver.observe(document.head, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
     return () => {
       observer.disconnect();
+      titleObserver.disconnect();
       if (mountFrame) {
         window.cancelAnimationFrame(mountFrame);
       }
@@ -172,6 +201,11 @@ const bridge = `var SynapseThemeBridge = () => {
       i18nMarker,
       `/* @__PURE__ */ jsx3(SynapseThemeBridge, {}),\n        ${i18nMarker}`
     )
+    .replace(
+      'return `${pageTitle} - Medusa`;',
+      'return `${pageTitle} - Synapse`;'
+    )
+    .replace('DEFAULT_TITLE = "Medusa";', 'DEFAULT_TITLE = "Synapse";')
 }
 
 module.exports = defineConfig({

@@ -55,6 +55,37 @@ html.light #medusa > div {
   min-height: 100vh;
 }
 
+#medusa .synapse-admin-logo,
+#medusa div:has(> div > svg[viewBox="0 0 400 400"]) {
+  width: 88px;
+  min-width: 88px;
+  height: 88px;
+  margin-bottom: 40px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-base);
+  border-radius: 18px;
+  background-color: var(--bg-base);
+  background-image: url("../../../../assets/logo.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  box-shadow: 0 12px 32px rgba(18, 54, 42, 0.12);
+}
+
+#medusa .synapse-admin-logo::after,
+#medusa div:has(> div > svg[viewBox="0 0 400 400"])::after {
+  display: none;
+  content: none;
+}
+
+#medusa .synapse-admin-logo > div:has(> svg[viewBox="0 0 400 400"]),
+#medusa
+  div:has(> div > svg[viewBox="0 0 400 400"])
+  > div:has(> svg[viewBox="0 0 400 400"]) {
+  display: none;
+}
+
 html.light button,
 html.light input,
 html.light [role="button"] {

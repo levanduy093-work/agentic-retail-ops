@@ -1,4 +1,12 @@
 {
+  "login": {
+    "title": "Welcome to Synapse"
+  },
+  "invite": {
+    "title": "Welcome to Synapse",
+    "successHint": "Get started with Synapse Admin right away.",
+    "successAction": "Start Synapse Admin"
+  },
   "knowledgeHub": {
     "navigation": "Store guidance",
     "title": "Store Knowledge Hub",

@@ -1,4 +1,12 @@
 {
+  "login": {
+    "title": "Chào mừng đến với Synapse"
+  },
+  "invite": {
+    "title": "Chào mừng đến với Synapse",
+    "successHint": "Bắt đầu sử dụng trang quản trị Synapse ngay.",
+    "successAction": "Bắt đầu với Synapse"
+  },
   "general": {
     "add": "Thêm",
     "apply": "Áp dụng",
