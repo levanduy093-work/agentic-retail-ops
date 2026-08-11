@@ -14,10 +14,23 @@ import {
 } from "./communication"
 import { analyzeInventoryLow } from "./inventory-low-analyzer"
 import { analyzeOrderException } from "./order-exception-analyzer"
+import {
+  createConfiguredModelAdapter,
+  redactModelInput,
+} from "./model-gateway"
+import {
+  decryptConnectorSecret,
+  encryptConnectorSecret,
+} from "./credential-vault"
+import {
+  createGoogleKnowledgeAccessToken,
+  getGoogleKnowledgeOAuthPlatformStatus,
+} from "./google-knowledge-oauth"
 import AgentActionRequest from "./models/agent-action-request"
 import AgentApproval from "./models/agent-approval"
 import AgentAuditEvent from "./models/agent-audit-event"
 import AgentChannelConnection from "./models/agent-channel-connection"
+import AgentConnectorCredential from "./models/agent-connector-credential"
 import AgentConversation from "./models/agent-conversation"
 import AgentDelivery from "./models/agent-delivery"
 import AgentEvaluationRun from "./models/agent-evaluation-run"
@@ -25,6 +38,8 @@ import AgentEvaluationCase from "./models/agent-evaluation-scenario"
 import AgentEvent from "./models/agent-event"
 import AgentIncident from "./models/agent-incident"
 import AgentKnowledgeDocument from "./models/agent-knowledge-document"
+import AgentKnowledgeChunk from "./models/agent-knowledge-chunk"
+import AgentKnowledgeSource from "./models/agent-knowledge-source"
 import AgentMessage from "./models/agent-message"
 import AgentModelRun from "./models/agent-model-run"
 import AgentOutboxEvent from "./models/agent-outbox-event"
@@ -56,9 +71,12 @@ import {
   ClaimAgentDeliveryInput,
   CompleteAgentDeliveryInput,
   CompleteAgentOutboxEventInput,
+  ConfigureGoogleKnowledgeConnectorInput,
   CreateAgentTaskInput,
   CreateApprovalRequestedNotificationInput,
   CreateKnowledgeDocumentInput,
+  CreateKnowledgeSourceInput,
+  DisconnectGoogleKnowledgeConnectorInput,
   EvaluationAssertion,
   EscalateAgentTaskInput,
   FailAgentActionInput,
@@ -71,11 +89,13 @@ import {
   ProcessAgentConversationMessageInput,
   ReleaseAgentTaskInput,
   RequestAgentActionInput,
+  RetireKnowledgeDocumentInput,
   SupportRequestEventInput,
+  SyncKnowledgeSourceInput,
   TransitionAgentTaskInput,
 } from "./types"
 import { evaluateAssertions } from "./evaluation"
-import { checksumKnowledgeContent } from "./knowledge"
+import { checksumKnowledgeContent, chunkKnowledgeContent } from "./knowledge"
 import {
   assertAgentTaskRelease,
   assertAgentTaskTransition,
@@ -87,7 +107,7 @@ import {
   formatAuditSearchResult,
   KnowledgeSearchInput,
   KnowledgeSearchOutput,
-  searchKnowledgeDocuments,
+  searchKnowledgeChunks,
   TraceReplayInput,
   TraceReplayOutput,
   TraceTimelineEntry,
@@ -112,13 +132,18 @@ import {
   PlatformCommandOutput,
 } from "./tools/platform-command-tools"
 import { OrderReadOutput } from "./tools/order-tools"
-import { ResponseDraftOutput } from "./tools/response-tools"
+import {
+  draftCustomerResponse,
+  ResponseDraftInput,
+  ResponseDraftOutput,
+} from "./tools/response-tools"
 
 class AgentOperationsModuleService extends MedusaService({
   AgentActionRequest,
   AgentApproval,
   AgentAuditEvent,
   AgentChannelConnection,
+  AgentConnectorCredential,
   AgentConversation,
   AgentDelivery,
   AgentEvaluationRun,
@@ -126,6 +151,8 @@ class AgentOperationsModuleService extends MedusaService({
   AgentEvent,
   AgentIncident,
   AgentKnowledgeDocument,
+  AgentKnowledgeChunk,
+  AgentKnowledgeSource,
   AgentMessage,
   AgentModelRun,
   AgentOutboxEvent,
@@ -136,6 +163,164 @@ class AgentOperationsModuleService extends MedusaService({
   AgentTask,
   AgentToolCall,
 }) {
+  async getGoogleKnowledgeConnectorStatus(tenantId = "default") {
+    const platform = getGoogleKnowledgeOAuthPlatformStatus()
+    const credentials = await this.listAgentConnectorCredentials(
+      { connector_type: "GOOGLE_DRIVE", tenant_id: tenantId },
+      { take: 1 }
+    )
+    const credential = credentials[0]
+
+    return {
+      account_email: credential?.account_email ?? null,
+      connected: Boolean(platform.platform_ready && credential),
+      platform_ready: platform.platform_ready,
+      uses_dedicated_encryption_key:
+        platform.uses_dedicated_encryption_key,
+    }
+  }
+
+  async getGoogleKnowledgeRefreshToken(tenantId = "default") {
+    const credentials = await this.listAgentConnectorCredentials(
+      { connector_type: "GOOGLE_DRIVE", tenant_id: tenantId },
+      { take: 1 }
+    )
+    const credential = credentials[0]
+    if (!credential) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        "Connect a Google account before using Google documents."
+      )
+    }
+    return decryptConnectorSecret({
+      encrypted_secret: credential.encrypted_secret,
+      encryption_iv: credential.encryption_iv,
+      encryption_tag: credential.encryption_tag,
+      key_version: credential.key_version,
+    })
+  }
+
+  async getGoogleKnowledgePickerToken(tenantId = "default") {
+    return createGoogleKnowledgeAccessToken(
+      await this.getGoogleKnowledgeRefreshToken(tenantId)
+    )
+  }
+
+  @InjectManager()
+  async configureGoogleKnowledgeConnector(
+    input: ConfigureGoogleKnowledgeConnectorInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.configureGoogleKnowledgeConnector_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async configureGoogleKnowledgeConnector_(
+    input: ConfigureGoogleKnowledgeConnectorInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const tenantId = input.tenant_id ?? "default"
+    const encrypted = encryptConnectorSecret(input.refresh_token)
+    const existing = await this.listAgentConnectorCredentials(
+      { connector_type: "GOOGLE_DRIVE", tenant_id: tenantId },
+      { take: 1 },
+      sharedContext
+    )
+    const current = existing[0]
+    const credential = current
+      ? await this.updateAgentConnectorCredentials(
+          {
+            ...encrypted,
+            account_email: input.account_email,
+            id: current.id,
+            scopes: { values: input.scopes },
+            updated_by_id: input.actor_id,
+          },
+          sharedContext
+        )
+      : await this.createAgentConnectorCredentials(
+          {
+            ...encrypted,
+            account_email: input.account_email,
+            connector_type: "GOOGLE_DRIVE",
+            scopes: { values: input.scopes },
+            tenant_id: tenantId,
+            updated_by_id: input.actor_id,
+          },
+          sharedContext
+        )
+
+    await this.createAgentAuditEvents(
+      {
+        action: current
+          ? "google-oauth-connection-replaced"
+          : "google-oauth-connected",
+        actor_id: input.actor_id,
+        actor_type: "user",
+        correlation_id: credential.id,
+        data: {
+          account_email: credential.account_email,
+          connector_type: credential.connector_type,
+          scopes: input.scopes,
+        },
+        event_type: "agent.connector.oauth.connected",
+        recorded_at: new Date(),
+        resource_id: credential.id,
+        resource_type: "agent_connector_credential",
+      },
+      sharedContext
+    )
+
+    return {
+      account_email: credential.account_email,
+      connected: true,
+    }
+  }
+
+  @InjectManager()
+  async disconnectGoogleKnowledgeConnector(
+    input: DisconnectGoogleKnowledgeConnectorInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.disconnectGoogleKnowledgeConnector_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async disconnectGoogleKnowledgeConnector_(
+    input: DisconnectGoogleKnowledgeConnectorInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const tenantId = input.tenant_id ?? "default"
+    const credentials = await this.listAgentConnectorCredentials(
+      { connector_type: "GOOGLE_DRIVE", tenant_id: tenantId },
+      { take: 1 },
+      sharedContext
+    )
+    const credential = credentials[0]
+    if (!credential) return { disconnected: false }
+
+    await this.deleteAgentConnectorCredentials(credential.id, sharedContext)
+    await this.createAgentAuditEvents(
+      {
+        action: "google-oauth-disconnected",
+        actor_id: input.actor_id,
+        actor_type: "user",
+        correlation_id: credential.id,
+        data: {
+          account_email: credential.account_email,
+          connector_type: credential.connector_type,
+        },
+        event_type: "agent.connector.oauth.disconnected",
+        recorded_at: new Date(),
+        resource_id: credential.id,
+        resource_type: "agent_connector_credential",
+      },
+      sharedContext
+    )
+
+    return { disconnected: true }
+  }
+
   @InjectManager()
   async createGovernedAgentTask(
     input: CreateAgentTaskInput,
@@ -378,6 +563,187 @@ class AgentOperationsModuleService extends MedusaService({
   }
 
   @InjectManager()
+  async createGovernedKnowledgeSource(
+    input: CreateKnowledgeSourceInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.createGovernedKnowledgeSource_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async createGovernedKnowledgeSource_(
+    input: CreateKnowledgeSourceInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const tenantId = input.tenant_id ?? "default"
+    const existing = await this.listAgentKnowledgeSources(
+      {
+        locale: input.locale,
+        scope: input.scope,
+        source_url: input.source_url,
+        tenant_id: tenantId,
+      },
+      { take: 1 },
+      sharedContext
+    )
+    if (existing[0]) return { duplicate: true, source: existing[0] }
+
+    const source = await this.createAgentKnowledgeSources(
+      {
+        locale: input.locale,
+        name: input.name,
+        owner_id: input.owner_id,
+        scope: input.scope,
+        source_type: input.source_type,
+        source_url: input.source_url,
+        status: "ACTIVE",
+        tenant_id: tenantId,
+      },
+      sharedContext
+    )
+    await this.createAgentAuditEvents(
+      {
+        action: "knowledge-source-connected",
+        actor_id: input.owner_id,
+        actor_type: "user",
+        correlation_id: source.id,
+        data: { locale: source.locale, scope: source.scope },
+        event_type: "agent.knowledge-source.connected",
+        recorded_at: new Date(),
+        resource_id: source.id,
+        resource_type: "agent_knowledge_source",
+      },
+      sharedContext
+    )
+
+    return { duplicate: false, source }
+  }
+
+  @InjectManager()
+  async recordKnowledgeSourceSync(
+    input: SyncKnowledgeSourceInput & {
+      fetch_result?: {
+        checksum: string
+        content: string
+        etag: string | null
+        final_url: string
+      }
+      failure?: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.recordKnowledgeSourceSync_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async recordKnowledgeSourceSync_(
+    input: SyncKnowledgeSourceInput & {
+      fetch_result?: {
+        checksum: string
+        content: string
+        etag: string | null
+        final_url: string
+      }
+      failure?: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const source = await this.retrieveAgentKnowledgeSource(
+      input.source_id,
+      {},
+      sharedContext
+    )
+    if (source.status !== "ACTIVE") {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        "Disabled knowledge sources cannot be synchronized."
+      )
+    }
+
+    const now = new Date()
+    if (!input.fetch_result) {
+      const updated = await this.updateAgentKnowledgeSources(
+        {
+          id: source.id,
+          last_checked_at: now,
+          last_error: input.failure ?? "Knowledge source sync failed.",
+          last_sync_status: "FAILED",
+        },
+        sharedContext
+      )
+      return { document: null, source: updated, status: "FAILED" as const }
+    }
+
+    if (source.last_checksum === input.fetch_result.checksum) {
+      const updated = await this.updateAgentKnowledgeSources(
+        {
+          id: source.id,
+          last_checked_at: now,
+          last_error: null,
+          last_etag: input.fetch_result.etag,
+          last_sync_status: "UNCHANGED",
+        },
+        sharedContext
+      )
+      return { document: null, source: updated, status: "UNCHANGED" as const }
+    }
+
+    const version = `sync-${input.fetch_result.checksum.slice(0, 16)}`
+    const created = await this.createGovernedKnowledgeDocument_(
+      {
+        citation_locator: input.fetch_result.final_url,
+        content: input.fetch_result.content,
+        document_key: `source-${source.id}`,
+        effective_at: now.toISOString(),
+        locale: source.locale,
+        owner_id: input.actor_id,
+        scope: source.scope,
+        tenant_id: source.tenant_id,
+        title: source.name,
+        version,
+      },
+      sharedContext
+    )
+    const updated = await this.updateAgentKnowledgeSources(
+      {
+        id: source.id,
+        last_checked_at: now,
+        last_checksum: input.fetch_result.checksum,
+        last_document_id: created.document.id,
+        last_error: null,
+        last_etag: input.fetch_result.etag,
+        last_synced_at: now,
+        last_sync_status: "SUCCEEDED",
+      },
+      sharedContext
+    )
+    await this.createAgentAuditEvents(
+      {
+        action: "knowledge-source-synchronized",
+        actor_id: input.actor_id,
+        actor_type: "user",
+        correlation_id: source.id,
+        data: {
+          checksum: input.fetch_result.checksum,
+          document_id: created.document.id,
+          version,
+        },
+        event_type: "agent.knowledge-source.synchronized",
+        recorded_at: now,
+        resource_id: source.id,
+        resource_type: "agent_knowledge_source",
+      },
+      sharedContext
+    )
+
+    return {
+      document: created.document,
+      source: updated,
+      status: "SUCCEEDED" as const,
+    }
+  }
+
+  @InjectManager()
   async createGovernedKnowledgeDocument(
     input: CreateKnowledgeDocumentInput,
     @MedusaContext() sharedContext: Context = {}
@@ -419,7 +785,58 @@ class AgentOperationsModuleService extends MedusaService({
       sharedContext
     )
 
-    return { document, duplicate: false }
+    const chunks = chunkKnowledgeContent(
+      input.content,
+      input.citation_locator
+    )
+    await this.createAgentKnowledgeChunks(
+      chunks.map((chunk) => ({
+        ...chunk,
+        document_id: document.id,
+      })),
+      sharedContext
+    )
+
+    return { chunk_count: chunks.length, document, duplicate: false }
+  }
+
+  @InjectManager()
+  async ensureKnowledgeDocumentChunks(
+    documentId: string,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.ensureKnowledgeDocumentChunks_(documentId, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async ensureKnowledgeDocumentChunks_(
+    documentId: string,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const existing = await this.listAgentKnowledgeChunks(
+      { document_id: documentId },
+      { take: 1 },
+      sharedContext
+    )
+    if (existing[0]) {
+      return { chunk_count: existing.length, created: false }
+    }
+
+    const document = await this.retrieveAgentKnowledgeDocument(
+      documentId,
+      {},
+      sharedContext
+    )
+    const chunks = chunkKnowledgeContent(
+      document.content,
+      document.citation_locator
+    )
+    await this.createAgentKnowledgeChunks(
+      chunks.map((chunk) => ({ ...chunk, document_id: document.id })),
+      sharedContext
+    )
+
+    return { chunk_count: chunks.length, created: true }
   }
 
   @InjectManager()
@@ -448,6 +865,25 @@ class AgentOperationsModuleService extends MedusaService({
       throw new MedusaError(
         MedusaError.Types.UNEXPECTED_STATE,
         `Knowledge document ${document.id} cannot be approved from ${document.status}.`
+      )
+    }
+
+    if (checksumKnowledgeContent(document.content) !== document.checksum) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        `Knowledge document ${document.id} content does not match its checksum.`
+      )
+    }
+
+    const chunks = await this.listAgentKnowledgeChunks(
+      { document_id: document.id },
+      { order: { chunk_index: "ASC" } },
+      sharedContext
+    )
+    if (!chunks.length) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        `Knowledge document ${document.id} has no searchable content.`
       )
     }
 
@@ -480,6 +916,57 @@ class AgentOperationsModuleService extends MedusaService({
   }
 
   @InjectManager()
+  async retireGovernedKnowledgeDocument(
+    input: RetireKnowledgeDocumentInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.retireGovernedKnowledgeDocument_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async retireGovernedKnowledgeDocument_(
+    input: RetireKnowledgeDocumentInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const document = await this.retrieveAgentKnowledgeDocument(
+      input.document_id,
+      {},
+      sharedContext
+    )
+
+    if (document.status === "RETIRED") {
+      return { document, duplicate: true }
+    }
+    if (document.status !== "APPROVED") {
+      throw new MedusaError(
+        MedusaError.Types.UNEXPECTED_STATE,
+        `Knowledge document ${document.id} cannot be retired from ${document.status}.`
+      )
+    }
+
+    const updated = await this.updateAgentKnowledgeDocuments(
+      { id: document.id, status: "RETIRED" },
+      sharedContext
+    )
+    await this.createAgentAuditEvents(
+      {
+        action: "knowledge-retired",
+        actor_id: input.actor_id,
+        actor_type: "user",
+        correlation_id: `${document.document_key}:${document.version}`,
+        data: { reason: input.reason },
+        event_type: "agent.knowledge.retired",
+        recorded_at: new Date(),
+        resource_id: document.id,
+        resource_type: "agent_knowledge_document",
+      },
+      sharedContext
+    )
+
+    return { document: updated, duplicate: false }
+  }
+
+  @InjectManager()
   async searchGovernedKnowledge(
     input: KnowledgeSearchInput,
     @MedusaContext() sharedContext: Context = {}
@@ -500,7 +987,17 @@ class AgentOperationsModuleService extends MedusaService({
       sharedContext
     )
 
-    return searchKnowledgeDocuments(parsed, documents)
+    if (!documents.length) {
+      return { results: [], total_candidates: 0 }
+    }
+
+    const chunks = await this.listAgentKnowledgeChunks(
+      { document_id: documents.map((document) => document.id) },
+      { order: { chunk_index: "ASC" }, take: 2_000 },
+      sharedContext
+    )
+
+    return searchKnowledgeChunks(parsed, documents, chunks)
   }
 
   @InjectManager()
@@ -1300,6 +1797,121 @@ class AgentOperationsModuleService extends MedusaService({
       ),
       live_order: liveOrder,
       recommendation: recommendationRecord,
+    }
+  }
+
+  @InjectManager()
+  async draftGovernedCustomerResponse(
+    input: ResponseDraftInput,
+    idempotencyKey: string,
+    @MedusaContext() sharedContext: Context = {}
+  ): Promise<ResponseDraftOutput> {
+    const parsed = ResponseDraftInput.parse(input)
+    const deterministic = draftCustomerResponse(parsed)
+
+    if (!deterministic.grounded) return deterministic
+
+    let adapter
+    try {
+      adapter = createConfiguredModelAdapter()
+    } catch {
+      return deterministic
+    }
+    if (adapter.provider === "disabled") return deterministic
+
+    const existing = (
+      await this.listAgentModelRuns(
+        { idempotency_key: idempotencyKey },
+        { take: 1 },
+        sharedContext
+      )
+    )[0]
+    if (existing?.status === "SUCCEEDED" && existing.output) {
+      const cached = ResponseDraftOutput.safeParse(existing.output)
+      return cached.success ? cached.data : deterministic
+    }
+    if (existing) return deterministic
+
+    const safeInput = {
+      approved_knowledge: parsed.knowledge.map((item) => ({
+        excerpt: item.excerpt,
+        locator: item.citation_locator,
+        title: item.title,
+        version: item.version,
+      })),
+      locale: parsed.locale,
+      live_order: {
+        display_id: parsed.order.display_id,
+        fulfillment_status: parsed.order.fulfillment_status,
+        order_status: parsed.order.order_status,
+        payment_status: parsed.order.payment_status,
+      },
+      question: parsed.question,
+    }
+    const startedAt = new Date()
+    const modelRun = await this.createAgentModelRuns(
+      {
+        agent_id: "customer-support-agent",
+        agent_version: "0.2.0",
+        idempotency_key: idempotencyKey,
+        input: redactModelInput(safeInput) as Record<string, unknown>,
+        model: adapter.model,
+        prompt_key: "customer-support-grounded-draft",
+        prompt_version: "1.0.0",
+        provider: adapter.provider,
+        redacted: true,
+        started_at: startedAt,
+        status: "RUNNING",
+      },
+      sharedContext
+    )
+
+    try {
+      const generated = await adapter.invoke({
+        agent_id: "customer-support-agent",
+        input: safeInput,
+        max_tokens: 800,
+        output_schema: {
+          additionalProperties: false,
+          properties: { body: { maxLength: 4000, minLength: 1, type: "string" } },
+          required: ["body"],
+          type: "object",
+        },
+        prompt_key: "customer-support-grounded-draft",
+        prompt_version: "1.0.0",
+      })
+      const output = ResponseDraftOutput.parse({
+        body: generated.body,
+        citations: deterministic.citations,
+        grounded: true,
+        requires_human_review: true,
+      })
+      await this.updateAgentModelRuns(
+        {
+          completed_at: new Date(),
+          id: modelRun.id,
+          latency_ms: Date.now() - startedAt.getTime(),
+          output,
+          status: "SUCCEEDED",
+        },
+        sharedContext
+      )
+      return output
+    } catch (error) {
+      await this.updateAgentModelRuns(
+        {
+          completed_at: new Date(),
+          error:
+            error instanceof Error
+              ? error.message.slice(0, 1000)
+              : "Model draft failed",
+          id: modelRun.id,
+          latency_ms: Date.now() - startedAt.getTime(),
+          status: "FAILED",
+        },
+        sharedContext
+      )
+      return deterministic
     }
   }
 

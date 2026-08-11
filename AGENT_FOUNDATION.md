@@ -378,6 +378,12 @@ Chỉ xây RAG sau khi tool/policy/approval chạy ổn định. Knowledge item 
 Agent chỉ được dùng tài liệu `APPROVED` còn hiệu lực cho quyết định nghiệp vụ.
 Không tìm được bằng chứng phải hỏi hoặc escalation, không được đoán.
 
+Baseline hiện đã có `agent_knowledge_chunk`: tài liệu mới được chia đoạn ổn
+định khi tạo, mỗi đoạn có checksum và citation locator riêng. Tìm kiếm chỉ xét
+đoạn thuộc tài liệu đúng tenant/scope/locale, đã duyệt và còn hiệu lực. Admin có
+Knowledge Hub Việt/Anh để tạo bản nháp, duyệt, ngừng sử dụng và thử truy xuất;
+script reindex dùng để bổ sung đoạn cho tài liệu được tạo trước migration.
+
 ### 4.10 Security và tenant boundary
 
 Trước khi bật agent command cần có:
@@ -641,5 +647,30 @@ vertical slice của từng agent, không tiếp tục dựng infrastructure chu
   `deployment_ready`.
 - Redis Event Bus, Workflow Engine và distributed locking đã kết nối runtime khi
   bật cờ; local mặc định vẫn an toàn với in-memory.
-- Model provider và external delivery provider vẫn disabled. Đây là chủ ý an
-  toàn, không phải phần đã triển khai giả.
+- OpenAI Responses adapter đã có structured output, timeout, redaction,
+  idempotent model-run ledger và deterministic fallback; provider vẫn disabled
+  nếu chưa cấu hình key/model. External delivery provider thật vẫn disabled.
+  Đây là chủ ý an toàn, không phải bằng chứng runtime production.
+
+## 14. Knowledge Source Connector ngày 2026-08-11
+
+- Có model nguồn knowledge, API Admin, workflow kết nối/đồng bộ và giao diện
+  Việt/Anh trong Knowledge Hub.
+- Connector đầu tiên chỉ nhận tài liệu Markdown hoặc văn bản qua HTTPS, bắt
+  buộc hostname nằm trong `KNOWLEDGE_CONNECTOR_ALLOWED_HOSTS`, từ chối URL có
+  credential, custom port, địa chỉ private, HTML, redirect không an toàn và tài
+  liệu lớn hơn 1 MB.
+- Mỗi lần nội dung thay đổi tạo một knowledge document `DRAFT`; quản lý vẫn phải
+  duyệt thì agent mới tìm thấy. Checksum ngăn bản nháp trùng khi nguồn không đổi.
+- Migration `Migration20260811060537` và runtime verifier đã chạy thành công
+  trên PostgreSQL local. Migration `Migration20260811064334` mở rộng nguồn cho
+  Google Docs, Google Sheets và tệp TXT/Markdown/CSV trên Drive.
+- Google adapter đã chuyển sang connector OAuth theo từng shop. Chủ shop bấm
+  kết nối, đăng nhập Google và chọn tệp qua Google Picker; quyền `drive.file`
+  chỉ cho phép đọc những tệp được chọn. Refresh token được mã hóa AES-256-GCM
+  trong `agent_connector_credential`, callback kiểm tra state ký số, nonce và
+  thời hạn; kết nối/ngắt kết nối có workflow và audit.
+- Migration `Migration20260811080525` đã chạy; build, lint và 112 unit test đạt.
+  Acceptance Google thật vẫn `RUNTIME-PENDING` đến khi bên triển khai cấu hình
+  OAuth Client, Picker API key và project number. Chưa có Notion/PDF, lịch đồng
+  bộ nền hoặc review diff.

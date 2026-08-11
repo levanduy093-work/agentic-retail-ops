@@ -12,7 +12,6 @@ import { executeAgentTool } from "../../modules/agent-operations/tool-executor"
 import { AGENT_TOOL_REGISTRY } from "../../modules/agent-operations/tool-registry"
 import { OrderReadOutput } from "../../modules/agent-operations/tools/order-tools"
 import {
-  draftCustomerResponse,
   RESPONSE_DRAFT_TOOL,
   ResponseDraftInput,
   ResponseDraftOutput,
@@ -68,8 +67,12 @@ const draftSupportResponseStep = createStep(
       event: SupportRequestEventInput
       knowledge: KnowledgeSearchOutput
       order: OrderReadOutput
-    }
+    },
+    { container }
   ) => {
+    const service = container.resolve<AgentOperationsModuleService>(
+      AGENT_OPERATIONS_MODULE
+    )
     const execution = await executeAgentTool<
       ResponseDraftInput,
       ResponseDraftOutput
@@ -91,7 +94,11 @@ const draftSupportResponseStep = createStep(
         tool_name: RESPONSE_DRAFT_TOOL.name,
         tool_version: RESPONSE_DRAFT_TOOL.version,
       },
-      async (parsed) => draftCustomerResponse(parsed)
+      async (parsed) =>
+        service.draftGovernedCustomerResponse(
+          parsed,
+          `${input.event.source}:${input.event.event_id}:support-draft-model`
+        )
     )
 
     return new StepResponse(execution.output)

@@ -1,4 +1,143 @@
 {
+  "knowledgeHub": {
+    "navigation": "Store guidance",
+    "title": "Store Knowledge Hub",
+    "subtitle": "Manage approved guidance that the system can use for customer support and store operations.",
+    "createAction": "Add guidance",
+    "documents": "Store guidance",
+    "documentsHint": "The system only uses approved guidance while it is in effect.",
+    "loading": "Loading guidance...",
+    "empty": "No guidance yet. Create the first draft to begin.",
+    "selectDocument": "Choose guidance on the left to see its content and usage status.",
+    "views": {
+      "documents": "Guidance",
+      "sources": "Connected documents",
+      "search": "Check search"
+    },
+    "emptyStatus": {
+      "approved": "No guidance is currently in use.",
+      "draft": "No guidance is waiting for approval.",
+      "retired": "No guidance has been stopped."
+    },
+    "languages": {
+      "vi": "Vietnamese",
+      "en": "English"
+    },
+    "usedFor": "Used for {{scope}} · {{language}}",
+    "guidanceContent": "Guidance employees and agents will follow",
+    "approvalExplanation": "Only guidance marked “In use” can support an agent response.",
+    "detailSummary": "Version {{version}} · {{chunks}} searchable sections",
+    "source": "Where this guidance came from",
+    "searchableSections": "Sections the system can find",
+    "sectionMeta": "Section {{number}} · {{words}} words",
+    "approveAction": "Approve for system use",
+    "retireAction": "Stop using this guidance",
+    "retireReason": "A manager stopped this version from being used in the Knowledge Hub.",
+    "testSearch": "Test information search",
+    "testSearchHint": "Enter a customer-like question to check which approved guidance the system finds.",
+    "searchPlaceholder": "For example: Has the order been paid?",
+    "searchAction": "Find guidance",
+    "matchSource": "Matched section",
+    "noMatch": "No matching approved guidance was found. The agent will ask an employee to check manually.",
+    "cancel": "Cancel",
+    "saveDraft": "Save draft",
+    "createTitle": "Create store guidance",
+    "createHint": "Guidance is saved as a draft. A manager must approve it before an agent may use it.",
+    "status": {
+      "approved": "In use",
+      "draft": "Waiting for approval",
+      "retired": "No longer used"
+    },
+    "scopes": {
+      "customerSupport": "Customer support",
+      "operations": "General operations",
+      "returns": "Returns",
+      "fulfillment": "Packing and delivery"
+    },
+    "fields": {
+      "title": "Clear guidance name",
+      "key": "Unique guidance code",
+      "version": "Version",
+      "source": "Reference URL or source code",
+      "language": "Content language",
+      "scope": "Used for",
+      "effectiveAt": "Use starting from",
+      "content": "Guidance content",
+      "contentHint": "Use short paragraphs, with one rule or concrete handling instruction in each paragraph."
+    },
+    "sources": {
+      "title": "Connected knowledge sources",
+      "subtitle": "Bring approved store guidance in from controlled Markdown or text documents.",
+      "simpleSubtitle": "When you check for updates, changed content becomes a draft for a manager to review.",
+      "connectAction": "Connect a document",
+      "loading": "Loading connected sources...",
+      "empty": "No source is connected yet. Connect a controlled HTTPS document to create drafts from it.",
+      "connectionErrorHint": "The document could not be read. Check its address, approved host, and text or Markdown format.",
+      "googleReadyTitle": "Google connection is ready",
+      "googleShareHint": "Share this document with {{email}} as a Viewer, then paste its link above.",
+      "googleNotReadyTitle": "Google connection needs server setup",
+      "googleNotReadyHint": "Connect a Google account at the top of this page before choosing a document.",
+      "oauth": {
+        "connected": "Connected",
+        "notConnected": "Not connected",
+        "connectedAs": "Using {{email}}. The system can only read files you explicitly choose.",
+        "connectHint": "Sign in to Google and choose which documents the system may read.",
+        "platformNotReady": "The deployer has not completed the Google OAuth application setup for this store.",
+        "connectAction": "Connect Google",
+        "changeAccountAction": "Change account",
+        "disconnectAction": "Disconnect",
+        "chooseFileAction": "Choose from Google Drive",
+        "pickerHint": "Select Choose from Google Drive. Google grants access only to the file selected with {{email}}.",
+        "connectedMessage": "Google Drive is connected. You can now choose documents directly.",
+        "cancelledMessage": "Google connection was closed or declined. Nothing was changed.",
+        "disconnectedMessage": "Google was disconnected and the stored access grant was removed.",
+        "connectError": "Google sign-in could not start. Check the connector setup.",
+        "disconnectError": "Google could not be disconnected. Try again.",
+        "pickerError": "Google Drive could not be opened. Reconnect the account and try again.",
+        "disconnectTitle": "Disconnect Google?",
+        "disconnectConfirmation": "The encrypted refresh token will be deleted and Google revocation will be requested. Google sources stop updating until you reconnect."
+      },
+      "syncAction": "Check for updates",
+      "saveAction": "Save connection",
+      "createTitle": "Connect a knowledge source",
+      "createHint": "The source must return plain text or Markdown. Synchronizing creates a draft; it never publishes guidance automatically.",
+      "safetyTitle": "Approval remains required",
+      "safetyHint": "The system checks the source and creates a new draft only when its content changes. An authorized manager must review and approve that draft before agents can use it.",
+      "fields": {
+        "type": "Document location",
+        "name": "Source name",
+        "url": "Document sharing link",
+        "urlHint": "The host must be approved by the server administrator. HTML pages and private network addresses are rejected.",
+        "googleUrlHint": "Paste the sharing link from Google Docs, Google Sheets, or a Drive file."
+      },
+      "types": {
+        "googleDoc": "Google Docs",
+        "googleSheet": "Google Sheets",
+        "googleDrive": "Text, Markdown, or CSV file on Google Drive",
+        "httpsText": "Markdown or text from another website"
+      },
+      "status": {
+        "never": "Not checked yet",
+        "succeeded": "Draft created",
+        "failed": "Connection needs attention",
+        "unchanged": "No changes"
+      },
+      "messages": {
+        "connected": "Source connection saved. Check it to create the first draft.",
+        "createError": "The source could not be connected. Check the HTTPS address and server allowlist.",
+        "synced": "Source checked and a new knowledge draft was created for review.",
+        "unchanged": "Source checked. Its content has not changed, so no duplicate draft was created.",
+        "syncError": "The source could not be synchronized. Review the connection status for details."
+      }
+    },
+    "messages": {
+      "created": "Draft saved. Agents cannot use this guidance until it is approved.",
+      "approved": "Approved. Agents can now find and cite this guidance.",
+      "retired": "Use stopped. Agents will no longer use this version.",
+      "actionError": "The action could not be completed. Check the information and try again.",
+      "searchError": "Guidance search is unavailable right now. Please try again."
+    }
+  },
   "supportDesk": {
     "navigation": "Customer Support",
     "title": "Customer Support",

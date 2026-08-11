@@ -1,5 +1,7 @@
 {
-  "namespaces": ["public"],
+  "namespaces": [
+    "public"
+  ],
   "name": "public",
   "tables": [
     {
@@ -225,7 +227,13 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["READ_ONLY", "LOW", "MEDIUM", "HIGH", "PROHIBITED"],
+          "enumItems": [
+            "READ_ONLY",
+            "LOW",
+            "MEDIUM",
+            "HIGH",
+            "PROHIBITED"
+          ],
           "mappedType": "enum"
         },
         "status": {
@@ -568,7 +576,9 @@
         },
         {
           "keyName": "agent_action_request_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -917,7 +927,9 @@
         },
         {
           "keyName": "agent_approval_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -1203,7 +1215,9 @@
         },
         {
           "keyName": "agent_audit_event_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -1268,7 +1282,11 @@
           "scale": null,
           "default": "'DISABLED'",
           "comment": null,
-          "enumItems": ["ACTIVE", "PAUSED", "DISABLED"],
+          "enumItems": [
+            "ACTIVE",
+            "PAUSED",
+            "DISABLED"
+          ],
           "mappedType": "enum"
         },
         "tenant_id": {
@@ -1416,7 +1434,258 @@
         },
         {
           "keyName": "agent_channel_connection_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {},
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "connector_type": {
+          "name": "connector_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [
+            "GOOGLE_DRIVE"
+          ],
+          "mappedType": "enum"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'default'",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "account_email": {
+          "name": "account_email",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "encrypted_secret": {
+          "name": "encrypted_secret",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "encryption_iv": {
+          "name": "encryption_iv",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "encryption_tag": {
+          "name": "encryption_tag",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "key_version": {
+          "name": "key_version",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'v1'",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "scopes": {
+          "name": "scopes",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "json"
+        },
+        "updated_by_id": {
+          "name": "updated_by_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": "now()",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": "now()",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "name": "agent_connector_credential",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "IDX_agent_connector_credential_deleted_at",
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false,
+          "expression": "CREATE INDEX IF NOT EXISTS \"IDX_agent_connector_credential_deleted_at\" ON \"agent_connector_credential\" (\"deleted_at\") WHERE deleted_at IS NULL"
+        },
+        {
+          "keyName": "IDX_agent_connector_credential_unique",
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false,
+          "expression": "CREATE UNIQUE INDEX IF NOT EXISTS \"IDX_agent_connector_credential_unique\" ON \"agent_connector_credential\" (\"tenant_id\", \"connector_type\") WHERE deleted_at IS NULL"
+        },
+        {
+          "keyName": "agent_connector_credential_pkey",
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -1577,7 +1846,10 @@
           "scale": null,
           "default": "'OPEN'",
           "comment": null,
-          "enumItems": ["OPEN", "CLOSED"],
+          "enumItems": [
+            "OPEN",
+            "CLOSED"
+          ],
           "mappedType": "enum"
         },
         "opened_at": {
@@ -1734,7 +2006,9 @@
         },
         {
           "keyName": "agent_conversation_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -1831,7 +2105,13 @@
           "scale": null,
           "default": "'PENDING'",
           "comment": null,
-          "enumItems": ["PENDING", "PROCESSING", "DELIVERED", "FAILED", "DEAD"],
+          "enumItems": [
+            "PENDING",
+            "PROCESSING",
+            "DELIVERED",
+            "FAILED",
+            "DEAD"
+          ],
           "mappedType": "enum"
         },
         "idempotency_key": {
@@ -2059,7 +2339,9 @@
         },
         {
           "keyName": "agent_delivery_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -2133,7 +2415,12 @@
           "scale": null,
           "default": "'RUNNING'",
           "comment": null,
-          "enumItems": ["RUNNING", "PASSED", "FAILED", "ERROR"],
+          "enumItems": [
+            "RUNNING",
+            "PASSED",
+            "FAILED",
+            "ERROR"
+          ],
           "mappedType": "enum"
         },
         "idempotency_key": {
@@ -2329,7 +2616,9 @@
         },
         {
           "keyName": "agent_evaluation_run_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -2451,7 +2740,11 @@
           "scale": null,
           "default": "'DRAFT'",
           "comment": null,
-          "enumItems": ["DRAFT", "ACTIVE", "RETIRED"],
+          "enumItems": [
+            "DRAFT",
+            "ACTIVE",
+            "RETIRED"
+          ],
           "mappedType": "enum"
         },
         "initial_state": {
@@ -2615,7 +2908,9 @@
         },
         {
           "keyName": "agent_evaluation_scenario_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -2849,7 +3144,11 @@
           "scale": null,
           "default": "'RECEIVED'",
           "comment": null,
-          "enumItems": ["RECEIVED", "PROCESSED", "FAILED"],
+          "enumItems": [
+            "RECEIVED",
+            "PROCESSED",
+            "FAILED"
+          ],
           "mappedType": "enum"
         },
         "processed_at": {
@@ -2974,7 +3273,9 @@
         },
         {
           "keyName": "agent_event_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -3080,7 +3381,12 @@
           "scale": null,
           "default": "'MEDIUM'",
           "comment": null,
-          "enumItems": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+          "enumItems": [
+            "LOW",
+            "MEDIUM",
+            "HIGH",
+            "CRITICAL"
+          ],
           "mappedType": "enum"
         },
         "status": {
@@ -3329,7 +3635,217 @@
         },
         {
           "keyName": "agent_incident_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {},
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "document_id": {
+          "name": "document_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "chunk_index": {
+          "name": "chunk_index",
+          "type": "integer",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "checksum": {
+          "name": "checksum",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "citation_locator": {
+          "name": "citation_locator",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "word_count": {
+          "name": "word_count",
+          "type": "integer",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": "now()",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": "now()",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "name": "agent_knowledge_chunk",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "IDX_agent_knowledge_chunk_deleted_at",
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false,
+          "expression": "CREATE INDEX IF NOT EXISTS \"IDX_agent_knowledge_chunk_deleted_at\" ON \"agent_knowledge_chunk\" (\"deleted_at\") WHERE deleted_at IS NULL"
+        },
+        {
+          "keyName": "IDX_agent_knowledge_chunk_document_index",
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false,
+          "expression": "CREATE UNIQUE INDEX IF NOT EXISTS \"IDX_agent_knowledge_chunk_document_index\" ON \"agent_knowledge_chunk\" (\"document_id\", \"chunk_index\") WHERE deleted_at IS NULL"
+        },
+        {
+          "keyName": "IDX_agent_knowledge_chunk_document_id",
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false,
+          "expression": "CREATE INDEX IF NOT EXISTS \"IDX_agent_knowledge_chunk_document_id\" ON \"agent_knowledge_chunk\" (\"document_id\") WHERE deleted_at IS NULL"
+        },
+        {
+          "keyName": "agent_knowledge_chunk_pkey",
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -3451,7 +3967,11 @@
           "scale": null,
           "default": "'DRAFT'",
           "comment": null,
-          "enumItems": ["DRAFT", "APPROVED", "RETIRED"],
+          "enumItems": [
+            "DRAFT",
+            "APPROVED",
+            "RETIRED"
+          ],
           "mappedType": "enum"
         },
         "owner_id": {
@@ -3679,7 +4199,374 @@
         },
         {
           "keyName": "agent_knowledge_document_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "primary": true,
+          "unique": true
+        }
+      ],
+      "checks": [],
+      "foreignKeys": {},
+      "nativeEnums": {}
+    },
+    {
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "source_type": {
+          "name": "source_type",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'HTTPS_TEXT'",
+          "comment": null,
+          "enumItems": [
+            "HTTPS_TEXT",
+            "GOOGLE_DOC",
+            "GOOGLE_SHEET",
+            "GOOGLE_DRIVE"
+          ],
+          "mappedType": "enum"
+        },
+        "source_url": {
+          "name": "source_url",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'ACTIVE'",
+          "comment": null,
+          "enumItems": [
+            "ACTIVE",
+            "DISABLED"
+          ],
+          "mappedType": "enum"
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'default'",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'customer_support'",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "locale": {
+          "name": "locale",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'vi'",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "last_sync_status": {
+          "name": "last_sync_status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'NEVER'",
+          "comment": null,
+          "enumItems": [
+            "NEVER",
+            "SUCCEEDED",
+            "FAILED",
+            "UNCHANGED"
+          ],
+          "mappedType": "enum"
+        },
+        "last_checked_at": {
+          "name": "last_checked_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "last_synced_at": {
+          "name": "last_synced_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "last_etag": {
+          "name": "last_etag",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "last_checksum": {
+          "name": "last_checksum",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "last_document_id": {
+          "name": "last_document_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": "now()",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": "now()",
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamptz",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "name": "agent_knowledge_source",
+      "schema": "public",
+      "indexes": [
+        {
+          "keyName": "IDX_agent_knowledge_source_deleted_at",
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false,
+          "expression": "CREATE INDEX IF NOT EXISTS \"IDX_agent_knowledge_source_deleted_at\" ON \"agent_knowledge_source\" (\"deleted_at\") WHERE deleted_at IS NULL"
+        },
+        {
+          "keyName": "IDX_agent_knowledge_source_unique",
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false,
+          "expression": "CREATE UNIQUE INDEX IF NOT EXISTS \"IDX_agent_knowledge_source_unique\" ON \"agent_knowledge_source\" (\"tenant_id\", \"source_url\", \"scope\", \"locale\") WHERE deleted_at IS NULL"
+        },
+        {
+          "keyName": "IDX_agent_knowledge_source_status",
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false,
+          "expression": "CREATE INDEX IF NOT EXISTS \"IDX_agent_knowledge_source_status\" ON \"agent_knowledge_source\" (\"status\", \"last_sync_status\") WHERE deleted_at IS NULL"
+        },
+        {
+          "keyName": "agent_knowledge_source_pkey",
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -3760,7 +4647,10 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["INBOUND", "OUTBOUND"],
+          "enumItems": [
+            "INBOUND",
+            "OUTBOUND"
+          ],
           "mappedType": "enum"
         },
         "message_type": {
@@ -3776,7 +4666,12 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["NOTIFICATION", "COMMAND", "COMMAND_RESULT", "TEXT"],
+          "enumItems": [
+            "NOTIFICATION",
+            "COMMAND",
+            "COMMAND_RESULT",
+            "TEXT"
+          ],
           "mappedType": "enum"
         },
         "status": {
@@ -3792,7 +4687,12 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["RECEIVED", "AVAILABLE", "PROCESSED", "REJECTED"],
+          "enumItems": [
+            "RECEIVED",
+            "AVAILABLE",
+            "PROCESSED",
+            "REJECTED"
+          ],
           "mappedType": "enum"
         },
         "sender_type": {
@@ -4045,7 +4945,9 @@
         },
         {
           "keyName": "agent_message_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -4481,7 +5383,9 @@
         },
         {
           "keyName": "agent_model_run_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -4603,7 +5507,13 @@
           "scale": null,
           "default": "'PENDING'",
           "comment": null,
-          "enumItems": ["PENDING", "PROCESSING", "DELIVERED", "FAILED", "DEAD"],
+          "enumItems": [
+            "PENDING",
+            "PROCESSING",
+            "DELIVERED",
+            "FAILED",
+            "DEAD"
+          ],
           "mappedType": "enum"
         },
         "idempotency_key": {
@@ -4815,7 +5725,9 @@
         },
         {
           "keyName": "agent_outbox_event_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -4921,7 +5833,11 @@
           "scale": null,
           "default": "'DRAFT'",
           "comment": null,
-          "enumItems": ["DRAFT", "ACTIVE", "RETIRED"],
+          "enumItems": [
+            "DRAFT",
+            "ACTIVE",
+            "RETIRED"
+          ],
           "mappedType": "enum"
         },
         "action_type": {
@@ -4953,7 +5869,13 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["READ_ONLY", "LOW", "MEDIUM", "HIGH", "PROHIBITED"],
+          "enumItems": [
+            "READ_ONLY",
+            "LOW",
+            "MEDIUM",
+            "HIGH",
+            "PROHIBITED"
+          ],
           "mappedType": "enum"
         },
         "requires_approval": {
@@ -5133,7 +6055,9 @@
         },
         {
           "keyName": "agent_policy_definition_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -5223,7 +6147,11 @@
           "scale": null,
           "default": "'DRAFT'",
           "comment": null,
-          "enumItems": ["DRAFT", "ACTIVE", "RETIRED"],
+          "enumItems": [
+            "DRAFT",
+            "ACTIVE",
+            "RETIRED"
+          ],
           "mappedType": "enum"
         },
         "system_prompt": {
@@ -5403,7 +6331,9 @@
         },
         {
           "keyName": "agent_prompt_template_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -5493,7 +6423,13 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["READ_ONLY", "LOW", "MEDIUM", "HIGH", "PROHIBITED"],
+          "enumItems": [
+            "READ_ONLY",
+            "LOW",
+            "MEDIUM",
+            "HIGH",
+            "PROHIBITED"
+          ],
           "mappedType": "enum"
         },
         "status": {
@@ -5681,7 +6617,9 @@
         },
         {
           "keyName": "agent_recommendation_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -5963,7 +6901,9 @@
         },
         {
           "keyName": "agent_run_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -6069,7 +7009,12 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+          "enumItems": [
+            "LOW",
+            "MEDIUM",
+            "HIGH",
+            "CRITICAL"
+          ],
           "mappedType": "enum"
         },
         "status": {
@@ -6443,7 +7388,9 @@
         },
         {
           "keyName": "agent_task_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,
@@ -6549,7 +7496,10 @@
           "scale": null,
           "default": null,
           "comment": null,
-          "enumItems": ["READ", "COMMAND"],
+          "enumItems": [
+            "READ",
+            "COMMAND"
+          ],
           "mappedType": "enum"
         },
         "status": {
@@ -6565,7 +7515,12 @@
           "scale": null,
           "default": "'RUNNING'",
           "comment": null,
-          "enumItems": ["RUNNING", "SUCCEEDED", "CONFLICT", "FAILED"],
+          "enumItems": [
+            "RUNNING",
+            "SUCCEEDED",
+            "CONFLICT",
+            "FAILED"
+          ],
           "mappedType": "enum"
         },
         "idempotency_key": {
@@ -6754,7 +7709,9 @@
         },
         {
           "keyName": "agent_tool_call_pkey",
-          "columnNames": ["id"],
+          "columnNames": [
+            "id"
+          ],
           "composite": false,
           "constraint": true,
           "primary": true,

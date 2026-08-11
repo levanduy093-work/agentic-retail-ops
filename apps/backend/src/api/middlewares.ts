@@ -2,25 +2,30 @@ import {
   authenticate,
   defineMiddlewares,
   validateAndTransformBody,
+  validateAndTransformQuery,
 } from "@medusajs/framework/http"
+import type { MiddlewareRoute } from "@medusajs/framework/http"
 import {
   AdminCreateAgentTask,
   AdminCreateKnowledgeDocument,
+  AdminCreateKnowledgeSource,
   AdminCreateSupportSimulatorMessage,
   AdminDecideAgentApproval,
   AdminIngestInventoryLowEvent,
   AdminIngestOrderExceptionEvent,
   AdminIngestSupportRequest,
+  AdminGoogleKnowledgeOAuthCallback,
   AdminRunAgentEvaluation,
   AdminRequestAgentAction,
+  AdminRetireKnowledgeDocument,
+  AdminSearchKnowledge,
   AdminSendAgentConversationMessage,
   AdminSendSupportSimulatorReply,
   AdminTransitionAgentTask,
   TelegramWebhookUpdate,
 } from "./admin/agent-operations/validators"
 
-export default defineMiddlewares({
-  routes: [
+const routes: MiddlewareRoute[] = [
     {
       matcher: "/webhooks/agent-operations/telegram/:id",
       method: "POST",
@@ -184,6 +189,71 @@ export default defineMiddlewares({
       policies: [{ resource: "agent_knowledge", operation: "approve" }],
     },
     {
+      matcher: "/admin/agent-operations/knowledge/sources",
+      method: "GET",
+      policies: [{ resource: "agent_knowledge", operation: "read" }],
+    },
+    {
+      matcher: "/admin/agent-operations/knowledge/sources",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminCreateKnowledgeSource)],
+      policies: [{ resource: "agent_knowledge", operation: "create" }],
+    },
+    {
+      matcher: "/admin/agent-operations/knowledge/sources/google-status",
+      method: "GET",
+      policies: [{ resource: "agent_knowledge", operation: "read" }],
+    },
+    {
+      matcher:
+        "/admin/agent-operations/knowledge/sources/google-oauth/authorize",
+      method: "POST",
+      policies: [{ resource: "agent_knowledge", operation: "create" }],
+    },
+    {
+      matcher:
+        "/admin/agent-operations/knowledge/sources/google-oauth/callback",
+      method: "GET",
+      middlewares: [
+        validateAndTransformQuery(AdminGoogleKnowledgeOAuthCallback, {}),
+      ],
+      policies: [{ resource: "agent_knowledge", operation: "create" }],
+    },
+    {
+      matcher:
+        "/admin/agent-operations/knowledge/sources/google-oauth/picker-token",
+      method: "POST",
+      policies: [{ resource: "agent_knowledge", operation: "read" }],
+    },
+    {
+      matcher:
+        "/admin/agent-operations/knowledge/sources/google-oauth/disconnect",
+      method: "POST",
+      policies: [{ resource: "agent_knowledge", operation: "delete" }],
+    },
+    {
+      matcher: "/admin/agent-operations/knowledge/sources/:id/sync",
+      method: "POST",
+      policies: [{ resource: "agent_knowledge", operation: "create" }],
+    },
+    {
+      matcher: "/admin/agent-operations/knowledge/:id",
+      method: "GET",
+      policies: [{ resource: "agent_knowledge", operation: "read" }],
+    },
+    {
+      matcher: "/admin/agent-operations/knowledge/:id/retire",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminRetireKnowledgeDocument)],
+      policies: [{ resource: "agent_knowledge", operation: "approve" }],
+    },
+    {
+      matcher: "/admin/agent-operations/knowledge/search",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminSearchKnowledge)],
+      policies: [{ resource: "agent_knowledge", operation: "read" }],
+    },
+    {
       matcher: "/admin/agent-operations/evaluations/scenarios",
       method: "GET",
       policies: [{ resource: "agent_evaluation", operation: "read" }],
@@ -219,5 +289,6 @@ export default defineMiddlewares({
       method: "GET",
       policies: [{ resource: "agent_platform", operation: "read" }],
     },
-  ],
-})
+]
+
+export default defineMiddlewares({ routes })

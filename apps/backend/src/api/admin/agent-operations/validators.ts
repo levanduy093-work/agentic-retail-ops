@@ -207,6 +207,38 @@ export const AdminCreateKnowledgeDocument = z.strictObject({
   version: z.string().trim().min(1).max(50),
 })
 
+export const AdminSearchKnowledge = z.strictObject({
+  limit: z.number().int().min(1).max(20).default(5),
+  locale: z.string().trim().min(2).max(20).optional(),
+  query: z.string().trim().min(2).max(500),
+  scope: z.string().trim().min(1).max(100).optional(),
+  tenant_id: z.string().trim().min(1).default("default"),
+})
+
+export const AdminRetireKnowledgeDocument = z.strictObject({
+  reason: z.string().trim().min(3).max(1000),
+})
+
+export const AdminCreateKnowledgeSource = z.strictObject({
+  locale: z.enum(["en", "vi"]),
+  name: z.string().trim().min(2).max(200),
+  scope: z.string().trim().min(1).max(100).default("customer_support"),
+  source_type: z.enum([
+    "GOOGLE_DOC",
+    "GOOGLE_DRIVE",
+    "GOOGLE_SHEET",
+    "HTTPS_TEXT",
+  ]),
+  source_url: z.url().max(2000),
+  tenant_id: z.string().trim().min(1).default("default"),
+})
+
+export const AdminGoogleKnowledgeOAuthCallback = z.looseObject({
+  code: z.string().trim().min(1).optional(),
+  error: z.string().trim().min(1).max(200).optional(),
+  state: z.string().trim().min(1).max(4_000).optional(),
+})
+
 export const AdminRunAgentEvaluation = z.strictObject({
   idempotency_key: z.string().trim().min(1).max(200),
   observed: z.record(z.string(), z.unknown()),
@@ -246,6 +278,16 @@ export type AdminTransitionAgentTaskType = z.infer<
 >
 export type AdminCreateKnowledgeDocumentType = z.infer<
   typeof AdminCreateKnowledgeDocument
+>
+export type AdminSearchKnowledgeType = z.infer<typeof AdminSearchKnowledge>
+export type AdminRetireKnowledgeDocumentType = z.infer<
+  typeof AdminRetireKnowledgeDocument
+>
+export type AdminCreateKnowledgeSourceType = z.infer<
+  typeof AdminCreateKnowledgeSource
+>
+export type AdminGoogleKnowledgeOAuthCallbackType = z.infer<
+  typeof AdminGoogleKnowledgeOAuthCallback
 >
 export type AdminRunAgentEvaluationType = z.infer<
   typeof AdminRunAgentEvaluation

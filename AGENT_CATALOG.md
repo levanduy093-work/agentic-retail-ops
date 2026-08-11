@@ -23,7 +23,7 @@ vẫn là các gate riêng.
 | Order Exception Agent | `runtime-verified` | Checkout `order.placed` và luồng API/OMS tự gán SLA UTC; `order.read` lấy live status; detector quét phân trang mỗi 5 phút và khóa từng order bằng Redis; HTTP/RBAC đã xác nhận; hai worker cạnh tranh vẫn chỉ tạo một event/incident/action | Hiệu chỉnh SLA theo vận hành thật và SLA table/index hoặc durable cursor cho volume lớn |
 | Fulfillment Agent | `contracted` | Có trigger fulfillment, read/task tool và foundation dependency | SLA contract, workflow và connector vận chuyển thật |
 | Customer Support Agent | `runtime-verified` | API/worker/PostgreSQL đã xác nhận `support.requested` đọc live order, kiểm tra chủ sở hữu, dùng knowledge `APPROVED`, tạo draft có citation và task; browser nhân viên đã xác nhận nhận/sửa/lưu, trả hàng đợi, chuyển quản lý và VI/EN; simulator `IN_APP` đã xác nhận khách hỏi và nhân viên bấm gửi bản đã duyệt, có chống gửi trùng | Customer channel/identity mapping, consent, webhook signature, delivery receipt và adapter gửi khách thật |
-| Knowledge Curator Agent | `contracted` | Có knowledge lifecycle, checksum, citation và approval workflow | Gap detector, diff/review UI và nguồn tri thức thật |
+| Knowledge Curator Agent | `implemented-static` | Kho hướng dẫn có tài liệu bất biến theo phiên bản, tự chia đoạn, checksum từng đoạn, nguồn trích dẫn chính xác, vòng đời duyệt/ngừng dùng, API tìm thử, reindex dữ liệu cũ và Admin UI Việt/Anh; lifecycle đã chạy thật trên PostgreSQL | Connector nhập từ nguồn thật, phát hiện nội dung thiếu/trùng/xung đột và agent đề xuất bản cập nhật; hiện quản lý vẫn chủ động nhập và duyệt |
 | Returns & Refund Agent | `contracted` | Có policy/approval, task, audit và evaluation foundation | Ownership, evidence contract và Medusa workflow riêng |
 | Payment & Fraud Watcher | `contracted` | Có event/incident/task/escalation và `PROHIBITED` policy primitive | Payment mapping, fraud rules và prohibited-action scenarios |
 | Catalog Quality Agent | `contracted` | Có task, evaluation và typed-tool contract | Catalog rules, scanner và remediation tools riêng |
@@ -65,10 +65,14 @@ mobile/push/Zalo/Slack/Teams vẫn chưa triển khai.
   lý. Script onboarding thay role `Super Admin` do Medusa CLI gán mặc định bằng
   role nhân viên này.
 - Knowledge có lifecycle `DRAFT -> APPROVED -> RETIRED`, checksum, citation,
-  owner, locale, scope, hiệu lực và expiry. Agent chỉ được dùng bản approved còn
-  hiệu lực.
+  owner, locale, scope, hiệu lực và expiry. Nội dung được chia thành các đoạn
+  tìm kiếm ổn định; mỗi đoạn có checksum và locator riêng. Agent chỉ được dùng
+  đoạn thuộc bản approved còn hiệu lực.
 - Model Gateway có adapter contract, redaction, token budget và structured
-  output bắt buộc. Adapter mặc định chủ động từ chối khi chưa cấu hình provider.
+  output bắt buộc. OpenAI Responses adapter dùng JSON Schema strict, timeout,
+  `store=false`, input tối thiểu và model-run ledger. Adapter mặc định vẫn
+  disabled; thiếu provider/key/model thì Customer Support giữ draft
+  deterministic thay vì làm hỏng hàng đợi.
 - Evaluation harness lưu scenario/run, expected/forbidden assertions và score.
   Baseline đã seed `SHIP-001`, `KNOW-001` và `ORDER-001`.
 - Channel registry và delivery ledger hỗ trợ `IN_APP`, web push, Telegram, Zalo,
@@ -77,6 +81,9 @@ mobile/push/Zalo/Slack/Teams vẫn chưa triển khai.
   vào database.
 - Medusa Admin có trang `Agent Operations` xem readiness, incident, approval,
   task, knowledge, evaluation và catalog; quyết định approval bắt buộc có reason.
+- Medusa Admin có trang `Knowledge Hub / Kho hướng dẫn của cửa hàng` để quản lý
+  tạo bản nháp, duyệt, ngừng sử dụng, xem từng đoạn và thử câu hỏi bằng tiếng
+  Việt hoặc tiếng Anh. Câu chữ giải thích rõ khi nào agent được phép sử dụng.
 - Medusa Admin có route nghiệp vụ `Customer Support / Hỗ trợ khách hàng` tách
   khỏi control plane kỹ thuật. Nhân viên chỉ thấy câu hỏi, khách, trạng thái đơn,
   bản nháp, nguồn tham khảo và các nút nhận việc/hoàn tất/chuyển quản lý. Toàn bộ
@@ -150,11 +157,13 @@ mobile/push/Zalo/Slack/Teams vẫn chưa triển khai.
 - `order.read@1.0.0` lấy trạng thái order/payment/fulfillment trực tiếp từ
   Medusa. Customer ID trong request phải đúng chủ sở hữu của order, nếu không
   workflow fail-closed trước khi ghi event hay incident.
-- `knowledge.search@1.0.0` chỉ lấy tài liệu scope `customer_support` đang
-  `APPROVED`, còn hiệu lực và đúng locale; citation giữ document, locator,
-  checksum và version.
+- `knowledge.search@1.0.0` chỉ lấy từng đoạn thuộc tài liệu scope
+  `customer_support` đang `APPROVED`, còn hiệu lực và đúng locale; citation giữ
+  document, chunk, locator, checksum và version để nhân viên kiểm tra đúng đoạn.
 - `response.draft@1.0.0` tạo câu trả lời deterministic từ live order và
-  knowledge. Nếu thiếu knowledge phù hợp thì ghi rõ cần kiểm tra thủ công.
+  knowledge. Khi model provider được bật, model chỉ được viết lại phần `body`
+  từ live order và approved excerpts; citation/grounding/review flag do code
+  gắn cố định. Nếu model lỗi hoặc thiếu knowledge, luồng deterministic tiếp tục.
 - Mọi bản nháp đều có `requires_human_review=true`. Agent tạo recommendation
   `REVIEW_SUPPORT_RESPONSE` và request `task.create` qua Action Gateway với loại
   `SUPPORT_RESPONSE_REVIEW`.
@@ -254,7 +263,10 @@ Admin API:
 - `GET|POST /admin/agent-operations/tasks`;
 - `POST /admin/agent-operations/tasks/:id/transition`;
 - `GET|POST /admin/agent-operations/knowledge`;
+- `GET /admin/agent-operations/knowledge/:id` trả tài liệu và các đoạn;
+- `POST /admin/agent-operations/knowledge/search` thử tìm nguồn đã duyệt;
 - `POST /admin/agent-operations/knowledge/:id/approve`;
+- `POST /admin/agent-operations/knowledge/:id/retire`;
 - `GET /admin/agent-operations/evaluations/scenarios`;
 - `GET|POST /admin/agent-operations/evaluations/runs`;
 - read API cho policies, prompts, model runs và channel connections.
@@ -275,6 +287,7 @@ Persistence:
 - `agent_task`;
 - `agent_policy_definition`;
 - `agent_knowledge_document`;
+- `agent_knowledge_chunk`;
 - `agent_prompt_template`;
 - `agent_model_run`;
 - `agent_evaluation_scenario`;
@@ -339,6 +352,28 @@ Ngày kiểm chứng: 2026-08-11.
   recommendation, action, task và tool call; event trùng bị suppress; customer
   không sở hữu order bị từ chối và tạo 0 event; order không đổi; có 0
   conversation và 0 `message.send` action.
+- Migration `Migration20260811052521` tạo bảng `agent_knowledge_chunk` đã chạy
+  thành công. Script reindex đã chuyển 14 tài liệu cũ thành 14 đoạn có nguồn.
+- Knowledge Hub verifier đã xác nhận trên PostgreSQL: bản nháp không xuất hiện
+  khi tìm, bản đã duyệt trả đúng locator `#chunk-*` và checksum, bản ngừng sử
+  dụng lập tức bị loại khỏi kết quả. Customer Support verifier chạy lại thành
+  công với tìm kiếm theo đoạn, draft grounded và vẫn bắt buộc người duyệt.
+- OpenAI Responses adapter có unit test kiểm tra JSON Schema strict,
+  `store=false`, parse structured output và không đưa credential vào payload.
+  Toàn bộ suite hiện đạt 103/103. Chưa gọi API model thật vì workspace chưa được
+  cấp `OPENAI_API_KEY` và `AGENT_MODEL`; model path là `RUNTIME-PENDING`.
+- Knowledge Source Connector đầu tiên đã hỗ trợ tài liệu Markdown/văn bản qua
+  HTTPS. Giao diện Knowledge Hub cho phép lưu nguồn và chủ động đồng bộ; nội
+  dung thay đổi chỉ tạo `DRAFT`, không tự xuất bản cho agent.
+- Migration `Migration20260811060537` đã chạy trên PostgreSQL local. Runtime
+  connector đã tải tài liệu HTTPS thật, tạo 4 chunks và xác nhận lần đồng bộ
+  thứ hai trả `UNCHANGED`, không tạo bản nháp trùng.
+- Google knowledge adapter đã hỗ trợ Google Docs, Google Sheets và tệp
+  TXT/Markdown/CSV bằng OAuth connector và Google Picker. Chủ shop đăng nhập rồi
+  chọn từng tệp; quyền `drive.file` không mở toàn bộ Drive. Refresh token được
+  mã hóa, callback chống CSRF bằng state/nonce có hạn dùng, disconnect cố thu hồi
+  quyền và xóa credential. Migration `Migration20260811080525` đã chạy; gọi
+  Google thật vẫn `RUNTIME-PENDING` đến khi có OAuth app production.
 - Customer Support staff-flow verifier dùng hai User record tạm và JWT ngắn
   hạn: user có role nhận 201, user thiếu role nhận 403, request chưa đăng nhập
   nhận 401; hai nhánh bị chặn tạo 0 event. Worker tạo task thật; nhân viên nhận
@@ -392,8 +427,10 @@ Ngày kiểm chứng: 2026-08-11.
    thêm hiểu chat tự do bằng LLM.
 6. Chọn model provider, secret manager và budget; chỉ bật adapter sau khi
    benchmark `KNOW-001` và security review đạt yêu cầu.
-7. Bổ sung connector nguồn thật và scenario approval expiry, retry/dead
-   recovery qua API/worker.
+7. Cấu hình OAuth app và Google Picker ở cấp nền tảng, chạy acceptance đăng nhập
+   và chọn Docs/Sheets thật; sau đó thêm lịch đồng bộ, review diff, phát hiện nội
+   dung thiếu/xung đột và retry/dead recovery qua worker. Notion/PDF cần adapter
+   riêng theo cùng connector contract.
 8. Hiệu chỉnh số phút SLA theo vận hành thật; khi vượt giới hạn batch cấu hình,
    chuyển detector sang SLA table có index hoặc durable cursor.
 9. Sau lát cắt hỗ trợ khách hàng, triển khai Fulfillment Agent từ SLA contract

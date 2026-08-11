@@ -1,5 +1,9 @@
 import { z } from "@medusajs/framework/zod"
-import { buildKnowledgeCitation, isKnowledgeEligible } from "../knowledge"
+import {
+  buildKnowledgeCitation,
+  checksumKnowledgeContent,
+  isKnowledgeEligible,
+} from "../knowledge"
 import { defineAgentTool } from "../tool-contract"
 
 const JsonRecord = z.record(z.string(), z.unknown())
@@ -14,6 +18,8 @@ export const KnowledgeSearchInput = z.strictObject({
 
 export const KnowledgeSearchResult = z.strictObject({
   citation_locator: z.string().min(1),
+  chunk_id: z.string().min(1).optional(),
+  chunk_index: z.number().int().nonnegative().optional(),
   document_id: z.string().min(1),
   document_key: z.string().min(1),
   effective_at: z.string().datetime(),
@@ -125,6 +131,15 @@ export type KnowledgeDocumentSearchSource = {
   status: string
   title: string
   version: string
+}
+
+export type KnowledgeChunkSearchSource = {
+  checksum: string
+  chunk_index: number
+  citation_locator: string
+  content: string
+  document_id: string
+  id: string
 }
 
 export type AuditEventSearchSource = {
@@ -307,6 +322,61 @@ export function searchKnowledgeDocuments(
     }))
 
   return { results, total_candidates: eligible.length }
+}
+
+export function searchKnowledgeChunks(
+  input: KnowledgeSearchInput,
+  documents: KnowledgeDocumentSearchSource[],
+  chunks: KnowledgeChunkSearchSource[],
+  now = new Date()
+): KnowledgeSearchOutput {
+  const parsed = KnowledgeSearchInput.parse(input)
+  const normalizedQuery = normalizeSearchText(parsed.query)
+  const eligibleDocuments = new Map(
+    documents
+      .filter((document) => isKnowledgeEligible(document, now))
+      .map((document) => [document.id, document])
+  )
+  const candidates = chunks.filter((chunk) =>
+    eligibleDocuments.has(chunk.document_id)
+  )
+  const results = candidates
+    .map((chunk) => {
+      const document = eligibleDocuments.get(chunk.document_id)!
+      return {
+        chunk,
+        document,
+        score: scoreKnowledgeDocument(
+          { ...document, content: chunk.content },
+          normalizedQuery
+        ),
+      }
+    })
+    .filter((candidate) => candidate.score > 0)
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        new Date(right.document.effective_at).getTime() -
+          new Date(left.document.effective_at).getTime() ||
+        left.chunk.chunk_index - right.chunk.chunk_index
+    )
+    .slice(0, parsed.limit)
+    .map(({ chunk, document, score }) => ({
+      citation_locator: chunk.citation_locator,
+      chunk_id: chunk.id,
+      chunk_index: chunk.chunk_index,
+      document_id: document.id,
+      document_key: document.document_key,
+      effective_at: new Date(document.effective_at).toISOString(),
+      excerpt: createExcerpt(chunk.content, normalizedQuery),
+      quote_checksum:
+        chunk.checksum || checksumKnowledgeContent(chunk.content),
+      score,
+      title: document.title,
+      version: document.version,
+    }))
+
+  return { results, total_candidates: candidates.length }
 }
 
 export function formatAuditSearchResult(

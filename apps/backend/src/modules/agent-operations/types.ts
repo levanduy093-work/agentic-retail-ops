@@ -235,6 +235,40 @@ export type ApproveKnowledgeDocumentInput = {
   document_id: string
 }
 
+export type RetireKnowledgeDocumentInput = {
+  actor_id: string
+  document_id: string
+  reason: string
+}
+
+export type CreateKnowledgeSourceInput = {
+  locale: "en" | "vi"
+  name: string
+  owner_id: string
+  scope: string
+  source_type: "GOOGLE_DOC" | "GOOGLE_DRIVE" | "GOOGLE_SHEET" | "HTTPS_TEXT"
+  source_url: string
+  tenant_id?: string
+}
+
+export type SyncKnowledgeSourceInput = {
+  actor_id: string
+  source_id: string
+}
+
+export type ConfigureGoogleKnowledgeConnectorInput = {
+  account_email: string
+  actor_id: string
+  refresh_token: string
+  scopes: string[]
+  tenant_id?: string
+}
+
+export type DisconnectGoogleKnowledgeConnectorInput = {
+  actor_id: string
+  tenant_id?: string
+}
+
 export type InventoryLocationSnapshot = {
   available_quantity: number
   location_id: string

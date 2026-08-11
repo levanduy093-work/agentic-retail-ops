@@ -7,12 +7,15 @@ import { createChannelAdapter } from "../channel-gateway"
 import { evaluateAssertions } from "../evaluation"
 import {
   buildKnowledgeCitation,
+  chunkKnowledgeContent,
   checksumKnowledgeContent,
   isKnowledgeEligible,
 } from "../knowledge"
+import { searchKnowledgeChunks } from "../tools/platform-read-tools"
 import {
   assertModelInvocation,
   DisabledModelAdapter,
+  OpenAIResponsesModelAdapter,
   redactModelInput,
 } from "../model-gateway"
 import { evaluatePolicies } from "../policy-engine"
@@ -150,6 +153,59 @@ describe("agent platform foundations", () => {
     expect(buildKnowledgeCitation({ ...document, status: "DRAFT" })).toBeNull()
   })
 
+  it("creates deterministic searchable knowledge chunks with precise citations", () => {
+    const content = Array.from(
+      { length: 20 },
+      (_, index) =>
+        `Section ${index + 1}. Customers can check order payment and delivery status with store staff.`
+    ).join("\n\n")
+    const chunks = chunkKnowledgeContent(content, "policy://orders/1.0", {
+      max_characters: 360,
+      overlap_characters: 40,
+    })
+
+    expect(chunks.length).toBeGreaterThan(1)
+    expect(chunks.every((chunk) => chunk.content.length <= 360)).toBe(true)
+    expect(chunks[0].citation_locator).toBe("policy://orders/1.0#chunk-1")
+    expect(chunkKnowledgeContent(content, "policy://orders/1.0")).toEqual(
+      chunkKnowledgeContent(content, "policy://orders/1.0")
+    )
+
+    const document = {
+      approved_at: "2026-08-01T00:00:00.000Z",
+      citation_locator: "policy://orders/1.0",
+      content,
+      document_key: "order-status",
+      effective_at: "2026-08-01T00:00:00.000Z",
+      expires_at: null,
+      id: "agknow_test",
+      status: "APPROVED",
+      title: "Order status guidance",
+      version: "1.0.0",
+    }
+    const result = searchKnowledgeChunks(
+      {
+        limit: 2,
+        query: "payment delivery",
+        tenant_id: "default",
+      },
+      [document],
+      chunks.map((chunk, index) => ({
+        ...chunk,
+        document_id: document.id,
+        id: `agkchunk_${index}`,
+      })),
+      new Date("2026-08-11T00:00:00.000Z")
+    )
+
+    expect(result.results[0]).toMatchObject({
+      chunk_id: "agkchunk_0",
+      citation_locator: "policy://orders/1.0#chunk-1",
+      document_id: document.id,
+    })
+    expect(result.results[0].quote_checksum).toBe(chunks[0].checksum)
+  })
+
   it("redacts model input and rejects unbounded or schema-less runs", async () => {
     expect(
       redactModelInput({
@@ -180,6 +236,57 @@ describe("agent platform foundations", () => {
         prompt_version: "1",
       })
     ).rejects.toThrow("No model provider is enabled")
+  })
+
+  it("uses structured Responses output without exposing provider credentials", async () => {
+    const request = jest.fn(async (_url: string, init?: RequestInit) => {
+      const authorization = new Headers(init?.headers).get("Authorization")
+      expect(authorization).toBe("Bearer test-key")
+      const body = JSON.parse(String(init?.body))
+      expect(body.store).toBe(false)
+      expect(body.text.format).toMatchObject({
+        name: "customer_support_draft",
+        strict: true,
+        type: "json_schema",
+      })
+      return new Response(
+        JSON.stringify({
+          output: [
+            {
+              content: [
+                {
+                  text: JSON.stringify({ body: "Your order is being prepared." }),
+                  type: "output_text",
+                },
+              ],
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    })
+    const adapter = new OpenAIResponsesModelAdapter(
+      "test-key",
+      "test-model",
+      "https://provider.test/v1",
+      request as typeof fetch
+    )
+
+    await expect(
+      adapter.invoke({
+        agent_id: "customer-support-agent",
+        input: { question: "Where is my order?" },
+        max_tokens: 100,
+        output_schema: {
+          properties: { body: { type: "string" } },
+          required: ["body"],
+          type: "object",
+        },
+        prompt_key: "support",
+        prompt_version: "1",
+      })
+    ).resolves.toEqual({ body: "Your order is being prepared." })
+    expect(request).toHaveBeenCalledTimes(1)
   })
 
   it("scores structured evaluation assertions", () => {

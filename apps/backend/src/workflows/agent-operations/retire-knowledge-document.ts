@@ -8,27 +8,26 @@ import {
 } from "@medusajs/framework/workflows-sdk"
 import { AGENT_OPERATIONS_MODULE } from "../../modules/agent-operations"
 import AgentOperationsModuleService from "../../modules/agent-operations/service"
-import { CreateKnowledgeDocumentInput } from "../../modules/agent-operations/types"
+import { RetireKnowledgeDocumentInput } from "../../modules/agent-operations/types"
 
-const createKnowledgeDocumentStep = createStep(
-  "create-knowledge-document",
-  async (input: CreateKnowledgeDocumentInput, { container }) => {
+const retireKnowledgeDocumentStep = createStep(
+  "retire-knowledge-document",
+  async (input: RetireKnowledgeDocumentInput, { container }) => {
     const service = container.resolve<AgentOperationsModuleService>(
       AGENT_OPERATIONS_MODULE
     )
     const locking = container.resolve<ILockingModule>(Modules.LOCKING)
     return new StepResponse(
-      await locking.execute(
-        `agent-knowledge:${input.document_key}:${input.version}`,
-        () => service.createGovernedKnowledgeDocument(input)
+      await locking.execute(`agent-knowledge:${input.document_id}`, () =>
+        service.retireGovernedKnowledgeDocument(input)
       )
     )
   }
 )
 
-export const createKnowledgeDocumentWorkflow = createWorkflow(
-  "create-knowledge-document",
-  function (input: CreateKnowledgeDocumentInput) {
-    return new WorkflowResponse(createKnowledgeDocumentStep(input))
+export const retireKnowledgeDocumentWorkflow = createWorkflow(
+  "retire-knowledge-document",
+  function (input: RetireKnowledgeDocumentInput) {
+    return new WorkflowResponse(retireKnowledgeDocumentStep(input))
   }
 )
