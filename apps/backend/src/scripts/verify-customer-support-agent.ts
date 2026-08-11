@@ -147,6 +147,10 @@ export default async function verifyCustomerSupportAgent({
     ownershipMismatchRejected = true
   }
   assert.equal(ownershipMismatchRejected, true)
+  const rejectedModelRuns = await service.listAgentModelRuns({
+    idempotency_key: `${input.source}:${rejectedEventId}:support-draft-model`,
+  })
+  assert.equal(rejectedModelRuns.length, 0)
 
   const { result: execution } = await executeAgentActionWorkflow(container).run(
     {
@@ -239,6 +243,7 @@ export default async function verifyCustomerSupportAgent({
         },
         ownership_mismatch_rejected:
           ownershipMismatchRejected && rejectedEvents.length === 0,
+        ownership_mismatch_model_runs: rejectedModelRuns.length,
         requires_human_review: first.draft.requires_human_review,
         status: "CUSTOMER_SUPPORT_AGENT_VERIFIED",
         task_id: tasks[0].id,

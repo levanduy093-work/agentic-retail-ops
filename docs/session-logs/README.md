@@ -12,6 +12,9 @@ không phải suy luận lại từ đầu.
    nghiệp vụ còn thiếu.
 4. [`../../AGENT_FOUNDATION.md`](../../AGENT_FOUNDATION.md) để đọc nguyên tắc
    kiến trúc, Definition of Ready và Definition of Done.
+5. [`2026-08-11-live-agent-runtime-verification-handoff.md`](./2026-08-11-live-agent-runtime-verification-handoff.md)
+   để xem bằng chứng Gemini/RAG, authorization gate và inventory contention mới
+   nhất.
 
 Session log là ảnh chụp tại thời điểm ghi. Source code, migration và kết quả
 kiểm thử hiện tại luôn có ưu tiên cao hơn nếu tài liệu bị lệch.

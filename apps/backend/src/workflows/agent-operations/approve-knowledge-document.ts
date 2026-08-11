@@ -1,3 +1,5 @@
+import { ILockingModule } from "@medusajs/framework/types"
+import { Modules } from "@medusajs/framework/utils"
 import {
   createStep,
   createWorkflow,
@@ -36,5 +38,3 @@ export const approveKnowledgeDocumentWorkflow = createWorkflow(
     return new WorkflowResponse(approveKnowledgeDocumentStep(input))
   }
 )
-import { ILockingModule } from "@medusajs/framework/types"
-import { Modules } from "@medusajs/framework/utils"

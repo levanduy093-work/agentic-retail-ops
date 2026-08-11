@@ -1,5 +1,7 @@
+import type { IInventoryService } from "@medusajs/framework/types"
 import {
   evaluateInventoryTransfer,
+  getInventoryPositions,
   INVENTORY_EXECUTE_TRANSFER_TOOL,
   INVENTORY_GET_POSITION_TOOL,
   InventoryPosition,
@@ -29,6 +31,36 @@ function position(
 }
 
 describe("typed inventory tools", () => {
+  test("normalizes Medusa BigNumber-like quantities at the tool boundary", async () => {
+    const bigNumber = (value: number) => ({ valueOf: () => value })
+    const service = {
+      listInventoryLevels: jest.fn(async () => [
+        {
+          available_quantity: bigNumber(15),
+          incoming_quantity: bigNumber(2),
+          inventory_item_id: input.inventory_item_id,
+          location_id: input.source_location_id,
+          reserved_quantity: bigNumber(3),
+          stocked_quantity: bigNumber(18),
+        },
+      ]),
+    } as unknown as IInventoryService
+
+    await expect(
+      getInventoryPositions(service, {
+        inventory_item_id: input.inventory_item_id,
+        location_ids: [input.source_location_id],
+      })
+    ).resolves.toEqual([
+      expect.objectContaining({
+        available_quantity: 15,
+        incoming_quantity: 2,
+        reserved_quantity: 3,
+        stocked_quantity: 18,
+      }),
+    ])
+  })
+
   test("publishes versioned read and guarded command contracts", () => {
     expect(INVENTORY_GET_POSITION_TOOL).toMatchObject({
       approval_required: false,

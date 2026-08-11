@@ -62,6 +62,7 @@ import {
 } from "./delivery-policy"
 import { conditionMatches, evaluatePolicies } from "./policy-engine"
 import { assertIncidentTransition, canTransitionIncident } from "./state-machine"
+import { assertSupportOrderAccess } from "./support-request-policy"
 import { AGENT_TOOL_REGISTRY } from "./tool-registry"
 import { executeAgentTool, prepareAgentCommand } from "./tool-executor"
 import { InventoryTransferInput } from "./tools/inventory-tools"
@@ -2592,22 +2593,7 @@ class AgentOperationsModuleService extends MedusaService({
     draft: ResponseDraftOutput,
     @MedusaContext() sharedContext: Context = {}
   ) {
-    if (
-      input.subject_id !== input.payload.order_id ||
-      liveOrder.order_id !== input.payload.order_id
-    ) {
-      throw new MedusaError(
-        MedusaError.Types.INVALID_DATA,
-        "Support request subject, payload, and live order must reference the same order."
-      )
-    }
-
-    if (liveOrder.customer_id !== input.payload.customer_id) {
-      throw new MedusaError(
-        MedusaError.Types.NOT_ALLOWED,
-        "The support customer does not own the referenced order."
-      )
-    }
+    assertSupportOrderAccess(input, liveOrder)
 
     const existingEvents = await this.listAgentEvents(
       { event_id: input.event_id, source: input.source },

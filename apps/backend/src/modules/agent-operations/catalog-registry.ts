@@ -19,6 +19,22 @@ export type AgentCatalogEntry = {
   status: AgentCatalogStatus
 }
 
+const AGENT_IMPLEMENTATION_STATUS = {
+  "analytics-agent": "contracted",
+  "catalog-quality-agent": "contracted",
+  "customer-support-agent": "runtime-verified",
+  "fulfillment-agent": "contracted",
+  "incident-commander-agent": "contracted",
+  "integration-watchdog-agent": "contracted",
+  "knowledge-curator-agent": "implemented-static",
+  "order-exception-agent": "runtime-verified",
+  "owner-briefing-agent": "contracted",
+  "payment-fraud-watcher": "contracted",
+  "pricing-promotion-analyst": "contracted",
+  "returns-refund-agent": "contracted",
+  "workforce-coordinator-agent": "implemented-static",
+} as const satisfies Readonly<Record<string, AgentCatalogStatus>>
+
 export const AGENT_FOUNDATIONS = [
   "event-contracts",
   "incident-state-machine",
@@ -111,11 +127,9 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     ],
     maximum_risk: "HIGH" as RiskLevel,
     status:
-      id === "order-exception-agent"
-        ? ("runtime-verified" as AgentCatalogStatus)
-        : id === "workforce-coordinator-agent"
-          ? ("implemented-static" as AgentCatalogStatus)
-          : ("contracted" as AgentCatalogStatus),
+      AGENT_IMPLEMENTATION_STATUS[
+        id as keyof typeof AGENT_IMPLEMENTATION_STATUS
+      ],
   })),
 ]
 

@@ -8,6 +8,7 @@ import { AGENT_OPERATIONS_MODULE } from "../../modules/agent-operations"
 import { executeOrderRead } from "../../modules/agent-operations/order-read-runtime"
 import { executeKnowledgeSearchTool } from "../../modules/agent-operations/read-tool-runtime"
 import AgentOperationsModuleService from "../../modules/agent-operations/service"
+import { assertSupportOrderAccess } from "../../modules/agent-operations/support-request-policy"
 import { executeAgentTool } from "../../modules/agent-operations/tool-executor"
 import { AGENT_TOOL_REGISTRY } from "../../modules/agent-operations/tool-registry"
 import { OrderReadOutput } from "../../modules/agent-operations/tools/order-tools"
@@ -32,10 +33,24 @@ const readSupportOrderStep = createStep(
   }
 )
 
+const authorizeSupportOrderAccessStep = createStep(
+  "authorize-support-order-access",
+  async (input: { event: SupportRequestEventInput; order: OrderReadOutput }) => {
+    assertSupportOrderAccess(input.event, input.order)
+
+    return new StepResponse(input.order)
+  }
+)
+
 const searchSupportKnowledgeStep = createStep(
   "search-support-knowledge",
   async (
-    input: { locale: "en" | "vi"; question: string; tenant_id: string },
+    input: {
+      authorized_order: OrderReadOutput
+      locale: "en" | "vi"
+      question: string
+      tenant_id: string
+    },
     { container }
   ) => {
     const service = container.resolve<AgentOperationsModuleService>(
@@ -135,7 +150,12 @@ export const ingestSupportRequestWorkflow = createWorkflow(
   "ingest-support-request",
   function (input: SupportRequestEventInput) {
     const order = readSupportOrderStep({ order_id: input.payload.order_id })
+    const authorizedOrder = authorizeSupportOrderAccessStep({
+      event: input,
+      order,
+    })
     const knowledge = searchSupportKnowledgeStep({
+      authorized_order: authorizedOrder,
       locale: input.payload.locale,
       question: input.payload.question,
       tenant_id: input.tenant_id,
@@ -143,13 +163,13 @@ export const ingestSupportRequestWorkflow = createWorkflow(
     const draft = draftSupportResponseStep({
       event: input,
       knowledge,
-      order,
+      order: authorizedOrder,
     })
     const result = persistSupportRequestStep({
       draft,
       event: input,
       knowledge,
-      order,
+      order: authorizedOrder,
     })
 
     return new WorkflowResponse(result)

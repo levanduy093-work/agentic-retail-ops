@@ -5,9 +5,11 @@ import {
 } from "../../../../modules/agent-operations/catalog-registry"
 
 export async function GET(_req: MedusaRequest, res: MedusaResponse) {
+  const agents = getAgentCatalogReadiness()
+
   res.json({
-    agents: getAgentCatalogReadiness(),
-    count: getAgentCatalogReadiness().length,
+    agents,
+    count: agents.length,
     foundations: AGENT_FOUNDATIONS,
   })
 }

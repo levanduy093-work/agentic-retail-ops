@@ -18,12 +18,12 @@ vẫn là các gate riêng.
 | --- | --- | --- | --- |
 | Policy & Approval Agent | `implemented-static` | Policy HIGH cho đề xuất chuyển tồn; `approval.request/decide` đã có typed contract, role gate và Action Gateway; approval có expiry, reason, actor; RBAC module, 21 policy và role Operations Manager đã bootstrap idempotent | Gán role cho tài khoản thật và kiểm thử allow/deny qua HTTP |
 | Event Triage Agent | `implemented-static` | Nhận `inventory.low`; validate envelope; unique theo `source + event_id`; tạo một incident cho event; duplicate trả lại record cũ | Subscriber/connector thật, retry/concurrency test, dead-letter và nhiều event type |
-| Inventory Agent | `implemented-static` | Rule deterministic, typed read/command tools, Action Gateway revalidate và safe conflict; Redis locking adapter đã kết nối runtime | Happy path với hai stock location thật và concurrency/reservation test nhiều process |
+| Inventory Agent | `implemented-static` | Rule deterministic, typed read/command tools, Action Gateway revalidate và safe conflict; runtime verifier dùng ba stock location và inventory item thật của Medusa, chạy hai action cạnh tranh dưới Redis lock cho kết quả một `SUCCEEDED`, một `CONFLICT` và không oversell | Lặp lại contention bằng nhiều process/worker, thêm reservation interaction và chạy trên location vận hành thật |
 | Audit & Compliance Agent | `implemented-static` | Audit/outbox/tool trace, lease, retry/backoff, dead-letter; Redis Event Bus, Workflow Engine và locking đã kết nối runtime | Subscriber idempotency mở rộng, append-only enforcement, trace/replay detail và retention |
 | Order Exception Agent | `runtime-verified` | Checkout `order.placed` và luồng API/OMS tự gán SLA UTC; `order.read` lấy live status; detector quét phân trang mỗi 5 phút và khóa từng order bằng Redis; HTTP/RBAC đã xác nhận; hai worker cạnh tranh vẫn chỉ tạo một event/incident/action | Hiệu chỉnh SLA theo vận hành thật và SLA table/index hoặc durable cursor cho volume lớn |
 | Fulfillment Agent | `contracted` | Có trigger fulfillment, read/task tool và foundation dependency | SLA contract, workflow và connector vận chuyển thật |
-| Customer Support Agent | `runtime-verified` | API/worker/PostgreSQL đã xác nhận `support.requested` đọc live order, kiểm tra chủ sở hữu, dùng knowledge `APPROVED`, tạo draft có citation và task; browser nhân viên đã xác nhận nhận/sửa/lưu, trả hàng đợi, chuyển quản lý và VI/EN; simulator `IN_APP` đã xác nhận khách hỏi và nhân viên bấm gửi bản đã duyệt, có chống gửi trùng | Customer channel/identity mapping, consent, webhook signature, delivery receipt và adapter gửi khách thật |
-| Knowledge Curator Agent | `implemented-static` | Kho hướng dẫn có Google OAuth/Picker connector, tài liệu bất biến theo phiên bản, chunk/checksum/citation, vòng đời duyệt/ngừng dùng và Admin UI Việt/Anh. LangChain.js + Qdrant đã được nối làm semantic index; `knowledge.search` kết hợp semantic với lexical và luôn kiểm tra lại governance từ PostgreSQL | Chạy embedding model thật, benchmark VI/EN, phát hiện nội dung thiếu/trùng/xung đột và agent đề xuất bản cập nhật; quản lý vẫn là người duyệt cuối |
+| Customer Support Agent | `runtime-verified` | API/worker/PostgreSQL đã xác nhận `support.requested` đọc live order, chặn sai chủ sở hữu trước knowledge/model call, gọi Gemini thật, dùng knowledge `APPROVED`, tạo draft có citation và task; browser nhân viên đã xác nhận nhận/sửa/lưu, trả hàng đợi, chuyển quản lý và VI/EN; simulator `IN_APP` đã xác nhận khách hỏi và nhân viên bấm gửi bản đã duyệt, có chống gửi trùng | Customer channel/identity mapping, consent, webhook signature, delivery receipt và adapter gửi khách thật |
+| Knowledge Curator Agent | `implemented-static` | Kho hướng dẫn có Google OAuth/Picker connector, tài liệu bất biến theo phiên bản, chunk/checksum/citation, vòng đời duyệt/ngừng dùng và Admin UI Việt/Anh. LangChain.js + Qdrant đã chạy với Gemini `gemini-embedding-001`; live verifier chứng minh lexical không tìm thấy fixture nhưng semantic và hybrid đều tìm đúng, rồi retire/xóa vector | Benchmark VI/EN, phát hiện nội dung thiếu/trùng/xung đột và agent đề xuất bản cập nhật; quản lý vẫn là người duyệt cuối |
 | Returns & Refund Agent | `contracted` | Có policy/approval, task, audit và evaluation foundation | Ownership, evidence contract và Medusa workflow riêng |
 | Payment & Fraud Watcher | `contracted` | Có event/incident/task/escalation và `PROHIBITED` policy primitive | Payment mapping, fraud rules và prohibited-action scenarios |
 | Catalog Quality Agent | `contracted` | Có task, evaluation và typed-tool contract | Catalog rules, scanner và remediation tools riêng |
@@ -325,7 +325,7 @@ Ngày kiểm chứng: 2026-08-11.
   task escalation; migration chạy thành công, có backfill action inventory cũ.
 - Migration `Migration20260810132610` lưu snapshot role được ủy quyền trên
   action request và đã chạy thành công trên PostgreSQL local.
-- 89/89 unit test pass cho analyzer, detector, response draft, state machines, validators, tool contract,
+- 134/134 unit test pass cho analyzer, detector, response draft, state machines, validators, tool contract,
   executor, registry coverage, tools, policy,
   knowledge, model boundary, evaluation, action/outbox và communication.
 - ESLint mục tiêu của toàn bộ source agent pass.
@@ -366,7 +366,8 @@ Ngày kiểm chứng: 2026-08-11.
   rồi chạy `support.requested -> order.read -> knowledge.search ->
   response.draft -> task.create`. Kết quả có đúng 1 event, incident,
   recommendation, action, task và tool call; event trùng bị suppress; customer
-  không sở hữu order bị từ chối và tạo 0 event; order không đổi; có 0
+  không sở hữu order bị từ chối trước model boundary, tạo 0 event và 0 model
+  run; order không đổi; có 0
   conversation và 0 `message.send` action.
 - Migration `Migration20260811052521` tạo bảng `agent_knowledge_chunk` đã chạy
   thành công. Script reindex đã chuyển 14 tài liệu cũ thành 14 đoạn có nguồn.
@@ -393,9 +394,17 @@ Ngày kiểm chứng: 2026-08-11.
   Google thật vẫn `RUNTIME-PENDING` đến khi có OAuth app production.
 - LangChain.js `QdrantVectorStore` và Qdrant `1.19.0` đã được tích hợp. Runtime
   verifier đã upsert hai chunks, chứng minh metadata filter cô lập tenant và
-  xóa vector khi tài liệu ngừng dùng. RAG tự bật theo provider embedding đã kết
-  nối trong Admin. Chưa gọi embedding API thật nên semantic model path vẫn
-  `RUNTIME-PENDING`; lexical retrieval tiếp tục hoạt động.
+  xóa vector khi tài liệu ngừng dùng. Live verifier gọi Gemini
+  `gemini-embedding-001`, index 17 tài liệu/17 chunks và chứng minh fixture có
+  lexical result bằng 0 nhưng semantic và hybrid result đều bằng 1; fixture sau
+  đó được retire và vector được xóa.
+- Customer Support live verifier gọi Gemini `gemini-3.5-flash-lite`, trả draft
+  structured có hai citation và bắt buộc human review. Nhánh sai ownership tạo
+  0 model run, nên dữ liệu order không vượt qua authorization gate.
+- Inventory contention verifier tạo ba location và một inventory item bằng
+  workflow Medusa, duyệt hai action cùng đòi chuyển 10 từ nguồn có 15, rồi chạy
+  đồng thời dưới Redis lock. Kết quả một `SUCCEEDED`, một `CONFLICT`, nguồn còn
+  5 và hai đích là 0/10; toàn bộ fixture được cleanup bằng workflow chính thức.
 - Customer Support staff-flow verifier dùng hai User record tạm và JWT ngắn
   hạn: user có role nhận 201, user thiếu role nhận 403, request chưa đăng nhập
   nhận 401; hai nhánh bị chặn tạo 0 event. Worker tạo task thật; nhân viên nhận
@@ -440,17 +449,17 @@ Ngày kiểm chứng: 2026-08-11.
    bước nhân viên xác nhận gửi; chưa bật agent tự gửi.
 2. Gán role `operations_manager` cho tài khoản Admin thật và kiểm thử allow/deny
    trên từng policy qua HTTP.
-3. Chạy happy path bằng ít nhất hai stock location thật và kiểm thử hai action
-   cạnh tranh trên cùng inventory item.
+3. Chạy inventory contention bằng hai process/worker riêng, bổ sung tương tác
+   reservation và xác nhận lại trên stock location vận hành thật.
 4. Bổ sung trace/replay detail, append-only/retention và subscriber idempotency
    cho từng connector production.
 5. Cấu hình bot Telegram thật và public HTTPS để chạy acceptance; sau đó thêm UI
    quản lý connection. Tiếp tục xây push/Zalo/Slack/Teams/Messenger rồi mới
    thêm hiểu chat tự do bằng LLM.
-6. Chọn model provider, secret manager và budget; chỉ bật adapter sau khi
-   benchmark `KNOW-001` và security review đạt yêu cầu.
-7. Cấu hình OAuth app và Google Picker ở cấp nền tảng, chạy acceptance đăng nhập
-   và chọn Docs/Sheets thật; sau đó thêm lịch đồng bộ, review diff, phát hiện nội
+6. Benchmark Gemini generation/embedding với bộ `KNOW-001` VI/EN, đặt budget,
+   rate-limit và security review trước production rollout.
+7. Google OAuth/Picker đã kết nối; cần người dùng chọn Docs/Sheets thật để chạy
+   acceptance import. Sau đó thêm lịch đồng bộ, review diff, phát hiện nội
    dung thiếu/xung đột và retry/dead recovery qua worker. Notion/PDF cần adapter
    riêng theo cùng connector contract.
 8. Hiệu chỉnh số phút SLA theo vận hành thật; khi vượt giới hạn batch cấu hình,

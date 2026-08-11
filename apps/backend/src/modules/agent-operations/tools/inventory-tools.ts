@@ -1,4 +1,5 @@
 import type { IInventoryService } from "@medusajs/framework/types"
+import { MedusaError } from "@medusajs/framework/utils"
 import { z } from "@medusajs/framework/zod"
 import { defineAgentTool } from "../tool-contract"
 
@@ -73,6 +74,20 @@ export type InventoryTransferEvaluation =
       source: InventoryPosition | null
       target: InventoryPosition | null
     }
+
+function toQuantity(value: unknown) {
+  if (value === null || value === undefined) return null
+
+  const quantity = Number(value)
+  if (!Number.isFinite(quantity)) {
+    throw new MedusaError(
+      MedusaError.Types.UNEXPECTED_STATE,
+      "Inventory service returned a non-numeric quantity."
+    )
+  }
+
+  return quantity
+}
 
 export const INVENTORY_GET_POSITION_TOOL = defineAgentTool({
   approval_required: false,
@@ -163,13 +178,13 @@ export async function getInventoryPositions(
     const level = levelsByLocation.get(locationId)
 
     return {
-      available_quantity: level?.available_quantity ?? null,
+      available_quantity: toQuantity(level?.available_quantity),
       exists: !!level,
-      incoming_quantity: level?.incoming_quantity ?? null,
+      incoming_quantity: toQuantity(level?.incoming_quantity),
       inventory_item_id: parsed.inventory_item_id,
       location_id: locationId,
-      reserved_quantity: level?.reserved_quantity ?? null,
-      stocked_quantity: level?.stocked_quantity ?? null,
+      reserved_quantity: toQuantity(level?.reserved_quantity),
+      stocked_quantity: toQuantity(level?.stocked_quantity),
     }
   })
 }
