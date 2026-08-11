@@ -21,6 +21,8 @@
 
 # Synapse DTC Starter
 
+> **Note:** Synapse is developed and built on top of the open-source Medusa commerce engine.
+
 A production-ready monorepo starter for direct-to-consumer ecommerce stores powered by Synapse and Next.js. Includes a fully featured storefront with product browsing, cart, checkout, customer accounts, and order management.
 
 ## Features

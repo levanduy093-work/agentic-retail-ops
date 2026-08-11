@@ -1,5 +1,5 @@
 {
-  "name": "dtc-starter-monorepo",
+  "name": "synapse-starter-monorepo",
   "private": false,
   "packageManager": "pnpm@10.11.1",
   "engines": {
