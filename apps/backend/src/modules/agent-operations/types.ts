@@ -269,6 +269,38 @@ export type DisconnectGoogleKnowledgeConnectorInput = {
   tenant_id?: string
 }
 
+export type AiProvider = "GEMINI" | "OPENAI"
+
+export type ConfigureAiProviderInput = {
+  actor_id: string
+  encrypted_api_key?: {
+    encrypted_secret: string
+    encryption_iv: string
+    encryption_tag: string
+    key_version: string
+  }
+  embedding_dimensions?: number | null
+  embedding_enabled: boolean
+  embedding_model: string
+  generation_enabled: boolean
+  generation_model: string
+  provider: AiProvider
+  secret_hint?: string
+  tenant_id?: string
+}
+
+export type DisconnectAiProviderInput = {
+  actor_id: string
+  provider: AiProvider
+  tenant_id?: string
+}
+
+export type ConfigureCustomerSupportPromptInput = {
+  actor_id: string
+  max_tokens: number
+  system_prompt: string
+}
+
 export type InventoryLocationSnapshot = {
   available_quantity: number
   location_id: string

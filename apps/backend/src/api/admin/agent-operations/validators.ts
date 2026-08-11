@@ -215,6 +215,24 @@ export const AdminSearchKnowledge = z.strictObject({
   tenant_id: z.string().trim().min(1).default("default"),
 })
 
+export const AdminConfigureAiProvider = z.strictObject({
+  api_key: z.string().trim().min(8).max(500).optional(),
+  embedding_dimensions: z.number().int().min(128).max(3072).nullable().optional(),
+  embedding_enabled: z.boolean(),
+  embedding_model: z.string().trim().min(2).max(200),
+  generation_enabled: z.boolean(),
+  generation_model: z.string().trim().min(2).max(200),
+})
+
+export const AdminConfigureAiPrompt = z.strictObject({
+  max_tokens: z.number().int().min(128).max(8192),
+  system_prompt: z.string().trim().min(100).max(20_000),
+})
+
+export const AdminDiscoverAiModels = z.strictObject({
+  api_key: z.string().trim().min(20).max(500).optional(),
+})
+
 export const AdminRetireKnowledgeDocument = z.strictObject({
   reason: z.string().trim().min(3).max(1000),
 })
@@ -285,6 +303,15 @@ export type AdminCreateKnowledgeDocumentType = z.infer<
   typeof AdminCreateKnowledgeDocument
 >
 export type AdminSearchKnowledgeType = z.infer<typeof AdminSearchKnowledge>
+export type AdminConfigureAiProviderType = z.infer<
+  typeof AdminConfigureAiProvider
+>
+export type AdminConfigureAiPromptType = z.infer<
+  typeof AdminConfigureAiPrompt
+>
+export type AdminDiscoverAiModelsType = z.infer<
+  typeof AdminDiscoverAiModels
+>
 export type AdminRetireKnowledgeDocumentType = z.infer<
   typeof AdminRetireKnowledgeDocument
 >

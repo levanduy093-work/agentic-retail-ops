@@ -97,7 +97,8 @@ const draftSupportResponseStep = createStep(
       async (parsed) =>
         service.draftGovernedCustomerResponse(
           parsed,
-          `${input.event.source}:${input.event.event_id}:support-draft-model`
+          `${input.event.source}:${input.event.event_id}:support-draft-model`,
+          input.event.tenant_id
         )
     )
 

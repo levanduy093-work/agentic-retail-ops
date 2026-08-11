@@ -14,6 +14,14 @@ import {
 } from "../../modules/agent-operations/rbac-policies"
 import AgentOperationsModuleService from "../../modules/agent-operations/service"
 import {
+  CUSTOMER_SUPPORT_DEFAULT_INPUT_SCHEMA,
+  CUSTOMER_SUPPORT_DEFAULT_MAX_TOKENS,
+  CUSTOMER_SUPPORT_DEFAULT_OUTPUT_SCHEMA,
+  CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT,
+  CUSTOMER_SUPPORT_PROMPT_KEY,
+  CUSTOMER_SUPPORT_PROMPT_VERSION,
+} from "../../modules/agent-operations/customer-support-prompt"
+import {
   TASK_ASSIGN_TOOL,
   TASK_CREATE_TOOL,
   TASK_ESCALATE_TOOL,
@@ -218,29 +226,34 @@ const bootstrapAgentPlatformStep = createStep(
     }
 
     const prompts = await service.listAgentPromptTemplates({
-      prompt_key: "customer-support.response-draft",
-      version: "1.0.0",
+      prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY,
+      version: CUSTOMER_SUPPORT_PROMPT_VERSION,
     })
     if (!prompts[0]) {
-      await service.createAgentPromptTemplates({
+      const prompt = await service.createAgentPromptTemplates({
         agent_id: "customer-support-agent",
         approved_at: now,
         approved_by: input.actor_id,
-        input_schema: {
-          required: ["question", "citations"],
-          type: "object",
-        },
-        max_tokens: 1200,
-        output_schema: {
-          required: ["draft", "citations", "requires_human_review"],
-          type: "object",
-        },
-        prompt_key: "customer-support.response-draft",
+        input_schema: CUSTOMER_SUPPORT_DEFAULT_INPUT_SCHEMA,
+        max_tokens: CUSTOMER_SUPPORT_DEFAULT_MAX_TOKENS,
+        output_schema: CUSTOMER_SUPPORT_DEFAULT_OUTPUT_SCHEMA,
+        prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY,
         status: "ACTIVE",
-        system_prompt:
-          "Draft a concise response using only approved cited knowledge. Never send it automatically.",
-        version: "1.0.0",
+        system_prompt: CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT,
+        version: CUSTOMER_SUPPORT_PROMPT_VERSION,
       })
+      const previousActive = await service.listAgentPromptTemplates({
+        prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY,
+        status: "ACTIVE",
+      })
+      for (const previous of previousActive) {
+        if (previous.id !== prompt.id) {
+          await service.updateAgentPromptTemplates({
+            id: previous.id,
+            status: "RETIRED",
+          })
+        }
+      }
       created.push("prompt:customer-support")
     }
 

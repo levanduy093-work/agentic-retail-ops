@@ -7,6 +7,7 @@ export type ModelInvocation = {
   output_schema: Record<string, unknown>
   prompt_key: string
   prompt_version: string
+  system_prompt: string
 }
 
 export type ModelGatewayAdapter = {
@@ -53,6 +54,12 @@ export function assertModelInvocation(input: ModelInvocation) {
       "A structured output schema is required for model runs."
     )
   }
+  if (!input.system_prompt.trim()) {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      "A system prompt is required for model runs."
+    )
+  }
 }
 
 export class DisabledModelAdapter implements ModelGatewayAdapter {
@@ -91,8 +98,7 @@ export class OpenAIResponsesModelAdapter implements ModelGatewayAdapter {
         body: JSON.stringify({
           input: [
             {
-              content:
-                "Write a concise customer-support draft using only the supplied live order facts and approved knowledge excerpts. Never invent a delivery date, payment state, policy, or citation. Return the requested JSON only.",
+              content: input.system_prompt,
               role: "system",
             },
             {
@@ -171,26 +177,129 @@ export class OpenAIResponsesModelAdapter implements ModelGatewayAdapter {
   }
 }
 
+export class GeminiModelAdapter implements ModelGatewayAdapter {
+  provider = "gemini"
+
+  constructor(
+    private readonly apiKey: string,
+    public readonly model: string,
+    private readonly baseUrl = "https://generativelanguage.googleapis.com/v1beta",
+    private readonly fetchImpl: FetchLike = fetch
+  ) {}
+
+  async invoke(input: ModelInvocation): Promise<Record<string, unknown>> {
+    assertModelInvocation(input)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15_000)
+    try {
+      const response = await this.fetchImpl(
+        `${this.baseUrl}/models/${encodeURIComponent(this.model)}:generateContent`,
+        {
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  { text: JSON.stringify(redactModelInput(input.input)) },
+                ],
+                role: "user",
+              },
+            ],
+            generationConfig: {
+              maxOutputTokens: input.max_tokens,
+              responseJsonSchema: input.output_schema,
+              responseMimeType: "application/json",
+            },
+            system_instruction: {
+              parts: [
+                {
+                  text: input.system_prompt,
+                },
+              ],
+            },
+          }),
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": this.apiKey,
+          },
+          method: "POST",
+          signal: controller.signal,
+        }
+      )
+      if (!response.ok) {
+        throw new MedusaError(
+          MedusaError.Types.UNEXPECTED_STATE,
+          `Model provider returned HTTP ${response.status}.`
+        )
+      }
+      const payload = (await response.json()) as {
+        candidates?: Array<{
+          content?: { parts?: Array<{ text?: string }> }
+        }>
+      }
+      const outputText = payload.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text ?? "")
+        .join("")
+      if (!outputText) {
+        throw new MedusaError(
+          MedusaError.Types.UNEXPECTED_STATE,
+          "The model provider returned no structured output."
+        )
+      }
+      return JSON.parse(outputText) as Record<string, unknown>
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new MedusaError(
+          MedusaError.Types.INVALID_DATA,
+          "The model provider returned invalid structured output."
+        )
+      }
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new MedusaError(
+          MedusaError.Types.UNEXPECTED_STATE,
+          "The model provider timed out."
+        )
+      }
+      throw error
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+}
+
+export function createModelAdapter(input: {
+  apiKey: string
+  model: string
+  provider: "gemini" | "openai"
+}): ModelGatewayAdapter {
+  if (input.provider === "gemini") {
+    return new GeminiModelAdapter(input.apiKey, input.model)
+  }
+  return new OpenAIResponsesModelAdapter(input.apiKey, input.model)
+}
+
 export function createConfiguredModelAdapter(
   environment: NodeJS.ProcessEnv = process.env
 ): ModelGatewayAdapter {
   const provider = environment.AGENT_MODEL_PROVIDER?.trim().toLowerCase()
   if (!provider || provider === "disabled") return new DisabledModelAdapter()
 
-  if (provider !== "openai") {
+  if (provider !== "openai" && provider !== "gemini") {
     throw new MedusaError(
       MedusaError.Types.INVALID_DATA,
       `Unsupported model provider ${provider}.`
     )
   }
-  const apiKey = environment.OPENAI_API_KEY?.trim()
+  const apiKey =
+    provider === "gemini"
+      ? environment.GEMINI_API_KEY?.trim()
+      : environment.OPENAI_API_KEY?.trim()
   const model = environment.AGENT_MODEL?.trim()
   if (!apiKey || !model) {
     throw new MedusaError(
       MedusaError.Types.INVALID_DATA,
-      "OPENAI_API_KEY and AGENT_MODEL are required when the OpenAI model provider is enabled."
+      "The provider API key and AGENT_MODEL are required when a model provider is enabled."
     )
   }
 
-  return new OpenAIResponsesModelAdapter(apiKey, model)
+  return createModelAdapter({ apiKey, model, provider })
 }

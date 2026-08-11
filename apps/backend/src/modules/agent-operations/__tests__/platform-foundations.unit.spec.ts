@@ -11,10 +11,14 @@ import {
   checksumKnowledgeContent,
   isKnowledgeEligible,
 } from "../knowledge"
-import { searchKnowledgeChunks } from "../tools/platform-read-tools"
+import {
+  searchKnowledgeChunks,
+  searchKnowledgeChunksHybrid,
+} from "../tools/platform-read-tools"
 import {
   assertModelInvocation,
   DisabledModelAdapter,
+  GeminiModelAdapter,
   OpenAIResponsesModelAdapter,
   redactModelInput,
 } from "../model-gateway"
@@ -206,6 +210,57 @@ describe("agent platform foundations", () => {
     expect(result.results[0].quote_checksum).toBe(chunks[0].checksum)
   })
 
+  it("uses semantic retrieval when a customer uses different wording", () => {
+    const document = {
+      approved_at: "2026-08-01T00:00:00.000Z",
+      citation_locator: "policy://delivery/1.0",
+      content: "Khách hàng có thể kiểm tra tiến độ giao hàng.",
+      document_key: "delivery-progress",
+      effective_at: "2026-08-01T00:00:00.000Z",
+      expires_at: null,
+      id: "agknow_delivery",
+      status: "APPROVED",
+      title: "Theo dõi giao hàng",
+      version: "1.0.0",
+    }
+    const chunk = {
+      checksum: checksumKnowledgeContent(document.content),
+      chunk_index: 0,
+      citation_locator: "policy://delivery/1.0#chunk-1",
+      content: document.content,
+      document_id: document.id,
+      id: "agkchunk_delivery",
+    }
+
+    const lexical = searchKnowledgeChunks(
+      {
+        limit: 5,
+        query: "bưu kiện của tôi đang ở đâu",
+        tenant_id: "default",
+      },
+      [document],
+      [chunk],
+      new Date("2026-08-11T00:00:00.000Z")
+    )
+    expect(lexical.results).toHaveLength(0)
+
+    const hybrid = searchKnowledgeChunksHybrid(
+      {
+        limit: 5,
+        query: "bưu kiện của tôi đang ở đâu",
+        tenant_id: "default",
+      },
+      [document],
+      [chunk],
+      new Map([[chunk.id, 0.92]]),
+      new Date("2026-08-11T00:00:00.000Z")
+    )
+    expect(hybrid.results[0]).toMatchObject({
+      chunk_id: chunk.id,
+      citation_locator: chunk.citation_locator,
+    })
+  })
+
   it("redacts model input and rejects unbounded or schema-less runs", async () => {
     expect(
       redactModelInput({
@@ -224,6 +279,7 @@ describe("agent platform foundations", () => {
         output_schema: { type: "object" },
         prompt_key: "support",
         prompt_version: "1",
+        system_prompt: "Use only approved facts.",
       })
     ).toThrow("max_tokens")
     await expect(
@@ -234,6 +290,7 @@ describe("agent platform foundations", () => {
         output_schema: { type: "object" },
         prompt_key: "support",
         prompt_version: "1",
+        system_prompt: "Use only approved facts.",
       })
     ).rejects.toThrow("No model provider is enabled")
   })
@@ -244,6 +301,7 @@ describe("agent platform foundations", () => {
       expect(authorization).toBe("Bearer test-key")
       const body = JSON.parse(String(init?.body))
       expect(body.store).toBe(false)
+      expect(body.input[0].content).toBe("Configured support prompt")
       expect(body.text.format).toMatchObject({
         name: "customer_support_draft",
         strict: true,
@@ -284,9 +342,61 @@ describe("agent platform foundations", () => {
         },
         prompt_key: "support",
         prompt_version: "1",
+        system_prompt: "Configured support prompt",
       })
     ).resolves.toEqual({ body: "Your order is being prepared." })
     expect(request).toHaveBeenCalledTimes(1)
+  })
+
+  it("uses Gemini structured JSON without exposing the API key in the request body", async () => {
+    const request = jest.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe(
+        "https://generativelanguage.test/v1beta/models/gemini-test:generateContent"
+      )
+      expect(new Headers(init?.headers).get("x-goog-api-key")).toBe("gemini-key")
+      const body = JSON.parse(String(init?.body))
+      expect(String(init?.body)).not.toContain("gemini-key")
+      expect(body.generationConfig).toMatchObject({
+        responseMimeType: "application/json",
+      })
+      expect(body.system_instruction.parts[0].text).toBe(
+        "Configured Gemini support prompt"
+      )
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [{ text: JSON.stringify({ body: "Đơn đang xử lý." }) }],
+              },
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    })
+    const adapter = new GeminiModelAdapter(
+      "gemini-key",
+      "gemini-test",
+      "https://generativelanguage.test/v1beta",
+      request as typeof fetch
+    )
+
+    await expect(
+      adapter.invoke({
+        agent_id: "customer-support-agent",
+        input: { question: "Đơn hàng ở đâu?" },
+        max_tokens: 100,
+        output_schema: {
+          properties: { body: { type: "string" } },
+          required: ["body"],
+          type: "object",
+        },
+        prompt_key: "support",
+        prompt_version: "1",
+        system_prompt: "Configured Gemini support prompt",
+      })
+    ).resolves.toEqual({ body: "Đơn đang xử lý." })
   })
 
   it("scores structured evaluation assertions", () => {

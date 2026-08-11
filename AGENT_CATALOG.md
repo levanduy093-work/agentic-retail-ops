@@ -23,7 +23,7 @@ vẫn là các gate riêng.
 | Order Exception Agent | `runtime-verified` | Checkout `order.placed` và luồng API/OMS tự gán SLA UTC; `order.read` lấy live status; detector quét phân trang mỗi 5 phút và khóa từng order bằng Redis; HTTP/RBAC đã xác nhận; hai worker cạnh tranh vẫn chỉ tạo một event/incident/action | Hiệu chỉnh SLA theo vận hành thật và SLA table/index hoặc durable cursor cho volume lớn |
 | Fulfillment Agent | `contracted` | Có trigger fulfillment, read/task tool và foundation dependency | SLA contract, workflow và connector vận chuyển thật |
 | Customer Support Agent | `runtime-verified` | API/worker/PostgreSQL đã xác nhận `support.requested` đọc live order, kiểm tra chủ sở hữu, dùng knowledge `APPROVED`, tạo draft có citation và task; browser nhân viên đã xác nhận nhận/sửa/lưu, trả hàng đợi, chuyển quản lý và VI/EN; simulator `IN_APP` đã xác nhận khách hỏi và nhân viên bấm gửi bản đã duyệt, có chống gửi trùng | Customer channel/identity mapping, consent, webhook signature, delivery receipt và adapter gửi khách thật |
-| Knowledge Curator Agent | `implemented-static` | Kho hướng dẫn có tài liệu bất biến theo phiên bản, tự chia đoạn, checksum từng đoạn, nguồn trích dẫn chính xác, vòng đời duyệt/ngừng dùng, API tìm thử, reindex dữ liệu cũ và Admin UI Việt/Anh; lifecycle đã chạy thật trên PostgreSQL | Connector nhập từ nguồn thật, phát hiện nội dung thiếu/trùng/xung đột và agent đề xuất bản cập nhật; hiện quản lý vẫn chủ động nhập và duyệt |
+| Knowledge Curator Agent | `implemented-static` | Kho hướng dẫn có Google OAuth/Picker connector, tài liệu bất biến theo phiên bản, chunk/checksum/citation, vòng đời duyệt/ngừng dùng và Admin UI Việt/Anh. LangChain.js + Qdrant đã được nối làm semantic index; `knowledge.search` kết hợp semantic với lexical và luôn kiểm tra lại governance từ PostgreSQL | Chạy embedding model thật, benchmark VI/EN, phát hiện nội dung thiếu/trùng/xung đột và agent đề xuất bản cập nhật; quản lý vẫn là người duyệt cuối |
 | Returns & Refund Agent | `contracted` | Có policy/approval, task, audit và evaluation foundation | Ownership, evidence contract và Medusa workflow riêng |
 | Payment & Fraud Watcher | `contracted` | Có event/incident/task/escalation và `PROHIBITED` policy primitive | Payment mapping, fraud rules và prohibited-action scenarios |
 | Catalog Quality Agent | `contracted` | Có task, evaluation và typed-tool contract | Catalog rules, scanner và remediation tools riêng |
@@ -68,11 +68,23 @@ mobile/push/Zalo/Slack/Teams vẫn chưa triển khai.
   owner, locale, scope, hiệu lực và expiry. Nội dung được chia thành các đoạn
   tìm kiếm ổn định; mỗi đoạn có checksum và locator riêng. Agent chỉ được dùng
   đoạn thuộc bản approved còn hiệu lực.
+- Semantic RAG dùng LangChain.js và Qdrant mã nguồn mở. Qdrant chỉ là derived
+  vector index; PostgreSQL vẫn là nguồn sự thật. Approval tự upsert chunks,
+  retire tự xóa vectors; truy vấn semantic được lọc tenant/scope/locale rồi
+  kiểm tra lại chunk thuộc tài liệu approved còn hiệu lực. Khi Qdrant hoặc
+  embedding provider lỗi/chưa bật, `knowledge.search` tự rơi về lexical search.
+- OpenAI và Gemini đều có thể làm embedding hoặc soạn câu trả lời. Chủ cửa hàng
+  kết nối provider từ Admin; API key được mã hóa trong PostgreSQL, không trả về
+  browser. Workflow tự reindex knowledge khi đổi provider/model và Qdrant dùng
+  collection tách biệt theo provider/model.
 - Model Gateway có adapter contract, redaction, token budget và structured
   output bắt buộc. OpenAI Responses adapter dùng JSON Schema strict, timeout,
-  `store=false`, input tối thiểu và model-run ledger. Adapter mặc định vẫn
-  disabled; thiếu provider/key/model thì Customer Support giữ draft
-  deterministic thay vì làm hỏng hàng đợi.
+  `store=false`, input tối thiểu và model-run ledger; Gemini adapter dùng JSON
+  Schema và khóa server-side tương tự. Prompt Customer Support là cấu hình có
+  phiên bản trong PostgreSQL, hiển thị và tùy chỉnh từ Admin, có prompt mặc định
+  để khôi phục; model run ghi đúng prompt key/version đã dùng. Thiếu
+  provider/key/model thì Customer Support giữ draft deterministic thay vì làm
+  hỏng hàng đợi.
 - Evaluation harness lưu scenario/run, expected/forbidden assertions và score.
   Baseline đã seed `SHIP-001`, `KNOW-001` và `ORDER-001`.
 - Channel registry và delivery ledger hỗ trợ `IN_APP`, web push, Telegram, Zalo,
@@ -374,6 +386,11 @@ Ngày kiểm chứng: 2026-08-11.
   mã hóa, callback chống CSRF bằng state/nonce có hạn dùng, disconnect cố thu hồi
   quyền và xóa credential. Migration `Migration20260811080525` đã chạy; gọi
   Google thật vẫn `RUNTIME-PENDING` đến khi có OAuth app production.
+- LangChain.js `QdrantVectorStore` và Qdrant `1.19.0` đã được tích hợp. Runtime
+  verifier đã upsert hai chunks, chứng minh metadata filter cô lập tenant và
+  xóa vector khi tài liệu ngừng dùng. RAG tự bật theo provider embedding đã kết
+  nối trong Admin. Chưa gọi embedding API thật nên semantic model path vẫn
+  `RUNTIME-PENDING`; lexical retrieval tiếp tục hoạt động.
 - Customer Support staff-flow verifier dùng hai User record tạm và JWT ngắn
   hạn: user có role nhận 201, user thiếu role nhận 403, request chưa đăng nhập
   nhận 401; hai nhánh bị chặn tạo 0 event. Worker tạo task thật; nhân viên nhận

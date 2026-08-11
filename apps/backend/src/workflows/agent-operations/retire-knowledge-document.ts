@@ -18,8 +18,15 @@ const retireKnowledgeDocumentStep = createStep(
     )
     const locking = container.resolve<ILockingModule>(Modules.LOCKING)
     return new StepResponse(
-      await locking.execute(`agent-knowledge:${input.document_id}`, () =>
-        service.retireGovernedKnowledgeDocument(input)
+      await locking.execute(
+        `agent-knowledge:${input.document_id}`,
+        async () => {
+          const retirement = await service.retireGovernedKnowledgeDocument(input)
+          const rag_index = await service.removeGovernedKnowledgeDocumentIndex(
+            input.document_id
+          )
+          return { ...retirement, rag_index }
+        }
       )
     )
   }

@@ -16,6 +16,7 @@ import { analyzeInventoryLow } from "./inventory-low-analyzer"
 import { analyzeOrderException } from "./order-exception-analyzer"
 import {
   createConfiguredModelAdapter,
+  createModelAdapter,
   redactModelInput,
 } from "./model-gateway"
 import {
@@ -31,6 +32,7 @@ import AgentApproval from "./models/agent-approval"
 import AgentAuditEvent from "./models/agent-audit-event"
 import AgentChannelConnection from "./models/agent-channel-connection"
 import AgentConnectorCredential from "./models/agent-connector-credential"
+import AgentAiProviderCredential from "./models/agent-ai-provider-credential"
 import AgentConversation from "./models/agent-conversation"
 import AgentDelivery from "./models/agent-delivery"
 import AgentEvaluationRun from "./models/agent-evaluation-run"
@@ -64,6 +66,7 @@ import { AGENT_TOOL_REGISTRY } from "./tool-registry"
 import { executeAgentTool, prepareAgentCommand } from "./tool-executor"
 import { InventoryTransferInput } from "./tools/inventory-tools"
 import {
+  AiProvider,
   ApprovalDecisionInput,
   ApproveKnowledgeDocumentInput,
   ClaimAgentActionInput,
@@ -71,12 +74,15 @@ import {
   ClaimAgentDeliveryInput,
   CompleteAgentDeliveryInput,
   CompleteAgentOutboxEventInput,
+  ConfigureAiProviderInput,
+  ConfigureCustomerSupportPromptInput,
   ConfigureGoogleKnowledgeConnectorInput,
   CreateAgentTaskInput,
   CreateApprovalRequestedNotificationInput,
   CreateKnowledgeDocumentInput,
   CreateKnowledgeSourceInput,
   DisconnectGoogleKnowledgeConnectorInput,
+  DisconnectAiProviderInput,
   EvaluationAssertion,
   EscalateAgentTaskInput,
   FailAgentActionInput,
@@ -95,7 +101,12 @@ import {
   TransitionAgentTaskInput,
 } from "./types"
 import { evaluateAssertions } from "./evaluation"
-import { checksumKnowledgeContent, chunkKnowledgeContent } from "./knowledge"
+import {
+  checksumKnowledgeContent,
+  chunkKnowledgeContent,
+  isKnowledgeEligible,
+} from "./knowledge"
+import { createKnowledgeRagEngine } from "./knowledge-rag-engine"
 import {
   assertAgentTaskRelease,
   assertAgentTaskTransition,
@@ -108,6 +119,7 @@ import {
   KnowledgeSearchInput,
   KnowledgeSearchOutput,
   searchKnowledgeChunks,
+  searchKnowledgeChunksHybrid,
   TraceReplayInput,
   TraceReplayOutput,
   TraceTimelineEntry,
@@ -137,6 +149,15 @@ import {
   ResponseDraftInput,
   ResponseDraftOutput,
 } from "./tools/response-tools"
+import {
+  CUSTOMER_SUPPORT_DEFAULT_INPUT_SCHEMA,
+  CUSTOMER_SUPPORT_DEFAULT_MAX_TOKENS,
+  CUSTOMER_SUPPORT_DEFAULT_OUTPUT_SCHEMA,
+  CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT,
+  CUSTOMER_SUPPORT_PROMPT_KEY,
+  CUSTOMER_SUPPORT_PROMPT_VERSION,
+} from "./customer-support-prompt"
+import { listAiProviderModels } from "./ai-provider-models"
 
 class AgentOperationsModuleService extends MedusaService({
   AgentActionRequest,
@@ -144,6 +165,7 @@ class AgentOperationsModuleService extends MedusaService({
   AgentAuditEvent,
   AgentChannelConnection,
   AgentConnectorCredential,
+  AgentAiProviderCredential,
   AgentConversation,
   AgentDelivery,
   AgentEvaluationRun,
@@ -163,6 +185,368 @@ class AgentOperationsModuleService extends MedusaService({
   AgentTask,
   AgentToolCall,
 }) {
+  async getCustomerSupportPromptConfiguration() {
+    const prompts = await this.listAgentPromptTemplates(
+      { prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY, status: "ACTIVE" },
+      { order: { created_at: "DESC" }, take: 1 }
+    )
+    const active = prompts[0]
+
+    return {
+      customized: Boolean(
+        active &&
+          active.system_prompt !== CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT
+      ),
+      default_system_prompt: CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT,
+      max_tokens:
+        active?.max_tokens ?? CUSTOMER_SUPPORT_DEFAULT_MAX_TOKENS,
+      prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY,
+      system_prompt:
+        active?.system_prompt ?? CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT,
+      updated_at: active?.updated_at ?? null,
+      version: active?.version ?? CUSTOMER_SUPPORT_PROMPT_VERSION,
+    }
+  }
+
+  @InjectManager()
+  async configureCustomerSupportPrompt(
+    input: ConfigureCustomerSupportPromptInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.configureCustomerSupportPrompt_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async configureCustomerSupportPrompt_(
+    input: ConfigureCustomerSupportPromptInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const activePrompts = await this.listAgentPromptTemplates(
+      { prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY, status: "ACTIVE" },
+      { order: { created_at: "DESC" } },
+      sharedContext
+    )
+    const now = new Date()
+    const version = `admin-${now.toISOString().replace(/[-:.]/g, "")}`
+    const prompt = await this.createAgentPromptTemplates(
+      {
+        agent_id: "customer-support-agent",
+        approved_at: now,
+        approved_by: input.actor_id,
+        input_schema: CUSTOMER_SUPPORT_DEFAULT_INPUT_SCHEMA,
+        max_tokens: input.max_tokens,
+        output_schema: CUSTOMER_SUPPORT_DEFAULT_OUTPUT_SCHEMA,
+        prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY,
+        status: "ACTIVE",
+        system_prompt: input.system_prompt.trim(),
+        version,
+      },
+      sharedContext
+    )
+
+    for (const active of activePrompts) {
+      await this.updateAgentPromptTemplates(
+        { id: active.id, status: "RETIRED" },
+        sharedContext
+      )
+    }
+
+    await this.createAgentAuditEvents(
+      {
+        action: "customer-support-prompt-activated",
+        actor_id: input.actor_id,
+        actor_type: "user",
+        correlation_id: prompt.id,
+        data: {
+          max_tokens: prompt.max_tokens,
+          prompt_key: prompt.prompt_key,
+          version: prompt.version,
+        },
+        event_type: "agent.prompt.activated",
+        recorded_at: now,
+        resource_id: prompt.id,
+        resource_type: "agent_prompt_template",
+      },
+      sharedContext
+    )
+
+    return {
+      customized:
+        prompt.system_prompt !== CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT,
+      max_tokens: prompt.max_tokens,
+      prompt_key: prompt.prompt_key,
+      system_prompt: prompt.system_prompt,
+      updated_at: prompt.updated_at,
+      version: prompt.version,
+    }
+  }
+
+  async getAiProviderStatuses(tenantId = "default") {
+    const credentials = await this.listAgentAiProviderCredentials(
+      { tenant_id: tenantId },
+      { order: { provider: "ASC" } }
+    )
+    const byProvider = new Map(
+      credentials.map((credential) => [credential.provider, credential])
+    )
+
+    return (["OPENAI", "GEMINI"] as const).map((provider) => {
+      const credential = byProvider.get(provider)
+      return {
+        configured: Boolean(credential),
+        embedding_dimensions: credential?.embedding_dimensions ?? null,
+        embedding_enabled: credential?.embedding_enabled ?? false,
+        embedding_model:
+          credential?.embedding_model ??
+          (provider === "OPENAI"
+            ? "text-embedding-3-small"
+            : "gemini-embedding-001"),
+        generation_enabled: credential?.generation_enabled ?? false,
+        generation_model:
+          credential?.generation_model ??
+          (provider === "OPENAI" ? "gpt-4.1-mini" : "gemini-2.5-flash"),
+        provider,
+        secret_hint: credential?.secret_hint ?? null,
+        updated_at: credential?.updated_at ?? null,
+      }
+    })
+  }
+
+  async discoverAiProviderModels(input: {
+    api_key?: string
+    provider: AiProvider
+    tenant_id?: string
+  }) {
+    let apiKey = input.api_key?.trim()
+    if (!apiKey) {
+      const credentials = await this.listAgentAiProviderCredentials(
+        {
+          provider: input.provider,
+          tenant_id: input.tenant_id ?? "default",
+        },
+        { take: 1 }
+      )
+      const credential = credentials[0]
+      if (credential) {
+        apiKey = decryptConnectorSecret({
+          encrypted_secret: credential.encrypted_secret,
+          encryption_iv: credential.encryption_iv,
+          encryption_tag: credential.encryption_tag,
+          key_version: credential.key_version,
+        })
+      }
+    }
+    if (!apiKey) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "Enter an API key before loading provider models."
+      )
+    }
+    return listAiProviderModels({ api_key: apiKey, provider: input.provider })
+  }
+
+  async getActiveAiProviderCredential(
+    purpose: "embedding" | "generation",
+    tenantId = "default"
+  ) {
+    const filter =
+      purpose === "embedding"
+        ? { embedding_enabled: true, tenant_id: tenantId }
+        : { generation_enabled: true, tenant_id: tenantId }
+    const credentials = await this.listAgentAiProviderCredentials(filter, {
+      order: { updated_at: "DESC" },
+      take: 1,
+    })
+    const credential = credentials[0]
+    if (!credential) return null
+
+    return {
+      api_key: decryptConnectorSecret({
+        encrypted_secret: credential.encrypted_secret,
+        encryption_iv: credential.encryption_iv,
+        encryption_tag: credential.encryption_tag,
+        key_version: credential.key_version,
+      }),
+      dimensions: credential.embedding_dimensions ?? undefined,
+      model:
+        purpose === "embedding"
+          ? credential.embedding_model
+          : credential.generation_model,
+      provider: credential.provider.toLowerCase() as "gemini" | "openai",
+    }
+  }
+
+  @InjectManager()
+  async configureAiProvider(
+    input: ConfigureAiProviderInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.configureAiProvider_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async configureAiProvider_(
+    input: ConfigureAiProviderInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const tenantId = input.tenant_id ?? "default"
+    const existing = await this.listAgentAiProviderCredentials(
+      { provider: input.provider, tenant_id: tenantId },
+      { take: 1 },
+      sharedContext
+    )
+    const current = existing[0]
+    if (!current && (!input.encrypted_api_key || !input.secret_hint)) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "API key is required when connecting a provider for the first time."
+      )
+    }
+    if (!input.embedding_enabled && !input.generation_enabled) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "Enable at least one AI capability for this provider."
+      )
+    }
+
+    const encrypted =
+      input.encrypted_api_key ??
+      {
+          encrypted_secret: current!.encrypted_secret,
+          encryption_iv: current!.encryption_iv,
+          encryption_tag: current!.encryption_tag,
+          key_version: current!.key_version,
+        }
+    const secretHint = input.secret_hint ?? current?.secret_hint
+    if (!secretHint) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "A secret hint is required for provider credentials."
+      )
+    }
+
+    const otherCredentials = await this.listAgentAiProviderCredentials(
+      { tenant_id: tenantId },
+      {},
+      sharedContext
+    )
+    for (const credential of otherCredentials) {
+      if (credential.provider === input.provider) continue
+      const embeddingEnabled = input.embedding_enabled
+        ? false
+        : credential.embedding_enabled
+      const generationEnabled = input.generation_enabled
+        ? false
+        : credential.generation_enabled
+      if (
+        embeddingEnabled !== credential.embedding_enabled ||
+        generationEnabled !== credential.generation_enabled
+      ) {
+        await this.updateAgentAiProviderCredentials(
+          {
+            embedding_enabled: embeddingEnabled,
+            generation_enabled: generationEnabled,
+            id: credential.id,
+          },
+          sharedContext
+        )
+      }
+    }
+
+    const data = {
+      ...encrypted,
+      embedding_dimensions: input.embedding_dimensions ?? null,
+      embedding_enabled: input.embedding_enabled,
+      embedding_model: input.embedding_model,
+      generation_enabled: input.generation_enabled,
+      generation_model: input.generation_model,
+      secret_hint: secretHint,
+      updated_by_id: input.actor_id,
+    }
+    const credential = current
+      ? await this.updateAgentAiProviderCredentials(
+          { ...data, id: current.id },
+          sharedContext
+        )
+      : await this.createAgentAiProviderCredentials(
+          {
+            ...data,
+            provider: input.provider,
+            tenant_id: tenantId,
+          },
+          sharedContext
+        )
+
+    await this.createAgentAuditEvents(
+      {
+        action: current ? "ai-provider-updated" : "ai-provider-connected",
+        actor_id: input.actor_id,
+        actor_type: "user",
+        correlation_id: credential.id,
+        data: {
+          embedding_enabled: credential.embedding_enabled,
+          embedding_model: credential.embedding_model,
+          generation_enabled: credential.generation_enabled,
+          generation_model: credential.generation_model,
+          provider: credential.provider,
+        },
+        event_type: "agent.ai-provider.configured",
+        recorded_at: new Date(),
+        resource_id: credential.id,
+        resource_type: "agent_ai_provider_credential",
+      },
+      sharedContext
+    )
+
+    return {
+      configured: true,
+      embedding_enabled: credential.embedding_enabled,
+      generation_enabled: credential.generation_enabled,
+      provider: credential.provider,
+      secret_hint: credential.secret_hint,
+    }
+  }
+
+  @InjectManager()
+  async disconnectAiProvider(
+    input: DisconnectAiProviderInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.disconnectAiProvider_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async disconnectAiProvider_(
+    input: DisconnectAiProviderInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const tenantId = input.tenant_id ?? "default"
+    const credentials = await this.listAgentAiProviderCredentials(
+      { provider: input.provider, tenant_id: tenantId },
+      { take: 1 },
+      sharedContext
+    )
+    const credential = credentials[0]
+    if (!credential) return { disconnected: false, provider: input.provider }
+
+    await this.deleteAgentAiProviderCredentials(credential.id, sharedContext)
+    await this.createAgentAuditEvents(
+      {
+        action: "ai-provider-disconnected",
+        actor_id: input.actor_id,
+        actor_type: "user",
+        correlation_id: credential.id,
+        data: { provider: input.provider },
+        event_type: "agent.ai-provider.disconnected",
+        recorded_at: new Date(),
+        resource_id: credential.id,
+        resource_type: "agent_ai_provider_credential",
+      },
+      sharedContext
+    )
+    return { disconnected: true, provider: input.provider }
+  }
+
   async getGoogleKnowledgeConnectorStatus(tenantId = "default") {
     const platform = getGoogleKnowledgeOAuthPlatformStatus()
     const credentials = await this.listAgentConnectorCredentials(
@@ -967,6 +1351,196 @@ class AgentOperationsModuleService extends MedusaService({
   }
 
   @InjectManager()
+  async indexGovernedKnowledgeDocument(
+    documentId: string,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const document = await this.retrieveAgentKnowledgeDocument(
+      documentId,
+      {},
+      sharedContext
+    )
+    if (!isKnowledgeEligible(document)) {
+      return {
+        indexed_chunks: 0,
+        provider: "disabled",
+        status: "SKIPPED" as const,
+      }
+    }
+
+    const chunks = await this.listAgentKnowledgeChunks(
+      { document_id: document.id },
+      { order: { chunk_index: "ASC" }, take: 10_000 },
+      sharedContext
+    )
+
+    try {
+      const credential = await this.getActiveAiProviderCredential(
+        "embedding",
+        document.tenant_id
+      )
+      const result = await createKnowledgeRagEngine(
+        process.env,
+        credential
+      ).indexDocuments(
+        chunks.map((chunk) => ({
+          checksum: chunk.checksum,
+          chunk_id: chunk.id,
+          citation_locator: chunk.citation_locator,
+          content: chunk.content,
+          document_id: document.id,
+          document_key: document.document_key,
+          locale: document.locale,
+          scope: document.scope,
+          tenant_id: document.tenant_id,
+          title: document.title,
+          version: document.version,
+        }))
+      )
+      if (result.status === "INDEXED") {
+        await this.createAgentAuditEvents(
+          {
+            action: "knowledge-vector-indexed",
+            actor_id: "knowledge-rag-indexer",
+            actor_type: "system",
+            correlation_id: `${document.document_key}:${document.version}`,
+            data: {
+              indexed_chunks: result.indexed_chunks,
+              provider: result.provider,
+            },
+            event_type: "agent.knowledge.vector-indexed",
+            recorded_at: new Date(),
+            resource_id: document.id,
+            resource_type: "agent_knowledge_document",
+          },
+          sharedContext
+        )
+      }
+      return result
+    } catch (error) {
+      return {
+        error:
+          error instanceof Error
+            ? error.message.slice(0, 1_000)
+            : "Knowledge vector indexing failed.",
+        indexed_chunks: 0,
+        provider: "langchain-qdrant",
+        status: "FAILED" as const,
+      }
+    }
+  }
+
+  @InjectManager()
+  async reindexGovernedKnowledge(
+    tenantId = "default",
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const documents = await this.listAgentKnowledgeDocuments(
+      { status: "APPROVED", tenant_id: tenantId },
+      { take: 10_000 },
+      sharedContext
+    )
+    const eligibleDocuments = documents.filter((document) =>
+      isKnowledgeEligible(document)
+    )
+    if (!eligibleDocuments.length) {
+      return {
+        indexed_chunks: 0,
+        indexed_documents: 0,
+        provider: "disabled",
+        status: "SKIPPED" as const,
+      }
+    }
+    const chunks = await this.listAgentKnowledgeChunks(
+      { document_id: eligibleDocuments.map((document) => document.id) },
+      { order: { chunk_index: "ASC" }, take: 50_000 },
+      sharedContext
+    )
+    const documentsById = new Map(
+      eligibleDocuments.map((document) => [document.id, document])
+    )
+
+    try {
+      const credential = await this.getActiveAiProviderCredential(
+        "embedding",
+        tenantId
+      )
+      const result = await createKnowledgeRagEngine(
+        process.env,
+        credential
+      ).indexDocuments(
+        chunks.flatMap((chunk) => {
+          const document = documentsById.get(chunk.document_id)
+          if (!document) return []
+          return [
+            {
+              checksum: chunk.checksum,
+              chunk_id: chunk.id,
+              citation_locator: chunk.citation_locator,
+              content: chunk.content,
+              document_id: document.id,
+              document_key: document.document_key,
+              locale: document.locale,
+              scope: document.scope,
+              tenant_id: document.tenant_id,
+              title: document.title,
+              version: document.version,
+            },
+          ]
+        })
+      )
+      return {
+        ...result,
+        indexed_documents: eligibleDocuments.length,
+      }
+    } catch (error) {
+      return {
+        error:
+          error instanceof Error
+            ? error.message.slice(0, 1_000)
+            : "Knowledge reindex failed.",
+        indexed_chunks: 0,
+        indexed_documents: 0,
+        provider: "langchain-qdrant",
+        status: "FAILED" as const,
+      }
+    }
+  }
+
+  @InjectManager()
+  async removeGovernedKnowledgeDocumentIndex(
+    documentId: string,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    try {
+      const document = await this.retrieveAgentKnowledgeDocument(
+        documentId,
+        {},
+        sharedContext
+      )
+      const credential = await this.getActiveAiProviderCredential(
+        "embedding",
+        document.tenant_id
+      )
+      const engine = createKnowledgeRagEngine(process.env, credential)
+      if (engine.provider === "disabled") {
+        return { provider: engine.provider, status: "DISABLED" as const }
+      }
+      await engine.deleteDocument(documentId)
+      return { provider: engine.provider, status: "DELETED" as const }
+    } catch (error) {
+      return {
+        error:
+          error instanceof Error
+            ? error.message.slice(0, 1_000)
+            : "Knowledge vector deletion failed.",
+        provider: "langchain-qdrant",
+        status: "FAILED" as const,
+      }
+    }
+  }
+
+  @InjectManager()
   async searchGovernedKnowledge(
     input: KnowledgeSearchInput,
     @MedusaContext() sharedContext: Context = {}
@@ -997,7 +1571,40 @@ class AgentOperationsModuleService extends MedusaService({
       sharedContext
     )
 
-    return searchKnowledgeChunks(parsed, documents, chunks)
+    let semanticScores = new Map<string, number>()
+    try {
+      const credential = await this.getActiveAiProviderCredential(
+        "embedding",
+        parsed.tenant_id
+      )
+      const results = await createKnowledgeRagEngine(
+        process.env,
+        credential
+      ).search({
+        candidate_limit: Math.min(Math.max(parsed.limit * 10, 20), 100),
+        locale: parsed.locale,
+        query: parsed.query,
+        scope: parsed.scope,
+        tenant_id: parsed.tenant_id,
+      })
+      const eligibleChunkIds = new Set(chunks.map((chunk) => chunk.id))
+      semanticScores = new Map(
+        results
+          .filter((result) => eligibleChunkIds.has(result.chunk_id))
+          .map((result) => [result.chunk_id, result.score])
+      )
+    } catch {
+      semanticScores = new Map()
+    }
+
+    return semanticScores.size
+      ? searchKnowledgeChunksHybrid(
+          parsed,
+          documents,
+          chunks,
+          semanticScores
+        )
+      : searchKnowledgeChunks(parsed, documents, chunks)
   }
 
   @InjectManager()
@@ -1804,6 +2411,7 @@ class AgentOperationsModuleService extends MedusaService({
   async draftGovernedCustomerResponse(
     input: ResponseDraftInput,
     idempotencyKey: string,
+    tenantId = "default",
     @MedusaContext() sharedContext: Context = {}
   ): Promise<ResponseDraftOutput> {
     const parsed = ResponseDraftInput.parse(input)
@@ -1813,11 +2421,39 @@ class AgentOperationsModuleService extends MedusaService({
 
     let adapter
     try {
-      adapter = createConfiguredModelAdapter()
+      const credential = await this.getActiveAiProviderCredential(
+        "generation",
+        tenantId
+      )
+      adapter = credential
+        ? createModelAdapter({
+            apiKey: credential.api_key,
+            model: credential.model,
+            provider: credential.provider,
+          })
+        : createConfiguredModelAdapter()
     } catch {
       return deterministic
     }
     if (adapter.provider === "disabled") return deterministic
+
+    const activePrompts = await this.listAgentPromptTemplates(
+      { prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY, status: "ACTIVE" },
+      { order: { created_at: "DESC" }, take: 1 },
+      sharedContext
+    )
+    const activePrompt = activePrompts[0]
+    const prompt = {
+      max_tokens:
+        activePrompt?.max_tokens ?? CUSTOMER_SUPPORT_DEFAULT_MAX_TOKENS,
+      output_schema:
+        (activePrompt?.output_schema as Record<string, unknown> | undefined) ??
+        CUSTOMER_SUPPORT_DEFAULT_OUTPUT_SCHEMA,
+      prompt_key: activePrompt?.prompt_key ?? CUSTOMER_SUPPORT_PROMPT_KEY,
+      system_prompt:
+        activePrompt?.system_prompt ?? CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT,
+      version: activePrompt?.version ?? CUSTOMER_SUPPORT_PROMPT_VERSION,
+    }
 
     const existing = (
       await this.listAgentModelRuns(
@@ -1856,8 +2492,8 @@ class AgentOperationsModuleService extends MedusaService({
         idempotency_key: idempotencyKey,
         input: redactModelInput(safeInput) as Record<string, unknown>,
         model: adapter.model,
-        prompt_key: "customer-support-grounded-draft",
-        prompt_version: "1.0.0",
+        prompt_key: prompt.prompt_key,
+        prompt_version: prompt.version,
         provider: adapter.provider,
         redacted: true,
         started_at: startedAt,
@@ -1870,15 +2506,11 @@ class AgentOperationsModuleService extends MedusaService({
       const generated = await adapter.invoke({
         agent_id: "customer-support-agent",
         input: safeInput,
-        max_tokens: 800,
-        output_schema: {
-          additionalProperties: false,
-          properties: { body: { maxLength: 4000, minLength: 1, type: "string" } },
-          required: ["body"],
-          type: "object",
-        },
-        prompt_key: "customer-support-grounded-draft",
-        prompt_version: "1.0.0",
+        max_tokens: prompt.max_tokens,
+        output_schema: prompt.output_schema,
+        prompt_key: prompt.prompt_key,
+        prompt_version: prompt.version,
+        system_prompt: prompt.system_prompt,
       })
       const output = ResponseDraftOutput.parse({
         body: generated.body,

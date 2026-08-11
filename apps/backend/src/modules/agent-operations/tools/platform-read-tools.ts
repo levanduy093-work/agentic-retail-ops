@@ -262,7 +262,13 @@ function scoreKnowledgeDocument(
   document: KnowledgeDocumentSearchSource,
   normalizedQuery: string
 ) {
-  const tokens = [...new Set(normalizedQuery.split(/\s+/).filter(Boolean))]
+  const tokens = [
+    ...new Set(
+      normalizedQuery
+        .split(/\s+/)
+        .filter((token) => token.length >= 2)
+    ),
+  ]
   const title = normalizeSearchText(document.title)
   const key = normalizeSearchText(document.document_key)
   const content = normalizeSearchText(document.content)
@@ -330,6 +336,16 @@ export function searchKnowledgeChunks(
   chunks: KnowledgeChunkSearchSource[],
   now = new Date()
 ): KnowledgeSearchOutput {
+  return searchKnowledgeChunksHybrid(input, documents, chunks, new Map(), now)
+}
+
+export function searchKnowledgeChunksHybrid(
+  input: KnowledgeSearchInput,
+  documents: KnowledgeDocumentSearchSource[],
+  chunks: KnowledgeChunkSearchSource[],
+  semanticScores: ReadonlyMap<string, number>,
+  now = new Date()
+): KnowledgeSearchOutput {
   const parsed = KnowledgeSearchInput.parse(input)
   const normalizedQuery = normalizeSearchText(parsed.query)
   const eligibleDocuments = new Map(
@@ -340,19 +356,33 @@ export function searchKnowledgeChunks(
   const candidates = chunks.filter((chunk) =>
     eligibleDocuments.has(chunk.document_id)
   )
-  const results = candidates
+  const ranked = candidates
     .map((chunk) => {
       const document = eligibleDocuments.get(chunk.document_id)!
+      const lexicalScore = scoreKnowledgeDocument(
+        { ...document, content: chunk.content },
+        normalizedQuery
+      )
+      const semanticScore = semanticScores.get(chunk.id)
+      const score =
+        semanticScore === undefined
+          ? lexicalScore
+          : Math.min(1, lexicalScore / 16) * 0.35 +
+            Math.max(0, Math.min(1, semanticScore)) * 0.65
       return {
         chunk,
         document,
-        score: scoreKnowledgeDocument(
-          { ...document, content: chunk.content },
-          normalizedQuery
-        ),
+        lexicalScore,
+        score,
+        semanticScore,
       }
     })
-    .filter((candidate) => candidate.score > 0)
+    .filter(
+      (candidate) =>
+        candidate.lexicalScore > 0 ||
+        (candidate.semanticScore !== undefined &&
+          candidate.semanticScore >= 0.2)
+    )
     .sort(
       (left, right) =>
         right.score - left.score ||
@@ -360,7 +390,20 @@ export function searchKnowledgeChunks(
           new Date(left.document.effective_at).getTime() ||
         left.chunk.chunk_index - right.chunk.chunk_index
     )
-    .slice(0, parsed.limit)
+  const selected: typeof ranked = []
+  const chunkChecksums = new Set<string>()
+  const documentCounts = new Map<string, number>()
+  for (const candidate of ranked) {
+    if (selected.length >= parsed.limit) break
+    if (chunkChecksums.has(candidate.chunk.checksum)) continue
+    const documentCount = documentCounts.get(candidate.document.id) ?? 0
+    if (documentCount >= 2) continue
+    selected.push(candidate)
+    chunkChecksums.add(candidate.chunk.checksum)
+    documentCounts.set(candidate.document.id, documentCount + 1)
+  }
+
+  const results = selected
     .map(({ chunk, document, score }) => ({
       citation_locator: chunk.citation_locator,
       chunk_id: chunk.id,

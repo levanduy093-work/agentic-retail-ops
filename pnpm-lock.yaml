@@ -30,6 +30,18 @@ importers:
 
   apps/backend:
     dependencies:
+      '@langchain/core':
+        specifier: ^1.2.5
+        version: 1.2.5(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.220.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.0))(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.71)(@smithy/signature-v4@5.6.8)(ws@8.21.3)(zod@4.2.0))(ws@8.21.3)
+      '@langchain/google-genai':
+        specifier: ^2.2.0
+        version: 2.2.0(@langchain/core@1.2.5(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.220.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.0))(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.71)(@smithy/signature-v4@5.6.8)(ws@8.21.3)(zod@4.2.0))(ws@8.21.3))
+      '@langchain/openai':
+        specifier: ^1.5.6
+        version: 1.5.6(@aws-sdk/credential-provider-node@3.972.71)(@langchain/core@1.2.5(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.220.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.0))(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.71)(@smithy/signature-v4@5.6.8)(ws@8.21.3)(zod@4.2.0))(ws@8.21.3))(@smithy/signature-v4@5.6.8)(ws@8.21.3)
+      '@langchain/qdrant':
+        specifier: ^1.0.3
+        version: 1.0.3(@langchain/core@1.2.5(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.220.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.0))(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.71)(@smithy/signature-v4@5.6.8)(ws@8.21.3)(zod@4.2.0))(ws@8.21.3))(typescript@5.9.3)
       '@medusajs/admin-sdk':
         specifier: 2.18.0
         version: 2.18.0
@@ -59,7 +71,7 @@ importers:
         version: 2.18.0
       '@medusajs/medusa':
         specifier: 2.18.0
-        version: 2.18.0(@medusajs/admin-sdk@2.18.0)(@medusajs/cli@2.18.0(@types/node@20.19.26))(@medusajs/dashboard@2.18.0(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(typescript@5.9.3))(@medusajs/framework@2.18.0(@medusajs/cli@2.18.0(@types/node@20.19.26))(@types/node@20.19.26)(ioredis@5.8.2)(vite@5.4.21(@types/node@20.19.26)(terser@5.44.1))(zod@4.2.0))(@medusajs/icons@2.18.0(react@18.3.1))(@medusajs/test-utils@2.18.0)(@medusajs/ui@4.2.0(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3))(@swc/core@1.15.3(@swc/helpers@0.5.17))(@types/node@20.19.26)(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(awilix@8.0.1)(posthog-node@5.17.2)(react-dom@18.3.1(react@18.3.1))(react-router-dom@6.30.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(terser@5.44.1)(typescript@5.9.3)(yalc@1.0.0-pre.53)
+        version: 2.18.0(@medusajs/admin-sdk@2.18.0)(@medusajs/cli@2.18.0(@types/node@20.19.26))(@medusajs/dashboard@2.18.0(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(typescript@5.9.3))(@medusajs/framework@2.18.0(@medusajs/cli@2.18.0(@types/node@20.19.26))(@types/node@20.19.26)(ioredis@5.8.2)(vite@5.4.21(@types/node@20.19.26)(terser@5.44.1))(zod@4.2.0))(@medusajs/icons@2.18.0(react@18.3.1))(@medusajs/test-utils@2.18.0)(@medusajs/ui@4.2.0(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3))(@swc/core@1.15.3(@swc/helpers@0.5.17))(@types/node@20.19.26)(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(awilix@8.0.1)(picomatch@4.0.3)(posthog-node@5.17.2)(react-dom@18.3.1(react@18.3.1))(react-router-dom@6.30.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(terser@5.44.1)(typescript@5.9.3)(yalc@1.0.0-pre.53)(yaml@2.9.0)
       '@medusajs/ui':
         specifier: 4.2.0
         version: 4.2.0(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)
@@ -609,6 +621,9 @@ packages:
   '@bcoe/v8-coverage@0.2.3':
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
 
+  '@cfworker/json-schema@4.1.1':
+    resolution: {integrity: sha512-gAmrUZSGtKc3AiBL71iNWxDsyUC5uMaKKGdvzYsBoTW/xi42JQHl7eKV2OYzCUqvc+D2RCcf7EXY2iCyFIk6og==}
+
   '@colors/colors@1.6.0':
     resolution: {integrity: sha512-Ir+AOibqzrIsL6ajt3Rz3LskB7OiMVHqltZmspbW/TJuTVuyOMirVqAkjfY6JISiLHgyNqicAC8AyHHGzNd/dA==}
     engines: {node: '>=0.1.90'}
@@ -862,6 +877,10 @@ packages:
 
   '@formatjs/intl-localematcher@0.6.2':
     resolution: {integrity: sha512-XOMO2Hupl0wdd172Y06h6kLpBz6Dv+J4okPLl4LPtzbr8f66WbIoy4ev98EBuZ6ZK4h5ydTN6XneT4QVpD7cdA==}
+
+  '@google/generative-ai@0.24.1':
+    resolution: {integrity: sha512-MqO+MLfM6kjxcKoy0p1wRzG3b4ZZXtPI+z2IE26UogS2Cm/XHO+7gGRBh6gcJsOiIVoH93UwKvW4HdgiOZCy9Q==}
+    engines: {node: '>=18.0.0'}
 
   '@graphql-codegen/core@4.0.2':
     resolution: {integrity: sha512-IZbpkhwVqgizcjNiaVzNAzm/xbWT6YnGgeOLwVjm4KbJn3V2jchVtuzHH09G5/WkkLSk2wgbXNdwjM41JxO6Eg==}
@@ -1280,6 +1299,28 @@ packages:
 
   '@js-sdsl/ordered-map@4.4.2':
     resolution: {integrity: sha512-iUKgm52T8HOE/makSxjqoWhe95ZJA1/G1sYsGev2JDKUSS14KAgg1LHb+Ba+IPow0xflbnSkOsZcO08C7w1gYw==}
+
+  '@langchain/core@1.2.5':
+    resolution: {integrity: sha512-4lXj3fTPQYGdEtOG9gWDnvmp6wpXNMo9MmWzfZxxPUxMcjulZJa93pYAZ90luFLg2YVdVuUl2tuwdD7tY5K9MA==}
+    engines: {node: '>=20'}
+
+  '@langchain/google-genai@2.2.0':
+    resolution: {integrity: sha512-1mDqbmB6+iC6ZBQY15r5xJg9wPErnQ774inpKh6qi6BrrjadDwaPHoklJW5IXU94edKiDpm1akIzJCrQDWe6yA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@langchain/core': ^1.2.0
+
+  '@langchain/openai@1.5.6':
+    resolution: {integrity: sha512-1cesvhCXw30tMYWXXQaK2gN4aDIKq266LcMSjZn7O/kue/vPnCOAxiwy54HcGQQf7m/sVKfhOn4QwVRObSeAsg==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@langchain/core': ^1.2.5
+
+  '@langchain/qdrant@1.0.3':
+    resolution: {integrity: sha512-b8EqhGpltjUvFfzk+NM03jfB20+HAWKylQU+k68BUkIvaW38F7cLoz90cJWWHrg9Ritv+bL5y2hchDm365z7bA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@langchain/core': ^1.1.47
 
   '@medusajs/admin-bundler@2.18.0':
     resolution: {integrity: sha512-DijXu1NxVgoCCetMFLqMJiZ5KtehPLlacGnjV7fGkyxSYJhMg8wJxHVt2uWr6aJag2eMUI8fPT/UeC+oZEm5bw==}
@@ -2159,6 +2200,16 @@ packages:
 
   '@protobufjs/utf8@1.1.0':
     resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
+
+  '@qdrant/js-client-rest@1.19.0':
+    resolution: {integrity: sha512-1+QLUHsWp+WV4PE35FLnH2ckxotWrQEqi/F3t4goF3cCThR0ZxLVtOC4OoOi/E1iyj/iIYBdbuACWMuQ15NAnA==}
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      typescript: '>=4.7'
+
+  '@qdrant/openapi-typescript-fetch@1.2.6':
+    resolution: {integrity: sha512-oQG/FejNpItrxRHoyctYvT3rwGZOnK4jr3JdppO/c78ktDvkWiPXPHNsrDf33K9sZdRb6PR7gi4noIapu5q4HA==}
+    engines: {node: '>=18.0.0', pnpm: '>=8'}
 
   '@radix-ui/number@1.1.0':
     resolution: {integrity: sha512-V3gRzhVNU1ldS5XhAPTom1fOIo4ccrjjJgmE+LI2h/WaFpHmx0MQApT+KZHnx8abG6Avtfcz4WoEciMnpFT3HQ==}
@@ -3790,6 +3841,9 @@ packages:
   '@so-ric/colorspace@1.1.6':
     resolution: {integrity: sha512-/KiKkpHNOBgkFJwu9sh48LkHSMYGyuTcSFK/qMBdnOAlrRJzRSXAOFB5qwzaVQuDl8wAvHVMkaASQDReTahxuw==}
 
+  '@standard-schema/spec@1.1.0':
+    resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+
   '@stripe/react-stripe-js@5.4.1':
     resolution: {integrity: sha512-ipeYcAHa4EPmjwfv0lFE+YDVkOQ0TMKkFWamW+BqmnSkEln/hO8rmxGPPWcd9WjqABx6Ro8Xg4pAS7evCcR9cw==}
     peerDependencies:
@@ -5377,6 +5431,9 @@ packages:
     resolution: {integrity: sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg==}
     engines: {node: '>= 0.6'}
 
+  eventemitter3@4.0.7:
+    resolution: {integrity: sha512-8guHBZCwKnFhYdHr2ysuRWErTwhoN2X8XELRlrRwpmfeY2jjuUN4taQMsULKUVo1K4DvZl+0pgfyoysHxvmvEw==}
+
   events@3.3.0:
     resolution: {integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==}
     engines: {node: '>=0.8.x'}
@@ -6217,6 +6274,9 @@ packages:
   jose@4.15.9:
     resolution: {integrity: sha512-1vUQX+IdDMVPj4k8kOxgUqlcK518yluMuGZwqlr44FS1ppZB/5GWh4rZG89erpOBOJjU/OBsnCVFfapsRz6nEA==}
 
+  js-tiktoken@1.0.21:
+    resolution: {integrity: sha512-biOj/6M5qdgx5TKjDnFT1ymSpM5tbd3ylwDtrQvFQSu0Z7bBYko2dF+W/aUkXUPuk6IVpRxk/3Q2sHOzGlS36g==}
+
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
@@ -6331,6 +6391,26 @@ packages:
 
   kuler@2.0.0:
     resolution: {integrity: sha512-Xq9nH7KlWZmXAtodXDDRE7vs6DU1gTU8zYDHDiWLSip45Egwq3plLHzPn27NgvzL2r1LMPC1vdqh98sQxtqj4A==}
+
+  langsmith@0.8.9:
+    resolution: {integrity: sha512-6ikTB5SO+3SlBQ/+oH8K/JzhglxB8AM4RAe5bHzgWSEIHTgTe+b71bSjf1fDvlYuEXoiPn6uP10BbczrbznUnA==}
+    peerDependencies:
+      '@opentelemetry/api': '*'
+      '@opentelemetry/exporter-trace-otlp-proto': '*'
+      '@opentelemetry/sdk-trace-base': '*'
+      openai: '*'
+      ws: '>=7'
+    peerDependenciesMeta:
+      '@opentelemetry/api':
+        optional: true
+      '@opentelemetry/exporter-trace-otlp-proto':
+        optional: true
+      '@opentelemetry/sdk-trace-base':
+        optional: true
+      openai:
+        optional: true
+      ws:
+        optional: true
 
   language-subtag-registry@0.3.23:
     resolution: {integrity: sha512-0K65Lea881pHotoGEa5gDlMxt3pctLi2RplBb7Ezh4rRdLEOtgi7n4EwK9lamnUCkKBqaeKRVebTq6BAxSkpXQ==}
@@ -6618,6 +6698,10 @@ packages:
     resolution: {integrity: sha512-6rdyFg2kLrMh9Jee7/BMPuV9lEAd7lLW2YUpF9/YxR7njyoUwwQ0ZPh3TaIY50Sw6vlyD2HW3wGOkTS4P79xrQ==}
     engines: {node: '>= 10.16.0'}
 
+  mustache@4.2.0:
+    resolution: {integrity: sha512-71ippSywq5Yb7/tVYyGbkBggbU8H3u5Rz56fH60jGFgr8uHwxs+aSKeqmluIVzM0m0kB7xQjKS6qPfd0b2ZoqQ==}
+    hasBin: true
+
   mute-stream@0.0.8:
     resolution: {integrity: sha512-nnbWWOkoWyUsTjKrhgD0dcz22mdkSnpYqbEjIm2nhwhuxlSkpywJmBo8h0ZqJdkp73mb90SssHkN4rsRaBAfAA==}
 
@@ -6803,6 +6887,26 @@ packages:
     resolution: {integrity: sha512-kbpaSSGJTWdAY5KPVeMOKXSrPtr8C8C7wodJbcsd51jRnmD+GZu8Y0VoU6Dm5Z4vWr0Ig/1NKuWRKf7j5aaYSg==}
     engines: {node: '>=6'}
 
+  openai@6.49.0:
+    resolution: {integrity: sha512-aYCc0C6L864eR6WSYIwQGyXriw/nIyZx0ObvhzOEVuk0zoBDpynjSbrionWI7q65B5H8jJX0DXR9snEzM6bfPg==}
+    peerDependencies:
+      '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
+      '@smithy/hash-node': '>=4.3.0 <5'
+      '@smithy/signature-v4': '>=5.4.0 <6'
+      ws: ^8.18.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      '@aws-sdk/credential-provider-node':
+        optional: true
+      '@smithy/hash-node':
+        optional: true
+      '@smithy/signature-v4':
+        optional: true
+      ws:
+        optional: true
+      zod:
+        optional: true
+
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
@@ -6817,6 +6921,10 @@ packages:
   own-keys@1.0.1:
     resolution: {integrity: sha512-qFOyK5PjiWZd+QQIh+1jhdb9LpxTF0qs7Pm8o5QHYZ0M3vKqSqzsZaEB6oWlxZ+q2sJBMI/Ktgd2N5ZwQoRHfg==}
     engines: {node: '>= 0.4'}
+
+  p-finally@1.0.0:
+    resolution: {integrity: sha512-LICb2p9CB7FS+0eR1oqWnHhp0FljGLZCWBE9aix0Uye9W8LTQPwMTYVGWQWIw9RdQiDg4+epXQODwIYJtSJaow==}
+    engines: {node: '>=4'}
 
   p-limit@2.3.0:
     resolution: {integrity: sha512-//88mFWSJx8lxCzwdAABTJL2MyWB12+eIY7MDL2SqLmAkeKU9qxRvWuSyTjm3FUmpBEMuFfckAIqEaVGUDxb6w==}
@@ -6833,6 +6941,14 @@ packages:
   p-locate@5.0.0:
     resolution: {integrity: sha512-LaNjtRWUBY++zB5nE/NwcaoMylSPk+S+ZHNB1TzdbMJMny6dynpAGt7X/tl/QYq3TIeE6nxHppbo2LGymrG5Pw==}
     engines: {node: '>=10'}
+
+  p-queue@6.6.2:
+    resolution: {integrity: sha512-RwFpb72c/BhQLEXIZ5K2e+AhgNVmIejGlTgiB9MzZ0e93GRvqZ7uSi0dvRF7/XIXDeNkra2fNHBxTyPDGySpjQ==}
+    engines: {node: '>=8'}
+
+  p-timeout@3.2.0:
+    resolution: {integrity: sha512-rhIwUycgwwKcP9yTOOFK/AKsAopjjCakVqLHePO3CC6Mir1Z99xT+R63jZxAT5lFZLa2inS5h+ZS2GvR99/FBg==}
+    engines: {node: '>=8'}
 
   p-try@2.2.0:
     resolution: {integrity: sha512-R4nPAVTAU0B9D35/Gk3uJf/7XYbQcyohSKdvAxIRSNghFl4e71hVoGnBNQz9cWaXxO2I10KTC+3jMdvvoKw6dQ==}
@@ -8036,6 +8152,10 @@ packages:
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
+  undici@7.29.0:
+    resolution: {integrity: sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==}
+    engines: {node: '>=20.18.1'}
+
   unique-string@2.0.0:
     resolution: {integrity: sha512-uNaeirEPvpZWSgzwsPGtU2zVSTrn/8L5q/IexZmH0eH6SA73CmAA5U4GwORTxQAZs95TAXLNqeLoPPNO5gZfWg==}
     engines: {node: '>=8'}
@@ -8248,6 +8368,18 @@ packages:
   write-file-atomic@4.0.2:
     resolution: {integrity: sha512-7KxauUdBmSdWnmpaGFg+ppNjKF8uNLry8LyzjauQDOVONfFLNKrKvQOxZ/VuTIcS/gge/YNahf5RIIQWTSarlg==}
     engines: {node: ^12.13.0 || ^14.15.0 || >=16.0.0}
+
+  ws@8.21.3:
+    resolution: {integrity: sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
 
   xdg-basedir@4.0.0:
     resolution: {integrity: sha512-PSNhEJDejZYV7h50BohL09Er9VaIefr2LMAf3OEmpCkjOi34eYyQYAXUTjEQtZJTKcF0E2UKTh+osDLsgNim9Q==}
@@ -8889,6 +9021,8 @@ snapshots:
 
   '@bcoe/v8-coverage@0.2.3': {}
 
+  '@cfworker/json-schema@4.1.1': {}
+
   '@colors/colors@1.6.0': {}
 
   '@cspotcode/source-map-support@0.8.1':
@@ -9118,6 +9252,8 @@ snapshots:
   '@formatjs/intl-localematcher@0.6.2':
     dependencies:
       tslib: 2.8.1
+
+  '@google/generative-ai@0.24.1': {}
 
   '@graphql-codegen/core@4.0.2(graphql@16.12.0)':
     dependencies:
@@ -9669,10 +9805,50 @@ snapshots:
 
   '@js-sdsl/ordered-map@4.4.2': {}
 
-  '@medusajs/admin-bundler@2.18.0(@types/node@20.19.26)(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(terser@5.44.1)(typescript@5.9.3)':
+  '@langchain/core@1.2.5(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.220.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.0))(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.71)(@smithy/signature-v4@5.6.8)(ws@8.21.3)(zod@4.2.0))(ws@8.21.3)':
+    dependencies:
+      '@cfworker/json-schema': 4.1.1
+      '@standard-schema/spec': 1.1.0
+      js-tiktoken: 1.0.21
+      langsmith: 0.8.9(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.220.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.0))(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.71)(@smithy/signature-v4@5.6.8)(ws@8.21.3)(zod@4.2.0))(ws@8.21.3)
+      mustache: 4.2.0
+      p-queue: 6.6.2
+      zod: 4.2.0
+    transitivePeerDependencies:
+      - '@opentelemetry/api'
+      - '@opentelemetry/exporter-trace-otlp-proto'
+      - '@opentelemetry/sdk-trace-base'
+      - openai
+      - ws
+
+  '@langchain/google-genai@2.2.0(@langchain/core@1.2.5(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.220.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.0))(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.71)(@smithy/signature-v4@5.6.8)(ws@8.21.3)(zod@4.2.0))(ws@8.21.3))':
+    dependencies:
+      '@google/generative-ai': 0.24.1
+      '@langchain/core': 1.2.5(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.220.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.0))(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.71)(@smithy/signature-v4@5.6.8)(ws@8.21.3)(zod@4.2.0))(ws@8.21.3)
+
+  '@langchain/openai@1.5.6(@aws-sdk/credential-provider-node@3.972.71)(@langchain/core@1.2.5(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.220.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.0))(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.71)(@smithy/signature-v4@5.6.8)(ws@8.21.3)(zod@4.2.0))(ws@8.21.3))(@smithy/signature-v4@5.6.8)(ws@8.21.3)':
+    dependencies:
+      '@langchain/core': 1.2.5(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.220.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.0))(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.71)(@smithy/signature-v4@5.6.8)(ws@8.21.3)(zod@4.2.0))(ws@8.21.3)
+      js-tiktoken: 1.0.21
+      openai: 6.49.0(@aws-sdk/credential-provider-node@3.972.71)(@smithy/signature-v4@5.6.8)(ws@8.21.3)(zod@4.2.0)
+      zod: 4.2.0
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - ws
+
+  '@langchain/qdrant@1.0.3(@langchain/core@1.2.5(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.220.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.0))(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.71)(@smithy/signature-v4@5.6.8)(ws@8.21.3)(zod@4.2.0))(ws@8.21.3))(typescript@5.9.3)':
+    dependencies:
+      '@langchain/core': 1.2.5(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.220.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.0))(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.71)(@smithy/signature-v4@5.6.8)(ws@8.21.3)(zod@4.2.0))(ws@8.21.3)
+      '@qdrant/js-client-rest': 1.19.0(typescript@5.9.3)
+    transitivePeerDependencies:
+      - typescript
+
+  '@medusajs/admin-bundler@2.18.0(@types/node@20.19.26)(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(picomatch@4.0.3)(terser@5.44.1)(typescript@5.9.3)(yaml@2.9.0)':
     dependencies:
       '@medusajs/admin-shared': 2.18.0
-      '@medusajs/admin-vite-plugin': 2.18.0(vite@5.4.21(@types/node@20.19.26)(terser@5.44.1))
+      '@medusajs/admin-vite-plugin': 2.18.0(picomatch@4.0.3)(vite@5.4.21(@types/node@20.19.26)(terser@5.44.1))
       '@medusajs/dashboard': 2.18.0(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(typescript@5.9.3)
       '@vitejs/plugin-react': 4.7.0(vite@5.4.21(@types/node@20.19.26)(terser@5.44.1))
       autoprefixer: 10.4.22(postcss@8.5.22)
@@ -9710,14 +9886,14 @@ snapshots:
 
   '@medusajs/admin-shared@2.18.0': {}
 
-  '@medusajs/admin-vite-plugin@2.18.0(vite@5.4.21(@types/node@20.19.26)(terser@5.44.1))':
+  '@medusajs/admin-vite-plugin@2.18.0(picomatch@4.0.3)(vite@5.4.21(@types/node@20.19.26)(terser@5.44.1))':
     dependencies:
       '@babel/parser': 7.25.6
       '@babel/traverse': 7.25.6
       '@babel/types': 7.25.6
       '@medusajs/admin-shared': 2.18.0
       chokidar: 3.6.0
-      fdir: 6.1.1
+      fdir: 6.1.1(picomatch@4.0.3)
       magic-string: 0.30.5
       outdent: 0.8.0
       picocolors: 1.1.1
@@ -10097,12 +10273,12 @@ snapshots:
     dependencies:
       '@medusajs/framework': 2.18.0(@medusajs/cli@2.18.0(@types/node@20.19.26))(@types/node@20.19.26)(ioredis@5.8.2)(vite@5.4.21(@types/node@20.19.26)(terser@5.44.1))(zod@4.2.0)
 
-  '@medusajs/medusa@2.18.0(@medusajs/admin-sdk@2.18.0)(@medusajs/cli@2.18.0(@types/node@20.19.26))(@medusajs/dashboard@2.18.0(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(typescript@5.9.3))(@medusajs/framework@2.18.0(@medusajs/cli@2.18.0(@types/node@20.19.26))(@types/node@20.19.26)(ioredis@5.8.2)(vite@5.4.21(@types/node@20.19.26)(terser@5.44.1))(zod@4.2.0))(@medusajs/icons@2.18.0(react@18.3.1))(@medusajs/test-utils@2.18.0)(@medusajs/ui@4.2.0(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3))(@swc/core@1.15.3(@swc/helpers@0.5.17))(@types/node@20.19.26)(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(awilix@8.0.1)(posthog-node@5.17.2)(react-dom@18.3.1(react@18.3.1))(react-router-dom@6.30.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(terser@5.44.1)(typescript@5.9.3)(yalc@1.0.0-pre.53)':
+  '@medusajs/medusa@2.18.0(@medusajs/admin-sdk@2.18.0)(@medusajs/cli@2.18.0(@types/node@20.19.26))(@medusajs/dashboard@2.18.0(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(typescript@5.9.3))(@medusajs/framework@2.18.0(@medusajs/cli@2.18.0(@types/node@20.19.26))(@types/node@20.19.26)(ioredis@5.8.2)(vite@5.4.21(@types/node@20.19.26)(terser@5.44.1))(zod@4.2.0))(@medusajs/icons@2.18.0(react@18.3.1))(@medusajs/test-utils@2.18.0)(@medusajs/ui@4.2.0(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3))(@swc/core@1.15.3(@swc/helpers@0.5.17))(@types/node@20.19.26)(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(awilix@8.0.1)(picomatch@4.0.3)(posthog-node@5.17.2)(react-dom@18.3.1(react@18.3.1))(react-router-dom@6.30.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(terser@5.44.1)(typescript@5.9.3)(yalc@1.0.0-pre.53)(yaml@2.9.0)':
     dependencies:
       '@inquirer/checkbox': 2.5.0
       '@inquirer/confirm': 2.0.17
       '@inquirer/input': 2.3.0
-      '@medusajs/admin-bundler': 2.18.0(@types/node@20.19.26)(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(terser@5.44.1)(typescript@5.9.3)
+      '@medusajs/admin-bundler': 2.18.0(@types/node@20.19.26)(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(picomatch@4.0.3)(terser@5.44.1)(typescript@5.9.3)(yaml@2.9.0)
       '@medusajs/analytics': 2.18.0(@medusajs/framework@2.18.0(@medusajs/cli@2.18.0(@types/node@20.19.26))(@types/node@20.19.26)(ioredis@5.8.2)(vite@5.4.21(@types/node@20.19.26)(terser@5.44.1))(zod@4.2.0))
       '@medusajs/analytics-local': 2.18.0(@medusajs/framework@2.18.0(@medusajs/cli@2.18.0(@types/node@20.19.26))(@types/node@20.19.26)(ioredis@5.8.2)(vite@5.4.21(@types/node@20.19.26)(terser@5.44.1))(zod@4.2.0))
       '@medusajs/analytics-posthog': 2.18.0(@medusajs/framework@2.18.0(@medusajs/cli@2.18.0(@types/node@20.19.26))(@types/node@20.19.26)(ioredis@5.8.2)(vite@5.4.21(@types/node@20.19.26)(terser@5.44.1))(zod@4.2.0))(posthog-node@5.17.2)
@@ -10356,7 +10532,7 @@ snapshots:
       ulid: 2.4.0
     optionalDependencies:
       '@medusajs/core-flows': 2.18.0(@medusajs/framework@2.18.0(@medusajs/cli@2.18.0(@types/node@20.19.26))(@types/node@20.19.26)(ioredis@5.8.2)(vite@5.4.21(@types/node@20.19.26)(terser@5.44.1))(zod@4.2.0))
-      '@medusajs/medusa': 2.18.0(@medusajs/admin-sdk@2.18.0)(@medusajs/cli@2.18.0(@types/node@20.19.26))(@medusajs/dashboard@2.18.0(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(typescript@5.9.3))(@medusajs/framework@2.18.0(@medusajs/cli@2.18.0(@types/node@20.19.26))(@types/node@20.19.26)(ioredis@5.8.2)(vite@5.4.21(@types/node@20.19.26)(terser@5.44.1))(zod@4.2.0))(@medusajs/icons@2.18.0(react@18.3.1))(@medusajs/test-utils@2.18.0)(@medusajs/ui@4.2.0(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3))(@swc/core@1.15.3(@swc/helpers@0.5.17))(@types/node@20.19.26)(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(awilix@8.0.1)(posthog-node@5.17.2)(react-dom@18.3.1(react@18.3.1))(react-router-dom@6.30.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(terser@5.44.1)(typescript@5.9.3)(yalc@1.0.0-pre.53)
+      '@medusajs/medusa': 2.18.0(@medusajs/admin-sdk@2.18.0)(@medusajs/cli@2.18.0(@types/node@20.19.26))(@medusajs/dashboard@2.18.0(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(typescript@5.9.3))(@medusajs/framework@2.18.0(@medusajs/cli@2.18.0(@types/node@20.19.26))(@types/node@20.19.26)(ioredis@5.8.2)(vite@5.4.21(@types/node@20.19.26)(terser@5.44.1))(zod@4.2.0))(@medusajs/icons@2.18.0(react@18.3.1))(@medusajs/test-utils@2.18.0)(@medusajs/ui@4.2.0(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3))(@swc/core@1.15.3(@swc/helpers@0.5.17))(@types/node@20.19.26)(@types/react-dom@19.0.5(@types/react@19.0.5))(@types/react@19.0.5)(awilix@8.0.1)(picomatch@4.0.3)(posthog-node@5.17.2)(react-dom@18.3.1(react@18.3.1))(react-router-dom@6.30.4(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(terser@5.44.1)(typescript@5.9.3)(yalc@1.0.0-pre.53)(yaml@2.9.0)
     transitivePeerDependencies:
       - debug
       - supports-color
@@ -10991,6 +11167,14 @@ snapshots:
   '@protobufjs/pool@1.1.0': {}
 
   '@protobufjs/utf8@1.1.0': {}
+
+  '@qdrant/js-client-rest@1.19.0(typescript@5.9.3)':
+    dependencies:
+      '@qdrant/openapi-typescript-fetch': 1.2.6
+      typescript: 5.9.3
+      undici: 7.29.0
+
+  '@qdrant/openapi-typescript-fetch@1.2.6': {}
 
   '@radix-ui/number@1.1.0': {}
 
@@ -13137,6 +13321,8 @@ snapshots:
       color: 5.0.3
       text-hex: 1.0.0
 
+  '@standard-schema/spec@1.1.0': {}
+
   '@stripe/react-stripe-js@5.4.1(@stripe/stripe-js@8.5.3)(react-dom@19.0.5(react@19.0.5))(react@19.0.5)':
     dependencies:
       '@stripe/stripe-js': 8.5.3
@@ -15034,6 +15220,8 @@ snapshots:
 
   etag@1.8.1: {}
 
+  eventemitter3@4.0.7: {}
+
   events@3.3.0: {}
 
   execa@5.1.1:
@@ -15155,7 +15343,9 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  fdir@6.1.1: {}
+  fdir@6.1.1(picomatch@4.0.3):
+    optionalDependencies:
+      picomatch: 4.0.3
 
   fdir@6.5.0(picomatch@4.0.3):
     optionalDependencies:
@@ -16151,6 +16341,10 @@ snapshots:
 
   jose@4.15.9: {}
 
+  js-tiktoken@1.0.21:
+    dependencies:
+      base64-js: 1.5.1
+
   js-tokens@4.0.0: {}
 
   js-yaml@3.14.2:
@@ -16270,6 +16464,16 @@ snapshots:
       - supports-color
 
   kuler@2.0.0: {}
+
+  langsmith@0.8.9(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.220.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.9.0(@opentelemetry/api@1.9.0))(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.71)(@smithy/signature-v4@5.6.8)(ws@8.21.3)(zod@4.2.0))(ws@8.21.3):
+    dependencies:
+      p-queue: 6.6.2
+    optionalDependencies:
+      '@opentelemetry/api': 1.9.0
+      '@opentelemetry/exporter-trace-otlp-proto': 0.220.0(@opentelemetry/api@1.9.0)
+      '@opentelemetry/sdk-trace-base': 2.9.0(@opentelemetry/api@1.9.0)
+      openai: 6.49.0(@aws-sdk/credential-provider-node@3.972.71)(@smithy/signature-v4@5.6.8)(ws@8.21.3)(zod@4.2.0)
+      ws: 8.21.3
 
   language-subtag-registry@0.3.23: {}
 
@@ -16522,6 +16726,8 @@ snapshots:
       concat-stream: 2.0.0
       type-is: 1.6.18
 
+  mustache@4.2.0: {}
+
   mute-stream@0.0.8: {}
 
   mute-stream@1.0.0: {}
@@ -16695,6 +16901,13 @@ snapshots:
     dependencies:
       mimic-fn: 2.1.0
 
+  openai@6.49.0(@aws-sdk/credential-provider-node@3.972.71)(@smithy/signature-v4@5.6.8)(ws@8.21.3)(zod@4.2.0):
+    optionalDependencies:
+      '@aws-sdk/credential-provider-node': 3.972.71
+      '@smithy/signature-v4': 5.6.8
+      ws: 8.21.3
+      zod: 4.2.0
+
   optionator@0.9.4:
     dependencies:
       deep-is: 0.1.4
@@ -16724,6 +16937,8 @@ snapshots:
       object-keys: 1.1.1
       safe-push-apply: 1.0.0
 
+  p-finally@1.0.0: {}
+
   p-limit@2.3.0:
     dependencies:
       p-try: 2.2.0
@@ -16739,6 +16954,15 @@ snapshots:
   p-locate@5.0.0:
     dependencies:
       p-limit: 3.1.0
+
+  p-queue@6.6.2:
+    dependencies:
+      eventemitter3: 4.0.7
+      p-timeout: 3.2.0
+
+  p-timeout@3.2.0:
+    dependencies:
+      p-finally: 1.0.0
 
   p-try@2.2.0: {}
 
@@ -18127,6 +18351,8 @@ snapshots:
 
   undici-types@6.21.0: {}
 
+  undici@7.29.0: {}
+
   unique-string@2.0.0:
     dependencies:
       crypto-random-string: 2.0.0
@@ -18397,6 +18623,9 @@ snapshots:
     dependencies:
       imurmurhash: 0.1.4
       signal-exit: 3.0.7
+
+  ws@8.21.3:
+    optional: true
 
   xdg-basedir@4.0.0: {}
 

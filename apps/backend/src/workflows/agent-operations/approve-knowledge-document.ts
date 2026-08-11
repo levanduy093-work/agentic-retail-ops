@@ -16,8 +16,15 @@ const approveKnowledgeDocumentStep = createStep(
     )
     const locking = container.resolve<ILockingModule>(Modules.LOCKING)
     return new StepResponse(
-      await locking.execute(`agent-knowledge:${input.document_id}`, () =>
-        service.approveGovernedKnowledgeDocument(input)
+      await locking.execute(
+        `agent-knowledge:${input.document_id}`,
+        async () => {
+          const approval = await service.approveGovernedKnowledgeDocument(input)
+          const rag_index = await service.indexGovernedKnowledgeDocument(
+            input.document_id
+          )
+          return { ...approval, rag_index }
+        }
       )
     )
   }
