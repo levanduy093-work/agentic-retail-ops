@@ -72,6 +72,26 @@
   mới được trả; workflow dùng distributed lock, xóa assignee, đưa task về `TODO`
   và ghi audit. Runtime đã xác nhận trả task đạt HTTP 200, assignee thành null;
   gọi lại khi task không còn thuộc user bị chặn HTTP 400.
+- Browser đã đăng nhập bằng tài khoản chỉ có role `customer_support_staff` và
+  xác nhận trọn checklist: nhận task, sửa/lưu câu trả lời, xem lại ở danh sách
+  đã xử lý, nhận rồi trả task về hàng đợi, chuyển quản lý và đổi VI/EN. Câu trả
+  lời được lưu với thông báo rõ là chưa gửi cho khách.
+- Browser test phát hiện nhánh chuyển quản lý gửi nhầm `incident_id` làm
+  `correlation_id`, nên Action Gateway fail-closed với HTTP 409. API task hiện
+  trả thêm `incident_correlation_id`; UI dùng đúng correlation này và lần thử
+  lại đã chuyển task cho `operations_manager` thành công.
+- Lint sạch, 89/89 unit test pass và backend/Admin build thành công sau bản sửa.
+- Đã thêm chat simulator nội bộ cho nhân viên tạo câu hỏi thử từ một order gần
+  đây. Workflow tạo conversation/tin `INBOUND` kênh `IN_APP`, vẫn đi qua luồng
+  `support.requested`, live order, approved knowledge và task review hiện có.
+- Sau khi nhân viên tự nhận task và lưu câu trả lời đã kiểm tra, UI hiện nút
+  “Xác nhận gửi câu trả lời”. Backend chỉ cho đúng nhân viên phụ trách gửi; mọi
+  lần gửi đi qua `message.send` trong Action Gateway, được audit và chống gửi
+  trùng. Simulator không kết nối ra khách thật.
+- Runtime `agent:verify-support-simulator` đã xác nhận đúng 1 tin vào và 1 tin
+  ra; gửi trước khi duyệt bị chặn, nhân viên khác gửi bị chặn và gửi lại không
+  tạo bản thứ hai. Role nhân viên đã bổ sung quyền conversation read,
+  message create và simulator create.
 
 ## Cách chạy lại
 
@@ -86,6 +106,8 @@ REDIS_URL=redis://localhost:6379 \
 LOCKING_REDIS_URL=redis://localhost:6379 \
 pnpm --dir apps/backend run agent:verify-customer-support-staff-flow
 
+pnpm --dir apps/backend run agent:verify-support-simulator
+
 AGENT_STAFF_EMAIL=<email> \
 AGENT_STAFF_FIRST_NAME=<first-name> \
 AGENT_STAFF_LAST_NAME=<last-name> \
@@ -94,9 +116,8 @@ pnpm --dir apps/backend run agent:assign-support-staff
 
 ## Gate tiếp theo
 
-- Chạy browser interaction test bằng tài khoản nhân viên thật: nhận task, sửa
-  draft, hoàn tất và chuyển quản lý; kiểm tra cả tiếng Việt lẫn tiếng Anh.
 - Chốt customer channel identity mapping, webhook signature, consent và
   delivery receipt trước khi thêm email/chat/mobile adapter.
-- Chỉ sau các gate trên mới thêm bước xác nhận gửi và nối `message.send`; không
-  cho agent tự phát tin.
+- Giữ `message.send` của simulator tách khỏi delivery thật. Chỉ sau các gate
+  trên mới nối action đã được người duyệt vào adapter thật; không cho agent tự
+  phát tin.

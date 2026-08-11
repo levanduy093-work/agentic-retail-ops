@@ -3,7 +3,9 @@ import {
   Button,
   Container,
   Drawer,
+  FocusModal,
   Heading,
+  Select,
   StatusBadge,
   Text,
   Textarea,
@@ -39,11 +41,13 @@ type SupportTask = {
   created_at: string
   due_at: string | null
   id: string
+  incident_correlation_id: string | null
   incident_id: string | null
   input: SupportTaskInput | null
   priority: string
   result: Record<string, unknown> | null
   status: string
+  support_conversation_id: string | null
   task_type: string
   title: string
   updated_at: string
@@ -58,6 +62,27 @@ type ActionRequestResponse = {
   action: {
     id: string
   }
+}
+
+type SupportConversationResponse = {
+  conversation: {
+    id: string
+  }
+  messages: Array<{
+    body: string
+    direction: "INBOUND" | "OUTBOUND"
+    id: string
+    occurred_at: string
+    sender_type: string
+    status: string
+  }>
+}
+
+type SimulatorOrder = {
+  customer_id: string | null
+  display_id: number
+  email?: string | null
+  id: string
 }
 
 const TERMINAL_STATUSES = ["COMPLETED", "CANCELLED", "DEAD"]
@@ -86,6 +111,11 @@ const CustomerSupportPage = () => {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [reply, setReply] = useState("")
   const [releaseOpen, setReleaseOpen] = useState(false)
+  const [sendOpen, setSendOpen] = useState(false)
+  const [simulatorLocale, setSimulatorLocale] = useState<"en" | "vi">("vi")
+  const [simulatorOpen, setSimulatorOpen] = useState(false)
+  const [simulatorOrderId, setSimulatorOrderId] = useState("")
+  const [simulatorQuestion, setSimulatorQuestion] = useState("")
   const [transferOpen, setTransferOpen] = useState(false)
   const [transferReason, setTransferReason] = useState("")
   const locale = i18n.language.startsWith("vi") ? "vi-VN" : "en-US"
@@ -98,6 +128,15 @@ const CustomerSupportPage = () => {
     queryFn: () =>
       sdk.client.fetch<TaskListResponse>("/admin/agent-operations/tasks"),
     queryKey: ["customer-support-tasks"],
+  })
+  const simulatorOrders = useQuery({
+    enabled: simulatorOpen,
+    queryFn: () =>
+      sdk.admin.order.list({
+        limit: 10,
+        order: "-created_at",
+      }),
+    queryKey: ["customer-support-simulator-orders"],
   })
   const supportTasks = useMemo(
     () =>
@@ -117,6 +156,20 @@ const CustomerSupportPage = () => {
   const selectedTask = supportTasks.find(
     (task) => task.id === selectedTaskId
   )
+  const selectedSimulatorOrder = simulatorOrders.data?.orders.find(
+    (order) => order.id === simulatorOrderId
+  ) as SimulatorOrder | undefined
+  const conversation = useQuery({
+    enabled: Boolean(selectedTask?.support_conversation_id),
+    queryFn: () =>
+      sdk.client.fetch<SupportConversationResponse>(
+        `/admin/agent-operations/conversations/${selectedTask?.support_conversation_id}`
+      ),
+    queryKey: [
+      "customer-support-conversation",
+      selectedTask?.support_conversation_id,
+    ],
+  })
 
   useEffect(() => {
     if (!visibleTasks.some((task) => task.id === selectedTaskId)) {
@@ -132,6 +185,7 @@ const CustomerSupportPage = () => {
         : selectedTask?.input?.draft ?? ""
     )
     setReleaseOpen(false)
+    setSendOpen(false)
     setTransferOpen(false)
     setTransferReason("")
   }, [selectedTask?.id, selectedTask?.input?.draft, selectedTask?.result])
@@ -248,9 +302,11 @@ const CustomerSupportPage = () => {
         "/admin/agent-operations/actions/requests",
         {
           body: {
-            correlation_id: task.incident_id ?? task.id,
+            correlation_id: task.incident_correlation_id ?? task.id,
             idempotency_key: `support-manager-transfer:${task.id}:${task.updated_at}`,
-            incident_id: task.incident_id ?? undefined,
+            incident_id: task.incident_correlation_id
+              ? task.incident_id ?? undefined
+              : undefined,
             input: {
               assigned_to_id: "operations_manager",
               assigned_to_type: "team",
@@ -277,6 +333,60 @@ const CustomerSupportPage = () => {
       setTransferOpen(false)
       setTransferReason("")
       await invalidateTasks()
+    },
+  })
+
+  const createSimulatorMessage = useMutation({
+    mutationFn: async () => {
+      if (!selectedSimulatorOrder?.customer_id) {
+        throw new Error(t("supportDesk.simulatorOrderRequired"))
+      }
+      if (simulatorQuestion.trim().length < 2) {
+        throw new Error(t("supportDesk.simulatorQuestionRequired"))
+      }
+
+      return sdk.client.fetch(
+        "/admin/agent-operations/support-simulator/messages",
+        {
+          body: {
+            client_message_id: crypto.randomUUID(),
+            customer_id: selectedSimulatorOrder.customer_id,
+            locale: simulatorLocale,
+            order_id: selectedSimulatorOrder.id,
+            question: simulatorQuestion.trim(),
+          },
+          method: "POST",
+        }
+      )
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+    onSuccess: async () => {
+      toast.success(t("supportDesk.simulatorCreated"))
+      setSimulatorOpen(false)
+      setSimulatorOrderId("")
+      setSimulatorQuestion("")
+      setView("open")
+      await invalidateTasks()
+    },
+  })
+
+  const sendSimulatorReply = useMutation({
+    mutationFn: (task: SupportTask) =>
+      sdk.client.fetch(
+        `/admin/agent-operations/tasks/${task.id}/send-simulator-reply`,
+        {
+          body: { expected_task_updated_at: task.updated_at },
+          method: "POST",
+        }
+      ),
+    onError: (error) => toast.error(errorMessage(error)),
+    onSuccess: async () => {
+      toast.success(t("supportDesk.simulatorReplySent"))
+      setSendOpen(false)
+      await invalidateTasks()
+      await queryClient.invalidateQueries({
+        queryKey: ["customer-support-conversation"],
+      })
     },
   })
 
@@ -314,6 +424,7 @@ const CustomerSupportPage = () => {
     !assignedToOther &&
     !assignedToManager
   const citations = selectedTask?.input?.citations ?? []
+  const messageSent = selectedTask?.result?.message_sent === true
 
   if (tasks.isLoading || currentUser.isLoading) {
     return (
@@ -328,11 +439,22 @@ const CustomerSupportPage = () => {
   return (
     <div className="flex flex-col gap-y-3">
       <Container className="p-0">
-        <div className="flex flex-col gap-y-1 px-6 py-5">
-          <Heading level="h1">{t("supportDesk.title")}</Heading>
-          <Text size="small" leading="compact" className="text-ui-fg-subtle">
-            {t("supportDesk.subtitle")}
-          </Text>
+        <div className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-y-1">
+            <Heading level="h1">{t("supportDesk.title")}</Heading>
+            <Text size="small" leading="compact" className="text-ui-fg-subtle">
+              {t("supportDesk.subtitle")}
+            </Text>
+          </div>
+          {import.meta.env.DEV && (
+            <Button
+              size="small"
+              variant="secondary"
+              onClick={() => setSimulatorOpen(true)}
+            >
+              {t("supportDesk.openSimulator")}
+            </Button>
+          )}
         </div>
       </Container>
 
@@ -527,7 +649,11 @@ const CustomerSupportPage = () => {
                   onChange={(event) => setReply(event.target.value)}
                 />
                 <Text size="small" leading="compact" className="text-ui-fg-warning">
-                  {t("supportDesk.notSent")}
+                  {t(
+                    messageSent
+                      ? "supportDesk.simulatorAlreadySent"
+                      : "supportDesk.notSent"
+                  )}
                 </Text>
               </div>
 
@@ -565,6 +691,47 @@ const CustomerSupportPage = () => {
                 )}
               </div>
 
+              {selectedTask.support_conversation_id && (
+                <div className="flex flex-col gap-y-3 bg-ui-bg-subtle px-6 py-5">
+                  <div className="flex flex-col gap-y-1">
+                    <Text size="small" leading="compact" weight="plus">
+                      {t("supportDesk.simulatorConversation")}
+                    </Text>
+                    <Text size="small" leading="compact" className="text-ui-fg-subtle">
+                      {t("supportDesk.simulatorConversationDescription")}
+                    </Text>
+                  </div>
+                  {conversation.isLoading ? (
+                    <Text size="small" leading="compact" className="text-ui-fg-subtle">
+                      {t("supportDesk.loading")}
+                    </Text>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {(conversation.data?.messages ?? []).map((message) => (
+                        <div
+                          className="rounded-md bg-ui-bg-component px-4 py-3 shadow-elevation-card-rest"
+                          key={message.id}
+                        >
+                          <div className="mb-1 flex items-center justify-between gap-x-3">
+                            <Text size="xsmall" leading="compact" weight="plus">
+                              {message.direction === "INBOUND"
+                                ? t("supportDesk.simulatorCustomer")
+                                : t("supportDesk.simulatorStore")}
+                            </Text>
+                            <Text size="xsmall" leading="compact" className="text-ui-fg-subtle">
+                              {formatDate(message.occurred_at)}
+                            </Text>
+                          </div>
+                          <Text size="small" leading="compact">
+                            {message.body}
+                          </Text>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex flex-col gap-y-2 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   {assignedToManager && (
@@ -575,6 +742,11 @@ const CustomerSupportPage = () => {
                   {assignedToOther && (
                     <Text size="small" leading="compact" className="text-ui-fg-subtle">
                       {t("supportDesk.claimedByOther")}
+                    </Text>
+                  )}
+                  {messageSent && (
+                    <Text size="small" leading="compact" className="text-ui-fg-success">
+                      {t("supportDesk.simulatorAlreadySent")}
                     </Text>
                   )}
                 </div>
@@ -623,12 +795,175 @@ const CustomerSupportPage = () => {
                       {t("supportDesk.completeDraft")}
                     </Button>
                   )}
+                  {selectedTask.status === "COMPLETED" &&
+                    selectedTask.support_conversation_id &&
+                    !messageSent && (
+                      <Button
+                        size="small"
+                        onClick={() => setSendOpen(true)}
+                      >
+                        {t("supportDesk.sendSimulatorReply")}
+                      </Button>
+                    )}
                 </div>
               </div>
             </div>
           )}
         </Container>
       </div>
+
+      <FocusModal open={simulatorOpen} onOpenChange={setSimulatorOpen}>
+        <FocusModal.Content>
+          <div className="flex h-full flex-col overflow-hidden">
+            <FocusModal.Header>
+              <div className="flex items-center justify-end gap-x-2">
+                <FocusModal.Close asChild>
+                  <Button
+                    size="small"
+                    variant="secondary"
+                    disabled={createSimulatorMessage.isPending}
+                  >
+                    {t("supportDesk.cancel")}
+                  </Button>
+                </FocusModal.Close>
+                <Button
+                  size="small"
+                  disabled={
+                    !selectedSimulatorOrder?.customer_id ||
+                    simulatorQuestion.trim().length < 2
+                  }
+                  isLoading={createSimulatorMessage.isPending}
+                  onClick={() => createSimulatorMessage.mutate()}
+                >
+                  {t("supportDesk.simulatorSendQuestion")}
+                </Button>
+              </div>
+            </FocusModal.Header>
+            <FocusModal.Body className="flex-1 overflow-auto">
+              <div className="mx-auto flex w-full max-w-2xl flex-col gap-y-6 px-6 py-8">
+                <div className="flex flex-col gap-y-1">
+                  <Heading level="h1">{t("supportDesk.simulatorTitle")}</Heading>
+                  <Text size="small" leading="compact" className="text-ui-fg-subtle">
+                    {t("supportDesk.simulatorDescription")}
+                  </Text>
+                </div>
+                <div className="flex flex-col gap-y-2">
+                  <Text size="small" leading="compact" weight="plus">
+                    {t("supportDesk.simulatorOrder")}
+                  </Text>
+                  <Select
+                    value={simulatorOrderId}
+                    onValueChange={setSimulatorOrderId}
+                  >
+                    <Select.Trigger>
+                      <Select.Value
+                        placeholder={
+                          simulatorOrders.isLoading
+                            ? t("supportDesk.loading")
+                            : t("supportDesk.simulatorOrderPlaceholder")
+                        }
+                      />
+                    </Select.Trigger>
+                    <Select.Content>
+                      {(simulatorOrders.data?.orders ?? []).map((order) => (
+                        <Select.Item key={order.id} value={order.id}>
+                          {t("supportDesk.simulatorOrderOption", {
+                            email: order.email ?? "—",
+                            number: order.display_id,
+                          })}
+                        </Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-y-2">
+                  <Text size="small" leading="compact" weight="plus">
+                    {t("supportDesk.simulatorLanguage")}
+                  </Text>
+                  <Select
+                    value={simulatorLocale}
+                    onValueChange={(value) =>
+                      setSimulatorLocale(value as "en" | "vi")
+                    }
+                  >
+                    <Select.Trigger>
+                      <Select.Value />
+                    </Select.Trigger>
+                    <Select.Content>
+                      <Select.Item value="vi">
+                        {t("supportDesk.simulatorVietnamese")}
+                      </Select.Item>
+                      <Select.Item value="en">
+                        {t("supportDesk.simulatorEnglish")}
+                      </Select.Item>
+                    </Select.Content>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-y-2">
+                  <Text size="small" leading="compact" weight="plus">
+                    {t("supportDesk.simulatorQuestion")}
+                  </Text>
+                  <Textarea
+                    aria-label={t("supportDesk.simulatorQuestion")}
+                    placeholder={t("supportDesk.simulatorQuestionPlaceholder")}
+                    rows={6}
+                    value={simulatorQuestion}
+                    onChange={(event) =>
+                      setSimulatorQuestion(event.target.value)
+                    }
+                  />
+                </div>
+                <Text size="small" leading="compact" className="text-ui-fg-warning">
+                  {t("supportDesk.simulatorSafetyNote")}
+                </Text>
+              </div>
+            </FocusModal.Body>
+          </div>
+        </FocusModal.Content>
+      </FocusModal>
+
+      <Drawer open={sendOpen} onOpenChange={setSendOpen}>
+        <Drawer.Content>
+          <Drawer.Header>
+            <Drawer.Title>{t("supportDesk.sendSimulatorTitle")}</Drawer.Title>
+          </Drawer.Header>
+          <Drawer.Body className="flex flex-col gap-y-4 p-4">
+            <Text size="small" leading="compact" className="text-ui-fg-subtle">
+              {t("supportDesk.sendSimulatorDescription")}
+            </Text>
+            <div className="rounded-md bg-ui-bg-subtle px-4 py-3">
+              <Text size="small" leading="compact">
+                {typeof selectedTask?.result?.response_body === "string"
+                  ? selectedTask.result.response_body
+                  : "—"}
+              </Text>
+            </div>
+          </Drawer.Body>
+          <Drawer.Footer>
+            <div className="flex justify-end gap-x-2">
+              <Drawer.Close asChild>
+                <Button
+                  size="small"
+                  variant="secondary"
+                  disabled={sendSimulatorReply.isPending}
+                >
+                  {t("supportDesk.cancel")}
+                </Button>
+              </Drawer.Close>
+              <Button
+                size="small"
+                disabled={!selectedTask}
+                isLoading={sendSimulatorReply.isPending}
+                onClick={() =>
+                  selectedTask && sendSimulatorReply.mutate(selectedTask)
+                }
+              >
+                {t("supportDesk.confirmSimulatorSend")}
+              </Button>
+            </div>
+          </Drawer.Footer>
+        </Drawer.Content>
+      </Drawer>
 
       <Drawer open={transferOpen} onOpenChange={setTransferOpen}>
         <Drawer.Content>

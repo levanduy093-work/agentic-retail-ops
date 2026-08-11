@@ -373,6 +373,39 @@ export type DispatchAgentOutboxEventInput = {
   worker_id: string
 }
 
+export type ClaimAgentDeliveryInput = {
+  claimed_at: string
+  delivery_id: string
+  lease_duration_ms: number
+  worker_id: string
+}
+
+export type CompleteAgentDeliveryInput = {
+  completed_at: string
+  delivery_id: string
+  external_message_id: string
+  worker_id: string
+}
+
+export type FailAgentDeliveryInput = {
+  delivery_id: string
+  error: string
+  failed_at: string
+  max_attempts: number
+  max_retry_delay_ms: number
+  retry_base_delay_ms: number
+  worker_id: string
+}
+
+export type DispatchAgentDeliveryInput = {
+  delivery_id: string
+  lease_duration_ms?: number
+  max_attempts?: number
+  max_retry_delay_ms?: number
+  retry_base_delay_ms?: number
+  worker_id: string
+}
+
 export type ClaimAgentActionInput = {
   action_request_id: string
   claimed_at: string

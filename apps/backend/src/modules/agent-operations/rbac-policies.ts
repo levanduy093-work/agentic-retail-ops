@@ -9,6 +9,7 @@ export const AGENT_RBAC_POLICY_DEFINITIONS = [
   { name: "AgentToolRead", resource: "agent_tool", operation: "read" },
   { name: "AgentConversationRead", resource: "agent_conversation", operation: "read" },
   { name: "AgentMessageCreate", resource: "agent_message", operation: "create" },
+  { name: "AgentSupportSimulatorCreate", resource: "agent_support_simulator", operation: "create" },
   { name: "AgentTaskRead", resource: "agent_task", operation: "read" },
   { name: "AgentTaskCreate", resource: "agent_task", operation: "create" },
   { name: "AgentTaskUpdate", resource: "agent_task", operation: "update" },
@@ -27,6 +28,9 @@ export const CUSTOMER_SUPPORT_STAFF_ROLE_NAME = "customer_support_staff"
 export const CUSTOMER_SUPPORT_STAFF_POLICY_KEYS = [
   "agent_action:create",
   "agent_action:execute",
+  "agent_conversation:read",
+  "agent_message:create",
+  "agent_support_simulator:create",
   "agent_task:read",
   "agent_task:update",
   "customer:read",

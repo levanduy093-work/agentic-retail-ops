@@ -6,6 +6,7 @@ import {
 import {
   AdminCreateAgentTask,
   AdminCreateKnowledgeDocument,
+  AdminCreateSupportSimulatorMessage,
   AdminDecideAgentApproval,
   AdminIngestInventoryLowEvent,
   AdminIngestOrderExceptionEvent,
@@ -13,11 +14,18 @@ import {
   AdminRunAgentEvaluation,
   AdminRequestAgentAction,
   AdminSendAgentConversationMessage,
+  AdminSendSupportSimulatorReply,
   AdminTransitionAgentTask,
+  TelegramWebhookUpdate,
 } from "./admin/agent-operations/validators"
 
 export default defineMiddlewares({
   routes: [
+    {
+      matcher: "/webhooks/agent-operations/telegram/:id",
+      method: "POST",
+      middlewares: [validateAndTransformBody(TelegramWebhookUpdate)],
+    },
     {
       matcher: "/store/customers/link-google",
       method: "POST",
@@ -42,6 +50,14 @@ export default defineMiddlewares({
       method: "POST",
       middlewares: [validateAndTransformBody(AdminIngestSupportRequest)],
       policies: [{ resource: "agent_event", operation: "create" }],
+    },
+    {
+      matcher: "/admin/agent-operations/support-simulator/messages",
+      method: "POST",
+      middlewares: [
+        validateAndTransformBody(AdminCreateSupportSimulatorMessage),
+      ],
+      policies: [{ resource: "agent_support_simulator", operation: "create" }],
     },
     {
       matcher: "/admin/agent-operations/incidents",
@@ -144,6 +160,12 @@ export default defineMiddlewares({
       matcher: "/admin/agent-operations/tasks/:id/release",
       method: "POST",
       policies: [{ resource: "agent_task", operation: "update" }],
+    },
+    {
+      matcher: "/admin/agent-operations/tasks/:id/send-simulator-reply",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminSendSupportSimulatorReply)],
+      policies: [{ resource: "agent_message", operation: "create" }],
     },
     {
       matcher: "/admin/agent-operations/knowledge",

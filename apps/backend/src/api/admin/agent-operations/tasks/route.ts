@@ -16,7 +16,51 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     order: { created_at: "DESC" },
     take: 100,
   })
-  res.json({ count, tasks })
+  const incidentIds = Array.from(
+    new Set(
+      tasks
+        .map((task) => task.incident_id)
+        .filter((incidentId): incidentId is string => Boolean(incidentId))
+    )
+  )
+  const incidents = await Promise.all(
+    incidentIds.map((incidentId) =>
+      service.retrieveAgentIncident(incidentId)
+    )
+  )
+  const correlationByIncidentId = new Map(
+    incidents.map((incident) => [incident.id, incident.correlation_id])
+  )
+  const conversations = await Promise.all(
+    incidentIds.map(async (incidentId) => {
+      const conversation = (
+        await service.listAgentConversations(
+          {
+            channel: "IN_APP",
+            incident_id: incidentId,
+            topic_type: "CUSTOMER_SUPPORT",
+          },
+          { take: 1 }
+        )
+      )[0]
+
+      return [incidentId, conversation?.id ?? null] as const
+    })
+  )
+  const conversationByIncidentId = new Map(conversations)
+
+  res.json({
+    count,
+    tasks: tasks.map((task) => ({
+      ...task,
+      incident_correlation_id: task.incident_id
+        ? correlationByIncidentId.get(task.incident_id) ?? null
+        : null,
+      support_conversation_id: task.incident_id
+        ? conversationByIncidentId.get(task.incident_id) ?? null
+        : null,
+    })),
+  })
 }
 
 export async function POST(

@@ -111,6 +111,7 @@ export const MessageSendInput = z.strictObject({
 
 const MessageSendOutput = z.union([
   z.strictObject({
+    delivery_id: z.string().optional(),
     duplicate: z.boolean(),
     message_id: z.string(),
     outcome: z.literal("SUCCEEDED"),

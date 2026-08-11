@@ -92,6 +92,52 @@ export const AdminIngestSupportRequest = z
     }
   })
 
+export const AdminCreateSupportSimulatorMessage = z.strictObject({
+  client_message_id: z.string().trim().min(1).max(200),
+  customer_id: z.string().trim().min(1),
+  locale: z.enum(["en", "vi"]).default("vi"),
+  order_id: z.string().trim().min(1),
+  question: z.string().trim().min(2).max(2_000),
+})
+
+export type AdminCreateSupportSimulatorMessageType = z.infer<
+  typeof AdminCreateSupportSimulatorMessage
+>
+
+export const AdminSendSupportSimulatorReply = z.strictObject({
+  expected_task_updated_at: z.string().datetime(),
+})
+
+export const TelegramWebhookUpdate = z.object({
+  message: z
+    .object({
+      chat: z.object({
+        id: z.number().int(),
+        type: z.string(),
+      }),
+      date: z.number().int().nonnegative(),
+      from: z
+        .object({
+          first_name: z.string().optional(),
+          id: z.number().int(),
+          is_bot: z.boolean(),
+          last_name: z.string().optional(),
+          username: z.string().optional(),
+        })
+        .optional(),
+      message_id: z.number().int(),
+      text: z.string().trim().min(1).max(4_000).optional(),
+    })
+    .optional(),
+  update_id: z.number().int().nonnegative(),
+})
+
+export type TelegramWebhookUpdateType = z.infer<typeof TelegramWebhookUpdate>
+
+export type AdminSendSupportSimulatorReplyType = z.infer<
+  typeof AdminSendSupportSimulatorReply
+>
+
 export const AdminDecideAgentApproval = z.object({
   decision: z.enum(["APPROVED", "REJECTED"]),
   reason: z.string().trim().min(3).max(1000),

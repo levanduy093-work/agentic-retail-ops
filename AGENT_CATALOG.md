@@ -22,7 +22,7 @@ vẫn là các gate riêng.
 | Audit & Compliance Agent | `implemented-static` | Audit/outbox/tool trace, lease, retry/backoff, dead-letter; Redis Event Bus, Workflow Engine và locking đã kết nối runtime | Subscriber idempotency mở rộng, append-only enforcement, trace/replay detail và retention |
 | Order Exception Agent | `runtime-verified` | Checkout `order.placed` và luồng API/OMS tự gán SLA UTC; `order.read` lấy live status; detector quét phân trang mỗi 5 phút và khóa từng order bằng Redis; HTTP/RBAC đã xác nhận; hai worker cạnh tranh vẫn chỉ tạo một event/incident/action | Hiệu chỉnh SLA theo vận hành thật và SLA table/index hoặc durable cursor cho volume lớn |
 | Fulfillment Agent | `contracted` | Có trigger fulfillment, read/task tool và foundation dependency | SLA contract, workflow và connector vận chuyển thật |
-| Customer Support Agent | `runtime-verified` | API/worker/PostgreSQL đã xác nhận `support.requested` đọc live order, kiểm tra chủ sở hữu, dùng knowledge `APPROVED`, tạo draft có citation và task; RBAC 201/403/401; luồng nhân viên nhận/hoàn tất và chuyển quản lý chạy qua HTTP; tuyệt đối chưa gửi khách | Browser interaction sau đăng nhập bằng tài khoản nhân viên thật, customer channel/identity mapping, consent và delivery adapter thật |
+| Customer Support Agent | `runtime-verified` | API/worker/PostgreSQL đã xác nhận `support.requested` đọc live order, kiểm tra chủ sở hữu, dùng knowledge `APPROVED`, tạo draft có citation và task; browser nhân viên đã xác nhận nhận/sửa/lưu, trả hàng đợi, chuyển quản lý và VI/EN; simulator `IN_APP` đã xác nhận khách hỏi và nhân viên bấm gửi bản đã duyệt, có chống gửi trùng | Customer channel/identity mapping, consent, webhook signature, delivery receipt và adapter gửi khách thật |
 | Knowledge Curator Agent | `contracted` | Có knowledge lifecycle, checksum, citation và approval workflow | Gap detector, diff/review UI và nguồn tri thức thật |
 | Returns & Refund Agent | `contracted` | Có policy/approval, task, audit và evaluation foundation | Ownership, evidence contract và Medusa workflow riêng |
 | Payment & Fraud Watcher | `contracted` | Có event/incident/task/escalation và `PROHIBITED` policy primitive | Payment mapping, fraud rules và prohibited-action scenarios |
@@ -35,9 +35,11 @@ vẫn là các gate riêng.
 | Analytics Agent | `contracted` | Có governed prompt/model-run/evaluation contract | Semantic metrics layer, query tool và benchmark dataset |
 
 Communication Gateway là platform capability dùng chung, không tính thêm thành
-agent thứ 18. Nền `IN_APP` hiện đã lưu conversation/message, tạo thông báo từ
-`agent.approval.requested` và nhận structured command `APPROVAL_DECISION` từ
-Admin. Provider mobile/push/chat bên ngoài vẫn là adapter chưa triển khai.
+agent thứ 18. `IN_APP` đã chạy trong Admin; Telegram đã có adapter gửi, webhook
+nhận, allowlist identity, secret verification, delivery lease/retry/dead-letter
+và runtime verifier với Telegram API giả lập. Kết nối bot thật vẫn
+`RUNTIME-PENDING` cho tới khi có bot token và public HTTPS URL. Các provider
+mobile/push/Zalo/Slack/Teams vẫn chưa triển khai.
 
 ## Nền tảng dùng chung đã hoàn thiện để bắt đầu xây agent
 
@@ -70,7 +72,9 @@ Admin. Provider mobile/push/chat bên ngoài vẫn là adapter chưa triển kha
 - Evaluation harness lưu scenario/run, expected/forbidden assertions và score.
   Baseline đã seed `SHIP-001`, `KNOW-001` và `ORDER-001`.
 - Channel registry và delivery ledger hỗ trợ `IN_APP`, web push, Telegram, Zalo,
-  Slack, Teams; hiện chỉ `IN_APP` active và secret chỉ lưu reference.
+  Slack, Teams. Telegram chỉ lưu `env:...` secret reference; adapter xử lý
+  `sendMessage`, receipt, retry và webhook `secret_token`, không ghi bot token
+  vào database.
 - Medusa Admin có trang `Agent Operations` xem readiness, incident, approval,
   task, knowledge, evaluation và catalog; quyết định approval bắt buộc có reason.
 - Medusa Admin có route nghiệp vụ `Customer Support / Hỗ trợ khách hàng` tách
@@ -154,9 +158,13 @@ Admin. Provider mobile/push/chat bên ngoài vẫn là adapter chưa triển kha
 - Mọi bản nháp đều có `requires_human_review=true`. Agent tạo recommendation
   `REVIEW_SUPPORT_RESPONSE` và request `task.create` qua Action Gateway với loại
   `SUPPORT_RESPONSE_REVIEW`.
-- Lát cắt này không tạo conversation, không gọi `message.send`, không tự gửi
-  khách và không thay đổi order. Xác nhận gửi và delivery adapter là gate tiếp
-  theo.
+- Luồng tiếp nhận chuẩn vẫn chỉ tạo bản nháp và task, không tự gửi khách. Chế độ
+  thử nội bộ có thể tạo conversation `IN_APP`; chỉ nhân viên đã nhận task, hoàn
+  tất kiểm tra và bấm xác nhận mới tạo action `message.send` qua Action Gateway.
+  Action có idempotency key nên bấm lại không tạo tin thứ hai.
+- Simulator chỉ bật trong môi trường phát triển, hoặc phải được chủ động bật
+  bằng `AGENT_SUPPORT_SIMULATOR_ENABLED=true` ở production. Tin nhắn chỉ nằm
+  trong database nội bộ, không gọi email, Telegram, Zalo hay khách thật.
 - Route Admin `customer-support` dùng SDK session và query cache; nhân viên có
   thể nhận task, sửa draft, hoàn tất với `message_sent=false`, hoặc chuyển quản
   lý qua `task.escalate` trong Action Gateway. Màn hình không hiển thị event ID,
@@ -200,7 +208,8 @@ Admin. Provider mobile/push/chat bên ngoài vẫn là adapter chưa triển kha
 
 ### Communication Gateway
 
-- Channel đầu tiên: `IN_APP`; conversation gắn với approval và incident.
+- `IN_APP` phục vụ Admin; Telegram tạo conversation `OPERATOR_CHAT` riêng theo
+  connection và `chat_id` đã được ánh xạ tới Medusa user.
 - Subscriber `agent.approval.requested` tạo notification idempotent từ outbox.
 - Admin command hiện hỗ trợ `APPROVAL_DECISION` với `client_message_id` chống
   xử lý trùng.
@@ -208,8 +217,16 @@ Admin. Provider mobile/push/chat bên ngoài vẫn là adapter chưa triển kha
 - Command gọi lại approval workflow hiện có; không tạo mutation commerce hoặc
   ghi bảng nghiệp vụ trực tiếp.
 - Kết quả command được ghi thành outbound `COMMAND_RESULT` và audit event.
-- Chưa có diễn giải câu chat tự do bằng LLM, push notification hoặc adapter
-  Telegram/Zalo/Slack/Teams.
+- Telegram webhook chỉ nhận private text, kiểm tra
+  `X-Telegram-Bot-Api-Secret-Token`, bỏ qua chat ngoài allowlist và suppress
+  update trùng. Nội dung tự do hiện được lưu để xử lý, chưa tự biến thành lệnh.
+- Outbound Telegram chỉ được tạo bởi `message.send` qua Action Gateway. Worker
+  claim delivery bằng lease, gọi Bot API, lưu external message ID; lỗi retry
+  exponential và quá giới hạn chuyển `DEAD`.
+- Script `agent:configure-telegram` gọi `getMe`, đăng ký `setWebhook`, sau đó mới
+  bật connection. Nếu Telegram từ chối, connection giữ `DISABLED`.
+- Chưa có diễn giải chat tự do bằng LLM, push notification hoặc adapter
+  Zalo/Slack/Teams/Messenger.
 
 ## API và persistence đã có
 
@@ -330,8 +347,16 @@ Ngày kiểm chứng: 2026-08-11.
   `operations_manager` với priority HIGH. Verifier giữ lại một customer, một
   order và hai task TODO Việt/Anh làm dữ liệu demo, nhưng tự xóa user tạm.
 - Customer Support UI lint/build thành công bằng Medusa Admin; cả `vi` và `en`
-  resource được compile. Browser unauthenticated chuyển đúng về `/app/login`;
-  kiểm chứng tương tác sau đăng nhập còn là runtime gate riêng.
+  resource được compile. Browser bằng tài khoản `customer_support_staff` thật
+  đã xác nhận nhận task, sửa/lưu câu trả lời, trả lại hàng đợi, chuyển quản lý
+  và đổi VI/EN. Lần kiểm thử này phát hiện UI dùng nhầm `incident_id` làm
+  `correlation_id`; API task đã trả correlation thật và Action Gateway chuyển
+  quản lý thành công sau khi sửa.
+- Support simulator verifier chạy API thật với đúng role
+  `customer_support_staff`: tạo một tin khách `INBOUND`, hoàn thành task rồi
+  xác nhận một tin `OUTBOUND`. Gửi khi chưa duyệt và gửi bằng nhân viên khác đều
+  bị chặn; gọi lại cùng yêu cầu không tạo tin/action thứ hai. Kết quả chỉ lưu ở
+  kênh `IN_APP`, chưa có external delivery.
 - Migration `Migration20260809200756` tạo 9 bảng nền mới; migration RBAC chính
   thức của Medusa cũng chạy thành công.
 - Bootstrap có tính idempotent; role `operations_manager` có đúng 21
@@ -354,17 +379,17 @@ Ngày kiểm chứng: 2026-08-11.
 
 ## Gate tiếp theo
 
-1. Kiểm thử Customer Support UI sau đăng nhập bằng tài khoản nhân viên thật,
-   rồi bổ sung delivery adapter có identity mapping; chưa bật tự gửi.
+1. Bổ sung customer channel có identity mapping, consent, delivery receipt và
+   bước nhân viên xác nhận gửi; chưa bật agent tự gửi.
 2. Gán role `operations_manager` cho tài khoản Admin thật và kiểm thử allow/deny
    trên từng policy qua HTTP.
 3. Chạy happy path bằng ít nhất hai stock location thật và kiểm thử hai action
    cạnh tranh trên cùng inventory item.
 4. Bổ sung trace/replay detail, append-only/retention và subscriber idempotency
    cho từng connector production.
-5. Thêm delivery adapter/push provider, webhook signature, channel identity
-   mapping, delivery receipt/retry và mobile/PWA; sau đó mới thêm hiểu chat tự
-   do bằng LLM.
+5. Cấu hình bot Telegram thật và public HTTPS để chạy acceptance; sau đó thêm UI
+   quản lý connection. Tiếp tục xây push/Zalo/Slack/Teams/Messenger rồi mới
+   thêm hiểu chat tự do bằng LLM.
 6. Chọn model provider, secret manager và budget; chỉ bật adapter sau khi
    benchmark `KNOW-001` và security review đạt yêu cầu.
 7. Bổ sung connector nguồn thật và scenario approval expiry, retry/dead

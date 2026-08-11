@@ -39,6 +39,10 @@ import {
   isOutboxEventClaimable,
   sanitizeOutboxError,
 } from "./outbox-policy"
+import {
+  calculateDeliveryRetry,
+  isAgentDeliveryClaimable,
+} from "./delivery-policy"
 import { conditionMatches, evaluatePolicies } from "./policy-engine"
 import { assertIncidentTransition, canTransitionIncident } from "./state-machine"
 import { AGENT_TOOL_REGISTRY } from "./tool-registry"
@@ -49,6 +53,8 @@ import {
   ApproveKnowledgeDocumentInput,
   ClaimAgentActionInput,
   ClaimAgentOutboxEventInput,
+  ClaimAgentDeliveryInput,
+  CompleteAgentDeliveryInput,
   CompleteAgentOutboxEventInput,
   CreateAgentTaskInput,
   CreateApprovalRequestedNotificationInput,
@@ -56,6 +62,7 @@ import {
   EvaluationAssertion,
   EscalateAgentTaskInput,
   FailAgentActionInput,
+  FailAgentDeliveryInput,
   FailAgentOutboxEventInput,
   IncidentStatus,
   InventoryLowEventInput,
@@ -3154,6 +3161,41 @@ class AgentOperationsModuleService extends MedusaService({
             `Conversation ${conversation.id} is closed.`
           )
         }
+        const conversationMetadata = (conversation.metadata ?? {}) as Record<
+          string,
+          unknown
+        >
+        let externalConnection:
+          | Awaited<
+              ReturnType<
+                AgentOperationsModuleService["retrieveAgentChannelConnection"]
+              >
+            >
+          | undefined
+        if (conversation.channel !== "IN_APP") {
+          const connectionId = conversationMetadata.connection_id
+          if (typeof connectionId !== "string") {
+            return platformConflict(
+              "CHANNEL_CONNECTION_MISSING",
+              `Conversation ${conversation.id} has no channel connection.`
+            )
+          }
+          externalConnection = await this.retrieveAgentChannelConnection(
+            connectionId,
+            {},
+            sharedContext
+          )
+          if (
+            externalConnection.status !== "ACTIVE" ||
+            externalConnection.channel !== conversation.channel ||
+            !conversation.external_thread_id
+          ) {
+            return platformConflict(
+              "CHANNEL_CONNECTION_UNAVAILABLE",
+              `Conversation ${conversation.id} cannot deliver on its configured channel.`
+            )
+          }
+        }
         const message = await this.createAgentMessages(
           {
             body: String(toolInput.body),
@@ -3176,7 +3218,22 @@ class AgentOperationsModuleService extends MedusaService({
           { id: conversation.id, last_message_at: now },
           sharedContext
         )
+        const delivery = externalConnection
+          ? await this.createAgentDeliveries(
+              {
+                attempt_count: 0,
+                available_at: now,
+                channel: conversation.channel,
+                connection_id: externalConnection.id,
+                idempotency_key: `message:${message.id}:delivery`,
+                message_id: message.id,
+                status: "PENDING",
+              },
+              sharedContext
+            )
+          : undefined
         return {
+          delivery_id: delivery?.id,
           duplicate: false,
           message_id: message.id,
           outcome: "SUCCEEDED" as const,
@@ -3788,6 +3845,184 @@ class AgentOperationsModuleService extends MedusaService({
     }
 
     return events[0]
+  }
+
+  @InjectManager()
+  async claimAgentDelivery(
+    input: ClaimAgentDeliveryInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.claimAgentDelivery_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async claimAgentDelivery_(
+    input: ClaimAgentDeliveryInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const delivery = await this.retrieveAgentDelivery(
+      input.delivery_id,
+      {},
+      sharedContext
+    )
+    const claimedAt = new Date(input.claimed_at)
+    if (!isAgentDeliveryClaimable(delivery, claimedAt)) {
+      return { claimed: false as const, delivery: null }
+    }
+
+    const claimed = (
+      await this.updateAgentDeliveries(
+        {
+          data: {
+            attempt_count: delivery.attempt_count + 1,
+            last_error: null,
+            lock_expires_at: new Date(
+              claimedAt.getTime() + input.lease_duration_ms
+            ),
+            locked_at: claimedAt,
+            locked_by: input.worker_id,
+            status: "PROCESSING",
+          },
+          selector: {
+            id: delivery.id,
+            locked_by: delivery.locked_by,
+            status: delivery.status,
+          },
+        },
+        sharedContext
+      )
+    )[0]
+
+    return claimed
+      ? { claimed: true as const, delivery: claimed }
+      : { claimed: false as const, delivery: null }
+  }
+
+  @InjectManager()
+  async markAgentDeliveryDelivered(
+    input: CompleteAgentDeliveryInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.markAgentDeliveryDelivered_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async markAgentDeliveryDelivered_(
+    input: CompleteAgentDeliveryInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const deliveredAt = new Date(input.completed_at)
+    const delivery = (
+      await this.updateAgentDeliveries(
+        {
+          data: {
+            delivered_at: deliveredAt,
+            external_message_id: input.external_message_id,
+            last_error: null,
+            lock_expires_at: null,
+            locked_at: null,
+            locked_by: null,
+            status: "DELIVERED",
+          },
+          selector: {
+            id: input.delivery_id,
+            locked_by: input.worker_id,
+            status: "PROCESSING",
+          },
+        },
+        sharedContext
+      )
+    )[0]
+    if (!delivery) {
+      throw new MedusaError(
+        MedusaError.Types.CONFLICT,
+        `Delivery ${input.delivery_id} is not leased by ${input.worker_id}.`
+      )
+    }
+
+    await this.updateAgentMessages(
+      {
+        external_message_id: input.external_message_id,
+        id: delivery.message_id,
+        processed_at: deliveredAt,
+        status: "PROCESSED",
+      },
+      sharedContext
+    )
+
+    return delivery
+  }
+
+  @InjectManager()
+  async markAgentDeliveryFailed(
+    input: FailAgentDeliveryInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.markAgentDeliveryFailed_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async markAgentDeliveryFailed_(
+    input: FailAgentDeliveryInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const delivery = await this.retrieveAgentDelivery(
+      input.delivery_id,
+      {},
+      sharedContext
+    )
+    if (
+      delivery.status !== "PROCESSING" ||
+      delivery.locked_by !== input.worker_id
+    ) {
+      throw new MedusaError(
+        MedusaError.Types.CONFLICT,
+        `Delivery ${input.delivery_id} is not leased by ${input.worker_id}.`
+      )
+    }
+
+    const failedAt = new Date(input.failed_at)
+    const retry = calculateDeliveryRetry(delivery.attempt_count, failedAt, input)
+    const failed = (
+      await this.updateAgentDeliveries(
+        {
+          data: {
+            available_at: retry.available_at,
+            last_error: sanitizeOutboxError(input.error),
+            lock_expires_at: null,
+            locked_at: null,
+            locked_by: null,
+            status: retry.status,
+          },
+          selector: {
+            id: delivery.id,
+            locked_by: input.worker_id,
+            status: "PROCESSING",
+          },
+        },
+        sharedContext
+      )
+    )[0]
+    if (!failed) {
+      throw new MedusaError(
+        MedusaError.Types.CONFLICT,
+        `Delivery ${input.delivery_id} lost its lease before failure handling.`
+      )
+    }
+
+    if (failed.status === "DEAD") {
+      await this.updateAgentMessages(
+        {
+          error: failed.last_error,
+          id: failed.message_id,
+          processed_at: failedAt,
+          status: "REJECTED",
+        },
+        sharedContext
+      )
+    }
+
+    return failed
   }
 
   @InjectTransactionManager()

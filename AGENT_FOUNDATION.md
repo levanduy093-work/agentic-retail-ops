@@ -77,8 +77,9 @@ vận hành chung để từng năng lực agent có thể:
   `task.created` hoặc `task.overdue`.
 - Bằng chứng multi-process cho production Event Bus, distributed locking và
   subscriber idempotency/replay tooling.
-- Mobile/PWA, push notification, provider adapter, channel identity mapping và
-  delivery receipt/retry cho Telegram/Zalo/Slack/Teams.
+- Telegram adapter đã có webhook secret, identity allowlist và delivery
+  receipt/retry nhưng chưa acceptance với bot thật. Mobile/PWA, push,
+  Zalo/Slack/Teams/Messenger vẫn chưa có provider adapter.
 - LLM chuyển câu chat tự do thành structured command có evaluation.
 - Connector ingestion và semantic/vector retrieval cho Knowledge; lifecycle,
   version, approval và citation cơ bản đã có.
