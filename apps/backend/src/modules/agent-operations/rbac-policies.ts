@@ -16,6 +16,7 @@ export const AGENT_RBAC_POLICY_DEFINITIONS = [
   { name: "AgentKnowledgeRead", resource: "agent_knowledge", operation: "read" },
   { name: "AgentKnowledgeCreate", resource: "agent_knowledge", operation: "create" },
   { name: "AgentKnowledgeApprove", resource: "agent_knowledge", operation: "approve" },
+  { name: "AgentKnowledgeDelete", resource: "agent_knowledge", operation: "delete" },
   { name: "AgentAiProviderRead", resource: "agent_ai_provider", operation: "read" },
   { name: "AgentAiProviderConfigure", resource: "agent_ai_provider", operation: "configure" },
   { name: "AgentAiProviderDelete", resource: "agent_ai_provider", operation: "delete" },

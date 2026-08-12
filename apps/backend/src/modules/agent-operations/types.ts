@@ -256,6 +256,11 @@ export type SyncKnowledgeSourceInput = {
   source_id: string
 }
 
+export type DeleteKnowledgeSourceInput = {
+  actor_id: string
+  source_id: string
+}
+
 export type ConfigureGoogleKnowledgeConnectorInput = {
   account_email: string
   actor_id: string

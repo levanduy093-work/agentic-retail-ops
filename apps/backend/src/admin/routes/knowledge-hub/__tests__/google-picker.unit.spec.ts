@@ -7,13 +7,16 @@ describe("Google knowledge Picker file classification", () => {
     ["text/plain", "GOOGLE_DRIVE"],
     ["text/markdown", "GOOGLE_DRIVE"],
     ["text/csv", "GOOGLE_DRIVE"],
+    [
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "GOOGLE_DRIVE",
+    ],
   ])("recognizes supported MIME type %s", (mimeType, expectedType) => {
     expect(classifyGooglePickerMimeType(mimeType)).toBe(expectedType)
   })
 
   test.each([
     "application/pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "image/png",
   ])("rejects unsupported MIME type %s", (mimeType) => {
     expect(classifyGooglePickerMimeType(mimeType)).toBeNull()

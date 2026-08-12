@@ -240,6 +240,11 @@ const routes: MiddlewareRoute[] = [
       policies: [{ resource: "agent_knowledge", operation: "create" }],
     },
     {
+      matcher: "/admin/agent-operations/knowledge/sources/:id",
+      method: "DELETE",
+      policies: [{ resource: "agent_knowledge", operation: "delete" }],
+    },
+    {
       matcher: "/admin/agent-operations/knowledge/:id",
       method: "GET",
       policies: [{ resource: "agent_knowledge", operation: "read" }],

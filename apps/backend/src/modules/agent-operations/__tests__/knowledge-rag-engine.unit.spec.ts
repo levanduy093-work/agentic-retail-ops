@@ -2,6 +2,7 @@ import { Document } from "@langchain/core/documents"
 import { QdrantVectorStore } from "@langchain/qdrant"
 import {
   createKnowledgeRagEngine,
+  deleteKnowledgeDocumentVectors,
   getKnowledgeRagRuntimeStatus,
   LangChainQdrantKnowledgeRagEngine,
 } from "../knowledge-rag-engine"
@@ -30,6 +31,58 @@ describe("knowledge RAG engine", () => {
         }
       )
     ).toThrow("Admin-managed AI provider")
+  })
+
+  it("deletes a document from every current and historical knowledge collection", async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            result: {
+              collections: [
+                { name: "agent_knowledge_gemini_current" },
+                { name: "agent_knowledge_openai_previous" },
+                { name: "unrelated_collection" },
+              ],
+            },
+          }),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValue(new Response("{}", { status: 200 }))
+
+    await expect(
+      deleteKnowledgeDocumentVectors(
+        "agknow_1",
+        {
+          QDRANT_API_KEY: "qdrant-key",
+          QDRANT_COLLECTION: "agent_knowledge",
+          QDRANT_URL: "http://qdrant:6333",
+        },
+        fetchImpl as typeof fetch
+      )
+    ).resolves.toMatchObject({
+      deleted_collections: 2,
+      status: "DELETED",
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
+    expect(fetchImpl.mock.calls[1][0]).toContain(
+      "agent_knowledge_gemini_current/points/delete"
+    )
+    expect(fetchImpl.mock.calls[2][0]).toContain(
+      "agent_knowledge_openai_previous/points/delete"
+    )
+    expect(JSON.parse(fetchImpl.mock.calls[1][1].body)).toMatchObject({
+      filter: {
+        must: [
+          {
+            key: "metadata.document_id",
+            match: { value: "agknow_1" },
+          },
+        ],
+      },
+    })
   })
 
   it("maps governed chunks into LangChain documents and returns Qdrant scores", async () => {
@@ -99,6 +152,18 @@ describe("knowledge RAG engine", () => {
         enabled: true,
         unindexed_filtering_retrieve: false,
         unindexed_filtering_update: false,
+      },
+    })
+
+    await engine.deleteDocument("agknow_1")
+    expect(deleteDocuments).toHaveBeenCalledWith({
+      filter: {
+        must: [
+          {
+            key: "metadata.document_id",
+            match: { value: "agknow_1" },
+          },
+        ],
       },
     })
   })

@@ -356,6 +356,28 @@ const KnowledgeHubPage = () => {
       )
     },
   })
+  const deleteSource = useMutation({
+    mutationFn: (id: string) =>
+      sdk.client.fetch<{
+        chunk_count: number
+        deleted: true
+        document_count: number
+        source_id: string
+      }>(`/admin/agent-operations/knowledge/sources/${id}`, {
+        method: "DELETE",
+      }),
+    onError: () =>
+      toast.error(t("knowledgeHub.sources.messages.deleteError")),
+    onSuccess: async (result) => {
+      await Promise.all([refreshSources(), refresh()])
+      toast.success(
+        t("knowledgeHub.sources.messages.deleted", {
+          chunks: result.chunk_count,
+          documents: result.document_count,
+        })
+      )
+    },
+  })
   const authorizeGoogle = useMutation({
     mutationFn: () =>
       sdk.client.fetch<GoogleAuthorizationResponse>(
@@ -393,6 +415,19 @@ const KnowledgeHubPage = () => {
       variant: "danger",
     })
     if (confirmed) disconnectGoogle.mutate()
+  }
+
+  const confirmDeleteSource = async (source: KnowledgeSource) => {
+    const confirmed = await prompt({
+      cancelText: t("knowledgeHub.cancel"),
+      confirmText: t("knowledgeHub.sources.deleteAction"),
+      description: t("knowledgeHub.sources.deleteConfirmation", {
+        name: source.name,
+      }),
+      title: t("knowledgeHub.sources.deleteTitle"),
+      variant: "danger",
+    })
+    if (confirmed) deleteSource.mutate(source.id)
   }
 
   const chooseGoogleDocument = async () => {
@@ -736,17 +771,30 @@ const KnowledgeHubPage = () => {
                       </Text>
                     )}
                   </div>
-                  <Button
-                    disabled={syncSource.isPending}
-                    isLoading={
-                      syncSource.isPending && syncSource.variables === source.id
-                    }
-                    onClick={() => syncSource.mutate(source.id)}
-                    size="small"
-                    variant="secondary"
-                  >
-                    {t("knowledgeHub.sources.syncAction")}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      disabled={syncSource.isPending || deleteSource.isPending}
+                      isLoading={
+                        syncSource.isPending && syncSource.variables === source.id
+                      }
+                      onClick={() => syncSource.mutate(source.id)}
+                      size="small"
+                      variant="secondary"
+                    >
+                      {t("knowledgeHub.sources.syncAction")}
+                    </Button>
+                    <Button
+                      disabled={syncSource.isPending || deleteSource.isPending}
+                      isLoading={
+                        deleteSource.isPending && deleteSource.variables === source.id
+                      }
+                      onClick={() => confirmDeleteSource(source)}
+                      size="small"
+                      variant="danger"
+                    >
+                      {t("knowledgeHub.sources.deleteAction")}
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

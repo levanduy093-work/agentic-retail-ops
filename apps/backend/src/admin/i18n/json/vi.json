@@ -351,6 +351,9 @@
         "disconnectConfirmation": "Hệ thống sẽ xóa refresh token đã mã hóa và yêu cầu Google thu hồi quyền. Các nguồn Google sẽ ngừng cập nhật cho đến khi kết nối lại."
       },
       "syncAction": "Kiểm tra cập nhật",
+      "deleteAction": "Xóa",
+      "deleteTitle": "Xóa nguồn tài liệu?",
+      "deleteConfirmation": "Hệ thống sẽ xóa {{name}}, mọi bản tài liệu và toàn bộ đoạn nội dung đã tạo từ nguồn này khỏi cơ sở dữ liệu, đồng thời dọn vector liên quan. Nhật ký kiểm toán tối thiểu vẫn được giữ.",
       "saveAction": "Lưu kết nối",
       "createTitle": "Kết nối nguồn hướng dẫn",
       "createHint": "Bạn chỉ cần chọn tài liệu. Hệ thống tự lấy tên, nhận biết loại tệp và chỉ tạo bản nháp để quản lý duyệt.",
@@ -361,7 +364,7 @@
         "noSelection": "Chưa chọn tài liệu nào. Tên và loại tài liệu sẽ được điền tự động.",
         "changeFileAction": "Chọn tài liệu khác",
         "unsupportedTitle": "Tài liệu này chưa được hỗ trợ",
-        "unsupportedHint": "{{name}} không phải Google Docs, Google Sheets, TXT, Markdown hoặc CSV. Hãy chọn tài liệu khác."
+        "unsupportedHint": "{{name}} không phải Google Docs, Google Sheets, DOCX, TXT, Markdown hoặc CSV. Hãy chọn tài liệu khác."
       },
       "safetyTitle": "Vẫn bắt buộc quản lý duyệt",
       "safetyHint": "Hệ thống kiểm tra nguồn và chỉ tạo bản nháp mới khi nội dung thay đổi. Quản lý có quyền phải đọc và duyệt thì agent mới được sử dụng.",
@@ -375,7 +378,7 @@
       "types": {
         "googleDoc": "Google Docs",
         "googleSheet": "Google Sheets",
-        "googleDrive": "Tệp văn bản, Markdown hoặc CSV trên Google Drive"
+        "googleDrive": "Tệp DOCX, văn bản, Markdown hoặc CSV trên Google Drive"
       },
       "status": {
         "never": "Chưa kiểm tra",
@@ -386,6 +389,8 @@
       "messages": {
         "connected": "Đã lưu kết nối. Hãy kiểm tra nguồn để tạo bản nháp đầu tiên.",
         "createError": "Không thể kết nối tài liệu Google. Hãy kiểm tra quyền truy cập và chọn lại tài liệu.",
+        "deleted": "Đã xóa nguồn, {{documents}} bản tài liệu và {{chunks}} đoạn nội dung.",
+        "deleteError": "Không thể xóa sạch nguồn tài liệu. Hệ thống đã giữ nguyên dữ liệu để tránh sót vector.",
         "synced": "Đã kiểm tra nguồn và tạo bản hướng dẫn mới để quản lý xem xét.",
         "unchanged": "Đã kiểm tra nguồn. Nội dung không thay đổi nên hệ thống không tạo bản nháp trùng.",
         "syncError": "Không thể đồng bộ nguồn. Hãy xem trạng thái kết nối để biết nguyên nhân."

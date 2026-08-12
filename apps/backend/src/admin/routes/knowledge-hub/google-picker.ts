@@ -104,7 +104,14 @@ export function classifyGooglePickerMimeType(
   if (mimeType === "application/vnd.google-apps.spreadsheet") {
     return "GOOGLE_SHEET"
   }
-  if (["text/csv", "text/markdown", "text/plain"].includes(mimeType)) {
+  if (
+    [
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "text/csv",
+      "text/markdown",
+      "text/plain",
+    ].includes(mimeType)
+  ) {
     return "GOOGLE_DRIVE"
   }
   return null
@@ -127,7 +134,7 @@ export async function openGoogleKnowledgePicker(
 
   return new Promise<GooglePickerSelection | null>((resolve) => {
     const view = new pickerApi.DocsView()
-      .setIncludeFolders(false)
+      .setIncludeFolders(true)
       .setSelectFolderEnabled(false)
       // Google recommends LIST with drive.file because thumbnail access is not
       // guaranteed until the user explicitly selects a file.

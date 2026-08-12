@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import {
   fetchGoogleDriveKnowledgeSource,
   parseGoogleDriveFileUrl,
@@ -107,6 +109,46 @@ describe("Google Drive knowledge connector", () => {
 
     expect(result.content_type).toBe("text/csv")
     expect(fetchImpl.mock.calls[1][0]).toContain("/export?mimeType=text%2Fcsv")
+  })
+
+  it("downloads DOCX files and extracts their text", async () => {
+    const docx = readFileSync(
+      resolve(
+        process.cwd(),
+        "../../docs/test-fixtures/rag-knowledge-pack/multiformat/customer-support-escalation-playbook.docx"
+      )
+    )
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            capabilities: { canDownload: true },
+            id: "1234567890_file-id",
+            mimeType:
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            modifiedTime: "2026-08-11T06:00:00.000Z",
+            name: "customer-support-escalation-playbook.docx",
+          }),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(new Response(docx, { status: 200 }))
+
+    const result = await fetchGoogleDriveKnowledgeSource(
+      "https://drive.google.com/file/d/1234567890_file-id/view",
+      "GOOGLE_DRIVE",
+      {
+        authorizationHeader: "Bearer test-token",
+        fetchImpl: fetchImpl as typeof fetch,
+      }
+    )
+
+    expect(result.content_type).toBe(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    expect(result.content).toContain("SỔ TAY XỬ LÝ ESCALATION")
+    expect(fetchImpl.mock.calls[1][0]).toContain("alt=media")
   })
 
   it("rejects unsupported Drive file types", async () => {

@@ -82,6 +82,7 @@ import {
   CreateApprovalRequestedNotificationInput,
   CreateKnowledgeDocumentInput,
   CreateKnowledgeSourceInput,
+  DeleteKnowledgeSourceInput,
   DisconnectGoogleKnowledgeConnectorInput,
   DisconnectAiProviderInput,
   EvaluationAssertion,
@@ -107,7 +108,10 @@ import {
   chunkKnowledgeContent,
   isKnowledgeEligible,
 } from "./knowledge"
-import { createKnowledgeRagEngine } from "./knowledge-rag-engine"
+import {
+  createKnowledgeRagEngine,
+  deleteKnowledgeDocumentVectors,
+} from "./knowledge-rag-engine"
 import {
   assertAgentTaskRelease,
   assertAgentTaskTransition,
@@ -1040,6 +1044,77 @@ class AgentOperationsModuleService extends MedusaService({
     return this.recordKnowledgeSourceSync_(input, sharedContext)
   }
 
+  @InjectManager()
+  async deleteGovernedKnowledgeSource(
+    input: DeleteKnowledgeSourceInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.deleteGovernedKnowledgeSource_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async deleteGovernedKnowledgeSource_(
+    input: DeleteKnowledgeSourceInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const source = await this.retrieveAgentKnowledgeSource(
+      input.source_id,
+      {},
+      sharedContext
+    )
+    const documents = await this.listAgentKnowledgeDocuments(
+      { document_key: `source-${source.id}` },
+      { take: 10_000 },
+      sharedContext
+    )
+    const documentIds = documents.map((document) => document.id)
+    const chunks = documentIds.length
+      ? await this.listAgentKnowledgeChunks(
+          { document_id: documentIds },
+          { take: 50_000 },
+          sharedContext
+        )
+      : []
+
+    await this.createAgentAuditEvents(
+      {
+        action: "knowledge-source-deleted",
+        actor_id: input.actor_id,
+        actor_type: "user",
+        correlation_id: source.id,
+        data: {
+          chunk_count: chunks.length,
+          document_count: documents.length,
+          source_name: source.name,
+          source_type: source.source_type,
+        },
+        event_type: "agent.knowledge-source.deleted",
+        recorded_at: new Date(),
+        resource_id: source.id,
+        resource_type: "agent_knowledge_source",
+      },
+      sharedContext
+    )
+
+    if (chunks.length) {
+      await this.deleteAgentKnowledgeChunks(
+        chunks.map((chunk) => chunk.id),
+        sharedContext
+      )
+    }
+    if (documentIds.length) {
+      await this.deleteAgentKnowledgeDocuments(documentIds, sharedContext)
+    }
+    await this.deleteAgentKnowledgeSources(source.id, sharedContext)
+
+    return {
+      chunk_count: chunks.length,
+      deleted: true as const,
+      document_count: documents.length,
+      source_id: source.id,
+    }
+  }
+
   @InjectTransactionManager()
   protected async recordKnowledgeSourceSync_(
     input: SyncKnowledgeSourceInput & {
@@ -1534,21 +1609,12 @@ class AgentOperationsModuleService extends MedusaService({
     @MedusaContext() sharedContext: Context = {}
   ) {
     try {
-      const document = await this.retrieveAgentKnowledgeDocument(
+      await this.retrieveAgentKnowledgeDocument(
         documentId,
         {},
         sharedContext
       )
-      const credential = await this.getActiveAiProviderCredential(
-        "embedding",
-        document.tenant_id
-      )
-      const engine = createKnowledgeRagEngine(process.env, credential)
-      if (engine.provider === "disabled") {
-        return { provider: engine.provider, status: "DISABLED" as const }
-      }
-      await engine.deleteDocument(documentId)
-      return { provider: engine.provider, status: "DELETED" as const }
+      return await deleteKnowledgeDocumentVectors(documentId)
     } catch (error) {
       return {
         error:

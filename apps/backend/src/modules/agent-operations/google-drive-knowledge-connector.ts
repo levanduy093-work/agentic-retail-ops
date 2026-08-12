@@ -1,9 +1,12 @@
 import { MedusaError } from "@medusajs/framework/utils"
+import mammoth from "mammoth"
 import { checksumKnowledgeContent } from "./knowledge"
 
 const GOOGLE_API_BASE = "https://www.googleapis.com/drive/v3/files"
 const MAX_DOCUMENT_BYTES = 1_000_000
 const FETCH_TIMEOUT_MS = 10_000
+const DOCX_MIME_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 export type GoogleKnowledgeSourceType =
   | "GOOGLE_DOC"
@@ -147,10 +150,32 @@ function contentRequestFor(metadata: GoogleDriveFileMetadata) {
       url: `${fileUrl}?alt=media&supportsAllDrives=true`,
     }
   }
+  if (metadata.mimeType === DOCX_MIME_TYPE) {
+    return {
+      content_type: DOCX_MIME_TYPE,
+      url: `${fileUrl}?alt=media&supportsAllDrives=true`,
+    }
+  }
   throw new MedusaError(
     MedusaError.Types.INVALID_DATA,
-    "This Drive file type is not supported. Use Google Docs, Google Sheets, TXT, Markdown, or CSV."
+    "This Drive file type is not supported. Use Google Docs, Google Sheets, DOCX, TXT, Markdown, or CSV."
   )
+}
+
+async function extractKnowledgeText(bytes: Uint8Array, contentType: string) {
+  if (contentType !== DOCX_MIME_TYPE) {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes).trim()
+  }
+
+  try {
+    const result = await mammoth.extractRawText({ buffer: Buffer.from(bytes) })
+    return result.value.trim()
+  } catch {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      "The selected DOCX file could not be read."
+    )
+  }
 }
 
 export async function fetchGoogleDriveKnowledgeSource(
@@ -233,7 +258,7 @@ export async function fetchGoogleDriveKnowledgeSource(
       "Google document is larger than 1 MB."
     )
   }
-  const content = new TextDecoder("utf-8", { fatal: true }).decode(bytes).trim()
+  const content = await extractKnowledgeText(bytes, request.content_type)
   if (content.length < 20) {
     throw new MedusaError(
       MedusaError.Types.INVALID_DATA,

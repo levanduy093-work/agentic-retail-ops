@@ -54,6 +54,12 @@ export type KnowledgeRagEngine = {
   search(input: KnowledgeRagSearchInput): Promise<KnowledgeRagSearchResult[]>
 }
 
+export type KnowledgeVectorDeleteResult = {
+  deleted_collections: number
+  provider: "disabled" | "langchain-qdrant"
+  status: "DELETED" | "DISABLED"
+}
+
 export type KnowledgeEmbeddingCredential = {
   api_key: string
   dimensions?: number
@@ -224,6 +230,84 @@ export function getKnowledgeRagRuntimeStatus(
     enabled: qdrantConfigured,
     provider: qdrantConfigured ? "langchain-qdrant" : "disabled",
     qdrant_configured: qdrantConfigured,
+  }
+}
+
+export async function deleteKnowledgeDocumentVectors(
+  documentId: string,
+  environment: NodeJS.ProcessEnv = process.env,
+  fetchImpl: typeof fetch = fetch
+): Promise<KnowledgeVectorDeleteResult> {
+  const qdrantUrl = environment.QDRANT_URL?.trim().replace(/\/$/, "")
+  if (!qdrantUrl) {
+    return {
+      deleted_collections: 0,
+      provider: "disabled",
+      status: "DISABLED",
+    }
+  }
+
+  const headers = {
+    "Content-Type": "application/json",
+    ...(environment.QDRANT_API_KEY?.trim()
+      ? { "api-key": environment.QDRANT_API_KEY.trim() }
+      : {}),
+  }
+  const collectionsResponse = await fetchImpl(`${qdrantUrl}/collections`, {
+    headers,
+    method: "GET",
+  })
+  if (!collectionsResponse.ok) {
+    throw new MedusaError(
+      MedusaError.Types.UNEXPECTED_STATE,
+      `Qdrant collection discovery returned HTTP ${collectionsResponse.status}.`
+    )
+  }
+  const collectionsPayload = (await collectionsResponse.json()) as {
+    result?: { collections?: Array<{ name?: string }> }
+  }
+  const baseCollectionName = assertCollectionName(
+    environment.QDRANT_COLLECTION?.trim() || DEFAULT_COLLECTION
+  )
+  const collectionNames = (collectionsPayload.result?.collections ?? [])
+    .flatMap((collection) =>
+      typeof collection.name === "string" ? [collection.name] : []
+    )
+    .filter(
+      (name) =>
+        name === baseCollectionName || name.startsWith(`${baseCollectionName}_`)
+    )
+
+  for (const collectionName of collectionNames) {
+    const deleteResponse = await fetchImpl(
+      `${qdrantUrl}/collections/${encodeURIComponent(collectionName)}/points/delete?wait=true`,
+      {
+        body: JSON.stringify({
+          filter: {
+            must: [
+              {
+                key: "metadata.document_id",
+                match: { value: documentId },
+              },
+            ],
+          },
+        }),
+        headers,
+        method: "POST",
+      }
+    )
+    if (!deleteResponse.ok) {
+      throw new MedusaError(
+        MedusaError.Types.UNEXPECTED_STATE,
+        `Qdrant vector deletion returned HTTP ${deleteResponse.status}.`
+      )
+    }
+  }
+
+  return {
+    deleted_collections: collectionNames.length,
+    provider: "langchain-qdrant",
+    status: "DELETED",
   }
 }
 

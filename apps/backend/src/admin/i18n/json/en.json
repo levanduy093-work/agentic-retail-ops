@@ -106,6 +106,9 @@
         "disconnectConfirmation": "The encrypted refresh token will be deleted and Google revocation will be requested. Google sources stop updating until you reconnect."
       },
       "syncAction": "Check for updates",
+      "deleteAction": "Delete",
+      "deleteTitle": "Delete knowledge source?",
+      "deleteConfirmation": "The system will delete {{name}}, every document version, and all generated chunks from the database, then remove related vectors. A minimal audit record is retained.",
       "saveAction": "Save connection",
       "createTitle": "Connect a knowledge source",
       "createHint": "Just choose a document. The system fills its name, detects its type, and creates only a draft for manager approval.",
@@ -116,7 +119,7 @@
         "noSelection": "No document selected. Its name and type will be filled automatically.",
         "changeFileAction": "Choose another document",
         "unsupportedTitle": "This document type is not supported",
-        "unsupportedHint": "{{name}} is not a Google Doc, Google Sheet, TXT, Markdown, or CSV file. Choose another document."
+        "unsupportedHint": "{{name}} is not a Google Doc, Google Sheet, DOCX, TXT, Markdown, or CSV file. Choose another document."
       },
       "safetyTitle": "Approval remains required",
       "safetyHint": "The system checks the source and creates a new draft only when its content changes. An authorized manager must review and approve that draft before agents can use it.",
@@ -130,7 +133,7 @@
       "types": {
         "googleDoc": "Google Docs",
         "googleSheet": "Google Sheets",
-        "googleDrive": "Text, Markdown, or CSV file on Google Drive"
+        "googleDrive": "DOCX, text, Markdown, or CSV file on Google Drive"
       },
       "status": {
         "never": "Not checked yet",
@@ -141,6 +144,8 @@
       "messages": {
         "connected": "Source connection saved. Check it to create the first draft.",
         "createError": "The Google document could not be connected. Check its access permission and select it again.",
+        "deleted": "Deleted the source, {{documents}} document versions, and {{chunks}} content chunks.",
+        "deleteError": "The knowledge source could not be purged. Data was kept to avoid leaving vectors behind.",
         "synced": "Source checked and a new knowledge draft was created for review.",
         "unchanged": "Source checked. Its content has not changed, so no duplicate draft was created.",
         "syncError": "The source could not be synchronized. Review the connection status for details."
