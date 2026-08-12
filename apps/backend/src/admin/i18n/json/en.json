@@ -75,12 +75,12 @@
     },
     "sources": {
       "title": "Connected knowledge sources",
-      "subtitle": "Connect documents so the system can prepare sourced guidance for manager approval.",
-      "simpleSubtitle": "When you check for updates, changed content becomes a draft for a manager to review.",
+      "subtitle": "Connect documents so the system can automatically read, chunk, and embed sourced guidance for manager approval.",
+      "simpleSubtitle": "After you save a source, the system automatically reads, chunks, and embeds it. Changed versions are prepared the same way.",
       "connectAction": "Connect a document",
       "loading": "Loading connected sources...",
       "empty": "No document is connected yet. Choose one to prepare the first draft.",
-      "connectionErrorHint": "The document could not be read. Check its address, approved host, and text or Markdown format.",
+      "connectionErrorHint": "Processing did not finish. Check Google access, the document format, and the embedding provider configuration.",
       "googleReadyTitle": "Google connection is ready",
       "googleShareHint": "Share this document with {{email}} as a Viewer, then paste its link above.",
       "googleNotReadyTitle": "Google connection needs server setup",
@@ -105,13 +105,13 @@
         "disconnectTitle": "Disconnect Google?",
         "disconnectConfirmation": "The encrypted refresh token will be deleted and Google revocation will be requested. Google sources stop updating until you reconnect."
       },
-      "syncAction": "Check for updates",
+      "syncAction": "Check and prepare",
       "deleteAction": "Delete",
       "deleteTitle": "Delete knowledge source?",
       "deleteConfirmation": "The system will delete {{name}}, every document version, and all generated chunks from the database, then remove related vectors. A minimal audit record is retained.",
-      "saveAction": "Save connection",
+      "saveAction": "Save and process",
       "createTitle": "Connect a knowledge source",
-      "createHint": "Just choose a document. The system fills its name, detects its type, and creates only a draft for manager approval.",
+      "createHint": "Choose a document and its usage scope. Saving automatically reads, chunks, and embeds it; the resulting draft still requires manager approval before agents can use it.",
       "automatic": {
         "supportedTitle": "Supported document types",
         "supportedHint": "If you choose another type, the system identifies it and explains the problem before saving.",
@@ -137,18 +137,27 @@
       },
       "status": {
         "never": "Not checked yet",
-        "succeeded": "Draft created",
-        "failed": "Connection needs attention",
-        "unchanged": "No changes"
+        "succeeded": "Embedded · awaiting approval",
+        "failed": "Processing needs attention",
+        "unchanged": "No changes · vectors ready"
+      },
+      "processing": {
+        "connecting": "Saving the source connection...",
+        "syncing": "Reading and splitting the document into chunks...",
+        "embedding": "Creating embeddings and writing vectors...",
+        "ready": "Vector preparation complete. The draft is awaiting approval.",
+        "failed": "Processing stopped before vector preparation completed."
       },
       "messages": {
-        "connected": "Source connection saved. Check it to create the first draft.",
+        "connected": "Source connection saved.",
         "createError": "The Google document could not be connected. Check its access permission and select it again.",
         "deleted": "Deleted the source, {{documents}} document versions, and {{chunks}} content chunks.",
         "deleteError": "The knowledge source could not be purged. Data was kept to avoid leaving vectors behind.",
-        "synced": "Source checked and a new knowledge draft was created for review.",
-        "unchanged": "Source checked. Its content has not changed, so no duplicate draft was created.",
-        "syncError": "The source could not be synchronized. Review the connection status for details."
+        "prepared": "Document prepared successfully: {{chunks}} chunks were embedded. The draft is awaiting approval.",
+        "processingError": "The source could not be fully prepared. Its connection was kept so you can retry after checking access and embedding configuration.",
+        "synced": "Source checked and prepared for review.",
+        "unchanged": "Source checked. Its content has not changed and its vectors remain ready.",
+        "syncError": "The source could not be read or embedded. Review the connection and embedding configuration."
       }
     },
     "messages": {

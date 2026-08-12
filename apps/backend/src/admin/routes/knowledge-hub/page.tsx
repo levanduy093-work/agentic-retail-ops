@@ -71,6 +71,7 @@ type KnowledgeSearchResponse = {
 
 type KnowledgeSource = {
   id: string
+  last_document_id: string | null
   last_error: string | null
   last_sync_status: "FAILED" | "NEVER" | "SUCCEEDED" | "UNCHANGED"
   locale: string
@@ -97,6 +98,36 @@ type GoogleAuthorizationResponse = {
   authorization_url: string
 }
 
+type KnowledgeSourceSyncResponse = {
+  document: KnowledgeDocument | null
+  source: KnowledgeSource
+  status: "FAILED" | "SUCCEEDED" | "UNCHANGED"
+}
+
+type KnowledgeSourcePrepareResponse = {
+  document: KnowledgeDocument
+  rag_index: {
+    error?: string
+    indexed_chunks: number
+    provider: string
+    status: "DISABLED" | "FAILED" | "INDEXED" | "SKIPPED"
+  }
+  source: KnowledgeSource
+}
+
+type SourceProcessingStage =
+  | "connecting"
+  | "embedding"
+  | "failed"
+  | "ready"
+  | "syncing"
+
+type SourceProcessingState = {
+  progress: number
+  source_id: string | null
+  stage: SourceProcessingStage
+}
+
 const statusColor = (status: KnowledgeDocument["status"]) => {
   if (status === "APPROVED") return "green" as const
   if (status === "RETIRED") return "grey" as const
@@ -115,11 +146,45 @@ const sourceHostname = (sourceUrl: string) => {
   }
 }
 
-const sourceTypeTranslationKey = (sourceType: KnowledgeSource["source_type"]) => {
+const sourceTypeTranslationKey = (
+  sourceType: KnowledgeSource["source_type"]
+) => {
   if (sourceType === "GOOGLE_DOC") return "googleDoc"
   if (sourceType === "GOOGLE_SHEET") return "googleSheet"
   return "googleDrive"
 }
+
+const SourceProgress = ({
+  label,
+  progress,
+  stage,
+}: SourceProcessingState & { label: string }) => (
+  <div className="mt-3 max-w-xl">
+    <div className="mb-1 flex items-center justify-between gap-3">
+      <Text className="text-ui-fg-subtle" size="xsmall">
+        {label}
+      </Text>
+      <Text className="text-ui-fg-muted" size="xsmall">
+        {progress}%
+      </Text>
+    </div>
+    <div
+      aria-label={label}
+      aria-valuemax={100}
+      aria-valuemin={0}
+      aria-valuenow={progress}
+      className="h-1.5 overflow-hidden rounded-full bg-ui-bg-component-pressed"
+      role="progressbar"
+    >
+      <div
+        className={`h-full rounded-full transition-[width] duration-300 ${
+          stage === "failed" ? "bg-ui-fg-error" : "bg-ui-fg-interactive"
+        }`}
+        style={{ width: `${progress}%` }}
+      />
+    </div>
+  </div>
+)
 
 const KnowledgeHubPage = () => {
   const { t } = useTranslation()
@@ -131,13 +196,14 @@ const KnowledgeHubPage = () => {
   const [activeView, setActiveView] = useState<
     "documents" | "search" | "sources"
   >("documents")
-  const [documentStatus, setDocumentStatus] = useState<
-    KnowledgeDocument["status"]
-  >("APPROVED")
+  const [documentStatus, setDocumentStatus] =
+    useState<KnowledgeDocument["status"]>("APPROVED")
   const [searchQuery, setSearchQuery] = useState("")
   const [searchLocale, setSearchLocale] = useState("vi")
   const [searchScope, setSearchScope] = useState("customer_support")
   const [pickerLoading, setPickerLoading] = useState(false)
+  const [sourceProcessing, setSourceProcessing] =
+    useState<SourceProcessingState | null>(null)
   const [unsupportedGoogleFile, setUnsupportedGoogleFile] = useState<
     Extract<GooglePickerSelection, { supported: false }> | undefined
   >()
@@ -218,6 +284,11 @@ const KnowledgeHubPage = () => {
       ),
     [visibleDocuments]
   )
+  const sourcePipelineBusy = Boolean(
+    sourceProcessing &&
+    sourceProcessing.stage !== "failed" &&
+    sourceProcessing.stage !== "ready"
+  )
 
   useEffect(() => {
     if (activeView !== "documents") return
@@ -248,6 +319,40 @@ const KnowledgeHubPage = () => {
   }
   const refreshSources = async () => {
     await queryClient.invalidateQueries({ queryKey: ["knowledge-sources"] })
+  }
+  const runSourcePipeline = async (sourceId: string) => {
+    setSourceProcessing({
+      progress: 35,
+      source_id: sourceId,
+      stage: "syncing",
+    })
+    const syncResult = await sdk.client.fetch<KnowledgeSourceSyncResponse>(
+      `/admin/agent-operations/knowledge/sources/${sourceId}/sync`,
+      { method: "POST" }
+    )
+
+    setSourceProcessing({
+      progress: 70,
+      source_id: sourceId,
+      stage: "embedding",
+    })
+    const prepareResult =
+      await sdk.client.fetch<KnowledgeSourcePrepareResponse>(
+        `/admin/agent-operations/knowledge/sources/${sourceId}/prepare`,
+        { method: "POST" }
+      )
+    if (prepareResult.rag_index.status !== "INDEXED") {
+      throw new Error(
+        prepareResult.rag_index.error ?? "Knowledge embedding failed."
+      )
+    }
+
+    setSourceProcessing({
+      progress: 100,
+      source_id: sourceId,
+      stage: "ready",
+    })
+    return { prepareResult, syncResult }
   }
   const createDocument = useMutation({
     mutationFn: () => {
@@ -312,14 +417,34 @@ const KnowledgeHubPage = () => {
     onError: () => toast.error(t("knowledgeHub.messages.searchError")),
   })
   const createSource = useMutation({
-    mutationFn: () =>
-      sdk.client.fetch("/admin/agent-operations/knowledge/sources", {
+    mutationFn: async () => {
+      setSourceProcessing({
+        progress: 10,
+        source_id: null,
+        stage: "connecting",
+      })
+      const created = await sdk.client.fetch<{
+        duplicate: boolean
+        source: KnowledgeSource
+      }>("/admin/agent-operations/knowledge/sources", {
         body: { ...sourceForm, tenant_id: "default" },
         method: "POST",
-      }),
-    onError: () =>
-      toast.error(t("knowledgeHub.sources.messages.createError")),
-    onSuccess: async () => {
+      })
+      return {
+        created,
+        pipeline: await runSourcePipeline(created.source.id),
+      }
+    },
+    onError: async () => {
+      setSourceProcessing((current) => ({
+        progress: current?.progress ?? 10,
+        source_id: current?.source_id ?? null,
+        stage: "failed",
+      }))
+      await Promise.all([refreshSources(), refresh()])
+      toast.error(t("knowledgeHub.sources.messages.processingError"))
+    },
+    onSuccess: async ({ pipeline }) => {
       setSourceOpen(false)
       setSourceForm({
         locale: "vi",
@@ -329,29 +454,33 @@ const KnowledgeHubPage = () => {
         source_url: "",
       })
       setUnsupportedGoogleFile(undefined)
-      await refreshSources()
-      toast.success(t("knowledgeHub.sources.messages.connected"))
+      await Promise.all([refreshSources(), refresh()])
+      toast.success(
+        t("knowledgeHub.sources.messages.prepared", {
+          chunks: pipeline.prepareResult.rag_index.indexed_chunks,
+        })
+      )
     },
   })
   const syncSource = useMutation({
-    mutationFn: (id: string) =>
-      sdk.client.fetch<{
-        document: KnowledgeDocument | null
-        status: "FAILED" | "SUCCEEDED" | "UNCHANGED"
-      }>(`/admin/agent-operations/knowledge/sources/${id}/sync`, {
-        method: "POST",
-      }),
+    mutationFn: runSourcePipeline,
     onError: async () => {
+      setSourceProcessing((current) => ({
+        progress: current?.progress ?? 35,
+        source_id: current?.source_id ?? null,
+        stage: "failed",
+      }))
       await refreshSources()
       toast.error(t("knowledgeHub.sources.messages.syncError"))
     },
-    onSuccess: async (result) => {
+    onSuccess: async ({ prepareResult, syncResult }) => {
       await Promise.all([refreshSources(), refresh()])
       toast.success(
         t(
-          result.status === "UNCHANGED"
+          syncResult.status === "UNCHANGED"
             ? "knowledgeHub.sources.messages.unchanged"
-            : "knowledgeHub.sources.messages.synced"
+            : "knowledgeHub.sources.messages.prepared",
+          { chunks: prepareResult.rag_index.indexed_chunks }
         )
       )
     },
@@ -366,8 +495,7 @@ const KnowledgeHubPage = () => {
       }>(`/admin/agent-operations/knowledge/sources/${id}`, {
         method: "DELETE",
       }),
-    onError: () =>
-      toast.error(t("knowledgeHub.sources.messages.deleteError")),
+    onError: () => toast.error(t("knowledgeHub.sources.messages.deleteError")),
     onSuccess: async (result) => {
       await Promise.all([refreshSources(), refresh()])
       toast.success(
@@ -384,8 +512,7 @@ const KnowledgeHubPage = () => {
         "/admin/agent-operations/knowledge/sources/google-oauth/authorize",
         { method: "POST" }
       ),
-    onError: () =>
-      toast.error(t("knowledgeHub.sources.oauth.connectError")),
+    onError: () => toast.error(t("knowledgeHub.sources.oauth.connectError")),
     onSuccess: ({ authorization_url }) => {
       window.location.assign(authorization_url)
     },
@@ -396,8 +523,7 @@ const KnowledgeHubPage = () => {
         "/admin/agent-operations/knowledge/sources/google-oauth/disconnect",
         { method: "POST" }
       ),
-    onError: () =>
-      toast.error(t("knowledgeHub.sources.oauth.disconnectError")),
+    onError: () => toast.error(t("knowledgeHub.sources.oauth.disconnectError")),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: ["knowledge-google-connector-status"],
@@ -482,6 +608,7 @@ const KnowledgeHubPage = () => {
   }
 
   const openSourceConnection = () => {
+    setSourceProcessing(null)
     setUnsupportedGoogleFile(undefined)
     setSourceForm({
       locale: "vi",
@@ -536,9 +663,12 @@ const KnowledgeHubPage = () => {
                 key={status}
                 onClick={() => setDocumentStatus(status)}
                 size="small"
-                variant={documentStatus === status ? "secondary" : "transparent"}
+                variant={
+                  documentStatus === status ? "secondary" : "transparent"
+                }
               >
-                {t(`knowledgeHub.status.${status.toLowerCase()}`)} · {counts[status]}
+                {t(`knowledgeHub.status.${status.toLowerCase()}`)} ·{" "}
+                {counts[status]}
               </Button>
             ))}
           </div>
@@ -566,17 +696,21 @@ const KnowledgeHubPage = () => {
                     leading="compact"
                     size="small"
                   >
-                    {t(`knowledgeHub.scopes.${
-                      document.scope === "customer_support"
-                        ? "customerSupport"
-                        : document.scope
-                    }`)}
+                    {t(
+                      `knowledgeHub.scopes.${
+                        document.scope === "customer_support"
+                          ? "customerSupport"
+                          : document.scope
+                      }`
+                    )}
                   </Text>
                 </button>
               ))}
               {!documents.isLoading && !filteredDocuments.length && (
                 <Text className="px-6 py-8 text-ui-fg-subtle" size="small">
-                  {t(`knowledgeHub.emptyStatus.${documentStatus.toLowerCase()}`)}
+                  {t(
+                    `knowledgeHub.emptyStatus.${documentStatus.toLowerCase()}`
+                  )}
                 </Text>
               )}
             </div>
@@ -594,7 +728,9 @@ const KnowledgeHubPage = () => {
                 <div className="mx-auto flex max-w-3xl flex-col gap-6">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex flex-col gap-2">
-                      <StatusBadge color={statusColor(detail.data.document.status)}>
+                      <StatusBadge
+                        color={statusColor(detail.data.document.status)}
+                      >
                         {t(
                           `knowledgeHub.status.${detail.data.document.status.toLowerCase()}`
                         )}
@@ -605,11 +741,13 @@ const KnowledgeHubPage = () => {
                           language: t(
                             `knowledgeHub.languages.${detail.data.document.locale}`
                           ),
-                          scope: t(`knowledgeHub.scopes.${
-                            detail.data.document.scope === "customer_support"
-                              ? "customerSupport"
-                              : detail.data.document.scope
-                          }`),
+                          scope: t(
+                            `knowledgeHub.scopes.${
+                              detail.data.document.scope === "customer_support"
+                                ? "customerSupport"
+                                : detail.data.document.scope
+                            }`
+                          ),
                         })}
                       </Text>
                     </div>
@@ -707,98 +845,114 @@ const KnowledgeHubPage = () => {
             </div>
           </Container>
           <Container className="p-0">
-          <div className="border-b px-6 py-4">
-            <Text leading="compact" size="small" weight="plus">
-              {t("knowledgeHub.sources.title")}
-            </Text>
-            <Text className="text-ui-fg-subtle" leading="compact" size="small">
-              {t("knowledgeHub.sources.simpleSubtitle")}
-            </Text>
-          </div>
-          {sources.isLoading ? (
-            <Text className="px-6 py-8 text-ui-fg-subtle" size="small">
-              {t("knowledgeHub.sources.loading")}
-            </Text>
-          ) : !visibleSources.length ? (
-            <Text className="px-6 py-8 text-ui-fg-subtle" size="small">
-              {t("knowledgeHub.sources.empty")}
-            </Text>
-          ) : (
-            <div className="divide-y">
-              {visibleSources.map((source) => (
-                <div
-                  className="flex items-center justify-between gap-4 px-6 py-5"
-                  key={source.id}
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Text leading="compact" size="small" weight="plus">
-                        {source.name}
-                      </Text>
-                      <StatusBadge
-                        color={
-                          source.last_sync_status === "FAILED"
-                            ? "red"
-                            : source.last_sync_status === "SUCCEEDED"
-                              ? "green"
-                              : source.last_sync_status === "UNCHANGED"
-                                ? "blue"
-                                : "orange"
-                        }
-                      >
-                        {t(
-                          `knowledgeHub.sources.status.${source.last_sync_status.toLowerCase()}`
-                        )}
-                      </StatusBadge>
-                    </div>
-                    <Text className="mt-1 text-ui-fg-subtle" size="small">
-                      {t(
-                        `knowledgeHub.sources.types.${sourceTypeTranslationKey(source.source_type)}`
-                      )} · {sourceHostname(source.source_url)}
-                    </Text>
-                    <Text className="text-ui-fg-muted" size="xsmall">
-                      {t(
-                        `knowledgeHub.scopes.${
-                          source.scope === "customer_support"
-                            ? "customerSupport"
-                            : source.scope
-                        }`
-                      )} · {t(`knowledgeHub.languages.${source.locale}`)}
-                    </Text>
-                    {source.last_error && (
-                      <Text className="mt-1 text-ui-fg-error" size="small">
-                        {t("knowledgeHub.sources.connectionErrorHint")}
-                      </Text>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      disabled={syncSource.isPending || deleteSource.isPending}
-                      isLoading={
-                        syncSource.isPending && syncSource.variables === source.id
-                      }
-                      onClick={() => syncSource.mutate(source.id)}
-                      size="small"
-                      variant="secondary"
-                    >
-                      {t("knowledgeHub.sources.syncAction")}
-                    </Button>
-                    <Button
-                      disabled={syncSource.isPending || deleteSource.isPending}
-                      isLoading={
-                        deleteSource.isPending && deleteSource.variables === source.id
-                      }
-                      onClick={() => confirmDeleteSource(source)}
-                      size="small"
-                      variant="danger"
-                    >
-                      {t("knowledgeHub.sources.deleteAction")}
-                    </Button>
-                  </div>
-                </div>
-              ))}
+            <div className="border-b px-6 py-4">
+              <Text leading="compact" size="small" weight="plus">
+                {t("knowledgeHub.sources.title")}
+              </Text>
+              <Text
+                className="text-ui-fg-subtle"
+                leading="compact"
+                size="small"
+              >
+                {t("knowledgeHub.sources.simpleSubtitle")}
+              </Text>
             </div>
-          )}
+            {sources.isLoading ? (
+              <Text className="px-6 py-8 text-ui-fg-subtle" size="small">
+                {t("knowledgeHub.sources.loading")}
+              </Text>
+            ) : !visibleSources.length ? (
+              <Text className="px-6 py-8 text-ui-fg-subtle" size="small">
+                {t("knowledgeHub.sources.empty")}
+              </Text>
+            ) : (
+              <div className="divide-y">
+                {visibleSources.map((source) => (
+                  <div
+                    className="flex items-center justify-between gap-4 px-6 py-5"
+                    key={source.id}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Text leading="compact" size="small" weight="plus">
+                          {source.name}
+                        </Text>
+                        <StatusBadge
+                          color={
+                            source.last_sync_status === "FAILED"
+                              ? "red"
+                              : source.last_sync_status === "SUCCEEDED"
+                                ? "green"
+                                : source.last_sync_status === "UNCHANGED"
+                                  ? "blue"
+                                  : "orange"
+                          }
+                        >
+                          {t(
+                            `knowledgeHub.sources.status.${source.last_sync_status.toLowerCase()}`
+                          )}
+                        </StatusBadge>
+                      </div>
+                      <Text className="mt-1 text-ui-fg-subtle" size="small">
+                        {t(
+                          `knowledgeHub.sources.types.${sourceTypeTranslationKey(source.source_type)}`
+                        )}{" "}
+                        · {sourceHostname(source.source_url)}
+                      </Text>
+                      <Text className="text-ui-fg-muted" size="xsmall">
+                        {t(
+                          `knowledgeHub.scopes.${
+                            source.scope === "customer_support"
+                              ? "customerSupport"
+                              : source.scope
+                          }`
+                        )}{" "}
+                        · {t(`knowledgeHub.languages.${source.locale}`)}
+                      </Text>
+                      {source.last_error && (
+                        <Text className="mt-1 text-ui-fg-error" size="small">
+                          {t("knowledgeHub.sources.connectionErrorHint")}
+                        </Text>
+                      )}
+                      {sourceProcessing?.source_id === source.id && (
+                        <SourceProgress
+                          {...sourceProcessing}
+                          label={t(
+                            `knowledgeHub.sources.processing.${sourceProcessing.stage}`
+                          )}
+                        />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        disabled={sourcePipelineBusy || deleteSource.isPending}
+                        isLoading={
+                          syncSource.isPending &&
+                          syncSource.variables === source.id
+                        }
+                        onClick={() => syncSource.mutate(source.id)}
+                        size="small"
+                        variant="secondary"
+                      >
+                        {t("knowledgeHub.sources.syncAction")}
+                      </Button>
+                      <Button
+                        disabled={sourcePipelineBusy || deleteSource.isPending}
+                        isLoading={
+                          deleteSource.isPending &&
+                          deleteSource.variables === source.id
+                        }
+                        onClick={() => confirmDeleteSource(source)}
+                        size="small"
+                        variant="danger"
+                      >
+                        {t("knowledgeHub.sources.deleteAction")}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Container>
         </div>
       )}
@@ -818,19 +972,31 @@ const KnowledgeHubPage = () => {
               value={searchQuery}
             />
             <Select onValueChange={setSearchLocale} value={searchLocale}>
-              <Select.Trigger><Select.Value /></Select.Trigger>
+              <Select.Trigger>
+                <Select.Value />
+              </Select.Trigger>
               <Select.Content>
                 <Select.Item value="vi">Tiếng Việt</Select.Item>
                 <Select.Item value="en">English</Select.Item>
               </Select.Content>
             </Select>
             <Select onValueChange={setSearchScope} value={searchScope}>
-              <Select.Trigger><Select.Value /></Select.Trigger>
+              <Select.Trigger>
+                <Select.Value />
+              </Select.Trigger>
               <Select.Content>
-                <Select.Item value="customer_support">{t("knowledgeHub.scopes.customerSupport")}</Select.Item>
-                <Select.Item value="operations">{t("knowledgeHub.scopes.operations")}</Select.Item>
-                <Select.Item value="returns">{t("knowledgeHub.scopes.returns")}</Select.Item>
-                <Select.Item value="fulfillment">{t("knowledgeHub.scopes.fulfillment")}</Select.Item>
+                <Select.Item value="customer_support">
+                  {t("knowledgeHub.scopes.customerSupport")}
+                </Select.Item>
+                <Select.Item value="operations">
+                  {t("knowledgeHub.scopes.operations")}
+                </Select.Item>
+                <Select.Item value="returns">
+                  {t("knowledgeHub.scopes.returns")}
+                </Select.Item>
+                <Select.Item value="fulfillment">
+                  {t("knowledgeHub.scopes.fulfillment")}
+                </Select.Item>
               </Select.Content>
             </Select>
             <Button
@@ -844,11 +1010,16 @@ const KnowledgeHubPage = () => {
           </div>
           <div className="flex max-w-4xl flex-col gap-3">
             {search.data?.results.map((result) => (
-              <div className="rounded-lg bg-ui-bg-subtle px-5 py-4" key={`${result.document_id}-${result.citation_locator}`}>
+              <div
+                className="rounded-lg bg-ui-bg-subtle px-5 py-4"
+                key={`${result.document_id}-${result.citation_locator}`}
+              >
                 <Text leading="compact" size="small" weight="plus">
                   {result.title}
                 </Text>
-                <Text className="mt-2" size="small">{result.excerpt}</Text>
+                <Text className="mt-2" size="small">
+                  {result.excerpt}
+                </Text>
               </div>
             ))}
             {search.isSuccess && !search.data.results.length && (
@@ -891,8 +1062,15 @@ const KnowledgeHubPage = () => {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="flex flex-col gap-2">
                   <Label>{t("knowledgeHub.fields.language")}</Label>
-                  <Select onValueChange={(locale) => setForm((current) => ({ ...current, locale }))} value={form.locale}>
-                    <Select.Trigger><Select.Value /></Select.Trigger>
+                  <Select
+                    onValueChange={(locale) =>
+                      setForm((current) => ({ ...current, locale }))
+                    }
+                    value={form.locale}
+                  >
+                    <Select.Trigger>
+                      <Select.Value />
+                    </Select.Trigger>
                     <Select.Content>
                       <Select.Item value="vi">Tiếng Việt</Select.Item>
                       <Select.Item value="en">English</Select.Item>
@@ -901,23 +1079,45 @@ const KnowledgeHubPage = () => {
                 </div>
                 <div className="flex flex-col gap-2">
                   <Label>{t("knowledgeHub.fields.scope")}</Label>
-                  <Select onValueChange={(scope) => setForm((current) => ({ ...current, scope }))} value={form.scope}>
-                    <Select.Trigger><Select.Value /></Select.Trigger>
+                  <Select
+                    onValueChange={(scope) =>
+                      setForm((current) => ({ ...current, scope }))
+                    }
+                    value={form.scope}
+                  >
+                    <Select.Trigger>
+                      <Select.Value />
+                    </Select.Trigger>
                     <Select.Content>
-                      <Select.Item value="customer_support">{t("knowledgeHub.scopes.customerSupport")}</Select.Item>
-                      <Select.Item value="operations">{t("knowledgeHub.scopes.operations")}</Select.Item>
-                      <Select.Item value="returns">{t("knowledgeHub.scopes.returns")}</Select.Item>
-                      <Select.Item value="fulfillment">{t("knowledgeHub.scopes.fulfillment")}</Select.Item>
+                      <Select.Item value="customer_support">
+                        {t("knowledgeHub.scopes.customerSupport")}
+                      </Select.Item>
+                      <Select.Item value="operations">
+                        {t("knowledgeHub.scopes.operations")}
+                      </Select.Item>
+                      <Select.Item value="returns">
+                        {t("knowledgeHub.scopes.returns")}
+                      </Select.Item>
+                      <Select.Item value="fulfillment">
+                        {t("knowledgeHub.scopes.fulfillment")}
+                      </Select.Item>
                     </Select.Content>
                   </Select>
                 </div>
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="content">{t("knowledgeHub.fields.content")}</Label>
+                <Label htmlFor="content">
+                  {t("knowledgeHub.fields.content")}
+                </Label>
                 <Textarea
                   className="min-h-52"
                   id="content"
-                  onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      content: event.target.value,
+                    }))
+                  }
                   required
                   value={form.content}
                 />
@@ -950,7 +1150,12 @@ const KnowledgeHubPage = () => {
         </Drawer.Content>
       </Drawer>
 
-      <Drawer open={sourceOpen} onOpenChange={setSourceOpen}>
+      <Drawer
+        open={sourceOpen}
+        onOpenChange={(open) => {
+          if (!createSource.isPending) setSourceOpen(open)
+        }}
+      >
         <Drawer.Content>
           <Drawer.Header>
             <Drawer.Title>{t("knowledgeHub.sources.createTitle")}</Drawer.Title>
@@ -965,71 +1170,88 @@ const KnowledgeHubPage = () => {
                 {t("knowledgeHub.sources.createHint")}
               </Text>
               <div className="flex flex-col gap-4">
-                  <div className="rounded-lg border bg-ui-bg-subtle p-4">
-                    <Text weight="plus">
-                      {t("knowledgeHub.sources.automatic.supportedTitle")}
+                <div className="rounded-lg border bg-ui-bg-subtle p-4">
+                  <Text weight="plus">
+                    {t("knowledgeHub.sources.automatic.supportedTitle")}
+                  </Text>
+                  <Text className="mt-1 text-ui-fg-subtle" size="small">
+                    {t("knowledgeHub.sources.automatic.supportedHint")}
+                  </Text>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {[
+                      "Google Docs",
+                      "Google Sheets",
+                      "DOCX",
+                      "TXT",
+                      "Markdown",
+                      "CSV",
+                    ].map((type) => (
+                      <span
+                        className="rounded-md border bg-ui-bg-base px-2 py-1 text-ui-fg-subtle txt-compact-small"
+                        key={type}
+                      >
+                        {type}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {unsupportedGoogleFile && (
+                  <div className="rounded-lg border border-ui-border-error bg-ui-bg-subtle p-4">
+                    <Text className="text-ui-fg-error" weight="plus">
+                      {t("knowledgeHub.sources.automatic.unsupportedTitle")}
                     </Text>
                     <Text className="mt-1 text-ui-fg-subtle" size="small">
-                      {t("knowledgeHub.sources.automatic.supportedHint")}
+                      {t("knowledgeHub.sources.automatic.unsupportedHint", {
+                        name: unsupportedGoogleFile.name,
+                      })}
                     </Text>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {["Google Docs", "Google Sheets", "TXT", "Markdown", "CSV"].map(
-                        (type) => (
-                          <span
-                            className="rounded-md border bg-ui-bg-base px-2 py-1 text-ui-fg-subtle txt-compact-small"
-                            key={type}
-                          >
-                            {type}
-                          </span>
-                        )
-                      )}
-                    </div>
                   </div>
+                )}
 
-                  {unsupportedGoogleFile && (
-                    <div className="rounded-lg border border-ui-border-error bg-ui-bg-subtle p-4">
-                      <Text className="text-ui-fg-error" weight="plus">
-                        {t("knowledgeHub.sources.automatic.unsupportedTitle")}
-                      </Text>
-                      <Text className="mt-1 text-ui-fg-subtle" size="small">
-                        {t("knowledgeHub.sources.automatic.unsupportedHint", {
-                          name: unsupportedGoogleFile.name,
-                        })}
-                      </Text>
-                    </div>
-                  )}
-
-                  {sourceForm.source_url ? (
-                    <div className="rounded-lg border border-ui-border-interactive bg-ui-bg-base p-4">
-                      <Text className="text-ui-fg-subtle" size="xsmall">
-                        {t("knowledgeHub.sources.automatic.selectedTitle")}
-                      </Text>
-                      <Text className="mt-1" weight="plus">
-                        {sourceForm.name}
-                      </Text>
-                      <Text className="text-ui-fg-subtle" size="small">
-                        {t(
-                          `knowledgeHub.sources.types.${sourceTypeTranslationKey(sourceForm.source_type)}`
-                        )}
-                      </Text>
-                    </div>
-                  ) : (
-                    <Text className="text-ui-fg-subtle" size="small">
-                      {t("knowledgeHub.sources.automatic.noSelection")}
+                {sourceForm.source_url ? (
+                  <div className="rounded-lg border border-ui-border-interactive bg-ui-bg-base p-4">
+                    <Text className="text-ui-fg-subtle" size="xsmall">
+                      {t("knowledgeHub.sources.automatic.selectedTitle")}
                     </Text>
-                  )}
+                    <Text className="mt-1" weight="plus">
+                      {sourceForm.name}
+                    </Text>
+                    <Text className="text-ui-fg-subtle" size="small">
+                      {t(
+                        `knowledgeHub.sources.types.${sourceTypeTranslationKey(sourceForm.source_type)}`
+                      )}
+                    </Text>
+                  </div>
+                ) : (
+                  <Text className="text-ui-fg-subtle" size="small">
+                    {t("knowledgeHub.sources.automatic.noSelection")}
+                  </Text>
+                )}
 
-                  <Button
-                    disabled={!googleConnector.data?.connected}
-                    isLoading={pickerLoading}
-                    onClick={chooseGoogleDocument}
-                    type="button"
-                  >
-                    {sourceForm.source_url
-                      ? t("knowledgeHub.sources.automatic.changeFileAction")
-                      : t("knowledgeHub.sources.oauth.chooseFileAction")}
-                  </Button>
+                  {sourceProcessing &&
+                    (createSource.isPending ||
+                      sourceProcessing.stage === "failed") && (
+                  <SourceProgress
+                    {...sourceProcessing}
+                    label={t(
+                      `knowledgeHub.sources.processing.${sourceProcessing.stage}`
+                    )}
+                  />
+                )}
 
+                <Button
+                  disabled={
+                    createSource.isPending || !googleConnector.data?.connected
+                  }
+                  isLoading={pickerLoading}
+                  onClick={chooseGoogleDocument}
+                  type="button"
+                >
+                  {sourceForm.source_url
+                    ? t("knowledgeHub.sources.automatic.changeFileAction")
+                    : t("knowledgeHub.sources.oauth.chooseFileAction")}
+                </Button>
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="flex flex-col gap-2">
@@ -1040,7 +1262,9 @@ const KnowledgeHubPage = () => {
                     }
                     value={sourceForm.locale}
                   >
-                    <Select.Trigger><Select.Value /></Select.Trigger>
+                    <Select.Trigger>
+                      <Select.Value />
+                    </Select.Trigger>
                     <Select.Content>
                       <Select.Item value="vi">Tiếng Việt</Select.Item>
                       <Select.Item value="en">English</Select.Item>
@@ -1055,7 +1279,9 @@ const KnowledgeHubPage = () => {
                     }
                     value={sourceForm.scope}
                   >
-                    <Select.Trigger><Select.Value /></Select.Trigger>
+                    <Select.Trigger>
+                      <Select.Value />
+                    </Select.Trigger>
                     <Select.Content>
                       <Select.Item value="customer_support">
                         {t("knowledgeHub.scopes.customerSupport")}
@@ -1126,7 +1352,6 @@ const KnowledgeHubPage = () => {
           </Drawer.Footer>
         </Drawer.Content>
       </Drawer>
-
     </div>
   )
 }

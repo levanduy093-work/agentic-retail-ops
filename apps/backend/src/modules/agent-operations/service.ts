@@ -61,7 +61,10 @@ import {
   isAgentDeliveryClaimable,
 } from "./delivery-policy"
 import { conditionMatches, evaluatePolicies } from "./policy-engine"
-import { assertIncidentTransition, canTransitionIncident } from "./state-machine"
+import {
+  assertIncidentTransition,
+  canTransitionIncident,
+} from "./state-machine"
 import { assertSupportOrderAccess } from "./support-request-policy"
 import { AGENT_TOOL_REGISTRY } from "./tool-registry"
 import { executeAgentTool, prepareAgentCommand } from "./tool-executor"
@@ -94,6 +97,7 @@ import {
   InventoryLowEventInput,
   OrderExceptionEventInput,
   PolicyCondition,
+  PrepareKnowledgeSourceInput,
   ProcessAgentConversationMessageInput,
   ReleaseAgentTaskInput,
   RequestAgentActionInput,
@@ -107,6 +111,7 @@ import {
   checksumKnowledgeContent,
   chunkKnowledgeContent,
   isKnowledgeEligible,
+  isKnowledgeReadyForVectorPreparation,
 } from "./knowledge"
 import {
   createKnowledgeRagEngine,
@@ -148,6 +153,16 @@ import {
   MESSAGE_SEND_TOOL,
   PlatformCommandOutput,
 } from "./tools/platform-command-tools"
+
+type IndexableKnowledgeDocument = {
+  document_key: string
+  id: string
+  locale: string
+  scope: string
+  tenant_id: string
+  title: string
+  version: string
+}
 import { OrderReadOutput } from "./tools/order-tools"
 import {
   draftCustomerResponse,
@@ -200,11 +215,10 @@ class AgentOperationsModuleService extends MedusaService({
     return {
       customized: Boolean(
         active &&
-          active.system_prompt !== CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT
+        active.system_prompt !== CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT
       ),
       default_system_prompt: CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT,
-      max_tokens:
-        active?.max_tokens ?? CUSTOMER_SUPPORT_DEFAULT_MAX_TOKENS,
+      max_tokens: active?.max_tokens ?? CUSTOMER_SUPPORT_DEFAULT_MAX_TOKENS,
       prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY,
       system_prompt:
         active?.system_prompt ?? CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT,
@@ -316,9 +330,11 @@ class AgentOperationsModuleService extends MedusaService({
         configured: Boolean(credential),
         embedding_dimensions: credential?.embedding_dimensions ?? null,
         embedding_enabled: credential?.embedding_enabled ?? false,
-        embedding_model: credential?.embedding_model ?? defaults.embedding_model,
+        embedding_model:
+          credential?.embedding_model ?? defaults.embedding_model,
         generation_enabled: credential?.generation_enabled ?? false,
-        generation_model: credential?.generation_model ?? defaults.generation_model,
+        generation_model:
+          credential?.generation_model ?? defaults.generation_model,
         provider,
         secret_hint: credential?.secret_hint ?? null,
         supports_embedding: provider !== "DEEPSEEK",
@@ -434,14 +450,12 @@ class AgentOperationsModuleService extends MedusaService({
       )
     }
 
-    const encrypted =
-      input.encrypted_api_key ??
-      {
-          encrypted_secret: current!.encrypted_secret,
-          encryption_iv: current!.encryption_iv,
-          encryption_tag: current!.encryption_tag,
-          key_version: current!.key_version,
-        }
+    const encrypted = input.encrypted_api_key ?? {
+      encrypted_secret: current!.encrypted_secret,
+      encryption_iv: current!.encryption_iv,
+      encryption_tag: current!.encryption_tag,
+      key_version: current!.key_version,
+    }
     const secretHint = input.secret_hint ?? current?.secret_hint
     if (!secretHint) {
       throw new MedusaError(
@@ -584,8 +598,7 @@ class AgentOperationsModuleService extends MedusaService({
       account_email: credential?.account_email ?? null,
       connected: Boolean(platform.platform_ready && credential),
       platform_ready: platform.platform_ready,
-      uses_dedicated_encryption_key:
-        platform.uses_dedicated_encryption_key,
+      uses_dedicated_encryption_key: platform.uses_dedicated_encryption_key,
     }
   }
 
@@ -1265,10 +1278,7 @@ class AgentOperationsModuleService extends MedusaService({
       sharedContext
     )
 
-    const chunks = chunkKnowledgeContent(
-      input.content,
-      input.citation_locator
-    )
+    const chunks = chunkKnowledgeContent(input.content, input.citation_locator)
     await this.createAgentKnowledgeChunks(
       chunks.map((chunk) => ({
         ...chunk,
@@ -1464,6 +1474,89 @@ class AgentOperationsModuleService extends MedusaService({
       }
     }
 
+    return this.indexKnowledgeDocument_(document, sharedContext)
+  }
+
+  @InjectManager()
+  async prepareKnowledgeSourceIndex(
+    input: PrepareKnowledgeSourceInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const source = await this.retrieveAgentKnowledgeSource(
+      input.source_id,
+      {},
+      sharedContext
+    )
+    if (!source.last_document_id) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        `Knowledge source ${source.id} has no synchronized document to index.`
+      )
+    }
+
+    const document = await this.retrieveAgentKnowledgeDocument(
+      source.last_document_id,
+      {},
+      sharedContext
+    )
+    const canPrepare = isKnowledgeReadyForVectorPreparation(document)
+    const ragIndex = canPrepare
+      ? await this.indexKnowledgeDocument_(document, sharedContext)
+      : {
+          error: `Knowledge document ${document.id} cannot be indexed from ${document.status}.`,
+          indexed_chunks: 0,
+          provider: "disabled",
+          status: "SKIPPED" as const,
+        }
+
+    if (ragIndex.status !== "INDEXED") {
+      const failure =
+        "error" in ragIndex
+          ? ragIndex.error
+          : "Vector indexing is not configured for this store."
+      const updatedSource = await this.updateAgentKnowledgeSources(
+        {
+          id: source.id,
+          last_error: failure,
+          last_sync_status: "FAILED",
+        },
+        sharedContext
+      )
+      return { document, rag_index: ragIndex, source: updatedSource }
+    }
+
+    const updatedSource = await this.updateAgentKnowledgeSources(
+      { id: source.id, last_error: null },
+      sharedContext
+    )
+    await this.createAgentAuditEvents(
+      {
+        action: "knowledge-source-prepared",
+        actor_id: input.actor_id,
+        actor_type: "user",
+        correlation_id: source.id,
+        data: {
+          document_id: document.id,
+          indexed_chunks: ragIndex.indexed_chunks,
+          provider: ragIndex.provider,
+          status: document.status,
+        },
+        event_type: "agent.knowledge-source.prepared",
+        recorded_at: new Date(),
+        resource_id: source.id,
+        resource_type: "agent_knowledge_source",
+      },
+      sharedContext
+    )
+
+    return { document, rag_index: ragIndex, source: updatedSource }
+  }
+
+  @InjectTransactionManager()
+  protected async indexKnowledgeDocument_(
+    document: IndexableKnowledgeDocument,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
     const chunks = await this.listAgentKnowledgeChunks(
       { document_id: document.id },
       { order: { chunk_index: "ASC" }, take: 10_000 },
@@ -1609,11 +1702,7 @@ class AgentOperationsModuleService extends MedusaService({
     @MedusaContext() sharedContext: Context = {}
   ) {
     try {
-      await this.retrieveAgentKnowledgeDocument(
-        documentId,
-        {},
-        sharedContext
-      )
+      await this.retrieveAgentKnowledgeDocument(documentId, {}, sharedContext)
       return await deleteKnowledgeDocumentVectors(documentId)
     } catch (error) {
       return {
@@ -1685,12 +1774,7 @@ class AgentOperationsModuleService extends MedusaService({
     }
 
     return semanticScores.size
-      ? searchKnowledgeChunksHybrid(
-          parsed,
-          documents,
-          chunks,
-          semanticScores
-        )
+      ? searchKnowledgeChunksHybrid(parsed, documents, chunks, semanticScores)
       : searchKnowledgeChunks(parsed, documents, chunks)
   }
 
@@ -5298,7 +5382,11 @@ class AgentOperationsModuleService extends MedusaService({
     }
 
     const failedAt = new Date(input.failed_at)
-    const retry = calculateDeliveryRetry(delivery.attempt_count, failedAt, input)
+    const retry = calculateDeliveryRetry(
+      delivery.attempt_count,
+      failedAt,
+      input
+    )
     const failed = (
       await this.updateAgentDeliveries(
         {

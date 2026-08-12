@@ -28,7 +28,7 @@ import {
   TelegramWebhookUpdate,
 } from "./admin/agent-operations/validators"
 
-const routes: MiddlewareRoute[] = [
+  const routes: MiddlewareRoute[] = [
     {
       matcher: "/webhooks/agent-operations/telegram/:id",
       method: "POST",
@@ -236,6 +236,11 @@ const routes: MiddlewareRoute[] = [
     },
     {
       matcher: "/admin/agent-operations/knowledge/sources/:id/sync",
+      method: "POST",
+      policies: [{ resource: "agent_knowledge", operation: "create" }],
+    },
+    {
+      matcher: "/admin/agent-operations/knowledge/sources/:id/prepare",
       method: "POST",
       policies: [{ resource: "agent_knowledge", operation: "create" }],
     },

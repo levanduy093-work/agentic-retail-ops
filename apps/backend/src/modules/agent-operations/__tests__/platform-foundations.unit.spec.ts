@@ -10,6 +10,7 @@ import {
   chunkKnowledgeContent,
   checksumKnowledgeContent,
   isKnowledgeEligible,
+  isKnowledgeReadyForVectorPreparation,
 } from "../knowledge"
 import {
   searchKnowledgeChunks,
@@ -40,17 +41,16 @@ describe("agent platform foundations", () => {
       )
     ).toBe(true)
     expect(
-      AGENT_CATALOG.find(
-        (agent) => agent.id === "workforce-coordinator-agent"
-      )?.status
+      AGENT_CATALOG.find((agent) => agent.id === "workforce-coordinator-agent")
+        ?.status
     ).toBe("implemented-static")
   })
 
   it("enforces the task lifecycle", () => {
     expect(() => assertAgentTaskTransition("TODO", "CLAIMED")).not.toThrow()
-    expect(() =>
-      assertAgentTaskTransition("COMPLETED", "IN_PROGRESS")
-    ).toThrow("Invalid agent task transition")
+    expect(() => assertAgentTaskTransition("COMPLETED", "IN_PROGRESS")).toThrow(
+      "Invalid agent task transition"
+    )
   })
 
   it("only lets the assigned employee return an active task", () => {
@@ -150,12 +150,19 @@ describe("agent platform foundations", () => {
       status: "APPROVED",
     }
 
-    expect(isKnowledgeEligible(document, new Date("2026-08-10T00:00:00.000Z"))).toBe(true)
+    expect(
+      isKnowledgeEligible(document, new Date("2026-08-10T00:00:00.000Z"))
+    ).toBe(true)
     expect(buildKnowledgeCitation(document)).toEqual({
       locator: document.citation_locator,
       quote_checksum: checksumKnowledgeContent(document.content),
     })
-    expect(buildKnowledgeCitation({ ...document, status: "DRAFT" })).toBeNull()
+    const draft = { ...document, approved_at: null, status: "DRAFT" }
+    expect(isKnowledgeReadyForVectorPreparation(draft)).toBe(true)
+    expect(buildKnowledgeCitation(draft)).toBeNull()
+    expect(
+      isKnowledgeReadyForVectorPreparation({ ...document, status: "RETIRED" })
+    ).toBe(false)
   })
 
   it("creates deterministic searchable knowledge chunks with precise citations", () => {
@@ -314,7 +321,9 @@ describe("agent platform foundations", () => {
             {
               content: [
                 {
-                  text: JSON.stringify({ body: "Your order is being prepared." }),
+                  text: JSON.stringify({
+                    body: "Your order is being prepared.",
+                  }),
                   type: "output_text",
                 },
               ],
@@ -354,7 +363,9 @@ describe("agent platform foundations", () => {
       expect(url).toBe(
         "https://generativelanguage.test/v1beta/models/gemini-test:generateContent"
       )
-      expect(new Headers(init?.headers).get("x-goog-api-key")).toBe("gemini-key")
+      expect(new Headers(init?.headers).get("x-goog-api-key")).toBe(
+        "gemini-key"
+      )
       const body = JSON.parse(String(init?.body))
       expect(String(init?.body)).not.toContain("gemini-key")
       expect(body.generationConfig).toMatchObject({
@@ -475,7 +486,9 @@ describe("agent platform foundations", () => {
       message_id: "agmsg_1",
       recipient_ref: "admin",
     }
-    await expect(createChannelAdapter("IN_APP").deliver(input)).resolves.toEqual({
+    await expect(
+      createChannelAdapter("IN_APP").deliver(input)
+    ).resolves.toEqual({
       external_message_id: "agmsg_1",
       status: "DELIVERED",
     })

@@ -256,6 +256,11 @@ export type SyncKnowledgeSourceInput = {
   source_id: string
 }
 
+export type PrepareKnowledgeSourceInput = {
+  actor_id: string
+  source_id: string
+}
+
 export type DeleteKnowledgeSourceInput = {
   actor_id: string
   source_id: string

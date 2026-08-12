@@ -320,12 +320,12 @@
     },
     "sources": {
       "title": "Nguồn hướng dẫn đã kết nối",
-      "subtitle": "Kết nối tài liệu để hệ thống tạo hướng dẫn có nguồn và chờ quản lý duyệt.",
-      "simpleSubtitle": "Khi bạn kiểm tra cập nhật, nội dung thay đổi sẽ thành bản nháp để quản lý xem và duyệt.",
+      "subtitle": "Kết nối tài liệu để hệ thống tự đọc, chia đoạn và embedding hướng dẫn có nguồn trước khi quản lý duyệt.",
+      "simpleSubtitle": "Sau khi lưu nguồn, hệ thống tự đọc, chia đoạn và embedding. Các phiên bản thay đổi cũng được chuẩn bị theo cùng quy trình.",
       "connectAction": "Kết nối tài liệu",
       "loading": "Đang tải các nguồn đã kết nối...",
       "empty": "Chưa có tài liệu nào. Hãy chọn một tài liệu để hệ thống chuẩn bị bản nháp đầu tiên.",
-      "connectionErrorHint": "Không thể đọc tài liệu. Hãy kiểm tra địa chỉ, tên miền được cho phép và định dạng văn bản hoặc Markdown.",
+      "connectionErrorHint": "Quá trình xử lý chưa hoàn tất. Hãy kiểm tra quyền Google, định dạng tài liệu và cấu hình nhà cung cấp embedding.",
       "googleReadyTitle": "Kết nối Google đã sẵn sàng",
       "googleShareHint": "Chia sẻ tài liệu cho {{email}} với quyền Người xem, sau đó dán liên kết vào ô phía trên.",
       "googleNotReadyTitle": "Máy chủ chưa kết nối với Google",
@@ -350,13 +350,13 @@
         "disconnectTitle": "Ngắt kết nối Google?",
         "disconnectConfirmation": "Hệ thống sẽ xóa refresh token đã mã hóa và yêu cầu Google thu hồi quyền. Các nguồn Google sẽ ngừng cập nhật cho đến khi kết nối lại."
       },
-      "syncAction": "Kiểm tra cập nhật",
+      "syncAction": "Kiểm tra và xử lý",
       "deleteAction": "Xóa",
       "deleteTitle": "Xóa nguồn tài liệu?",
       "deleteConfirmation": "Hệ thống sẽ xóa {{name}}, mọi bản tài liệu và toàn bộ đoạn nội dung đã tạo từ nguồn này khỏi cơ sở dữ liệu, đồng thời dọn vector liên quan. Nhật ký kiểm toán tối thiểu vẫn được giữ.",
-      "saveAction": "Lưu kết nối",
+      "saveAction": "Lưu và xử lý",
       "createTitle": "Kết nối nguồn hướng dẫn",
-      "createHint": "Bạn chỉ cần chọn tài liệu. Hệ thống tự lấy tên, nhận biết loại tệp và chỉ tạo bản nháp để quản lý duyệt.",
+      "createHint": "Chọn tài liệu và phạm vi sử dụng. Khi lưu, hệ thống tự đọc, chia đoạn và embedding; bản nháp vẫn cần quản lý duyệt trước khi agent được sử dụng.",
       "automatic": {
         "supportedTitle": "Các loại tài liệu được hỗ trợ",
         "supportedHint": "Nếu bạn chọn loại khác, hệ thống sẽ nhận biết và báo rõ trước khi lưu.",
@@ -382,18 +382,27 @@
       },
       "status": {
         "never": "Chưa kiểm tra",
-        "succeeded": "Đã tạo bản nháp",
-        "failed": "Kết nối cần kiểm tra",
-        "unchanged": "Nội dung không đổi"
+        "succeeded": "Đã embedding · chờ duyệt",
+        "failed": "Quá trình xử lý cần kiểm tra",
+        "unchanged": "Nội dung không đổi · vector sẵn sàng"
+      },
+      "processing": {
+        "connecting": "Đang lưu kết nối nguồn...",
+        "syncing": "Đang đọc và chia tài liệu thành các đoạn...",
+        "embedding": "Đang tạo embedding và ghi vector...",
+        "ready": "Đã chuẩn bị xong vector. Bản nháp đang chờ duyệt.",
+        "failed": "Quá trình dừng trước khi chuẩn bị vector hoàn tất."
       },
       "messages": {
-        "connected": "Đã lưu kết nối. Hãy kiểm tra nguồn để tạo bản nháp đầu tiên.",
+        "connected": "Đã lưu kết nối nguồn.",
         "createError": "Không thể kết nối tài liệu Google. Hãy kiểm tra quyền truy cập và chọn lại tài liệu.",
         "deleted": "Đã xóa nguồn, {{documents}} bản tài liệu và {{chunks}} đoạn nội dung.",
         "deleteError": "Không thể xóa sạch nguồn tài liệu. Hệ thống đã giữ nguyên dữ liệu để tránh sót vector.",
-        "synced": "Đã kiểm tra nguồn và tạo bản hướng dẫn mới để quản lý xem xét.",
-        "unchanged": "Đã kiểm tra nguồn. Nội dung không thay đổi nên hệ thống không tạo bản nháp trùng.",
-        "syncError": "Không thể đồng bộ nguồn. Hãy xem trạng thái kết nối để biết nguyên nhân."
+        "prepared": "Đã chuẩn bị tài liệu: {{chunks}} đoạn đã được embedding. Bản nháp đang chờ duyệt.",
+        "processingError": "Chưa thể chuẩn bị hoàn tất tài liệu. Kết nối nguồn vẫn được giữ để bạn thử lại sau khi kiểm tra quyền truy cập và cấu hình embedding.",
+        "synced": "Đã kiểm tra và chuẩn bị nguồn để quản lý xem xét.",
+        "unchanged": "Đã kiểm tra nguồn. Nội dung không thay đổi và vector vẫn sẵn sàng.",
+        "syncError": "Không thể đọc hoặc embedding nguồn. Hãy kiểm tra kết nối và cấu hình embedding."
       }
     },
     "messages": {

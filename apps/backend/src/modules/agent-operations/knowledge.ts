@@ -79,7 +79,8 @@ export function chunkKnowledgeContent(
     if (end >= normalized.length) break
     const nextStart = Math.max(start + 1, end - overlapCharacters)
     const nextBoundary = normalized.indexOf(" ", nextStart)
-    start = nextBoundary !== -1 && nextBoundary < end ? nextBoundary + 1 : nextStart
+    start =
+      nextBoundary !== -1 && nextBoundary < end ? nextBoundary + 1 : nextStart
   }
 
   return chunks
@@ -90,17 +91,22 @@ export function isKnowledgeEligible(
   now = new Date()
 ) {
   const effectiveAt = new Date(document.effective_at)
-  const expiresAt = document.expires_at
-    ? new Date(document.expires_at)
-    : null
+  const expiresAt = document.expires_at ? new Date(document.expires_at) : null
 
   return Boolean(
     document.status === "APPROVED" &&
-      document.approved_at &&
-      document.citation_locator.trim() &&
-      effectiveAt <= now &&
-      (!expiresAt || expiresAt > now)
+    document.approved_at &&
+    document.citation_locator.trim() &&
+    effectiveAt <= now &&
+    (!expiresAt || expiresAt > now)
   )
+}
+
+export function isKnowledgeReadyForVectorPreparation(
+  document: KnowledgeDocumentLike,
+  now = new Date()
+) {
+  return document.status === "DRAFT" || isKnowledgeEligible(document, now)
 }
 
 export function buildKnowledgeCitation(document: KnowledgeDocumentLike) {
