@@ -25,7 +25,9 @@ type SupportCitation = {
 }
 
 type SupportTaskInput = {
+  channel?: string
   citations?: SupportCitation[]
+  conversation_id?: string
   customer_id?: string
   draft?: string
   grounded?: boolean
@@ -198,7 +200,7 @@ const CustomerSupportPage = () => {
     queryKey: ["customer-support-order", orderId],
   })
   const customer = useQuery({
-    enabled: Boolean(customerId),
+    enabled: Boolean(customerId && !customerId.startsWith("telegram:")),
     queryFn: () => sdk.admin.customer.retrieve(customerId!),
     queryKey: ["customer-support-customer", customerId],
   })
@@ -370,10 +372,10 @@ const CustomerSupportPage = () => {
     },
   })
 
-  const sendSimulatorReply = useMutation({
+  const sendReviewedReply = useMutation({
     mutationFn: (task: SupportTask) =>
       sdk.client.fetch(
-        `/admin/agent-operations/tasks/${task.id}/send-simulator-reply`,
+        `/admin/agent-operations/tasks/${task.id}/send-reviewed-reply`,
         {
           body: { expected_task_updated_at: task.updated_at },
           method: "POST",
@@ -381,7 +383,7 @@ const CustomerSupportPage = () => {
       ),
     onError: (error) => toast.error(errorMessage(error)),
     onSuccess: async () => {
-      toast.success(t("supportDesk.simulatorReplySent"))
+      toast.success(t("supportDesk.reviewedReplySent"))
       setSendOpen(false)
       await invalidateTasks()
       await queryClient.invalidateQueries({
@@ -406,11 +408,16 @@ const CustomerSupportPage = () => {
           style: "currency",
         }).format(value)
       : "—"
-  const customerName = customer.data?.customer
-    ? [customer.data.customer.first_name, customer.data.customer.last_name]
-        .filter(Boolean)
-        .join(" ") || customer.data.customer.email
-    : "—"
+  const customerName = selectedTask?.input?.channel
+    ? `${selectedTask.input.channel} customer`
+    : customer.data?.customer
+      ? [customer.data.customer.first_name, customer.data.customer.last_name]
+          .filter(Boolean)
+          .join(" ") || customer.data.customer.email
+      : "—"
+  const customerReference = selectedTask?.input?.channel
+    ? selectedTask.input.customer_id ?? "—"
+    : customer.data?.customer.email ?? "—"
   const assignedToManager = selectedTask
     ? isAssignedToManager(selectedTask)
     : false
@@ -543,7 +550,7 @@ const CustomerSupportPage = () => {
                 <div className="flex flex-col gap-y-1">
                   <Heading level="h2">{customerName}</Heading>
                   <Text size="small" leading="compact" className="text-ui-fg-subtle">
-                    {customer.data?.customer.email ?? "—"}
+                    {customerReference}
                   </Text>
                 </div>
                 <div className="flex flex-col items-start gap-y-1 sm:items-end">
@@ -569,7 +576,7 @@ const CustomerSupportPage = () => {
                 </Text>
               </div>
 
-              <div className="px-6 py-5">
+              {orderId && <div className="px-6 py-5">
                 <div className="mb-4 flex items-center justify-between gap-x-3">
                   <Text size="small" leading="compact" weight="plus">
                     {t("supportDesk.order")}
@@ -624,7 +631,7 @@ const CustomerSupportPage = () => {
                     ))}
                   </div>
                 )}
-              </div>
+              </div>}
 
               <div className="flex flex-col gap-y-3 px-6 py-5">
                 <div className="flex flex-col gap-y-1">
@@ -802,7 +809,7 @@ const CustomerSupportPage = () => {
                         size="small"
                         onClick={() => setSendOpen(true)}
                       >
-                        {t("supportDesk.sendSimulatorReply")}
+                        {t("supportDesk.sendReviewedReply")}
                       </Button>
                     )}
                 </div>
@@ -925,11 +932,11 @@ const CustomerSupportPage = () => {
       <Drawer open={sendOpen} onOpenChange={setSendOpen}>
         <Drawer.Content>
           <Drawer.Header>
-            <Drawer.Title>{t("supportDesk.sendSimulatorTitle")}</Drawer.Title>
+            <Drawer.Title>{t("supportDesk.sendReviewedTitle")}</Drawer.Title>
           </Drawer.Header>
           <Drawer.Body className="flex flex-col gap-y-4 p-4">
             <Text size="small" leading="compact" className="text-ui-fg-subtle">
-              {t("supportDesk.sendSimulatorDescription")}
+              {t("supportDesk.sendReviewedDescription")}
             </Text>
             <div className="rounded-md bg-ui-bg-subtle px-4 py-3">
               <Text size="small" leading="compact">
@@ -945,7 +952,7 @@ const CustomerSupportPage = () => {
                 <Button
                   size="small"
                   variant="secondary"
-                  disabled={sendSimulatorReply.isPending}
+                  disabled={sendReviewedReply.isPending}
                 >
                   {t("supportDesk.cancel")}
                 </Button>
@@ -953,12 +960,12 @@ const CustomerSupportPage = () => {
               <Button
                 size="small"
                 disabled={!selectedTask}
-                isLoading={sendSimulatorReply.isPending}
+                isLoading={sendReviewedReply.isPending}
                 onClick={() =>
-                  selectedTask && sendSimulatorReply.mutate(selectedTask)
+                  selectedTask && sendReviewedReply.mutate(selectedTask)
                 }
               >
-                {t("supportDesk.confirmSimulatorSend")}
+                {t("supportDesk.confirmReviewedSend")}
               </Button>
             </div>
           </Drawer.Footer>

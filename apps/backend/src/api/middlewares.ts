@@ -176,6 +176,12 @@ import {
       policies: [{ resource: "agent_message", operation: "create" }],
     },
     {
+      matcher: "/admin/agent-operations/tasks/:id/send-reviewed-reply",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminSendSupportSimulatorReply)],
+      policies: [{ resource: "agent_message", operation: "create" }],
+    },
+    {
       matcher: "/admin/agent-operations/knowledge",
       method: "GET",
       policies: [{ resource: "agent_knowledge", operation: "read" }],

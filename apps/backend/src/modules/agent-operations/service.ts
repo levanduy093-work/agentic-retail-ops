@@ -99,6 +99,8 @@ import {
   PolicyCondition,
   PrepareKnowledgeSourceInput,
   ProcessAgentConversationMessageInput,
+  ProcessCustomerKnowledgeQuestionInput,
+  ProcessTelegramKnowledgeQuestionInput,
   ReleaseAgentTaskInput,
   RequestAgentActionInput,
   RetireKnowledgeDocumentInput,
@@ -113,6 +115,26 @@ import {
   isKnowledgeEligible,
   isKnowledgeReadyForVectorPreparation,
 } from "./knowledge"
+import {
+  buildKnowledgeAnswerFallback,
+  buildScopedCustomerReply,
+  detectKnowledgeQuestionLocale,
+  formatChannelKnowledgeAnswer,
+  hasSufficientKnowledgeEvidence,
+  isKnowledgeAnswerBodySafe,
+  KnowledgeAnswer,
+  KnowledgeAnswerModelOutput,
+  KNOWLEDGE_ANSWER_MAX_TOKENS,
+  KNOWLEDGE_ANSWER_OUTPUT_SCHEMA,
+  KNOWLEDGE_ANSWER_PROMPT_KEY,
+  KNOWLEDGE_ANSWER_PROMPT_VERSION,
+  KNOWLEDGE_ANSWER_SYSTEM_PROMPT,
+} from "./knowledge-answer"
+import {
+  isExplicitPromptAttack,
+  normalizeCustomerChatSecurityConfig,
+} from "./customer-chat-security"
+import { isCustomerSupportConversation } from "./channel-principal"
 import {
   createKnowledgeRagEngine,
   deleteKnowledgeDocumentVectors,
@@ -770,6 +792,7 @@ class AgentOperationsModuleService extends MedusaService({
       {
         created_by_id: input.created_by_id,
         created_by_type: input.created_by_type,
+        conversation_id: input.conversation_id,
         description: input.description,
         due_at: input.due_at ? new Date(input.due_at) : undefined,
         idempotency_key: input.idempotency_key,
@@ -1776,6 +1799,604 @@ class AgentOperationsModuleService extends MedusaService({
     return semanticScores.size
       ? searchKnowledgeChunksHybrid(parsed, documents, chunks, semanticScores)
       : searchKnowledgeChunks(parsed, documents, chunks)
+  }
+
+  @InjectManager()
+  async draftGovernedKnowledgeAnswer(
+    input: {
+      idempotency_key: string
+      knowledge: KnowledgeSearchOutput
+      locale: "en" | "vi"
+      question: string
+      tenant_id: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ): Promise<KnowledgeAnswer> {
+    const fallback = buildKnowledgeAnswerFallback(input.knowledge, input.locale)
+
+    let adapter
+    try {
+      const credential = await this.getActiveAiProviderCredential(
+        "generation",
+        input.tenant_id
+      )
+      adapter = credential
+        ? createModelAdapter({
+            apiKey: credential.api_key,
+            model: credential.model,
+            provider: credential.provider,
+          })
+        : new DisabledModelAdapter()
+    } catch {
+      return fallback
+    }
+    if (adapter.provider === "disabled") return fallback
+
+    const existing = (
+      await this.listAgentModelRuns(
+        { idempotency_key: input.idempotency_key },
+        { take: 1 },
+        sharedContext
+      )
+    )[0]
+    if (existing?.status === "SUCCEEDED" && existing.output) {
+      const cached = KnowledgeAnswerModelOutput.safeParse(existing.output)
+      if (!cached.success) return fallback
+      if (cached.data.disposition === "ANSWER") {
+        return fallback.grounded &&
+          isKnowledgeAnswerBodySafe(cached.data.body, input.knowledge)
+          ? { ...fallback, body: cached.data.body, disposition: "ANSWER" }
+          : fallback
+      }
+      if (
+        cached.data.disposition === "OUT_OF_SCOPE" ||
+        cached.data.disposition === "UNSAFE"
+      ) {
+        return buildScopedCustomerReply(cached.data.disposition, input.locale)
+      }
+      return fallback
+    }
+    if (existing) return fallback
+
+    const safeInput = {
+      approved_knowledge: input.knowledge.results.map((result) => ({
+        excerpt: result.excerpt,
+        locator: result.citation_locator,
+        title: result.title,
+        version: result.version,
+      })),
+      locale: input.locale,
+      question: input.question.slice(0, 2_000),
+    }
+    const startedAt = new Date()
+    const modelRun = await this.createAgentModelRuns(
+      {
+        agent_id: "customer-knowledge-agent",
+        agent_version: "1.0.0",
+        idempotency_key: input.idempotency_key,
+        input: redactModelInput(safeInput) as Record<string, unknown>,
+        model: adapter.model,
+        prompt_key: KNOWLEDGE_ANSWER_PROMPT_KEY,
+        prompt_version: KNOWLEDGE_ANSWER_PROMPT_VERSION,
+        provider: adapter.provider,
+        redacted: true,
+        started_at: startedAt,
+        status: "RUNNING",
+      },
+      sharedContext
+    )
+
+    try {
+      const generated = await adapter.invoke({
+        agent_id: "customer-knowledge-agent",
+        input: safeInput,
+        max_tokens: KNOWLEDGE_ANSWER_MAX_TOKENS,
+        output_schema: KNOWLEDGE_ANSWER_OUTPUT_SCHEMA,
+        prompt_key: KNOWLEDGE_ANSWER_PROMPT_KEY,
+        prompt_version: KNOWLEDGE_ANSWER_PROMPT_VERSION,
+        system_prompt: KNOWLEDGE_ANSWER_SYSTEM_PROMPT,
+      })
+      const output = KnowledgeAnswerModelOutput.parse(generated)
+      await this.updateAgentModelRuns(
+        {
+          completed_at: new Date(),
+          id: modelRun.id,
+          latency_ms: Date.now() - startedAt.getTime(),
+          output,
+          status: "SUCCEEDED",
+        },
+        sharedContext
+      )
+      if (output.disposition === "ANSWER") {
+        return fallback.grounded &&
+          isKnowledgeAnswerBodySafe(output.body, input.knowledge)
+          ? { ...fallback, body: output.body, disposition: "ANSWER" }
+          : fallback
+      }
+      if (
+        output.disposition === "OUT_OF_SCOPE" ||
+        output.disposition === "UNSAFE"
+      ) {
+        return buildScopedCustomerReply(output.disposition, input.locale)
+      }
+      return fallback
+    } catch (error) {
+      await this.updateAgentModelRuns(
+        {
+          completed_at: new Date(),
+          error:
+            error instanceof Error
+              ? error.message.slice(0, 1_000)
+              : "Customer knowledge answer failed",
+          id: modelRun.id,
+          latency_ms: Date.now() - startedAt.getTime(),
+          status: "FAILED",
+        },
+        sharedContext
+      )
+      return fallback
+    }
+  }
+
+  @InjectManager()
+  async processCustomerKnowledgeQuestion(
+    input: ProcessCustomerKnowledgeQuestionInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const inbound = await this.retrieveAgentMessage(
+      input.inbound_message_id,
+      {},
+      sharedContext
+    )
+    if (
+      inbound.direction !== "INBOUND" ||
+      inbound.message_type !== "TEXT"
+    ) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        `Message ${inbound.id} is not a customer knowledge question.`
+      )
+    }
+
+    const responseIdempotencyKey = `customer-answer:${inbound.id}`
+    const existing = (
+      await this.listAgentMessages(
+        { idempotency_key: responseIdempotencyKey },
+        { take: 1 },
+        sharedContext
+      )
+    )[0]
+    if (existing) {
+      let delivery = (
+        await this.listAgentDeliveries(
+          { message_id: existing.id },
+          { take: 1 },
+          sharedContext
+        )
+      )[0]
+      if (!delivery) {
+        const existingConversation = await this.retrieveAgentConversation(
+          existing.conversation_id,
+          {},
+          sharedContext
+        )
+        const existingMetadata = (existingConversation.metadata ??
+          {}) as Record<string, unknown>
+        if (typeof existingMetadata.connection_id === "string") {
+          delivery = await this.createAgentDeliveries(
+            {
+              attempt_count: 0,
+              available_at: new Date(),
+              channel: existingConversation.channel,
+              connection_id: existingMetadata.connection_id,
+              idempotency_key: `message:${existing.id}:delivery`,
+              message_id: existing.id,
+              status: "PENDING",
+            },
+            sharedContext
+          )
+        }
+      }
+      return {
+        delivery_id: delivery?.id ?? null,
+        duplicate: true,
+        grounded: Boolean(
+          (existing.structured_content as Record<string, unknown> | null)
+            ?.grounded
+        ),
+        response_message_id: existing.id,
+      }
+    }
+
+    const existingEscalation = (
+      await this.listAgentTasks(
+        {
+          idempotency_key: `customer-knowledge-escalation:${inbound.id}`,
+        },
+        { take: 1 },
+        sharedContext
+      )
+    )[0]
+    if (existingEscalation) {
+      return {
+        delivery_id: null,
+        duplicate: true,
+        grounded: false,
+        response_message_id: null,
+        support_task_id: existingEscalation.id,
+      }
+    }
+
+    const conversation = await this.retrieveAgentConversation(
+      inbound.conversation_id,
+      {},
+      sharedContext
+    )
+    const metadata = (conversation.metadata ?? {}) as Record<string, unknown>
+    if (!isCustomerSupportConversation({
+      metadata,
+      topic_type: conversation.topic_type,
+    })) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        `Conversation ${conversation.id} is not authorized for customer knowledge answers.`
+      )
+    }
+    const connectionId =
+      typeof metadata.connection_id === "string" ? metadata.connection_id : null
+    if (!connectionId || conversation.status !== "OPEN") {
+      throw new MedusaError(
+        MedusaError.Types.UNEXPECTED_STATE,
+        `Customer conversation ${conversation.id} cannot deliver a response.`
+      )
+    }
+    const connection = await this.retrieveAgentChannelConnection(
+      connectionId,
+      {},
+      sharedContext
+    )
+    if (
+      connection.channel !== conversation.channel ||
+      connection.status !== "ACTIVE"
+    ) {
+      throw new MedusaError(
+        MedusaError.Types.UNEXPECTED_STATE,
+        `Channel connection ${connection.id} is inactive or mismatched.`
+      )
+    }
+
+    const question = inbound.body.trim()
+    const locale = detectKnowledgeQuestionLocale(question)
+    const explicitAttack = isExplicitPromptAttack(question)
+    const retrievedKnowledge = explicitAttack
+      ? { results: [], total_candidates: 0 }
+      : question.length >= 2
+        ? await this.searchGovernedKnowledge(
+            {
+              limit: 5,
+              locale,
+              query: question.slice(0, 500),
+              scope: "customer_support",
+              tenant_id: conversation.tenant_id,
+            },
+            sharedContext
+          )
+        : { results: [], total_candidates: 0 }
+    const knowledge = hasSufficientKnowledgeEvidence(retrievedKnowledge)
+      ? retrievedKnowledge
+      : { results: [], total_candidates: retrievedKnowledge.total_candidates }
+    const answer = explicitAttack
+      ? buildScopedCustomerReply("UNSAFE", locale)
+      : await this.draftGovernedKnowledgeAnswer(
+          {
+            idempotency_key: `customer-answer-model:${inbound.id}`,
+            knowledge,
+            locale,
+            question,
+            tenant_id: conversation.tenant_id,
+          },
+          sharedContext
+        )
+    if (answer.disposition === "HUMAN_REVIEW") {
+      const escalation = await this.createCustomerKnowledgeEscalation(
+        {
+          conversation_id: conversation.id,
+          inbound_message_id: inbound.id,
+          locale,
+          question,
+        },
+        sharedContext
+      )
+
+      return {
+        delivery_id: null,
+        duplicate: escalation.duplicate,
+        grounded: false,
+        response_message_id: null,
+        support_task_id: escalation.task?.id ?? null,
+      }
+    }
+
+    const now = new Date()
+    const response = await this.createAgentMessages(
+      {
+        body: formatChannelKnowledgeAnswer(answer),
+        channel: conversation.channel,
+        conversation_id: conversation.id,
+        direction: "OUTBOUND",
+        idempotency_key: responseIdempotencyKey,
+        message_type: "TEXT",
+        occurred_at: now,
+        sender_id: "customer-knowledge-agent",
+        sender_type: "agent",
+        status: "AVAILABLE",
+        structured_content: {
+          citations: answer.citations,
+          grounded: answer.grounded,
+          disposition: answer.disposition,
+          inbound_message_id: inbound.id,
+          locale,
+        },
+      },
+      sharedContext
+    )
+    const delivery = await this.createAgentDeliveries(
+      {
+        attempt_count: 0,
+        available_at: now,
+        channel: conversation.channel,
+        connection_id: connection.id,
+        idempotency_key: `message:${response.id}:delivery`,
+        message_id: response.id,
+        status: "PENDING",
+      },
+      sharedContext
+    )
+    await this.updateAgentConversations(
+      { id: conversation.id, last_message_at: now },
+      sharedContext
+    )
+    await this.createAgentAuditEvents(
+      {
+        action: "customer-knowledge-answer-created",
+        actor_id: "customer-knowledge-agent",
+        actor_type: "agent",
+        correlation_id: `${conversation.channel.toLowerCase()}:${connection.id}:${inbound.id}`,
+        data: {
+          citation_count: answer.citations.length,
+          grounded: answer.grounded,
+          disposition: answer.disposition,
+          inbound_message_id: inbound.id,
+          response_message_id: response.id,
+        },
+        event_type: "agent.knowledge.answer-created",
+        recorded_at: now,
+        resource_id: response.id,
+        resource_type: "agent_message",
+      },
+      sharedContext
+    )
+
+    return {
+      delivery_id: delivery.id,
+      duplicate: false,
+      grounded: answer.grounded,
+      response_message_id: response.id,
+      support_task_id: null,
+    }
+  }
+
+  @InjectManager()
+  async createCustomerKnowledgeEscalation(
+    input: {
+      conversation_id: string
+      inbound_message_id: string
+      locale: "en" | "vi"
+      question: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.createCustomerKnowledgeEscalation_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async createCustomerKnowledgeEscalation_(
+    input: {
+      conversation_id: string
+      inbound_message_id: string
+      locale: "en" | "vi"
+      question: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const taskIdempotencyKey =
+      `customer-knowledge-escalation:${input.inbound_message_id}`
+    const existingTask = (
+      await this.listAgentTasks(
+        { idempotency_key: taskIdempotencyKey },
+        { take: 1 },
+        sharedContext
+      )
+    )[0]
+    if (existingTask) {
+      return {
+        duplicate: true,
+        incident: existingTask.incident_id
+          ? await this.retrieveAgentIncident(
+              existingTask.incident_id,
+              {},
+              sharedContext
+            )
+          : null,
+        task: existingTask,
+      }
+    }
+
+    const [conversation, inbound] = await Promise.all([
+      this.retrieveAgentConversation(input.conversation_id, {}, sharedContext),
+      this.retrieveAgentMessage(input.inbound_message_id, {}, sharedContext),
+    ])
+    const metadata = (conversation.metadata ?? {}) as Record<string, unknown>
+    if (
+      inbound.conversation_id !== conversation.id ||
+      !isCustomerSupportConversation({
+        metadata,
+        topic_type: conversation.topic_type,
+      })
+    ) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        "Only a customer support conversation can create a knowledge escalation."
+      )
+    }
+
+    const connectionId =
+      typeof metadata.connection_id === "string" ? metadata.connection_id : null
+    const connection = connectionId
+      ? await this.retrieveAgentChannelConnection(connectionId, {}, sharedContext)
+      : null
+    const security = normalizeCustomerChatSecurityConfig(
+      connection && connection.channel === "TELEGRAM"
+        ? ((connection.config as Record<string, unknown>).security as never)
+        : null
+    )
+    const [openTasks, openTaskCount] = await this.listAndCountAgentTasks(
+      {
+        conversation_id: conversation.id,
+        status: ["TODO", "CLAIMED", "IN_PROGRESS", "WAITING"],
+        task_type: "SUPPORT_RESPONSE_REVIEW",
+      },
+      { take: security.max_open_escalations },
+      sharedContext
+    )
+    if (openTaskCount >= security.max_open_escalations) {
+      await this.createAgentAuditEvents(
+        {
+          action: "customer-question-escalation-suppressed",
+          actor_id: "customer-knowledge-agent",
+          actor_type: "agent",
+          correlation_id: `customer-escalation-cap:${conversation.id}:${inbound.id}`,
+          data: {
+            conversation_id: conversation.id,
+            limit: security.max_open_escalations,
+            open_task_ids: openTasks.map((task) => task.id),
+            reason: "OPEN_ESCALATION_LIMIT",
+          },
+          event_type: "agent.support-response.escalation-suppressed",
+          recorded_at: new Date(),
+          resource_id: conversation.id,
+          resource_type: "agent_conversation",
+        },
+        sharedContext
+      )
+      return { duplicate: false, incident: null, suppressed: true, task: null }
+    }
+
+    const now = new Date()
+    const correlationId =
+      `${conversation.channel.toLowerCase()}:knowledge-escalation:` + inbound.id
+    const event = await this.createAgentEvents(
+      {
+        correlation_id: correlationId,
+        event_id: inbound.id,
+        event_type: "support.knowledge-unanswered",
+        event_version: 1,
+        occurred_at: inbound.occurred_at,
+        payload: {
+          channel: conversation.channel,
+          conversation_id: conversation.id,
+          locale: input.locale,
+          question: input.question,
+        },
+        processed_at: now,
+        received_at: now,
+        source: `${conversation.channel.toLowerCase()}-customer-support`,
+        status: "PROCESSED",
+        subject_id: conversation.id,
+        subject_type: "conversation",
+        tenant_id: conversation.tenant_id,
+      },
+      sharedContext
+    )
+    const incident = await this.createAgentIncidents(
+      {
+        context: {
+          channel: conversation.channel,
+          customer_id: inbound.sender_id,
+          locale: input.locale,
+          reason: "NO_APPROVED_KNOWLEDGE",
+        },
+        correlation_id: correlationId,
+        incident_type: "CUSTOMER_SUPPORT",
+        priority: "MEDIUM",
+        status: "ESCALATED",
+        subject_id: conversation.id,
+        subject_type: "conversation",
+        summary: input.question,
+        tenant_id: conversation.tenant_id,
+        title: `Unanswered ${conversation.channel} customer question`,
+        trigger_event_id: event.id,
+      },
+      sharedContext
+    )
+    const task = await this.createAgentTasks(
+      {
+        created_by_id: "customer-knowledge-agent",
+        created_by_type: "agent",
+        conversation_id: conversation.id,
+        description:
+          "Review the customer's question, write a verified response, and send it back through the original channel.",
+        due_at: new Date(now.getTime() + 30 * 60 * 1_000),
+        idempotency_key: taskIdempotencyKey,
+        incident_id: incident.id,
+        input: {
+          channel: conversation.channel,
+          conversation_id: conversation.id,
+          customer_id: inbound.sender_id,
+          draft: "",
+          grounded: false,
+          locale: input.locale,
+          question: input.question,
+          requires_human_review: true,
+        },
+        priority: "MEDIUM",
+        status: "TODO",
+        task_type: "SUPPORT_RESPONSE_REVIEW",
+        tenant_id: conversation.tenant_id,
+        title: `Answer ${conversation.channel} customer question`,
+      },
+      sharedContext
+    )
+    await this.createAgentAuditEvents(
+      {
+        action: "customer-question-escalated",
+        actor_id: "customer-knowledge-agent",
+        actor_type: "agent",
+        correlation_id: correlationId,
+        data: {
+          channel: conversation.channel,
+          conversation_id: conversation.id,
+          reason: "NO_APPROVED_KNOWLEDGE",
+          task_id: task.id,
+        },
+        event_type: "agent.support-response.escalated",
+        incident_id: incident.id,
+        recorded_at: now,
+        resource_id: task.id,
+        resource_type: "agent_task",
+      },
+      sharedContext
+    )
+
+    return { duplicate: false, incident, task }
+  }
+
+  @InjectManager()
+  async processTelegramKnowledgeQuestion(
+    input: ProcessTelegramKnowledgeQuestionInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.processCustomerKnowledgeQuestion(input, sharedContext)
   }
 
   @InjectManager()

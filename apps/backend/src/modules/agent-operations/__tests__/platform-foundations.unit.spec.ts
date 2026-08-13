@@ -272,10 +272,12 @@ describe("agent platform foundations", () => {
   it("redacts model input and rejects unbounded or schema-less runs", async () => {
     expect(
       redactModelInput({
+        api_key: "provider-key",
         customer: { email: "safe@example.com", password: "do-not-send" },
         secret: "provider-secret",
       })
     ).toEqual({
+      api_key: "[REDACTED]",
       customer: { email: "safe@example.com", password: "[REDACTED]" },
       secret: "[REDACTED]",
     })

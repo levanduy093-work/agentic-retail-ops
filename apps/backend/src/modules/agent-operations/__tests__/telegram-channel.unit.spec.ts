@@ -4,7 +4,12 @@ import {
   isAgentDeliveryClaimable,
 } from "../delivery-policy"
 import { resolveSecretReference } from "../secret-reference"
-import { findTelegramIdentity, secureTokenMatches } from "../telegram"
+import {
+  findTelegramIdentity,
+  resolveTelegramPrincipal,
+  resolveTelegramUserId,
+  secureTokenMatches,
+} from "../telegram"
 
 describe("telegram channel foundation", () => {
   it("delivers text through Telegram and returns its receipt", async () => {
@@ -73,7 +78,10 @@ describe("telegram channel foundation", () => {
 
   it("uses constant-time webhook matching and explicit chat identities", () => {
     const config = {
-      identities: [{ chat_id: "123", user_id: "user_1" }],
+      identities: [
+        { chat_id: "123", user_id: "user_1" },
+        { chat_id: "456", user_id: "customer_1" },
+      ],
       webhook_secret_ref: "env:TELEGRAM_WEBHOOK_SECRET",
     }
 
@@ -81,6 +89,33 @@ describe("telegram channel foundation", () => {
     expect(secureTokenMatches("secret_2", "secret_1")).toBe(false)
     expect(findTelegramIdentity(config, "123")?.user_id).toBe("user_1")
     expect(findTelegramIdentity(config, "999")).toBeUndefined()
+    expect(resolveTelegramUserId(config, "999")).toBeNull()
+    expect(
+      resolveTelegramUserId({ ...config, allow_unmapped_users: true }, "999")
+    ).toBe("telegram:999")
+    expect(resolveTelegramPrincipal(config, "123")).toMatchObject({
+      principal_id: "user_1",
+      role: "CUSTOMER",
+    })
+    expect(resolveTelegramPrincipal(config, "456")).toMatchObject({
+      principal_id: "customer_1",
+      role: "CUSTOMER",
+    })
+    expect(
+      resolveTelegramPrincipal(
+        { ...config, allow_unmapped_users: true },
+        "999"
+      )
+    ).toMatchObject({ principal_id: "telegram:999", role: "CUSTOMER" })
+  })
+
+  it("treats every mapped Telegram identity as a customer", () => {
+    const config = {
+      identities: [{ chat_id: "123", user_id: "user_1" }],
+      webhook_secret_ref: "env:TELEGRAM_WEBHOOK_SECRET",
+    }
+
+    expect(resolveTelegramPrincipal(config, "123")?.role).toBe("CUSTOMER")
   })
 
   it("retries failed delivery with backoff and eventually marks it dead", () => {

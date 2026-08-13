@@ -4,14 +4,21 @@ import {
   StepResponse,
   WorkflowResponse,
 } from "@medusajs/framework/workflows-sdk"
+import type { ILockingModule } from "@medusajs/framework/types"
+import { Modules } from "@medusajs/framework/utils"
 import { AGENT_OPERATIONS_MODULE } from "../../modules/agent-operations"
 import AgentOperationsModuleService from "../../modules/agent-operations/service"
 import { resolveSecretReference } from "../../modules/agent-operations/secret-reference"
 import {
-  findTelegramIdentity,
+  resolveTelegramPrincipal,
   secureTokenMatches,
   TelegramChannelConfig,
 } from "../../modules/agent-operations/telegram"
+import { getConversationTopicType } from "../../modules/agent-operations/channel-principal"
+import {
+  evaluateCustomerChatIngress,
+  normalizeCustomerChatSecurityConfig,
+} from "../../modules/agent-operations/customer-chat-security"
 
 export type IngestTelegramWebhookInput = {
   connection_id: string
@@ -40,7 +47,15 @@ export type IngestTelegramWebhookResult = {
   duplicate?: boolean
   ignored?: boolean
   message_id?: string
-  reason?: "CHANNEL_INACTIVE" | "INVALID_SECRET"
+  reason?:
+    | "BLOCKED"
+    | "CHANNEL_INACTIVE"
+    | "CAPACITY_LIMIT"
+    | "DAILY_LIMIT"
+    | "INVALID_SECRET"
+    | "MESSAGE_TOO_LONG"
+    | "RATE_LIMITED"
+    | "STALE_UPDATE"
 }
 
 const ingestTelegramWebhookStep = createStep<
@@ -85,52 +100,127 @@ const ingestTelegramWebhookStep = createStep<
     }
 
     const chatId = String(telegramMessage.chat.id)
-    const identity = findTelegramIdentity(config, chatId)
-    if (!identity) {
+    const messageText = telegramMessage.text
+    const principal = resolveTelegramPrincipal(config, chatId)
+    if (!principal) {
       return new StepResponse<IngestTelegramWebhookResult>({
         accepted: true,
         ignored: true,
       })
     }
 
-    const idempotencyKey = `telegram:${connection.id}:update:${input.update.update_id}`
-    const existing = (
-      await service.listAgentMessages(
-        { idempotency_key: idempotencyKey },
-        { take: 1 }
-      )
-    )[0]
-    if (existing) {
-      return new StepResponse<IngestTelegramWebhookResult>({
-        accepted: true,
-        conversation_id: existing.conversation_id,
-        duplicate: true,
-        message_id: existing.id,
-      })
-    }
+    const locking = container.resolve<ILockingModule>(Modules.LOCKING)
+    const result = await locking.execute(
+      [
+        `telegram-ingress:${connection.id}:global`,
+        `telegram-ingress:${connection.id}:${chatId}`,
+      ],
+      async (): Promise<IngestTelegramWebhookResult> => {
+        const idempotencyKey = `telegram:${connection.id}:update:${input.update.update_id}`
+        const existing = (
+          await service.listAgentMessages(
+            { idempotency_key: idempotencyKey },
+            { take: 1 }
+          )
+        )[0]
+        if (existing) {
+          return {
+            accepted: true,
+            conversation_id: existing.conversation_id,
+            duplicate: true,
+            message_id: existing.id,
+          }
+        }
 
-    const topicId = `${connection.id}:chat:${chatId}`
-    let conversation = (
-      await service.listAgentConversations(
-        { channel: "TELEGRAM", topic_id: topicId, topic_type: "OPERATOR_CHAT" },
-        { take: 1 }
-      )
-    )[0]
-    const occurredAt = new Date(telegramMessage.date * 1_000)
-    if (!conversation) {
+        const security = normalizeCustomerChatSecurityConfig(config.security)
+        const [recentMessages, globalMessages] = await Promise.all([
+          service.listAgentMessages(
+            {
+              channel: "TELEGRAM",
+              direction: "INBOUND",
+              sender_id: principal.principal_id,
+            },
+            {
+              order: { occurred_at: "DESC" },
+              take: Math.min(
+                Math.max(security.daily_limit, security.burst_limit),
+                1_000
+              ),
+            }
+          ),
+          service.listAgentMessages(
+            { channel: "TELEGRAM", direction: "INBOUND" },
+            {
+              order: { occurred_at: "DESC" },
+              take: Math.min(
+                Math.max(
+                  security.global_daily_limit,
+                  security.global_burst_limit
+                ),
+                10_000
+              ),
+            }
+          ),
+        ])
+        const now = new Date()
+        const ingressDecision = evaluateCustomerChatIngress({
+          chat_id: chatId,
+          config: security,
+          global_message_times: globalMessages.map(
+            (message) => message.occurred_at
+          ),
+          message_length: messageText.length,
+          now,
+          recent_message_times: recentMessages.map((message) => message.occurred_at),
+          update_date: new Date(telegramMessage.date * 1_000),
+        })
+        if (!ingressDecision.allowed) {
+          await service.createAgentAuditEvents({
+            action: "telegram-message-rejected",
+            actor_id: principal.principal_id,
+            actor_type: "user",
+            correlation_id: `telegram:${connection.id}:${input.update.update_id}`,
+            data: {
+              channel: "TELEGRAM",
+              connection_id: connection.id,
+              reason: ingressDecision.reason,
+            },
+            event_type: "agent.channel.message-rejected",
+            recorded_at: now,
+            resource_id: connection.id,
+            resource_type: "agent_channel_connection",
+          })
+          return {
+            accepted: true,
+            ignored: true,
+            reason: ingressDecision.reason,
+          }
+        }
+
+        const topicType = getConversationTopicType(principal.role)
+        const topicId = `${connection.id}:${principal.role.toLowerCase()}:chat:${chatId}`
+        let conversation = (
+          await service.listAgentConversations(
+            { channel: "TELEGRAM", topic_id: topicId, topic_type: topicType },
+            { take: 1 }
+          )
+        )[0]
+        const occurredAt = new Date(telegramMessage.date * 1_000)
+        if (!conversation) {
       const senderName = [
         telegramMessage.from?.first_name,
         telegramMessage.from?.last_name,
       ]
         .filter(Boolean)
         .join(" ")
-      conversation = await service.createAgentConversations({
+          conversation = await service.createAgentConversations({
         channel: "TELEGRAM",
         external_thread_id: chatId,
         last_message_at: occurredAt,
         metadata: {
           connection_id: connection.id,
-          mapped_user_id: identity.user_id,
+          mapped_user_id: principal.principal_id,
+          principal_role: principal.role,
           telegram_chat_id: chatId,
           telegram_username: telegramMessage.from?.username,
         },
@@ -139,12 +229,12 @@ const ingestTelegramWebhookStep = createStep<
         tenant_id: connection.tenant_id,
         title: senderName ? `Telegram — ${senderName}` : `Telegram — ${chatId}`,
         topic_id: topicId,
-        topic_type: "OPERATOR_CHAT",
-      })
-    }
+        topic_type: topicType,
+          })
+        }
 
-    const message = await service.createAgentMessages({
-      body: telegramMessage.text,
+        const message = await service.createAgentMessages({
+      body: messageText,
       channel: "TELEGRAM",
       conversation_id: conversation.id,
       direction: "INBOUND",
@@ -153,40 +243,46 @@ const ingestTelegramWebhookStep = createStep<
       message_type: "TEXT",
       occurred_at: occurredAt,
       processed_at: new Date(),
-      sender_id: identity.user_id,
+      sender_id: principal.principal_id,
       sender_type: "user",
       status: "PROCESSED",
       structured_content: {
+        principal_role: principal.role,
         telegram_from_id: String(telegramMessage.from?.id ?? ""),
         telegram_update_id: input.update.update_id,
       },
-    })
-    await service.updateAgentConversations({
+        })
+        await service.updateAgentConversations({
       id: conversation.id,
       last_message_at: occurredAt,
-    })
-    await service.createAgentAuditEvents({
+        })
+        await service.createAgentAuditEvents({
       action: "telegram-message-received",
-      actor_id: identity.user_id,
+      actor_id: principal.principal_id,
       actor_type: "user",
       correlation_id: `telegram:${connection.id}:${input.update.update_id}`,
       data: {
         channel: "TELEGRAM",
         connection_id: connection.id,
         conversation_id: conversation.id,
+        principal_role: principal.role,
       },
       event_type: "agent.channel.message-received",
       recorded_at: new Date(),
       resource_id: message.id,
       resource_type: "agent_message",
-    })
+        })
 
-    return new StepResponse<IngestTelegramWebhookResult>({
-      accepted: true,
-      conversation_id: conversation.id,
-      duplicate: false,
-      message_id: message.id,
-    })
+        return {
+          accepted: true,
+          conversation_id: conversation.id,
+          duplicate: false,
+          message_id: message.id,
+        }
+      }
+    )
+
+    return new StepResponse<IngestTelegramWebhookResult>(result)
   }
 )
 

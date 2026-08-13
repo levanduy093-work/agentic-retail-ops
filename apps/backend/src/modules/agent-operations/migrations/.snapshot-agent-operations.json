@@ -7262,6 +7262,22 @@
           "enumItems": [],
           "mappedType": "text"
         },
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
         "task_type": {
           "name": "task_type",
           "type": "text",
@@ -7699,6 +7715,15 @@
           "primary": false,
           "unique": false,
           "expression": "CREATE INDEX IF NOT EXISTS \"IDX_agent_task_incident_id\" ON \"agent_task\" (\"incident_id\") WHERE deleted_at IS NULL"
+        },
+        {
+          "keyName": "IDX_agent_task_conversation_status",
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "primary": false,
+          "unique": false,
+          "expression": "CREATE INDEX IF NOT EXISTS \"IDX_agent_task_conversation_status\" ON \"agent_task\" (\"conversation_id\", \"status\") WHERE deleted_at IS NULL"
         },
         {
           "keyName": "agent_task_pkey",

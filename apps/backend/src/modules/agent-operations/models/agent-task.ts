@@ -5,6 +5,7 @@ const AgentTask = model
   .define("agent_task", {
     id: model.id({ prefix: "agtask" }).primaryKey(),
     incident_id: model.text().nullable(),
+    conversation_id: model.text().nullable(),
     task_type: model.text(),
     title: model.text(),
     description: model.text().nullable(),
@@ -42,6 +43,11 @@ const AgentTask = model
     {
       name: "IDX_agent_task_incident_id",
       on: ["incident_id"],
+      where: "deleted_at IS NULL",
+    },
+    {
+      name: "IDX_agent_task_conversation_status",
+      on: ["conversation_id", "status"],
       where: "deleted_at IS NULL",
     },
   ])

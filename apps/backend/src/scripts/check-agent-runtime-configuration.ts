@@ -4,6 +4,7 @@ import { getCredentialVaultStatus } from "../modules/agent-operations/credential
 import { getGoogleKnowledgeOAuthPlatformStatus } from "../modules/agent-operations/google-knowledge-oauth"
 import { getKnowledgeRagRuntimeStatus } from "../modules/agent-operations/knowledge-rag-engine"
 import AgentOperationsModuleService from "../modules/agent-operations/service"
+import { TelegramChannelConfig } from "../modules/agent-operations/telegram"
 
 export default async function checkAgentRuntimeConfiguration({
   container,
@@ -11,11 +12,17 @@ export default async function checkAgentRuntimeConfiguration({
   const service = container.resolve<AgentOperationsModuleService>(
     AGENT_OPERATIONS_MODULE
   )
-  const [providers, googleConnection, activePrompts] = await Promise.all([
-    service.getAiProviderStatuses("default"),
-    service.getGoogleKnowledgeConnectorStatus("default"),
-    service.listAgentPromptTemplates({ status: "ACTIVE" }),
-  ])
+  const [providers, googleConnection, activePrompts, telegramConnections] =
+    await Promise.all([
+      service.getAiProviderStatuses("default"),
+      service.getGoogleKnowledgeConnectorStatus("default"),
+      service.listAgentPromptTemplates({ status: "ACTIVE" }),
+      service.listAgentChannelConnections({
+        channel: "TELEGRAM",
+        status: "ACTIVE",
+        tenant_id: "default",
+      }),
+    ])
   const vault = getCredentialVaultStatus()
   const googlePlatform = getGoogleKnowledgeOAuthPlatformStatus()
   const rag = getKnowledgeRagRuntimeStatus()
@@ -24,6 +31,19 @@ export default async function checkAgentRuntimeConfiguration({
   )
   const generationProvider = providers.find(
     (provider) => provider.generation_enabled
+  )
+  const telegramConnection = telegramConnections[0]
+  const telegramConfig = (telegramConnection?.config ?? {}) as Record<
+    string,
+    unknown
+  >
+  const telegramTypedConfig = telegramConnection
+    ? (telegramConnection.config as TelegramChannelConfig)
+    : null
+  const telegramHasCustomer = Boolean(
+    telegramTypedConfig &&
+      (telegramTypedConfig.allow_unmapped_users === true ||
+        telegramTypedConfig.identities.length > 0)
   )
 
   const checks = {
@@ -35,6 +55,9 @@ export default async function checkAgentRuntimeConfiguration({
     google_knowledge_account_connected: googleConnection.connected,
     google_knowledge_platform_ready: googlePlatform.platform_ready,
     qdrant_url_configured: rag.qdrant_configured,
+    distributed_locking_ready:
+      process.env.REDIS_INFRASTRUCTURE_ENABLED?.trim().toLowerCase() ===
+        "true" && Boolean(process.env.LOCKING_REDIS_URL?.trim()),
     telegram_bot_token_configured: Boolean(
       process.env.TELEGRAM_BOT_TOKEN?.trim()
     ),
@@ -44,6 +67,14 @@ export default async function checkAgentRuntimeConfiguration({
     telegram_webhook_secret_configured: Boolean(
       process.env.TELEGRAM_WEBHOOK_SECRET?.trim()
     ),
+    telegram_channel_active: Boolean(telegramConnection),
+    telegram_has_customer_access: telegramHasCustomer,
+    telegram_security_controls_enabled: true,
+    telegram_security_policy_persisted: Boolean(telegramTypedConfig?.security),
+    telegram_has_authorized_users:
+      telegramConfig.allow_unmapped_users === true ||
+      (Array.isArray(telegramConfig.identities) &&
+        telegramConfig.identities.length > 0),
   }
 
   console.log(
@@ -64,6 +95,20 @@ export default async function checkAgentRuntimeConfiguration({
           checks.google_knowledge_account_connected &&
           checks.qdrant_url_configured &&
           checks.embedding_provider_selected_in_admin,
+        ready_for_telegram_knowledge_qa:
+          checks.telegram_bot_token_configured &&
+          checks.telegram_public_url_configured &&
+          checks.telegram_webhook_secret_configured &&
+          checks.telegram_channel_active &&
+          checks.telegram_has_customer_access &&
+          checks.embedding_provider_selected_in_admin &&
+          checks.generation_provider_selected_in_admin &&
+          checks.qdrant_url_configured,
+        ready_for_production_telegram:
+          checks.telegram_channel_active &&
+          checks.telegram_security_controls_enabled &&
+          checks.telegram_security_policy_persisted &&
+          checks.distributed_locking_ready,
       },
       null,
       2

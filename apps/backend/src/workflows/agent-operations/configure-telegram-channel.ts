@@ -9,13 +9,19 @@ import { AGENT_OPERATIONS_MODULE } from "../../modules/agent-operations"
 import AgentOperationsModuleService from "../../modules/agent-operations/service"
 import { resolveSecretReference } from "../../modules/agent-operations/secret-reference"
 import { TelegramChannelIdentity } from "../../modules/agent-operations/telegram"
+import {
+  CustomerChatSecurityConfig,
+  normalizeCustomerChatSecurityConfig,
+} from "../../modules/agent-operations/customer-chat-security"
 
 export type ConfigureTelegramChannelInput = {
   account_ref: string
+  allow_unmapped_users?: boolean
   api_base_url?: string
   bot_token_ref?: string
   identities: TelegramChannelIdentity[]
   public_base_url: string
+  security?: Partial<CustomerChatSecurityConfig>
   tenant_id?: string
   webhook_secret_ref?: string
 }
@@ -65,10 +71,19 @@ const configureTelegramChannelStep = createStep(
         "Telegram public_base_url must use HTTPS."
       )
     }
-    if (!input.identities.length) {
+    if (!input.identities.length && !input.allow_unmapped_users) {
       throw new MedusaError(
         MedusaError.Types.INVALID_DATA,
-        "At least one Telegram chat-to-user identity is required."
+        "At least one Telegram identity or allow_unmapped_users=true is required."
+      )
+    }
+    if (
+      new Set(input.identities.map((identity) => identity.chat_id)).size !==
+      input.identities.length
+    ) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "Each Telegram chat_id can only have one identity and role."
       )
     }
 
@@ -103,10 +118,12 @@ const configureTelegramChannelStep = createStep(
     const disabledConnection = existing
       ? await service.updateAgentChannelConnections({
           config: {
+            allow_unmapped_users: input.allow_unmapped_users ?? false,
             api_base_url: apiBaseUrl,
             bot_id: String(bot.id),
             bot_username: bot.username,
             identities: input.identities,
+            security: normalizeCustomerChatSecurityConfig(input.security),
             webhook_secret_ref: webhookSecretRef,
           },
           id: existing.id,
@@ -117,10 +134,12 @@ const configureTelegramChannelStep = createStep(
           account_ref: input.account_ref,
           channel: "TELEGRAM",
           config: {
+            allow_unmapped_users: input.allow_unmapped_users ?? false,
             api_base_url: apiBaseUrl,
             bot_id: String(bot.id),
             bot_username: bot.username,
             identities: input.identities,
+            security: normalizeCustomerChatSecurityConfig(input.security),
             webhook_secret_ref: webhookSecretRef,
           },
           secret_ref: botTokenRef,
@@ -133,6 +152,7 @@ const configureTelegramChannelStep = createStep(
       await telegramRequest<boolean>(apiBaseUrl, botToken, "setWebhook", {
         allowed_updates: ["message"],
         drop_pending_updates: false,
+        max_connections: 20,
         secret_token: webhookSecret,
         url: webhookUrl,
       })
@@ -161,6 +181,8 @@ const configureTelegramChannelStep = createStep(
         account_ref: connection.account_ref,
         bot_username: bot.username,
         identity_count: input.identities.length,
+        public_questions_enabled: input.allow_unmapped_users ?? false,
+        security_controls_enabled: true,
       },
       event_type: "agent.channel.configured",
       recorded_at: new Date(),

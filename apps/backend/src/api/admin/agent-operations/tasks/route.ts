@@ -36,13 +36,15 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       const conversation = (
         await service.listAgentConversations(
           {
-            channel: "IN_APP",
             incident_id: incidentId,
-            topic_type: "CUSTOMER_SUPPORT",
           },
-          { take: 1 }
+          { order: { last_message_at: "DESC" }, take: 10 }
         )
-      )[0]
+      ).find((item) =>
+        ["CUSTOMER_SUPPORT", "CUSTOMER_SUPPORT_CHAT"].includes(
+          item.topic_type
+        )
+      )
 
       return [incidentId, conversation?.id ?? null] as const
     })
@@ -51,15 +53,21 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
 
   res.json({
     count,
-    tasks: tasks.map((task) => ({
-      ...task,
-      incident_correlation_id: task.incident_id
-        ? correlationByIncidentId.get(task.incident_id) ?? null
-        : null,
-      support_conversation_id: task.incident_id
-        ? conversationByIncidentId.get(task.incident_id) ?? null
-        : null,
-    })),
+    tasks: tasks.map((task) => {
+      const taskInput = (task.input ?? {}) as Record<string, unknown>
+      return {
+        ...task,
+        incident_correlation_id: task.incident_id
+          ? correlationByIncidentId.get(task.incident_id) ?? null
+          : null,
+        support_conversation_id:
+          typeof taskInput.conversation_id === "string"
+            ? taskInput.conversation_id
+            : task.incident_id
+              ? conversationByIncidentId.get(task.incident_id) ?? null
+              : null,
+      }
+    }),
   })
 }
 

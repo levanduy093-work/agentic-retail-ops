@@ -18,11 +18,14 @@ export type ModelGatewayAdapter = {
 
 const SENSITIVE_KEYS = new Set([
   "access_token",
+  "api_key",
   "authorization",
   "cookie",
   "password",
+  "private_key",
   "refresh_token",
   "secret",
+  "token",
 ])
 
 export function redactModelInput(value: unknown): unknown {

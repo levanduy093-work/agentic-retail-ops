@@ -177,6 +177,7 @@ export type EvaluationAssertion = {
 }
 
 export type CreateAgentTaskInput = {
+  conversation_id?: string
   created_by_id: string
   created_by_type: "agent" | "system" | "user"
   description?: string
@@ -416,6 +417,13 @@ export type ProcessAgentConversationMessageInput = {
   command: ApprovalDecisionConversationCommand
   conversation_id: string
 }
+
+export type ProcessCustomerKnowledgeQuestionInput = {
+  inbound_message_id: string
+}
+
+export type ProcessTelegramKnowledgeQuestionInput =
+  ProcessCustomerKnowledgeQuestionInput
 
 export type ClaimAgentOutboxEventInput = {
   claimed_at: string

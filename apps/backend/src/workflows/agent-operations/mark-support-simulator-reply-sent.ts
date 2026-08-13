@@ -60,6 +60,9 @@ const markSupportSimulatorReplySentStep = createStep(
         const message = await service.retrieveAgentMessage(
           actionResult.message_id
         )
+        const conversation = await service.retrieveAgentConversation(
+          message.conversation_id
+        )
         const actionInput = action.input as Record<string, unknown>
         if (
           message.conversation_id !== actionInput.conversation_id ||
@@ -92,9 +95,10 @@ const markSupportSimulatorReplySentStep = createStep(
           data: {
             action_request_id: action.id,
             conversation_id: message.conversation_id,
+            channel: conversation.channel,
             human_confirmed: true,
             message_id: message.id,
-            simulator: true,
+            simulator: conversation.channel === "IN_APP",
             task_id: task.id
           },
           event_type: "agent.support-response.sent",

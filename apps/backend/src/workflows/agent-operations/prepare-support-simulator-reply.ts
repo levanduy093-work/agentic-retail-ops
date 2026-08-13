@@ -84,21 +84,35 @@ const prepareSupportSimulatorReplyStep = createStep<
     }
 
     const incident = await service.retrieveAgentIncident(task.incident_id)
-    const conversation = (
-      await service.listAgentConversations(
-        {
-          channel: "IN_APP",
-          incident_id: incident.id,
-          topic_type: "CUSTOMER_SUPPORT",
-        },
-        { take: 1 }
-      )
-    )[0]
+    const taskInput = (task.input ?? {}) as Record<string, unknown>
+    const conversation =
+      typeof taskInput.conversation_id === "string"
+        ? await service.retrieveAgentConversation(taskInput.conversation_id)
+        : (
+            await service.listAgentConversations(
+              {
+                channel: "IN_APP",
+                incident_id: incident.id,
+                topic_type: "CUSTOMER_SUPPORT",
+              },
+              { take: 1 }
+            )
+          )[0]
     const metadata = (conversation?.metadata ?? {}) as Record<string, unknown>
-    if (!conversation || metadata.simulator !== true) {
+    const isSimulator =
+      conversation?.channel === "IN_APP" && metadata.simulator === true
+    const isExternalCustomer =
+      conversation?.channel !== "IN_APP" &&
+      conversation?.topic_type === "CUSTOMER_SUPPORT_CHAT" &&
+      metadata.principal_role === "CUSTOMER"
+    if (
+      !conversation ||
+      conversation.tenant_id !== task.tenant_id ||
+      (!isSimulator && !isExternalCustomer)
+    ) {
       throw new MedusaError(
         MedusaError.Types.NOT_ALLOWED,
-        "This request is not connected to the internal chat simulator."
+        "This request is not connected to an authorized customer conversation."
       )
     }
 
@@ -114,7 +128,7 @@ const prepareSupportSimulatorReplyStep = createStep<
         message_type: "TEXT",
         structured_content: {
           human_confirmed: true,
-          simulator: true,
+          simulator: isSimulator,
           support_task_id: task.id,
         },
       },
