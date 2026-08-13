@@ -292,6 +292,18 @@ describe("agent platform foundations", () => {
         system_prompt: "Use only approved facts.",
       })
     ).toThrow("max_tokens")
+    expect(() =>
+      assertModelInvocation({
+        agent_id: "support-agent",
+        input: {},
+        max_tokens: 100,
+        output_schema: { type: "object" },
+        prompt_key: "support",
+        prompt_version: "1",
+        system_prompt: "Use only approved facts.",
+        timeout_ms: 999,
+      })
+    ).toThrow("timeout_ms")
     await expect(
       new DisabledModelAdapter().invoke({
         agent_id: "support-agent",

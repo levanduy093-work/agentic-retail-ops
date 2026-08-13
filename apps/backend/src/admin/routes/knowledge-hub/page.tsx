@@ -115,6 +115,17 @@ type KnowledgeSourcePrepareResponse = {
   source: KnowledgeSource
 }
 
+type SupportedGooglePickerSelection = Extract<
+  GooglePickerSelection,
+  { supported: true }
+>
+
+type BatchSourceOutcome = {
+  error?: string
+  selection: SupportedGooglePickerSelection
+  source_created: boolean
+}
+
 type SourceProcessingStage =
   | "connecting"
   | "embedding"
@@ -207,6 +218,12 @@ const KnowledgeHubPage = () => {
   const [unsupportedGoogleFile, setUnsupportedGoogleFile] = useState<
     Extract<GooglePickerSelection, { supported: false }> | undefined
   >()
+  const [selectedGoogleFiles, setSelectedGoogleFiles] = useState<
+    SupportedGooglePickerSelection[]
+  >([])
+  const [batchFailures, setBatchFailures] = useState<
+    Array<Pick<BatchSourceOutcome, "error" | "selection">>
+  >([])
   const [form, setForm] = useState({
     citation_locator: "policy://customer-support/",
     content: "",
@@ -320,9 +337,17 @@ const KnowledgeHubPage = () => {
   const refreshSources = async () => {
     await queryClient.invalidateQueries({ queryKey: ["knowledge-sources"] })
   }
-  const runSourcePipeline = async (sourceId: string) => {
+  const runSourcePipeline = async (
+    sourceId: string,
+    progressRange = { end: 100, start: 0 }
+  ) => {
+    const progressAt = (percentage: number) =>
+      Math.round(
+        progressRange.start +
+          (progressRange.end - progressRange.start) * percentage
+      )
     setSourceProcessing({
-      progress: 35,
+      progress: progressAt(0.35),
       source_id: sourceId,
       stage: "syncing",
     })
@@ -332,7 +357,7 @@ const KnowledgeHubPage = () => {
     )
 
     setSourceProcessing({
-      progress: 70,
+      progress: progressAt(0.7),
       source_id: sourceId,
       stage: "embedding",
     })
@@ -348,7 +373,7 @@ const KnowledgeHubPage = () => {
     }
 
     setSourceProcessing({
-      progress: 100,
+      progress: progressRange.end,
       source_id: sourceId,
       stage: "ready",
     })
@@ -418,22 +443,50 @@ const KnowledgeHubPage = () => {
   })
   const createSource = useMutation({
     mutationFn: async () => {
-      setSourceProcessing({
-        progress: 10,
-        source_id: null,
-        stage: "connecting",
-      })
-      const created = await sdk.client.fetch<{
-        duplicate: boolean
-        source: KnowledgeSource
-      }>("/admin/agent-operations/knowledge/sources", {
-        body: { ...sourceForm, tenant_id: "default" },
-        method: "POST",
-      })
-      return {
-        created,
-        pipeline: await runSourcePipeline(created.source.id),
+      const selections = [...selectedGoogleFiles]
+      if (!selections.length) {
+        throw new Error("Select at least one Google Drive document.")
       }
+
+      const outcomes: BatchSourceOutcome[] = []
+      for (const [index, selection] of selections.entries()) {
+        let sourceCreated = false
+        const start = Math.round((index / selections.length) * 100)
+        const end = Math.round(((index + 1) / selections.length) * 100)
+        setSourceProcessing({
+          progress: Math.round(start + (end - start) * 0.1),
+          source_id: null,
+          stage: "connecting",
+        })
+        try {
+          const created = await sdk.client.fetch<{
+            duplicate: boolean
+            source: KnowledgeSource
+          }>("/admin/agent-operations/knowledge/sources", {
+            body: {
+              ...sourceForm,
+              name: selection.name,
+              source_type: selection.source_type,
+              source_url: selection.source_url,
+              tenant_id: "default",
+            },
+            method: "POST",
+          })
+          sourceCreated = true
+          await runSourcePipeline(created.source.id, { end, start })
+          outcomes.push({ selection, source_created: true })
+        } catch (error) {
+          outcomes.push({
+            error:
+              error instanceof Error
+                ? error.message
+                : "Knowledge source processing failed.",
+            selection,
+            source_created: sourceCreated,
+          })
+        }
+      }
+      return outcomes
     },
     onError: async () => {
       setSourceProcessing((current) => ({
@@ -444,7 +497,24 @@ const KnowledgeHubPage = () => {
       await Promise.all([refreshSources(), refresh()])
       toast.error(t("knowledgeHub.sources.messages.processingError"))
     },
-    onSuccess: async ({ pipeline }) => {
+    onSuccess: async (outcomes) => {
+      const failures = outcomes.filter((outcome) => outcome.error)
+      setBatchFailures(failures)
+      setSelectedGoogleFiles(
+        failures
+          .filter((outcome) => !outcome.source_created)
+          .map((outcome) => outcome.selection)
+      )
+      await Promise.all([refreshSources(), refresh()])
+      if (failures.length) {
+        toast.error(
+          t("knowledgeHub.sources.messages.batchPartial", {
+            failed: failures.length,
+            processed: outcomes.length - failures.length,
+          })
+        )
+        return
+      }
       setSourceOpen(false)
       setSourceForm({
         locale: "vi",
@@ -453,11 +523,11 @@ const KnowledgeHubPage = () => {
         source_type: "GOOGLE_DRIVE",
         source_url: "",
       })
+      setSelectedGoogleFiles([])
       setUnsupportedGoogleFile(undefined)
-      await Promise.all([refreshSources(), refresh()])
       toast.success(
-        t("knowledgeHub.sources.messages.prepared", {
-          chunks: pipeline.prepareResult.rag_index.indexed_chunks,
+        t("knowledgeHub.sources.messages.batchPrepared", {
+          count: outcomes.length,
         })
       )
     },
@@ -571,25 +641,16 @@ const KnowledgeHubPage = () => {
       setSourceOpen(false)
       await new Promise<void>((resolve) => window.setTimeout(resolve, 220))
 
-      const selection = await openGoogleKnowledgePicker(credential)
-      if (!selection) return
-      if (!selection.supported) {
-        setUnsupportedGoogleFile(selection)
-        setSourceForm((current) => ({
-          ...current,
-          name: "",
-          source_type: "GOOGLE_DRIVE",
-          source_url: "",
-        }))
-        return
-      }
-      setUnsupportedGoogleFile(undefined)
-      setSourceForm((current) => ({
-        ...current,
-        name: selection.name,
-        source_type: selection.source_type,
-        source_url: selection.source_url,
-      }))
+      const selections = await openGoogleKnowledgePicker(credential)
+      if (!selections) return
+      const unsupported = selections.find((selection) => !selection.supported)
+      const supported = selections.filter(
+        (selection): selection is SupportedGooglePickerSelection =>
+          selection.supported
+      )
+      setUnsupportedGoogleFile(unsupported)
+      setSelectedGoogleFiles(supported)
+      setBatchFailures([])
     } catch {
       toast.error(t("knowledgeHub.sources.oauth.pickerError"))
     } finally {
@@ -610,6 +671,8 @@ const KnowledgeHubPage = () => {
   const openSourceConnection = () => {
     setSourceProcessing(null)
     setUnsupportedGoogleFile(undefined)
+    setSelectedGoogleFiles([])
+    setBatchFailures([])
     setSourceForm({
       locale: "vi",
       name: "",
@@ -1209,24 +1272,53 @@ const KnowledgeHubPage = () => {
                   </div>
                 )}
 
-                {sourceForm.source_url ? (
+                {selectedGoogleFiles.length ? (
                   <div className="rounded-lg border border-ui-border-interactive bg-ui-bg-base p-4">
                     <Text className="text-ui-fg-subtle" size="xsmall">
                       {t("knowledgeHub.sources.automatic.selectedTitle")}
                     </Text>
-                    <Text className="mt-1" weight="plus">
-                      {sourceForm.name}
+                    <Text className="mt-1" size="small" weight="plus">
+                      {t("knowledgeHub.sources.automatic.selectedCount", {
+                        count: selectedGoogleFiles.length,
+                      })}
                     </Text>
-                    <Text className="text-ui-fg-subtle" size="small">
-                      {t(
-                        `knowledgeHub.sources.types.${sourceTypeTranslationKey(sourceForm.source_type)}`
-                      )}
-                    </Text>
+                    <div className="mt-3 flex flex-col gap-2">
+                      {selectedGoogleFiles.map((selection) => (
+                        <div
+                          className="rounded-md bg-ui-bg-subtle px-3 py-2"
+                          key={selection.source_url}
+                        >
+                          <Text size="small" weight="plus">
+                            {selection.name}
+                          </Text>
+                          <Text className="text-ui-fg-subtle" size="xsmall">
+                            {t(
+                              `knowledgeHub.sources.types.${sourceTypeTranslationKey(selection.source_type)}`
+                            )}
+                          </Text>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <Text className="text-ui-fg-subtle" size="small">
                     {t("knowledgeHub.sources.automatic.noSelection")}
                   </Text>
+                )}
+
+                {!!batchFailures.length && (
+                  <div className="rounded-lg border border-ui-border-error bg-ui-bg-subtle p-4">
+                    <Text className="text-ui-fg-error" size="small" weight="plus">
+                      {t("knowledgeHub.sources.automatic.failedTitle")}
+                    </Text>
+                    <div className="mt-2 flex flex-col gap-1">
+                      {batchFailures.map((failure) => (
+                        <Text key={failure.selection.source_url} size="small">
+                          {failure.selection.name}
+                        </Text>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                   {sourceProcessing &&
@@ -1248,7 +1340,7 @@ const KnowledgeHubPage = () => {
                   onClick={chooseGoogleDocument}
                   type="button"
                 >
-                  {sourceForm.source_url
+                  {selectedGoogleFiles.length
                     ? t("knowledgeHub.sources.automatic.changeFileAction")
                     : t("knowledgeHub.sources.oauth.chooseFileAction")}
                 </Button>
@@ -1337,8 +1429,7 @@ const KnowledgeHubPage = () => {
               <Button
                 disabled={
                   createSource.isPending ||
-                  !sourceForm.name ||
-                  !sourceForm.source_url ||
+                  !selectedGoogleFiles.length ||
                   !googleConnector.data?.connected
                 }
                 form="knowledge-source-form"
@@ -1346,7 +1437,9 @@ const KnowledgeHubPage = () => {
                 size="small"
                 type="submit"
               >
-                {t("knowledgeHub.sources.saveAction")}
+                {t("knowledgeHub.sources.saveAction", {
+                  count: selectedGoogleFiles.length,
+                })}
               </Button>
             </div>
           </Drawer.Footer>

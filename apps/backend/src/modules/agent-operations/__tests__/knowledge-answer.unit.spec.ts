@@ -10,6 +10,7 @@ import {
   isKnowledgeAnswerBodySafe,
   KnowledgeAnswerModelOutput,
   resolveGovernedKnowledgeModelOutput,
+  shouldUseSemanticKnowledgeSearch,
 } from "../knowledge-answer"
 
 describe("grounded knowledge answers", () => {
@@ -53,6 +54,13 @@ describe("grounded knowledge answers", () => {
     )
   })
 
+  it("skips semantic embedding when lexical evidence is already strong", () => {
+    expect(shouldUseSemanticKnowledgeSearch(knowledge)).toBe(false)
+    expect(
+      shouldUseSemanticKnowledgeSearch({ results: [], total_candidates: 0 })
+    ).toBe(true)
+  })
+
   it("refuses safely when approved knowledge has no result", () => {
     const answer = buildKnowledgeAnswerFallback(
       { results: [], total_candidates: 0 },
@@ -72,6 +80,7 @@ describe("grounded knowledge answers", () => {
       "en"
     )
     expect(detectKnowledgeQuestionLocale("Alo shop oi")).toBe("vi")
+    expect(detectKnowledgeQuestionLocale("Hello sốp")).toBe("vi")
     expect(isContextDependentKnowledgeQuestion("Thế còn hoàn tiền thì sao?")).toBe(
       true
     )

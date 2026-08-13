@@ -25,7 +25,8 @@ export type CustomerMessageIntentResult = z.infer<
 export const CUSTOMER_MESSAGE_INTENT_PROMPT_KEY =
   "customer-support.intent-router"
 export const CUSTOMER_MESSAGE_INTENT_PROMPT_VERSION = "1.0.0"
-export const CUSTOMER_MESSAGE_INTENT_MAX_TOKENS = 180
+export const CUSTOMER_MESSAGE_INTENT_MAX_TOKENS = 120
+export const CUSTOMER_MESSAGE_INTENT_TIMEOUT_MS = 5_000
 export const CUSTOMER_MESSAGE_INTENT_OUTPUT_SCHEMA = {
   additionalProperties: false,
   properties: {

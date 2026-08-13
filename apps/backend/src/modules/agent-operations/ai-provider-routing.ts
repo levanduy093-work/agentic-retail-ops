@@ -7,7 +7,7 @@ export const AI_PROVIDER_PRIORITY: Record<
   readonly AiProvider[]
 > = {
   embedding: ["GEMINI", "OPENAI"],
-  generation: ["DEEPSEEK", "GEMINI", "OPENAI"],
+  generation: ["GEMINI", "DEEPSEEK", "OPENAI"],
 }
 
 export function sortAiProvidersByPriority<T extends { provider: AiProvider }>(

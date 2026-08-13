@@ -137,19 +137,24 @@ import {
   KNOWLEDGE_ANSWER_PROMPT_KEY,
   KNOWLEDGE_ANSWER_PROMPT_VERSION,
   KNOWLEDGE_ANSWER_SYSTEM_PROMPT,
+  KNOWLEDGE_ANSWER_TIMEOUT_MS,
   resolveGovernedKnowledgeModelOutput,
+  shouldUseSemanticKnowledgeSearch,
 } from "./knowledge-answer"
 import {
+  buildCatalogOverviewReply,
   buildProductAdvisorFallback,
   CustomerCatalogSnapshot,
   formatProductAdvisorReply,
   isCatalogOverviewRequest,
+  isPublicCustomerUrl,
   ProductAdvisorModelOutput,
   PRODUCT_ADVISOR_MAX_TOKENS,
   PRODUCT_ADVISOR_OUTPUT_SCHEMA,
   PRODUCT_ADVISOR_PROMPT_KEY,
   PRODUCT_ADVISOR_PROMPT_VERSION,
   PRODUCT_ADVISOR_SYSTEM_PROMPT,
+  PRODUCT_ADVISOR_TIMEOUT_MS,
   resolveProductAdvisorModelOutput,
 } from "./customer-product-advisor"
 import {
@@ -161,6 +166,7 @@ import {
   CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
   CUSTOMER_MESSAGE_INTENT_PROMPT_VERSION,
   CUSTOMER_MESSAGE_INTENT_SYSTEM_PROMPT,
+  CUSTOMER_MESSAGE_INTENT_TIMEOUT_MS,
   defaultCustomerMessageIntent,
   detectCustomerMessageFastIntent,
   resolveCustomerMessageIntent,
@@ -252,6 +258,8 @@ import {
   CONVERSATION_MEMORY_PROMPT_KEY,
   CONVERSATION_MEMORY_PROMPT_VERSION,
   CONVERSATION_MEMORY_SYSTEM_PROMPT,
+  CONVERSATION_MEMORY_TIMEOUT_MS,
+  isSafeConversationMemoryOutput,
   shouldRefreshConversationMemoryWithAi,
 } from "./conversation-memory"
 import {
@@ -641,8 +649,16 @@ class AgentOperationsModuleService extends MedusaService({
             prompt_key: CONVERSATION_MEMORY_PROMPT_KEY,
             prompt_version: CONVERSATION_MEMORY_PROMPT_VERSION,
             system_prompt: CONVERSATION_MEMORY_SYSTEM_PROMPT,
+            timeout_ms: CONVERSATION_MEMORY_TIMEOUT_MS,
           })
-          output = ConversationMemoryModelOutput.parse(generated)
+          const parsedOutput = ConversationMemoryModelOutput.parse(generated)
+          if (!isSafeConversationMemoryOutput(parsedOutput)) {
+            throw new MedusaError(
+              MedusaError.Types.NOT_ALLOWED,
+              "Conversation memory contained unsafe content."
+            )
+          }
+          output = parsedOutput
           await this.updateAgentModelRuns(
             {
               completed_at: new Date(),
@@ -2090,6 +2106,20 @@ class AgentOperationsModuleService extends MedusaService({
       sharedContext
     )
 
+    const lexicalOutput = searchKnowledgeChunks(parsed, documents, chunks)
+    if (!shouldUseSemanticKnowledgeSearch(lexicalOutput)) {
+      await writeCustomerAssistantCache(caching, {
+        key: knowledgeCacheKey,
+        tags: [
+          "customer-assistant:knowledge",
+          `customer-assistant:tenant:${parsed.tenant_id}`,
+        ],
+        ttl: CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS.knowledge_search,
+        value: lexicalOutput,
+      })
+      return lexicalOutput
+    }
+
     let semanticScores = new Map<string, number>()
     try {
       const credentials = await this.getActiveAiProviderCredentials(
@@ -2177,16 +2207,16 @@ class AgentOperationsModuleService extends MedusaService({
 
     const safeInput = {
       approved_knowledge: input.knowledge.results.map((result) => ({
-        excerpt: result.excerpt,
+        excerpt: result.excerpt.slice(0, 650),
         locator: result.citation_locator,
         title: result.title,
         version: result.version,
       })),
       locale: input.locale,
       conversation_memory: isContextDependentKnowledgeQuestion(input.question)
-        ? input.conversation_memory?.slice(0, 1_600) ?? ""
+        ? input.conversation_memory?.slice(-900) ?? ""
         : "",
-      question: input.question.slice(0, 2_000),
+      question: input.question.slice(0, 1_000),
     }
     let credentials
     try {
@@ -2285,6 +2315,7 @@ class AgentOperationsModuleService extends MedusaService({
           prompt_key: KNOWLEDGE_ANSWER_PROMPT_KEY,
           prompt_version: KNOWLEDGE_ANSWER_PROMPT_VERSION,
           system_prompt: KNOWLEDGE_ANSWER_SYSTEM_PROMPT,
+          timeout_ms: KNOWLEDGE_ANSWER_TIMEOUT_MS,
         })
         const output = KnowledgeAnswerModelOutput.parse(generated)
         await writeCustomerAssistantCache(this.getCustomerAssistantCaching(), {
@@ -2356,7 +2387,8 @@ class AgentOperationsModuleService extends MedusaService({
   ): Promise<KnowledgeAnswer> {
     const fallbackOutput = buildProductAdvisorFallback(
       input.catalog,
-      input.locale
+      input.locale,
+      input.question
     )
     const fallback = formatProductAdvisorReply(
       fallbackOutput,
@@ -2370,15 +2402,35 @@ class AgentOperationsModuleService extends MedusaService({
         cache_hit: false,
         path: "DETERMINISTIC_FALLBACK",
       }
-    ) => ({
-      body: result.body,
-      citations: [],
-      disposition: "ANSWER" as const,
-      grounded: input.catalog.status === "READY",
-      locale: input.locale,
-      optimization,
-      product_ids: result.product_ids,
-    })
+    ) => {
+      const productIds = new Set(result.product_ids)
+      const catalogProducts =
+        input.catalog.status === "READY" ? input.catalog.products : []
+      const productMedia = catalogProducts
+        .filter(
+          (product) =>
+            productIds.has(product.id) && isPublicCustomerUrl(product.thumbnail)
+        )
+        .slice(0, 3)
+        .map((product) => ({
+          image_url: product.thumbnail as string,
+          product_id: product.id,
+          product_url: isPublicCustomerUrl(product.product_url)
+            ? product.product_url
+            : null,
+          title: product.title,
+        }))
+      return {
+        body: result.body,
+        citations: [],
+        disposition: "ANSWER" as const,
+        grounded: input.catalog.status === "READY",
+        locale: input.locale,
+        optimization,
+        product_ids: result.product_ids,
+        product_media: productMedia,
+      }
+    }
     if (
       input.catalog.status === "UNAVAILABLE" ||
       !input.catalog.products.length
@@ -2386,7 +2438,7 @@ class AgentOperationsModuleService extends MedusaService({
       return toAnswer(fallback)
     }
     if (isCatalogOverviewRequest(input.question)) {
-      return toAnswer(fallback, {
+      return toAnswer(buildCatalogOverviewReply(input.catalog, input.locale), {
         ai_invoked: false,
         cache_hit: false,
         path: "DETERMINISTIC_CATALOG",
@@ -2422,7 +2474,7 @@ class AgentOperationsModuleService extends MedusaService({
       catalog: input.catalog.products.map((product) => ({
         category_names: product.category_names,
         collection_title: product.collection_title,
-        description: product.description?.slice(0, 1_000) ?? null,
+        description: product.description?.slice(0, 420) ?? null,
         id: product.id,
         subtitle: product.subtitle,
         title: product.title,
@@ -2435,11 +2487,11 @@ class AgentOperationsModuleService extends MedusaService({
           title: variant.title,
         })),
       })),
-      conversation_memory: input.conversation_memory?.slice(0, 1_600) ?? "",
-      current_message: input.question.slice(0, 2_000),
+      conversation_memory: input.conversation_memory?.slice(-900) ?? "",
+      current_message: input.question.slice(0, 1_000),
       locale: input.locale,
-      recent_conversation: input.recent_messages.slice(-6).map((message) => ({
-        body: message.body.slice(0, 600),
+      recent_conversation: input.recent_messages.slice(-4).map((message) => ({
+        body: message.body.slice(0, 400),
         direction: message.direction,
       })),
     }
@@ -2541,6 +2593,7 @@ class AgentOperationsModuleService extends MedusaService({
           prompt_key: PRODUCT_ADVISOR_PROMPT_KEY,
           prompt_version: PRODUCT_ADVISOR_PROMPT_VERSION,
           system_prompt: PRODUCT_ADVISOR_SYSTEM_PROMPT,
+          timeout_ms: PRODUCT_ADVISOR_TIMEOUT_MS,
         })
         const output = ProductAdvisorModelOutput.parse(generated)
         await writeCustomerAssistantCache(this.getCustomerAssistantCaching(), {
@@ -2623,11 +2676,11 @@ class AgentOperationsModuleService extends MedusaService({
     }
 
     const safeInput = {
-      conversation_memory: input.conversation_memory?.slice(0, 1_600) ?? "",
-      current_message: input.message.slice(0, 2_000),
+      conversation_memory: input.conversation_memory?.slice(-800) ?? "",
+      current_message: input.message.slice(0, 800),
       locale: input.locale,
-      recent_conversation: input.recent_messages.slice(-4).map((message) => ({
-        body: message.body.slice(0, 500),
+      recent_conversation: input.recent_messages.slice(-3).map((message) => ({
+        body: message.body.slice(0, 320),
         direction: message.direction,
       })),
     }
@@ -2708,6 +2761,7 @@ class AgentOperationsModuleService extends MedusaService({
           prompt_key: CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
           prompt_version: CUSTOMER_MESSAGE_INTENT_PROMPT_VERSION,
           system_prompt: CUSTOMER_MESSAGE_INTENT_SYSTEM_PROMPT,
+          timeout_ms: CUSTOMER_MESSAGE_INTENT_TIMEOUT_MS,
         })
         const output = CustomerMessageIntentModelOutput.parse(generated)
         await writeCustomerAssistantCache(this.getCustomerAssistantCaching(), {
@@ -3127,6 +3181,7 @@ class AgentOperationsModuleService extends MedusaService({
             path: "DETERMINISTIC_OR_REVIEW",
           },
           product_ids: answer.product_ids ?? [],
+          product_media: answer.product_media ?? [],
           grounding_source: answer.product_ids?.length
             ? "LIVE_CATALOG"
             : answer.grounded

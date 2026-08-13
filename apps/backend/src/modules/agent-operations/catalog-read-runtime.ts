@@ -44,6 +44,7 @@ type QueryProduct = {
   description?: string | null
   handle: string
   id: string
+  images?: Array<{ url?: string | null }> | null
   subtitle?: string | null
   thumbnail?: string | null
   title: string
@@ -64,7 +65,10 @@ function toCatalogProduct(
     handle: product.handle,
     id: product.id,
     subtitle: product.subtitle ?? null,
-    thumbnail: product.thumbnail ?? null,
+    thumbnail:
+      product.thumbnail ??
+      (product.images ?? []).find((image) => image.url)?.url ??
+      null,
     title: product.title,
     product_url: buildTrustedProductUrl({
       country_code: context.country_code,
@@ -130,6 +134,7 @@ export async function executeCatalogRead(
         limit: parsed.limit,
         locale: parsed.locale,
         query: normalizeCustomerCacheText(parsed.query ?? ""),
+        schema_version: 2,
         storefront_origin:
           process.env.CUSTOMER_STOREFRONT_BASE_URL?.trim() ?? "",
         tenant_id: tenantId,
@@ -184,6 +189,7 @@ export async function executeCatalogRead(
           "description",
           "handle",
           "thumbnail",
+          "images.url",
           "collection.title",
           "categories.name",
           "variants.id",
@@ -247,5 +253,8 @@ export async function executeCatalogRead(
       return output
     }
   )
-  return { ...result, cache_status: cacheStatus }
+  return {
+    ...result,
+    cache_status: cacheStatus as "HIT" | "MISS",
+  }
 }

@@ -4,10 +4,10 @@ import {
 } from "../ai-provider-routing"
 
 describe("AI provider routing", () => {
-  it("prioritizes DeepSeek, Gemini, then OpenAI for generation", () => {
+  it("prioritizes Gemini, DeepSeek, then OpenAI for generation", () => {
     expect(AI_PROVIDER_PRIORITY.generation).toEqual([
-      "DEEPSEEK",
       "GEMINI",
+      "DEEPSEEK",
       "OPENAI",
     ])
     expect(
@@ -19,7 +19,7 @@ describe("AI provider routing", () => {
         ],
         "generation"
       ).map((item) => item.provider)
-    ).toEqual(["DEEPSEEK", "GEMINI", "OPENAI"])
+    ).toEqual(["GEMINI", "DEEPSEEK", "OPENAI"])
   })
 
   it("uses only Gemini then OpenAI for embeddings", () => {

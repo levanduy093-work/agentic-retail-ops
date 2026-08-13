@@ -21,6 +21,7 @@ export default async function answerTelegramCustomerMessageHandler({
   container,
 }: SubscriberArgs<TelegramCustomerMessageReceivedData>) {
   const logger = container.resolve(ContainerRegistrationKeys.LOGGER)
+  const startedAt = Date.now()
 
   try {
     const service = container.resolve<AgentOperationsModuleService>(
@@ -42,6 +43,10 @@ export default async function answerTelegramCustomerMessageHandler({
         },
       })
     }
+    logger.info(
+      `Telegram customer answer delivered in ${Date.now() - startedAt}ms ` +
+        `(prepared in ${result.response_preparation_ms}ms)`
+    )
     await refreshConversationMemoryWorkflow(container).run({
       input: { conversation_id: inbound.conversation_id },
     })

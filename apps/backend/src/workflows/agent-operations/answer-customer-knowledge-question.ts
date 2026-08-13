@@ -12,6 +12,7 @@ import { ProcessCustomerKnowledgeQuestionInput } from "../../modules/agent-opera
 import { executeCatalogRead } from "../../modules/agent-operations/catalog-read-runtime"
 import {
   extractCatalogSearchQuery,
+  extractRecentCatalogSearchQuery,
   isPotentialProductRequest,
 } from "../../modules/agent-operations/customer-product-advisor"
 import { detectKnowledgeQuestionLocale } from "../../modules/agent-operations/knowledge-answer"
@@ -19,6 +20,7 @@ import { detectKnowledgeQuestionLocale } from "../../modules/agent-operations/kn
 const answerCustomerKnowledgeQuestionStep = createStep(
   "answer-customer-knowledge-question",
   async (input: ProcessCustomerKnowledgeQuestionInput, { container }) => {
+    const startedAt = Date.now()
     const locking = container.resolve<ILockingModule>(Modules.LOCKING)
     const service = container.resolve<AgentOperationsModuleService>(
       AGENT_OPERATIONS_MODULE
@@ -33,11 +35,28 @@ const answerCustomerKnowledgeQuestionStep = createStep(
     )[0]
     if (!existingResponse && isPotentialProductRequest(inbound.body)) {
       const locale = detectKnowledgeQuestionLocale(inbound.body)
-      const catalogQuery = extractCatalogSearchQuery(inbound.body)
+      let catalogQuery = extractCatalogSearchQuery(inbound.body)
       try {
         const conversation = await service.retrieveAgentConversation(
           inbound.conversation_id
         )
+        if (!catalogQuery) {
+          const recentInbound = await service.listAgentMessages(
+            {
+              conversation_id: conversation.id,
+              direction: "INBOUND",
+            },
+            { order: { occurred_at: "DESC" }, take: 6 }
+          )
+          catalogQuery = extractRecentCatalogSearchQuery(
+            recentInbound
+              .filter((message) => message.id !== inbound.id)
+              .map((message) => ({
+                body: message.body,
+                direction: message.direction as "INBOUND" | "OUTBOUND",
+              }))
+          )
+        }
         const catalogRead = await executeCatalogRead(
           container,
           {
@@ -66,7 +85,10 @@ const answerCustomerKnowledgeQuestionStep = createStep(
         })
     )
 
-    return new StepResponse(result)
+    return new StepResponse({
+      ...result,
+      response_preparation_ms: Date.now() - startedAt,
+    })
   }
 )
 

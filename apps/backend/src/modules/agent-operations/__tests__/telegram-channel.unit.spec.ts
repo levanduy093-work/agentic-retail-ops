@@ -65,6 +65,131 @@ describe("telegram channel foundation", () => {
     ).rejects.toThrow("chat not found")
   })
 
+  it("sends advisory text promptly and then verified product photos", async () => {
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce({
+        json: async () => ({ ok: true, result: { message_id: 43 } }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: async () => ({ ok: true, result: [] }),
+        ok: true,
+        status: 200,
+      })
+    const adapter = createChannelAdapter("TELEGRAM", {
+      telegram: {
+        api_base_url: "https://telegram.test",
+        bot_token: "test-token",
+        fetch: fetcher as typeof fetch,
+      },
+    })
+
+    await adapter.deliver({
+      body: "Sốp chọn hai mẫu phù hợp.",
+      idempotency_key: "delivery-media",
+      message_id: "agmsg_media",
+      recipient_ref: "123456",
+      structured_content: {
+        product_media: [
+          {
+            image_url: "https://cdn.example/one.jpg",
+            product_id: "prod_1",
+            title: "Mẫu một",
+          },
+          {
+            image_url: "https://cdn.example/two.jpg",
+            product_id: "prod_2",
+            title: "Mẫu hai",
+          },
+        ],
+      },
+    })
+
+    expect(fetcher.mock.calls[0][0]).toContain("/sendMessage")
+    expect(fetcher.mock.calls[1][0]).toContain("/sendMediaGroup")
+    expect(JSON.parse(fetcher.mock.calls[1][1].body)).toMatchObject({
+      chat_id: "123456",
+      media: [
+        { media: "https://cdn.example/one.jpg", type: "photo" },
+        { media: "https://cdn.example/two.jpg", type: "photo" },
+      ],
+    })
+  })
+
+  it("rejects private media URLs and still sends the advisory text", async () => {
+    const fetcher = jest.fn().mockResolvedValue({
+      json: async () => ({ ok: true, result: { message_id: 44 } }),
+      ok: true,
+      status: 200,
+    })
+    const adapter = createChannelAdapter("TELEGRAM", {
+      telegram: {
+        api_base_url: "https://telegram.test",
+        bot_token: "test-token",
+        fetch: fetcher as typeof fetch,
+      },
+    })
+
+    await adapter.deliver({
+      body: "Nội dung tư vấn",
+      idempotency_key: "delivery-private-media",
+      message_id: "agmsg_private_media",
+      recipient_ref: "123456",
+      structured_content: {
+        product_media: [
+          {
+            image_url: "http://localhost:9000/admin-secret.jpg",
+            product_id: "prod_1",
+            title: "Không an toàn",
+          },
+        ],
+      },
+    })
+
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(fetcher.mock.calls[0][0]).toContain("/sendMessage")
+  })
+
+  it("falls back to text when Telegram cannot fetch product media", async () => {
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce({
+        json: async () => ({ ok: true, result: { message_id: 45 } }),
+        ok: true,
+        status: 200,
+      })
+      .mockRejectedValueOnce(new Error("media timeout"))
+    const adapter = createChannelAdapter("TELEGRAM", {
+      telegram: {
+        api_base_url: "https://telegram.test",
+        bot_token: "test-token",
+        fetch: fetcher as typeof fetch,
+      },
+    })
+
+    await expect(
+      adapter.deliver({
+        body: "Nội dung vẫn được gửi",
+        idempotency_key: "delivery-media-fallback",
+        message_id: "agmsg_media_fallback",
+        recipient_ref: "123456",
+        structured_content: {
+          product_media: [
+            {
+              image_url: "https://cdn.example/product.jpg",
+              product_id: "prod_1",
+              title: "Mẫu phù hợp",
+            },
+          ],
+        },
+      })
+    ).resolves.toEqual({ external_message_id: "45", status: "DELIVERED" })
+    expect(fetcher.mock.calls[0][0]).toContain("/sendMessage")
+    expect(fetcher.mock.calls[1][0]).toContain("/sendPhoto")
+  })
+
   it("resolves environment secret references without storing the secret", () => {
     expect(
       resolveSecretReference("env:TELEGRAM_BOT_TOKEN", {

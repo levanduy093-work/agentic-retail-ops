@@ -23,6 +23,15 @@ export type GooglePickerSelection =
       supported: false
     }
 
+export const GOOGLE_KNOWLEDGE_PICKER_MIME_TYPES = [
+  "application/vnd.google-apps.document",
+  "application/vnd.google-apps.spreadsheet",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/csv",
+  "text/markdown",
+  "text/plain",
+].join(",")
+
 type PickerDocument = {
   id?: string
   mimeType?: string
@@ -37,6 +46,7 @@ type PickerResponse = {
 
 type PickerView = {
   setIncludeFolders(value: boolean): PickerView
+  setMimeTypes(value: string): PickerView
   setMode(value: string): PickerView
   setSelectFolderEnabled(value: boolean): PickerView
 }
@@ -48,6 +58,7 @@ type Picker = {
 type PickerBuilder = {
   addView(view: PickerView): PickerBuilder
   build(): Picker
+  enableFeature(value: string): PickerBuilder
   setAppId(value: string): PickerBuilder
   setCallback(callback: (data: PickerResponse) => void): PickerBuilder
   setDeveloperKey(value: string): PickerBuilder
@@ -58,6 +69,7 @@ type PickerBuilder = {
 type GooglePickerApi = {
   DocsView: new () => PickerView
   DocsViewMode: { LIST: string }
+  Feature: { MULTISELECT_ENABLED: string }
   PickerBuilder: new () => PickerBuilder
 }
 
@@ -132,9 +144,10 @@ export async function openGoogleKnowledgePicker(
   const pickerApi = window.google?.picker
   if (!pickerApi) throw new Error("Google Picker is unavailable.")
 
-  return new Promise<GooglePickerSelection | null>((resolve) => {
+  return new Promise<GooglePickerSelection[] | null>((resolve) => {
     const view = new pickerApi.DocsView()
-      .setIncludeFolders(true)
+      .setIncludeFolders(false)
+      .setMimeTypes(GOOGLE_KNOWLEDGE_PICKER_MIME_TYPES)
       .setSelectFolderEnabled(false)
       // Google recommends LIST with drive.file because thumbnail access is not
       // guaranteed until the user explicitly selects a file.
@@ -145,32 +158,40 @@ export async function openGoogleKnowledgePicker(
       .setOAuthToken(credential.access_token)
       .setOrigin(window.location.origin)
       .addView(view)
+      .enableFeature(pickerApi.Feature.MULTISELECT_ENABLED)
       .setCallback((data) => {
         if (data.action === "cancel") return resolve(null)
         if (data.action !== "picked") return
-        const document = data.docs?.[0]
-        if (!document?.id || !document.mimeType) return resolve(null)
-        const sourceType = classifyGooglePickerMimeType(document.mimeType)
-        if (!sourceType) {
-          return resolve({
-            mime_type: document.mimeType,
-            name: document.name ?? "Google Drive document",
-            supported: false,
-          })
-        }
-        const sourceUrl =
-          sourceType === "GOOGLE_DOC"
-            ? `https://docs.google.com/document/d/${document.id}`
-            : sourceType === "GOOGLE_SHEET"
-              ? `https://docs.google.com/spreadsheets/d/${document.id}`
-              : `https://drive.google.com/file/d/${document.id}`
-        resolve({
-          mime_type: document.mimeType,
-          name: document.name ?? "Google Drive document",
-          source_type: sourceType,
-          source_url: sourceUrl,
-          supported: true,
+        const documents = data.docs ?? []
+        const selections = documents.flatMap((document) => {
+          if (!document.id || !document.mimeType) return []
+          const sourceType = classifyGooglePickerMimeType(document.mimeType)
+          if (!sourceType) {
+            return [
+              {
+                mime_type: document.mimeType,
+                name: document.name ?? "Google Drive document",
+                supported: false as const,
+              },
+            ]
+          }
+          const sourceUrl =
+            sourceType === "GOOGLE_DOC"
+              ? `https://docs.google.com/document/d/${document.id}`
+              : sourceType === "GOOGLE_SHEET"
+                ? `https://docs.google.com/spreadsheets/d/${document.id}`
+                : `https://drive.google.com/file/d/${document.id}`
+          return [
+            {
+              mime_type: document.mimeType,
+              name: document.name ?? "Google Drive document",
+              source_type: sourceType,
+              source_url: sourceUrl,
+              supported: true as const,
+            },
+          ]
         })
+        resolve(selections.length ? selections : null)
       })
       .build()
       .setVisible(true)

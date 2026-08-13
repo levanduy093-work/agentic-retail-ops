@@ -8,6 +8,7 @@ export type ModelInvocation = {
   prompt_key: string
   prompt_version: string
   system_prompt: string
+  timeout_ms?: number
 }
 
 export type ModelGatewayAdapter = {
@@ -63,6 +64,15 @@ export function assertModelInvocation(input: ModelInvocation) {
       "A system prompt is required for model runs."
     )
   }
+  if (
+    input.timeout_ms !== undefined &&
+    (input.timeout_ms < 1_000 || input.timeout_ms > 30_000)
+  ) {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      "Model timeout_ms must be between 1000 and 30000."
+    )
+  }
 }
 
 export class DisabledModelAdapter implements ModelGatewayAdapter {
@@ -94,7 +104,10 @@ export class OpenAIResponsesModelAdapter implements ModelGatewayAdapter {
   async invoke(input: ModelInvocation): Promise<Record<string, unknown>> {
     assertModelInvocation(input)
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 15_000)
+    const timeout = setTimeout(
+      () => controller.abort(),
+      input.timeout_ms ?? 15_000
+    )
 
     try {
       const response = await this.fetchImpl(`${this.baseUrl}/responses`, {
@@ -193,7 +206,10 @@ export class GeminiModelAdapter implements ModelGatewayAdapter {
   async invoke(input: ModelInvocation): Promise<Record<string, unknown>> {
     assertModelInvocation(input)
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 15_000)
+    const timeout = setTimeout(
+      () => controller.abort(),
+      input.timeout_ms ?? 15_000
+    )
     try {
       const response = await this.fetchImpl(
         `${this.baseUrl}/models/${encodeURIComponent(this.model)}:generateContent`,
@@ -282,7 +298,10 @@ export class DeepSeekChatModelAdapter implements ModelGatewayAdapter {
   async invoke(input: ModelInvocation): Promise<Record<string, unknown>> {
     assertModelInvocation(input)
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 30_000)
+    const timeout = setTimeout(
+      () => controller.abort(),
+      input.timeout_ms ?? 30_000
+    )
     try {
       const response = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
         body: JSON.stringify({

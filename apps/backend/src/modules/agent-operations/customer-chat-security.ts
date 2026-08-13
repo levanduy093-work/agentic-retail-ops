@@ -151,9 +151,12 @@ const PROMPT_ATTACK_PATTERNS = [
   /(reveal|show|print|repeat|leak)\s+(the\s+)?(system|developer)\s+(prompt|message|instructions?)/iu,
   /(execute|run|call)\s+(a\s+)?(tool|function|command|shell|sql)/iu,
   /(bypass|disable|override)\s+(the\s+)?(guardrails?|safety|policy|permissions?)/iu,
+  /(grant|enable|elevate|add)\s+(?:me\s+)?(?:admin|inventory|privileged?|access)\s+(?:access|permissions?)/iu,
+  /(api[ _-]?key|access token|secret key|password|mật khẩu|token truy cập)/iu,
   /bỏ\s+qua\s+(mọi\s+)?(hướng\s+dẫn|chỉ\s+thị|quy\s+tắc)/iu,
   /(tiết\s+lộ|hiển\s+thị|in\s+ra)\s+(system\s+)?prompt/iu,
   /(chạy|thực\s+thi|gọi)\s+(lệnh|tool|công\s+cụ|shell|sql)/iu,
+  /(cấp|bật|nâng|thêm)\s+quyền|quyền\s+(quản trị|admin|kho)/iu,
 ]
 
 export function isExplicitPromptAttack(value: string) {

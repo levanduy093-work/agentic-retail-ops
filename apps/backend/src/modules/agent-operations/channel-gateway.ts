@@ -55,6 +55,65 @@ type TelegramSendMessageResponse = {
   result?: { message_id: number }
 }
 
+type TelegramProductMedia = {
+  image_url: string
+  product_id: string
+  product_url?: string | null
+  title: string
+}
+
+function isPublicTelegramMediaUrl(value: unknown): value is string {
+  if (typeof value !== "string") return false
+  try {
+    const url = new URL(value)
+    const hostname = url.hostname.toLocaleLowerCase()
+    if (url.protocol !== "https:" || url.username || url.password) return false
+    return !(
+      hostname === "localhost" ||
+      hostname.endsWith(".localhost") ||
+      hostname.endsWith(".local") ||
+      hostname === "0.0.0.0" ||
+      hostname === "::1" ||
+      /^127\./u.test(hostname) ||
+      /^10\./u.test(hostname) ||
+      /^192\.168\./u.test(hostname) ||
+      /^169\.254\./u.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[01])\./u.test(hostname)
+    )
+  } catch {
+    return false
+  }
+}
+
+function getTelegramProductMedia(
+  structuredContent: Record<string, unknown> | undefined
+): TelegramProductMedia[] {
+  const candidate = structuredContent?.product_media
+  if (!Array.isArray(candidate)) return []
+  return candidate.flatMap((item) => {
+    if (!item || typeof item !== "object") return []
+    const media = item as Record<string, unknown>
+    if (
+      !isPublicTelegramMediaUrl(media.image_url) ||
+      typeof media.product_id !== "string" ||
+      typeof media.title !== "string"
+    ) {
+      return []
+    }
+    return [
+      {
+        image_url: media.image_url,
+        product_id: media.product_id,
+        product_url:
+          isPublicTelegramMediaUrl(media.product_url)
+            ? media.product_url
+            : null,
+        title: media.title.slice(0, 200),
+      },
+    ]
+  }).slice(0, 3)
+}
+
 export class TelegramChannelAdapter implements ChannelAdapter {
   channel = "TELEGRAM" as const
   private readonly apiBaseUrl: string
@@ -67,6 +126,42 @@ export class TelegramChannelAdapter implements ChannelAdapter {
     ).replace(/\/$/, "")
     this.botToken = options.bot_token
     this.fetcher = options.fetch ?? fetch
+  }
+
+  private async sendProductMedia(input: ChannelDeliveryInput) {
+    const media = getTelegramProductMedia(input.structured_content)
+    if (!media.length) return
+    const method = media.length === 1 ? "sendPhoto" : "sendMediaGroup"
+    const body =
+      media.length === 1
+        ? {
+            caption: media[0].title,
+            chat_id: input.recipient_ref,
+            photo: media[0].image_url,
+          }
+        : {
+            chat_id: input.recipient_ref,
+            media: media.map((item) => ({
+              caption: item.title,
+              media: item.image_url,
+              type: "photo",
+            })),
+          }
+    try {
+      const response = await this.fetcher(
+        `${this.apiBaseUrl}/bot${this.botToken}/${method}`,
+        {
+          body: JSON.stringify(body),
+          headers: { "content-type": "application/json" },
+          method: "POST",
+          signal: AbortSignal.timeout(6_000),
+        }
+      )
+      const payload = (await response.json()) as TelegramSendMessageResponse
+      if (!response.ok || !payload.ok) return
+    } catch {
+      // Product media is an enhancement. Text delivery remains authoritative.
+    }
   }
 
   async deliver(
@@ -92,6 +187,8 @@ export class TelegramChannelAdapter implements ChannelAdapter {
         `Telegram delivery failed: ${payload.description ?? `HTTP ${response.status}`}`
       )
     }
+
+    await this.sendProductMedia(input)
 
     return {
       external_message_id: String(payload.result.message_id),

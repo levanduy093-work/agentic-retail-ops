@@ -31,11 +31,18 @@ export type KnowledgeAnswer = {
     path: string
   }
   product_ids?: string[]
+  product_media?: Array<{
+    image_url: string
+    product_id: string
+    product_url: string | null
+    title: string
+  }>
 }
 
 export const KNOWLEDGE_ANSWER_PROMPT_KEY = "knowledge.customer-answer"
 export const KNOWLEDGE_ANSWER_PROMPT_VERSION = "2.0.0"
-export const KNOWLEDGE_ANSWER_MAX_TOKENS = 900
+export const KNOWLEDGE_ANSWER_MAX_TOKENS = 600
+export const KNOWLEDGE_ANSWER_TIMEOUT_MS = 8_000
 export const KNOWLEDGE_ANSWER_OUTPUT_SCHEMA = {
   additionalProperties: false,
   properties: {
@@ -68,7 +75,7 @@ export function detectKnowledgeQuestionLocale(question: string): "en" | "vi" {
   return /[ăâđêôơưĂÂĐÊÔƠƯ]|[àáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/iu.test(
     question
   ) ||
-    /\b(xin chao|chao shop|shop oi|cam on|tam biet|alo|a lo|da|vang)\b/iu.test(
+    /\b(xin chao|chao shop|chào sốp|sốp|shop oi|cam on|tam biet|alo|a lo|da|vang)\b/iu.test(
       question
     )
     ? "vi"
@@ -246,6 +253,12 @@ export function hasSufficientKnowledgeEvidence(
   return knowledge.results.some((result) =>
     result.score <= 1 ? result.score >= 0.35 : result.score >= 2
   )
+}
+
+export function shouldUseSemanticKnowledgeSearch(
+  lexicalKnowledge: KnowledgeSearchOutput
+) {
+  return !hasSufficientKnowledgeEvidence(lexicalKnowledge)
 }
 
 function normalizedEvidenceTokens(value: string) {

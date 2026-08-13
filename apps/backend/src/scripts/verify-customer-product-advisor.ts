@@ -26,11 +26,19 @@ export default async function verifyCustomerProductAdvisor({
   )
   const first_read_ms = Date.now() - firstReadStartedAt
   const cachedReadStartedAt = Date.now()
-  const cachedCatalogRead = await executeCatalogRead(
+  let cachedCatalogRead = await executeCatalogRead(
     container,
     { limit: 8, locale: "vi" },
     { tenant_id: "default" }
   )
+  for (let attempt = 0; attempt < 4 && cachedCatalogRead.cache_status !== "HIT"; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    cachedCatalogRead = await executeCatalogRead(
+      container,
+      { limit: 8, locale: "vi" },
+      { tenant_id: "default" }
+    )
+  }
   const cached_read_ms = Date.now() - cachedReadStartedAt
   const catalog = catalogRead.output
   assert.deepEqual(cachedCatalogRead.output, catalog)
@@ -65,6 +73,9 @@ export default async function verifyCustomerProductAdvisor({
         catalog_first_read_ms: first_read_ms,
         catalog_cached_read_ms: cached_read_ms,
         conversation_memory_records: memoryCount,
+        public_thumbnail_count: catalog.products.filter((product) =>
+          product.thumbnail?.startsWith("https://")
+        ).length,
         product_count: catalog.products.length,
         products: catalog.products.map((product) => ({
           id: product.id,

@@ -1,4 +1,7 @@
-import { classifyGooglePickerMimeType } from "../google-picker"
+import {
+  classifyGooglePickerMimeType,
+  GOOGLE_KNOWLEDGE_PICKER_MIME_TYPES,
+} from "../google-picker"
 
 describe("Google knowledge Picker file classification", () => {
   test.each([
@@ -20,5 +23,16 @@ describe("Google knowledge Picker file classification", () => {
     "image/png",
   ])("rejects unsupported MIME type %s", (mimeType) => {
     expect(classifyGooglePickerMimeType(mimeType)).toBeNull()
+  })
+
+  it("filters the Picker to only knowledge formats before selection", () => {
+    expect(GOOGLE_KNOWLEDGE_PICKER_MIME_TYPES).toContain(
+      "application/vnd.google-apps.document"
+    )
+    expect(GOOGLE_KNOWLEDGE_PICKER_MIME_TYPES).toContain(
+      "application/vnd.google-apps.spreadsheet"
+    )
+    expect(GOOGLE_KNOWLEDGE_PICKER_MIME_TYPES).toContain("text/plain")
+    expect(GOOGLE_KNOWLEDGE_PICKER_MIME_TYPES).not.toContain("application/pdf")
   })
 })

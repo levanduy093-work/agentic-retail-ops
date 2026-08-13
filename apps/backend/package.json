@@ -42,6 +42,7 @@
     "agent:verify-live-rag": "medusa exec ./src/scripts/verify-live-semantic-rag.ts",
     "agent:verify-intent-router": "medusa exec ./src/scripts/verify-customer-intent-router.ts",
     "agent:verify-product-advisor": "medusa exec ./src/scripts/verify-customer-product-advisor.ts",
+    "agent:evaluate-customer-chat": "medusa exec ./src/scripts/run-customer-chat-evaluation.ts",
     "agent:analyze-customer-ai-latency": "medusa exec ./src/scripts/analyze-customer-ai-latency.ts",
     "agent:apply-provider-priority": "medusa exec ./src/scripts/apply-ai-provider-priority.ts",
     "agent:backfill-conversation-memory": "medusa exec ./src/scripts/backfill-conversation-memory.ts",
