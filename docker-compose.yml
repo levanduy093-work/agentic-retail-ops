@@ -35,6 +35,22 @@ services:
       retries: 15
     volumes:
       - agent-qdrant-data:/qdrant/storage
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    pull_policy: always
+    command:
+      - tunnel
+      - --no-autoupdate
+      - --loglevel
+      - info
+      - run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    profiles:
+      - telegram-tunnel
+    restart: unless-stopped
 
 volumes:
   agent-redis-data:

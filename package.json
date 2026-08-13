@@ -13,6 +13,11 @@
     "test": "turbo test",
     "backend:seed": "turbo seed --filter=@dtc/backend",
     "backend:dev": "turbo dev --filter=@dtc/backend",
+    "agent:configure-telegram": "pnpm --dir apps/backend run agent:configure-telegram",
+    "tunnel:up": "docker compose --env-file apps/backend/.env --profile telegram-tunnel up -d cloudflared",
+    "tunnel:status": "docker compose --env-file apps/backend/.env --profile telegram-tunnel ps cloudflared",
+    "tunnel:logs": "docker compose --env-file apps/backend/.env --profile telegram-tunnel logs -f cloudflared",
+    "tunnel:down": "docker compose --env-file apps/backend/.env --profile telegram-tunnel stop cloudflared && docker compose --env-file apps/backend/.env --profile telegram-tunnel rm -f cloudflared",
     "storefront:dev": "turbo dev --filter=@dtc/storefront"
   },
   "pnpm": {
