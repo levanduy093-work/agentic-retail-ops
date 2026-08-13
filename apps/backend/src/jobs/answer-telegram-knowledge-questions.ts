@@ -6,6 +6,7 @@ import AgentOperationsModuleService from "../modules/agent-operations/service"
 import { isCustomerSupportConversation } from "../modules/agent-operations/channel-principal"
 import { answerCustomerKnowledgeQuestionWorkflow } from "../workflows/agent-operations/answer-customer-knowledge-question"
 import { dispatchAgentDeliveryWorkflow } from "../workflows/agent-operations/dispatch-agent-delivery"
+import { refreshConversationMemoryWorkflow } from "../workflows/agent-operations/refresh-conversation-memory"
 
 const BATCH_SIZE = 25
 const CANDIDATE_WINDOW = 200
@@ -62,6 +63,9 @@ export default async function answerTelegramKnowledgeQuestionsJob(
     if (escalations.length) continue
 
     try {
+      await refreshConversationMemoryWorkflow(container).run({
+        input: { conversation_id: inbound.conversation_id },
+      })
       const { result } = await answerCustomerKnowledgeQuestionWorkflow(
         container
       ).run({ input: { inbound_message_id: inbound.id } })
@@ -73,6 +77,9 @@ export default async function answerTelegramKnowledgeQuestionsJob(
           },
         })
       }
+      await refreshConversationMemoryWorkflow(container).run({
+        input: { conversation_id: inbound.conversation_id },
+      })
       processed += 1
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error"

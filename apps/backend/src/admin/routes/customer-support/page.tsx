@@ -14,19 +14,10 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Link } from "react-router-dom"
 import { sdk } from "../../lib/sdk"
-
-type SupportCitation = {
-  document_id: string
-  locator: string
-  quote_checksum: string
-  version: string
-}
 
 type SupportTaskInput = {
   channel?: string
-  citations?: SupportCitation[]
   conversation_id?: string
   customer_id?: string
   draft?: string
@@ -49,7 +40,9 @@ type SupportTask = {
   priority: string
   result: Record<string, unknown> | null
   status: string
+  support_conversation_channel: string | null
   support_conversation_id: string | null
+  support_conversation_title: string | null
   task_type: string
   title: string
   updated_at: string
@@ -68,8 +61,12 @@ type ActionRequestResponse = {
 
 type SupportConversationResponse = {
   conversation: {
+    channel: string
     id: string
+    last_message_at: string
+    title: string
   }
+  memory: ConversationMemory | null
   messages: Array<{
     body: string
     direction: "INBOUND" | "OUTBOUND"
@@ -78,6 +75,38 @@ type SupportConversationResponse = {
     sender_type: string
     status: string
   }>
+  support_tasks: SupportTask[]
+}
+
+type ConversationMemory = {
+  customer_facts: string[]
+  open_questions: string[]
+  resolved_topics: string[]
+  source_message_count: number
+  summarized_at: string
+  summary: string
+  version: number
+}
+
+type SupportConversationListItem = {
+  channel: string
+  id: string
+  last_message_at: string
+  latest_message: {
+    body: string
+    direction: "INBOUND" | "OUTBOUND"
+    occurred_at: string
+  } | null
+  memory: ConversationMemory | null
+  requires_human_attention: boolean
+  status: string
+  support_task: SupportTask | null
+  title: string
+}
+
+type SupportConversationListResponse = {
+  conversations: SupportConversationListItem[]
+  count: number
 }
 
 type SimulatorOrder = {
@@ -106,11 +135,26 @@ const statusColor = (status: string) => {
   return "blue" as const
 }
 
+const customerNameFromConversation = (conversation: {
+  title?: string | null
+}) => {
+  const title = conversation.title?.trim()
+  if (title) {
+    return title.replace(/^(Telegram|Zalo|Slack|Teams)\s+[—–-]\s+/i, "")
+  }
+
+  return "Customer"
+}
+
+const customerInitial = (name: string) => name.trim().charAt(0).toUpperCase()
+
 const CustomerSupportPage = () => {
   const { i18n, t } = useTranslation()
   const queryClient = useQueryClient()
-  const [view, setView] = useState<"open" | "completed">("open")
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  const [view, setView] = useState<"attention" | "all">("attention")
+  const [selectedConversationId, setSelectedConversationId] = useState<
+    string | null
+  >(null)
   const [reply, setReply] = useState("")
   const [releaseOpen, setReleaseOpen] = useState(false)
   const [sendOpen, setSendOpen] = useState(false)
@@ -123,13 +167,22 @@ const CustomerSupportPage = () => {
   const locale = i18n.language.startsWith("vi") ? "vi-VN" : "en-US"
 
   const currentUser = useQuery({
-    queryFn: () => sdk.admin.user.me({ fields: "id,email,first_name,last_name" }),
+    queryFn: () =>
+      sdk.admin.user.me({ fields: "id,email,first_name,last_name" }),
     queryKey: ["current-admin-user"],
   })
   const tasks = useQuery({
     queryFn: () =>
       sdk.client.fetch<TaskListResponse>("/admin/agent-operations/tasks"),
     queryKey: ["customer-support-tasks"],
+  })
+  const conversations = useQuery({
+    queryFn: () =>
+      sdk.client.fetch<SupportConversationListResponse>(
+        "/admin/agent-operations/conversations?customer_support=true&limit=100",
+      ),
+    queryKey: ["customer-support-conversations"],
+    refetchInterval: 10_000,
   })
   const simulatorOrders = useQuery({
     enabled: simulatorOpen,
@@ -143,48 +196,51 @@ const CustomerSupportPage = () => {
   const supportTasks = useMemo(
     () =>
       (tasks.data?.tasks ?? []).filter(
-        (task) => task.task_type === "SUPPORT_RESPONSE_REVIEW"
+        (task) => task.task_type === "SUPPORT_RESPONSE_REVIEW",
       ),
-    [tasks.data?.tasks]
+    [tasks.data?.tasks],
   )
-  const openTasks = supportTasks.filter(
-    (task) =>
-      !TERMINAL_STATUSES.includes(task.status) && !isAssignedToManager(task)
+  const allConversations = conversations.data?.conversations ?? []
+  const attentionConversations = allConversations.filter(
+    (conversation) => conversation.requires_human_attention,
   )
-  const completedTasks = supportTasks.filter((task) =>
-    TERMINAL_STATUSES.includes(task.status)
+  const visibleConversations =
+    view === "attention" ? attentionConversations : allConversations
+  const selectedConversation = allConversations.find(
+    (conversation) => conversation.id === selectedConversationId,
   )
-  const visibleTasks = view === "open" ? openTasks : completedTasks
   const selectedTask = supportTasks.find(
-    (task) => task.id === selectedTaskId
+    (task) => task.support_conversation_id === selectedConversationId,
   )
   const selectedSimulatorOrder = simulatorOrders.data?.orders.find(
-    (order) => order.id === simulatorOrderId
+    (order) => order.id === simulatorOrderId,
   ) as SimulatorOrder | undefined
   const conversation = useQuery({
-    enabled: Boolean(selectedTask?.support_conversation_id),
+    enabled: Boolean(selectedConversationId),
     queryFn: () =>
       sdk.client.fetch<SupportConversationResponse>(
-        `/admin/agent-operations/conversations/${selectedTask?.support_conversation_id}`
+        `/admin/agent-operations/conversations/${selectedConversationId}`,
       ),
-    queryKey: [
-      "customer-support-conversation",
-      selectedTask?.support_conversation_id,
-    ],
+    queryKey: ["customer-support-conversation", selectedConversationId],
+    refetchInterval: 10_000,
   })
 
   useEffect(() => {
-    if (!visibleTasks.some((task) => task.id === selectedTaskId)) {
-      setSelectedTaskId(visibleTasks[0]?.id ?? null)
+    if (
+      !visibleConversations.some(
+        (conversation) => conversation.id === selectedConversationId,
+      )
+    ) {
+      setSelectedConversationId(visibleConversations[0]?.id ?? null)
     }
-  }, [selectedTaskId, visibleTasks])
+  }, [selectedConversationId, visibleConversations])
 
   useEffect(() => {
     const completedReply = selectedTask?.result?.response_body
     setReply(
       typeof completedReply === "string"
         ? completedReply
-        : selectedTask?.input?.draft ?? ""
+        : (selectedTask?.input?.draft ?? ""),
     )
     setReleaseOpen(false)
     setSendOpen(false)
@@ -192,21 +248,25 @@ const CustomerSupportPage = () => {
     setTransferReason("")
   }, [selectedTask?.id, selectedTask?.input?.draft, selectedTask?.result])
 
-  const orderId = selectedTask?.input?.order_id
   const customerId = selectedTask?.input?.customer_id
-  const order = useQuery({
-    enabled: Boolean(orderId),
-    queryFn: () => sdk.admin.order.retrieve(orderId!),
-    queryKey: ["customer-support-order", orderId],
-  })
   const customer = useQuery({
     enabled: Boolean(customerId && !customerId.startsWith("telegram:")),
     queryFn: () => sdk.admin.customer.retrieve(customerId!),
     queryKey: ["customer-support-customer", customerId],
   })
 
-  const invalidateTasks = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["customer-support-tasks"] })
+  const invalidateSupportData = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: ["customer-support-tasks"],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["customer-support-conversations"],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["customer-support-conversation"],
+      }),
+    ])
   }
   const errorMessage = (error: unknown) =>
     error instanceof Error ? error.message : t("supportDesk.actionError")
@@ -229,7 +289,7 @@ const CustomerSupportPage = () => {
               status: "CLAIMED",
             },
             method: "POST",
-          }
+          },
         )
         status = "CLAIMED"
       }
@@ -244,14 +304,14 @@ const CustomerSupportPage = () => {
               status: "IN_PROGRESS",
             },
             method: "POST",
-          }
+          },
         )
       }
     },
     onError: (error) => toast.error(errorMessage(error)),
     onSuccess: async () => {
       toast.success(t("supportDesk.requestTaken"))
-      await invalidateTasks()
+      await invalidateSupportData()
     },
   })
 
@@ -274,27 +334,27 @@ const CustomerSupportPage = () => {
             status: "COMPLETED",
           },
           method: "POST",
-        }
+        },
       )
     },
     onError: (error) => toast.error(errorMessage(error)),
     onSuccess: async () => {
       toast.success(t("supportDesk.draftCompleted"))
-      await invalidateTasks()
+      await invalidateSupportData()
     },
   })
 
   const releaseTask = useMutation({
     mutationFn: (task: SupportTask) =>
-      sdk.client.fetch(
-        `/admin/agent-operations/tasks/${task.id}/release`,
-        { body: {}, method: "POST" }
-      ),
+      sdk.client.fetch(`/admin/agent-operations/tasks/${task.id}/release`, {
+        body: {},
+        method: "POST",
+      }),
     onError: (error) => toast.error(errorMessage(error)),
     onSuccess: async () => {
       toast.success(t("supportDesk.requestReleased"))
       setReleaseOpen(false)
-      await invalidateTasks()
+      await invalidateSupportData()
     },
   })
 
@@ -307,7 +367,7 @@ const CustomerSupportPage = () => {
             correlation_id: task.incident_correlation_id ?? task.id,
             idempotency_key: `support-manager-transfer:${task.id}:${task.updated_at}`,
             incident_id: task.incident_correlation_id
-              ? task.incident_id ?? undefined
+              ? (task.incident_id ?? undefined)
               : undefined,
             input: {
               assigned_to_id: "operations_manager",
@@ -322,11 +382,11 @@ const CustomerSupportPage = () => {
             tool_version: "1.0.0",
           },
           method: "POST",
-        }
+        },
       )
       return sdk.client.fetch(
         `/admin/agent-operations/actions/${requested.action.id}/execute`,
-        { body: {}, method: "POST" }
+        { body: {}, method: "POST" },
       )
     },
     onError: (error) => toast.error(errorMessage(error)),
@@ -334,7 +394,7 @@ const CustomerSupportPage = () => {
       toast.success(t("supportDesk.requestTransferred"))
       setTransferOpen(false)
       setTransferReason("")
-      await invalidateTasks()
+      await invalidateSupportData()
     },
   })
 
@@ -358,7 +418,7 @@ const CustomerSupportPage = () => {
             question: simulatorQuestion.trim(),
           },
           method: "POST",
-        }
+        },
       )
     },
     onError: (error) => toast.error(errorMessage(error)),
@@ -367,8 +427,8 @@ const CustomerSupportPage = () => {
       setSimulatorOpen(false)
       setSimulatorOrderId("")
       setSimulatorQuestion("")
-      setView("open")
-      await invalidateTasks()
+      setView("attention")
+      await invalidateSupportData()
     },
   })
 
@@ -379,16 +439,13 @@ const CustomerSupportPage = () => {
         {
           body: { expected_task_updated_at: task.updated_at },
           method: "POST",
-        }
+        },
       ),
     onError: (error) => toast.error(errorMessage(error)),
     onSuccess: async () => {
       toast.success(t("supportDesk.reviewedReplySent"))
       setSendOpen(false)
-      await invalidateTasks()
-      await queryClient.invalidateQueries({
-        queryKey: ["customer-support-conversation"],
-      })
+      await invalidateSupportData()
     },
   })
 
@@ -401,39 +458,34 @@ const CustomerSupportPage = () => {
           timeStyle: "short",
         }).format(new Date(value))
       : "—"
-  const formatMoney = (value?: number, currency?: string) =>
-    typeof value === "number" && currency
-      ? new Intl.NumberFormat(locale, {
-          currency: currency.toUpperCase(),
-          style: "currency",
-        }).format(value)
-      : "—"
-  const customerName = selectedTask?.input?.channel
-    ? `${selectedTask.input.channel} customer`
-    : customer.data?.customer
-      ? [customer.data.customer.first_name, customer.data.customer.last_name]
-          .filter(Boolean)
-          .join(" ") || customer.data.customer.email
-      : "—"
-  const customerReference = selectedTask?.input?.channel
-    ? selectedTask.input.customer_id ?? "—"
-    : customer.data?.customer.email ?? "—"
+  const storedCustomerName = customer.data?.customer
+    ? [customer.data.customer.first_name, customer.data.customer.last_name]
+        .filter(Boolean)
+        .join(" ") || customer.data.customer.email
+    : null
+  const customerName = selectedConversation
+    ? (storedCustomerName ?? customerNameFromConversation(selectedConversation))
+    : "—"
+  const customerReference =
+    customer.data?.customer?.email ??
+    selectedConversation?.channel ??
+    selectedTask?.input?.channel ??
+    "—"
   const assignedToManager = selectedTask
     ? isAssignedToManager(selectedTask)
     : false
   const assignedToOther = Boolean(
     selectedTask?.assigned_to_id &&
-      selectedTask.assigned_to_type === "user" &&
-      selectedTask.assigned_to_id !== currentUser.data?.user.id
+    selectedTask.assigned_to_type === "user" &&
+    selectedTask.assigned_to_id !== currentUser.data?.user.id,
   )
   const canEdit =
     selectedTask?.status === "IN_PROGRESS" &&
     !assignedToOther &&
     !assignedToManager
-  const citations = selectedTask?.input?.citations ?? []
   const messageSent = selectedTask?.result?.message_sent === true
 
-  if (tasks.isLoading || currentUser.isLoading) {
+  if (tasks.isLoading || conversations.isLoading || currentUser.isLoading) {
     return (
       <Container className="flex min-h-[360px] items-center justify-center">
         <Text size="small" leading="compact" className="text-ui-fg-subtle">
@@ -470,78 +522,120 @@ const CustomerSupportPage = () => {
           <div className="flex gap-x-2 border-b border-ui-border-base px-4 py-3">
             <Button
               size="small"
-              variant={view === "open" ? "primary" : "secondary"}
-              onClick={() => setView("open")}
+              variant={view === "attention" ? "primary" : "secondary"}
+              onClick={() => setView("attention")}
             >
-              {t("supportDesk.openTab")}
+              {t("supportDesk.attentionTab")}
             </Button>
             <Button
               size="small"
-              variant={view === "completed" ? "primary" : "secondary"}
-              onClick={() => setView("completed")}
+              variant={view === "all" ? "primary" : "secondary"}
+              onClick={() => setView("all")}
             >
-              {t("supportDesk.completedTab")}
+              {t("supportDesk.allConversationsTab")}
             </Button>
           </div>
           <div className="px-4 py-3">
             <Text size="small" leading="compact" className="text-ui-fg-subtle">
-              {view === "open"
-                ? t("supportDesk.openCount", { count: openTasks.length })
-                : t("supportDesk.completedCount", {
-                    count: completedTasks.length,
+              {view === "attention"
+                ? t("supportDesk.attentionCount", {
+                    count: attentionConversations.length,
+                  })
+                : t("supportDesk.allConversationsCount", {
+                    count: allConversations.length,
                   })}
             </Text>
           </div>
           <div className="flex flex-col gap-2 px-3 pb-3">
-            {visibleTasks.length === 0 ? (
+            {visibleConversations.length === 0 ? (
               <Text
                 size="small"
                 leading="compact"
                 className="px-3 py-8 text-center text-ui-fg-subtle"
               >
                 {t(
-                  view === "open"
-                    ? "supportDesk.emptyOpen"
-                    : "supportDesk.emptyCompleted"
+                  view === "attention"
+                    ? "supportDesk.emptyAttention"
+                    : "supportDesk.emptyConversations",
                 )}
               </Text>
             ) : (
-              visibleTasks.map((task) => (
-                <Button
-                  className="h-auto w-full justify-start whitespace-normal px-4 py-3 text-left"
-                  key={task.id}
-                  size="small"
-                  variant={task.id === selectedTaskId ? "secondary" : "transparent"}
-                  onClick={() => setSelectedTaskId(task.id)}
-                >
-                  <div className="flex min-w-0 flex-1 flex-col gap-y-1">
-                    <Text size="small" leading="compact" weight="plus">
-                      {task.input?.question ?? task.title}
-                    </Text>
-                    <div className="flex items-center justify-between gap-x-2">
-                      <Text
-                        size="xsmall"
-                        leading="compact"
-                        className="text-ui-fg-subtle"
-                      >
-                        {formatDate(task.created_at)}
-                      </Text>
-                      <StatusBadge color={statusColor(task.status)}>
-                        {humanStatus(task.status)}
-                      </StatusBadge>
+              visibleConversations.map((item) => {
+                const itemCustomerName = customerNameFromConversation(item)
+                const isSelected = item.id === selectedConversationId
+
+                return (
+                  <Button
+                    className="h-auto w-full justify-start whitespace-normal rounded-lg px-3 py-3 text-left"
+                    key={item.id}
+                    size="small"
+                    variant={isSelected ? "secondary" : "transparent"}
+                    onClick={() => setSelectedConversationId(item.id)}
+                  >
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ui-bg-component shadow-elevation-card-rest">
+                        <Text size="small" leading="compact" weight="plus">
+                          {customerInitial(itemCustomerName)}
+                        </Text>
+                      </div>
+                      <div className="flex min-w-0 flex-1 flex-col gap-y-1">
+                        <div className="flex items-center justify-between gap-x-2">
+                          <Text size="small" leading="compact" weight="plus">
+                            {itemCustomerName}
+                          </Text>
+                          <Text
+                            size="xsmall"
+                            leading="compact"
+                            className="shrink-0 text-ui-fg-subtle"
+                          >
+                            {formatDate(item.last_message_at)}
+                          </Text>
+                        </div>
+                        <Text
+                          size="small"
+                          leading="compact"
+                          className="line-clamp-2 text-ui-fg-subtle"
+                        >
+                          {item.latest_message?.body ??
+                            item.memory?.summary ??
+                            item.title}
+                        </Text>
+                        <div className="flex items-center justify-between gap-x-2">
+                          <Text
+                            size="xsmall"
+                            leading="compact"
+                            className="text-ui-fg-muted"
+                          >
+                            {item.channel}
+                          </Text>
+                          <StatusBadge
+                            color={
+                              item.requires_human_attention ? "orange" : "green"
+                            }
+                          >
+                            {item.requires_human_attention
+                              ? t("supportDesk.needsHuman")
+                              : t("supportDesk.aiHandling")}
+                          </StatusBadge>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </Button>
-              ))
+                  </Button>
+                )
+              })
             )}
           </div>
         </Container>
 
         <Container className="p-0">
-          {!selectedTask ? (
+          {!selectedConversation ? (
             <div className="flex min-h-[420px] items-center justify-center px-6 py-12">
-              <Text size="small" leading="compact" className="text-ui-fg-subtle">
-                {t("supportDesk.selectRequest")}
+              <Text
+                size="small"
+                leading="compact"
+                className="text-ui-fg-subtle"
+              >
+                {t("supportDesk.selectConversation")}
               </Text>
             </div>
           ) : (
@@ -549,16 +643,28 @@ const CustomerSupportPage = () => {
               <div className="flex flex-col gap-y-3 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex flex-col gap-y-1">
                   <Heading level="h2">{customerName}</Heading>
-                  <Text size="small" leading="compact" className="text-ui-fg-subtle">
+                  <Text
+                    size="small"
+                    leading="compact"
+                    className="text-ui-fg-subtle"
+                  >
                     {customerReference}
                   </Text>
                 </div>
                 <div className="flex flex-col items-start gap-y-1 sm:items-end">
-                  <StatusBadge color={statusColor(selectedTask.status)}>
-                    {humanStatus(selectedTask.status)}
+                  <StatusBadge
+                    color={selectedTask ? statusColor(selectedTask.status) : "green"}
+                  >
+                    {selectedTask
+                      ? humanStatus(selectedTask.status)
+                      : t("supportDesk.aiHandling")}
                   </StatusBadge>
-                  {selectedTask.due_at && (
-                    <Text size="xsmall" leading="compact" className="text-ui-fg-subtle">
+                  {selectedTask?.due_at && (
+                    <Text
+                      size="xsmall"
+                      leading="compact"
+                      className="text-ui-fg-subtle"
+                    >
                       {t("supportDesk.due", {
                         time: formatDate(selectedTask.due_at),
                       })}
@@ -567,198 +673,183 @@ const CustomerSupportPage = () => {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-y-2 bg-ui-bg-subtle px-6 py-5">
-                <Text size="small" leading="compact" weight="plus">
-                  {t("supportDesk.customerQuestion")}
-                </Text>
-                <Text size="small" leading="compact">
-                  {selectedTask.input?.question ?? "—"}
-                </Text>
-              </div>
-
-              {orderId && <div className="px-6 py-5">
-                <div className="mb-4 flex items-center justify-between gap-x-3">
+              <div className="bg-ui-bg-base px-6 py-4">
+                <div className="flex items-center justify-between gap-3">
                   <Text size="small" leading="compact" weight="plus">
-                    {t("supportDesk.order")}
+                    {t("supportDesk.conversationMemory")}
                   </Text>
-                  {orderId && (
-                    <Button asChild size="small" variant="secondary">
-                      <Link to={`/orders/${orderId}`}>
-                        {t("supportDesk.viewOrder")}
-                      </Link>
-                    </Button>
+                  {conversation.data?.memory && (
+                    <Text
+                      size="xsmall"
+                      leading="compact"
+                      className="text-ui-fg-muted"
+                    >
+                      {t("supportDesk.memoryVersion", {
+                        count: conversation.data.memory.source_message_count,
+                        version: conversation.data.memory.version,
+                      })}
+                    </Text>
                   )}
                 </div>
-                {order.isLoading || customer.isLoading ? (
-                  <Text size="small" leading="compact" className="text-ui-fg-subtle">
-                    {t("supportDesk.loading")}
-                  </Text>
-                ) : (
-                  <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                    {[
-                      [
-                        t("supportDesk.orderNumber", {
-                          number: order.data?.order.display_id ?? "—",
-                        }),
-                        humanStatus(order.data?.order.status ?? "pending"),
-                      ],
-                      [
-                        t("supportDesk.payment"),
-                        humanStatus(order.data?.order.payment_status ?? "pending"),
-                      ],
-                      [
-                        t("supportDesk.fulfillment"),
-                        humanStatus(
-                          order.data?.order.fulfillment_status ?? "not_fulfilled"
-                        ),
-                      ],
-                      [
-                        t("supportDesk.total"),
-                        formatMoney(
-                          order.data?.order.total,
-                          order.data?.order.currency_code
-                        ),
-                      ],
-                    ].map(([label, value]) => (
-                      <div className="flex flex-col gap-y-1" key={label}>
-                        <Text size="xsmall" leading="compact" className="text-ui-fg-subtle">
-                          {label}
-                        </Text>
-                        <Text size="small" leading="compact" weight="plus">
-                          {value}
-                        </Text>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>}
-
-              <div className="flex flex-col gap-y-3 px-6 py-5">
-                <div className="flex flex-col gap-y-1">
-                  <Text size="small" leading="compact" weight="plus">
-                    {t("supportDesk.suggestedReply")}
-                  </Text>
-                  <Text size="small" leading="compact" className="text-ui-fg-subtle">
-                    {t(
-                      canEdit
-                        ? "supportDesk.replyEditHint"
-                        : TERMINAL_STATUSES.includes(selectedTask.status)
-                          ? "supportDesk.replyCompletedHint"
-                          : "supportDesk.replyLockedHint"
-                    )}
-                  </Text>
-                </div>
-                <Textarea
-                  aria-label={t("supportDesk.suggestedReply")}
-                  disabled={!canEdit}
-                  rows={8}
-                  value={reply}
-                  onChange={(event) => setReply(event.target.value)}
-                />
-                <Text size="small" leading="compact" className="text-ui-fg-warning">
-                  {t(
-                    messageSent
-                      ? "supportDesk.simulatorAlreadySent"
-                      : "supportDesk.notSent"
-                  )}
+                <Text
+                  size="small"
+                  leading="compact"
+                  className="mt-2 text-ui-fg-subtle"
+                >
+                  {conversation.data?.memory?.summary ??
+                    t("supportDesk.memoryPending")}
                 </Text>
-              </div>
-
-              <div className="flex flex-col gap-y-3 px-6 py-5">
-                <div className="flex flex-col gap-y-1">
-                  <Text size="small" leading="compact" weight="plus">
-                    {t("supportDesk.sources")}
-                  </Text>
-                  <Text size="small" leading="compact" className="text-ui-fg-subtle">
-                    {t("supportDesk.sourcesDescription")}
-                  </Text>
-                </div>
-                {citations.length === 0 ? (
-                  <Text size="small" leading="compact" className="text-ui-fg-warning">
-                    {t("supportDesk.noSources")}
-                  </Text>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {citations.map((citation) => (
-                      <div
-                        className="rounded-md bg-ui-bg-component px-4 py-3 shadow-elevation-card-rest"
-                        key={`${citation.document_id}:${citation.version}`}
+                {conversation.data?.memory?.open_questions.length ? (
+                  <div className="mt-3 flex flex-col gap-1">
+                    <Text size="xsmall" leading="compact" weight="plus">
+                      {t("supportDesk.openQuestions")}
+                    </Text>
+                    {conversation.data.memory.open_questions.map((question) => (
+                      <Text
+                        className="text-ui-fg-subtle"
+                        key={question}
+                        leading="compact"
+                        size="xsmall"
                       >
-                        <Text size="small" leading="compact" weight="plus">
-                          {t("supportDesk.sourceName")}
-                        </Text>
-                        <Text size="xsmall" leading="compact" className="text-ui-fg-subtle">
-                          {t("supportDesk.sourceApprovedVersion", {
-                            version: citation.version,
-                          })}
-                        </Text>
-                      </div>
+                        • {question}
+                      </Text>
                     ))}
                   </div>
-                )}
+                ) : null}
               </div>
 
-              {selectedTask.support_conversation_id && (
-                <div className="flex flex-col gap-y-3 bg-ui-bg-subtle px-6 py-5">
-                  <div className="flex flex-col gap-y-1">
-                    <Text size="small" leading="compact" weight="plus">
-                      {t("supportDesk.simulatorConversation")}
-                    </Text>
-                    <Text size="small" leading="compact" className="text-ui-fg-subtle">
-                      {t("supportDesk.simulatorConversationDescription")}
-                    </Text>
-                  </div>
+              <div className="flex min-h-[460px] flex-col bg-ui-bg-subtle">
+                <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-6 py-5">
                   {conversation.isLoading ? (
-                    <Text size="small" leading="compact" className="text-ui-fg-subtle">
+                    <Text
+                      size="small"
+                      leading="compact"
+                      className="text-ui-fg-subtle"
+                    >
                       {t("supportDesk.loading")}
                     </Text>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {(conversation.data?.messages ?? []).map((message) => (
+                  ) : conversation.data?.messages.length ? (
+                    conversation.data.messages.map((message) => {
+                      const isCustomerMessage = message.direction === "INBOUND"
+
+                      return (
                         <div
-                          className="rounded-md bg-ui-bg-component px-4 py-3 shadow-elevation-card-rest"
+                          className={`flex ${
+                            isCustomerMessage ? "justify-start" : "justify-end"
+                          }`}
                           key={message.id}
                         >
-                          <div className="mb-1 flex items-center justify-between gap-x-3">
-                            <Text size="xsmall" leading="compact" weight="plus">
-                              {message.direction === "INBOUND"
-                                ? t("supportDesk.simulatorCustomer")
-                                : t("supportDesk.simulatorStore")}
-                            </Text>
-                            <Text size="xsmall" leading="compact" className="text-ui-fg-subtle">
-                              {formatDate(message.occurred_at)}
+                          <div
+                            className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-elevation-card-rest ${
+                              isCustomerMessage
+                                ? "rounded-tl-sm bg-ui-bg-component"
+                                : "rounded-tr-sm border border-ui-border-base bg-ui-bg-base"
+                            }`}
+                          >
+                            <div className="mb-1 flex items-center gap-x-2">
+                              <Text
+                                size="xsmall"
+                                leading="compact"
+                                weight="plus"
+                              >
+                                {isCustomerMessage
+                                  ? customerName
+                                  : t("supportDesk.simulatorStore")}
+                              </Text>
+                              <Text
+                                size="xsmall"
+                                leading="compact"
+                                className="text-ui-fg-subtle"
+                              >
+                                {formatDate(message.occurred_at)}
+                              </Text>
+                            </div>
+                            <Text size="small" leading="compact">
+                              {message.body}
                             </Text>
                           </div>
-                          <Text size="small" leading="compact">
-                            {message.body}
+                        </div>
+                      )
+                    })
+                  ) : (
+                    <div className="flex justify-start">
+                      <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-ui-bg-component px-4 py-3 shadow-elevation-card-rest">
+                        <div className="mb-1 flex items-center gap-x-2">
+                          <Text size="xsmall" leading="compact" weight="plus">
+                            {customerName}
+                          </Text>
+                          <Text
+                            size="xsmall"
+                            leading="compact"
+                            className="text-ui-fg-subtle"
+                          >
+                            {formatDate(selectedConversation.last_message_at)}
                           </Text>
                         </div>
-                      ))}
+                        <Text size="small" leading="compact">
+                          {selectedConversation.latest_message?.body ?? "—"}
+                        </Text>
+                      </div>
                     </div>
                   )}
                 </div>
-              )}
+
+                {selectedTask ? (
+                  <div className="border-t border-ui-border-base bg-ui-bg-base px-6 py-4">
+                    <Textarea
+                      aria-label={t("supportDesk.suggestedReply")}
+                      disabled={!canEdit}
+                      placeholder={t("supportDesk.suggestedReply")}
+                      rows={3}
+                      value={reply}
+                      onChange={(event) => setReply(event.target.value)}
+                    />
+                  </div>
+                ) : null}
+              </div>
 
               <div className="flex flex-col gap-y-2 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
+                  {!selectedTask && (
+                    <Text
+                      size="small"
+                      leading="compact"
+                      className="text-ui-fg-success"
+                    >
+                      {t("supportDesk.noHumanActionNeeded")}
+                    </Text>
+                  )}
                   {assignedToManager && (
-                    <Text size="small" leading="compact" className="text-ui-fg-warning">
+                    <Text
+                      size="small"
+                      leading="compact"
+                      className="text-ui-fg-warning"
+                    >
                       {t("supportDesk.transferred")}
                     </Text>
                   )}
                   {assignedToOther && (
-                    <Text size="small" leading="compact" className="text-ui-fg-subtle">
+                    <Text
+                      size="small"
+                      leading="compact"
+                      className="text-ui-fg-subtle"
+                    >
                       {t("supportDesk.claimedByOther")}
                     </Text>
                   )}
                   {messageSent && (
-                    <Text size="small" leading="compact" className="text-ui-fg-success">
+                    <Text
+                      size="small"
+                      leading="compact"
+                      className="text-ui-fg-success"
+                    >
                       {t("supportDesk.simulatorAlreadySent")}
                     </Text>
                   )}
                 </div>
                 <div className="flex flex-wrap justify-end gap-2">
-                  {!TERMINAL_STATUSES.includes(selectedTask.status) &&
+                  {selectedTask &&
+                    !TERMINAL_STATUSES.includes(selectedTask.status) &&
                     !assignedToManager && (
                       <Button
                         size="small"
@@ -769,7 +860,10 @@ const CustomerSupportPage = () => {
                         {t("supportDesk.transferManager")}
                       </Button>
                     )}
-                  {["TODO", "CLAIMED", "WAITING"].includes(selectedTask.status) &&
+                  {selectedTask &&
+                    ["TODO", "CLAIMED", "WAITING"].includes(
+                      selectedTask.status,
+                    ) &&
                     !assignedToManager && (
                       <Button
                         size="small"
@@ -782,7 +876,7 @@ const CustomerSupportPage = () => {
                           : t("supportDesk.continueRequest")}
                       </Button>
                     )}
-                  {canEdit && (
+                  {canEdit && selectedTask && (
                     <Button
                       size="small"
                       variant="secondary"
@@ -792,7 +886,7 @@ const CustomerSupportPage = () => {
                       {t("supportDesk.releaseRequest")}
                     </Button>
                   )}
-                  {canEdit && (
+                  {canEdit && selectedTask && (
                     <Button
                       size="small"
                       disabled={reply.trim().length < 3}
@@ -802,13 +896,10 @@ const CustomerSupportPage = () => {
                       {t("supportDesk.completeDraft")}
                     </Button>
                   )}
-                  {selectedTask.status === "COMPLETED" &&
+                  {selectedTask?.status === "COMPLETED" &&
                     selectedTask.support_conversation_id &&
                     !messageSent && (
-                      <Button
-                        size="small"
-                        onClick={() => setSendOpen(true)}
-                      >
+                      <Button size="small" onClick={() => setSendOpen(true)}>
                         {t("supportDesk.sendReviewedReply")}
                       </Button>
                     )}
@@ -849,8 +940,14 @@ const CustomerSupportPage = () => {
             <FocusModal.Body className="flex-1 overflow-auto">
               <div className="mx-auto flex w-full max-w-2xl flex-col gap-y-6 px-6 py-8">
                 <div className="flex flex-col gap-y-1">
-                  <Heading level="h1">{t("supportDesk.simulatorTitle")}</Heading>
-                  <Text size="small" leading="compact" className="text-ui-fg-subtle">
+                  <Heading level="h1">
+                    {t("supportDesk.simulatorTitle")}
+                  </Heading>
+                  <Text
+                    size="small"
+                    leading="compact"
+                    className="text-ui-fg-subtle"
+                  >
                     {t("supportDesk.simulatorDescription")}
                   </Text>
                 </div>
@@ -920,7 +1017,11 @@ const CustomerSupportPage = () => {
                     }
                   />
                 </div>
-                <Text size="small" leading="compact" className="text-ui-fg-warning">
+                <Text
+                  size="small"
+                  leading="compact"
+                  className="text-ui-fg-warning"
+                >
                   {t("supportDesk.simulatorSafetyNote")}
                 </Text>
               </div>

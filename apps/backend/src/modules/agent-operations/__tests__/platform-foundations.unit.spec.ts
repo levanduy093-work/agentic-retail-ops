@@ -428,10 +428,13 @@ describe("agent platform foundations", () => {
         stream: false,
         thinking: { type: "disabled" },
       })
-      expect(body.messages[0]).toEqual({
-        content: "Configured DeepSeek support prompt",
-        role: "system",
-      })
+      expect(body.messages[0].role).toBe("system")
+      expect(body.messages[0].content).toContain(
+        "Configured DeepSeek support prompt\nReturn only valid JSON matching this JSON Schema:"
+      )
+      expect(body.messages[0].content).toContain(
+        '"required":["body"]'
+      )
       return new Response(
         JSON.stringify({
           choices: [
@@ -467,6 +470,35 @@ describe("agent platform foundations", () => {
         system_prompt: "Configured DeepSeek support prompt",
       })
     ).resolves.toEqual({ body: "Đơn đang được chuẩn bị." })
+  })
+
+  it("keeps a bounded DeepSeek validation message for diagnostics", async () => {
+    const request = jest.fn(async () =>
+      new Response(
+        JSON.stringify({ error: { message: "Unsupported request field" } }),
+        { status: 400 }
+      )
+    )
+    const adapter = new DeepSeekChatModelAdapter(
+      "deepseek-key",
+      "deepseek-v4-flash",
+      "https://api.deepseek.test",
+      request as typeof fetch
+    )
+
+    await expect(
+      adapter.invoke({
+        agent_id: "customer-support-agent",
+        input: { question: "Hello" },
+        max_tokens: 100,
+        output_schema: { type: "object" },
+        prompt_key: "support",
+        prompt_version: "1",
+        system_prompt: "Support prompt",
+      })
+    ).rejects.toThrow(
+      "Model provider returned HTTP 400: Unsupported request field"
+    )
   })
 
   it("scores structured evaluation assertions", () => {

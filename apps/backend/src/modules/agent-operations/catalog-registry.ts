@@ -97,7 +97,7 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
   ...[
     ["order-exception-agent", "Order Exception Agent", "Detect and coordinate stuck orders.", ["order.exception"], ["order.read", "task.create"]],
     ["fulfillment-agent", "Fulfillment Agent", "Monitor fulfillment flow and delivery SLA.", ["fulfillment.status_changed"], ["fulfillment.read", "task.create"]],
-    ["customer-support-agent", "Customer Support Agent", "Draft cited customer responses for human review.", ["support.requested"], ["order.read", "knowledge.search", "response.draft"]],
+    ["customer-support-agent", "Customer Support Agent", "Advise customers from live catalog data and approved store knowledge.", ["support.requested", "agent.telegram.customer-message-received"], ["catalog.read", "order.read", "knowledge.search", "response.draft"]],
     ["knowledge-curator-agent", "Knowledge Curator Agent", "Find knowledge gaps and propose governed updates.", ["knowledge.gap_detected"], ["knowledge.search", "knowledge.propose"]],
     ["returns-refund-agent", "Returns & Refund Agent", "Collect evidence and propose return or refund outcomes.", ["return.requested"], ["order.read", "return.propose"]],
     ["payment-fraud-watcher", "Payment & Fraud Watcher", "Escalate suspicious payments without autonomous financial action.", ["payment.anomaly"], ["payment.read", "incident.create"]],

@@ -4,7 +4,10 @@ import {
   StepResponse,
   WorkflowResponse,
 } from "@medusajs/framework/workflows-sdk"
-import type { ILockingModule } from "@medusajs/framework/types"
+import type {
+  IEventBusModuleService,
+  ILockingModule,
+} from "@medusajs/framework/types"
 import { Modules } from "@medusajs/framework/utils"
 import { AGENT_OPERATIONS_MODULE } from "../../modules/agent-operations"
 import AgentOperationsModuleService from "../../modules/agent-operations/service"
@@ -281,6 +284,16 @@ const ingestTelegramWebhookStep = createStep<
         }
       }
     )
+
+    if (result.accepted && result.message_id && !result.ignored) {
+      const eventBus = container.resolve<IEventBusModuleService>(
+        Modules.EVENT_BUS
+      )
+      await eventBus.emit({
+        data: { inbound_message_id: result.message_id },
+        name: "agent.telegram.customer-message-received",
+      })
+    }
 
     return new StepResponse<IngestTelegramWebhookResult>(result)
   }

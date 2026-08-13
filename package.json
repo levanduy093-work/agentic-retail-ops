@@ -14,6 +14,8 @@
     "backend:seed": "turbo seed --filter=@dtc/backend",
     "backend:dev": "turbo dev --filter=@dtc/backend",
     "agent:configure-telegram": "pnpm --dir apps/backend run agent:configure-telegram",
+    "agent:apply-provider-priority": "pnpm --dir apps/backend run agent:apply-provider-priority",
+    "agent:backfill-conversation-memory": "pnpm --dir apps/backend run agent:backfill-conversation-memory",
     "tunnel:up": "docker compose --env-file apps/backend/.env --profile telegram-tunnel up -d cloudflared",
     "tunnel:status": "docker compose --env-file apps/backend/.env --profile telegram-tunnel ps cloudflared",
     "tunnel:logs": "docker compose --env-file apps/backend/.env --profile telegram-tunnel logs -f cloudflared",

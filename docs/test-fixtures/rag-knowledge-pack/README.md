@@ -12,6 +12,10 @@ nội dung file vào trường **Content**, sau đó approve các tài liệu đ
 `APPROVED_FOR_TEST`. Pack `multiformat/` kiểm tra connector/parser file với DOCX,
 PDF, XLSX và CSV; metadata riêng nằm trong `multiformat/manifest.json`.
 
+`retail-store-operating-policy.txt` là policy tổng hợp đa kênh cho kiểm thử hỏi
+đáp khách hàng. Có thể import trực tiếp như file text/plain; sau khi import, chỉ
+approve document `RETAIL-OPERATING-001` trong môi trường test/staging.
+
 Đừng approve tài liệu `DRAFT_ONLY` hoặc `EXPIRED_ONLY`: chúng là negative cases
 để xác nhận retrieval loại đúng tài liệu chưa duyệt và hết hiệu lực. Với bài thử
 version, retire `CS-RETURN-001` version `1.0.0` trước khi approve version `1.1.0`.

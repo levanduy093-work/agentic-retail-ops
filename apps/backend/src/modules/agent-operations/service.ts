@@ -1,10 +1,11 @@
-import { Context } from "@medusajs/framework/types"
+import { Context, ICachingModuleService } from "@medusajs/framework/types"
 import {
   InjectTransactionManager,
   InjectManager,
   MedusaContext,
   MedusaError,
   MedusaService,
+  Modules,
 } from "@medusajs/framework/utils"
 import { calculateActionRetry, isAgentActionClaimable } from "./action-policy"
 import {
@@ -16,9 +17,12 @@ import { analyzeInventoryLow } from "./inventory-low-analyzer"
 import { analyzeOrderException } from "./order-exception-analyzer"
 import {
   createModelAdapter,
-  DisabledModelAdapter,
   redactModelInput,
 } from "./model-gateway"
+import {
+  AiProviderPurpose,
+  sortAiProvidersByPriority,
+} from "./ai-provider-routing"
 import {
   decryptConnectorSecret,
   encryptConnectorSecret,
@@ -34,6 +38,7 @@ import AgentChannelConnection from "./models/agent-channel-connection"
 import AgentConnectorCredential from "./models/agent-connector-credential"
 import AgentAiProviderCredential from "./models/agent-ai-provider-credential"
 import AgentConversation from "./models/agent-conversation"
+import AgentConversationMemory from "./models/agent-conversation-memory"
 import AgentDelivery from "./models/agent-delivery"
 import AgentEvaluationRun from "./models/agent-evaluation-run"
 import AgentEvaluationCase from "./models/agent-evaluation-scenario"
@@ -116,12 +121,15 @@ import {
   isKnowledgeReadyForVectorPreparation,
 } from "./knowledge"
 import {
-  buildKnowledgeAnswerFallback,
+  buildCustomerSmallTalkReply,
+  buildCustomerReviewAcknowledgement,
+  buildKnowledgeReviewFallback,
   buildScopedCustomerReply,
   detectKnowledgeQuestionLocale,
   formatChannelKnowledgeAnswer,
+  filterKnowledgeEvidenceForQuestion,
   hasSufficientKnowledgeEvidence,
-  isKnowledgeAnswerBodySafe,
+  isContextDependentKnowledgeQuestion,
   KnowledgeAnswer,
   KnowledgeAnswerModelOutput,
   KNOWLEDGE_ANSWER_MAX_TOKENS,
@@ -129,7 +137,34 @@ import {
   KNOWLEDGE_ANSWER_PROMPT_KEY,
   KNOWLEDGE_ANSWER_PROMPT_VERSION,
   KNOWLEDGE_ANSWER_SYSTEM_PROMPT,
+  resolveGovernedKnowledgeModelOutput,
 } from "./knowledge-answer"
+import {
+  buildProductAdvisorFallback,
+  CustomerCatalogSnapshot,
+  formatProductAdvisorReply,
+  isCatalogOverviewRequest,
+  ProductAdvisorModelOutput,
+  PRODUCT_ADVISOR_MAX_TOKENS,
+  PRODUCT_ADVISOR_OUTPUT_SCHEMA,
+  PRODUCT_ADVISOR_PROMPT_KEY,
+  PRODUCT_ADVISOR_PROMPT_VERSION,
+  PRODUCT_ADVISOR_SYSTEM_PROMPT,
+  resolveProductAdvisorModelOutput,
+} from "./customer-product-advisor"
+import {
+  buildCustomerIntentReply,
+  CustomerMessageIntentModelOutput,
+  CustomerMessageIntentResult,
+  CUSTOMER_MESSAGE_INTENT_MAX_TOKENS,
+  CUSTOMER_MESSAGE_INTENT_OUTPUT_SCHEMA,
+  CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
+  CUSTOMER_MESSAGE_INTENT_PROMPT_VERSION,
+  CUSTOMER_MESSAGE_INTENT_SYSTEM_PROMPT,
+  defaultCustomerMessageIntent,
+  detectCustomerMessageFastIntent,
+  resolveCustomerMessageIntent,
+} from "./customer-message-intent"
 import {
   isExplicitPromptAttack,
   normalizeCustomerChatSecurityConfig,
@@ -185,6 +220,14 @@ type IndexableKnowledgeDocument = {
   title: string
   version: string
 }
+
+function readMemoryItems(value: unknown) {
+  if (!value || typeof value !== "object") return []
+  const items = (value as { items?: unknown }).items
+  return Array.isArray(items)
+    ? items.filter((item): item is string => typeof item === "string")
+    : []
+}
 import { OrderReadOutput } from "./tools/order-tools"
 import {
   draftCustomerResponse,
@@ -200,6 +243,24 @@ import {
   CUSTOMER_SUPPORT_PROMPT_VERSION,
 } from "./customer-support-prompt"
 import { listAiProviderModels } from "./ai-provider-models"
+import {
+  buildConversationMemoryFallback,
+  buildCustomerConversationContext,
+  ConversationMemoryModelOutput,
+  CONVERSATION_MEMORY_MAX_TOKENS,
+  CONVERSATION_MEMORY_OUTPUT_SCHEMA,
+  CONVERSATION_MEMORY_PROMPT_KEY,
+  CONVERSATION_MEMORY_PROMPT_VERSION,
+  CONVERSATION_MEMORY_SYSTEM_PROMPT,
+  shouldRefreshConversationMemoryWithAi,
+} from "./conversation-memory"
+import {
+  buildCustomerAssistantCacheKey,
+  CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS,
+  normalizeCustomerCacheText,
+  readCustomerAssistantCache,
+  writeCustomerAssistantCache,
+} from "./customer-assistant-cache"
 
 class AgentOperationsModuleService extends MedusaService({
   AgentActionRequest,
@@ -209,6 +270,7 @@ class AgentOperationsModuleService extends MedusaService({
   AgentConnectorCredential,
   AgentAiProviderCredential,
   AgentConversation,
+  AgentConversationMemory,
   AgentDelivery,
   AgentEvaluationRun,
   AgentEvaluationCase,
@@ -227,6 +289,14 @@ class AgentOperationsModuleService extends MedusaService({
   AgentTask,
   AgentToolCall,
 }) {
+  protected getCustomerAssistantCaching() {
+    return (
+      this as unknown as {
+        __container__: Record<string, unknown>
+      }
+    ).__container__[Modules.CACHING] as ICachingModuleService | undefined
+  }
+
   async getCustomerSupportPromptConfiguration() {
     const prompts = await this.listAgentPromptTemplates(
       { prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY, status: "ACTIVE" },
@@ -399,8 +469,8 @@ class AgentOperationsModuleService extends MedusaService({
     return listAiProviderModels({ api_key: apiKey, provider: input.provider })
   }
 
-  async getActiveAiProviderCredential(
-    purpose: "embedding" | "generation",
+  async getActiveAiProviderCredentials(
+    purpose: AiProviderPurpose,
     tenantId = "default"
   ) {
     const filter =
@@ -408,29 +478,246 @@ class AgentOperationsModuleService extends MedusaService({
         ? { embedding_enabled: true, tenant_id: tenantId }
         : { generation_enabled: true, tenant_id: tenantId }
     const credentials = await this.listAgentAiProviderCredentials(filter, {
-      order: { updated_at: "DESC" },
-      take: 1,
+      take: 10,
     })
-    const credential = credentials[0]
-    if (!credential) return null
+    return sortAiProvidersByPriority(credentials, purpose).flatMap(
+      (credential) => {
+        try {
+          return [
+            {
+              api_key: decryptConnectorSecret({
+                encrypted_secret: credential.encrypted_secret,
+                encryption_iv: credential.encryption_iv,
+                encryption_tag: credential.encryption_tag,
+                key_version: credential.key_version,
+              }),
+              dimensions: credential.embedding_dimensions ?? undefined,
+              model:
+                purpose === "embedding"
+                  ? credential.embedding_model
+                  : credential.generation_model,
+              provider: credential.provider.toLowerCase() as
+                | "deepseek"
+                | "gemini"
+                | "openai",
+            },
+          ]
+        } catch {
+          return []
+        }
+      }
+    )
+  }
 
-    return {
-      api_key: decryptConnectorSecret({
-        encrypted_secret: credential.encrypted_secret,
-        encryption_iv: credential.encryption_iv,
-        encryption_tag: credential.encryption_tag,
-        key_version: credential.key_version,
-      }),
-      dimensions: credential.embedding_dimensions ?? undefined,
-      model:
-        purpose === "embedding"
-          ? credential.embedding_model
-          : credential.generation_model,
-      provider: credential.provider.toLowerCase() as
-        | "deepseek"
-        | "gemini"
-        | "openai",
+  async getActiveAiProviderCredential(
+    purpose: AiProviderPurpose,
+    tenantId = "default"
+  ) {
+    const credentials = await this.getActiveAiProviderCredentials(
+      purpose,
+      tenantId
+    )
+    return credentials[0] ?? null
+  }
+
+  @InjectManager()
+  async refreshConversationMemory(
+    conversationId: string,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const conversation = await this.retrieveAgentConversation(
+      conversationId,
+      {},
+      sharedContext
+    )
+    const [messages, messageCount] = await this.listAndCountAgentMessages(
+      { conversation_id: conversation.id },
+      { order: { occurred_at: "DESC" }, take: 6 },
+      sharedContext
+    )
+    const latestMessage = messages[0]
+    if (!latestMessage) return { memory: null, updated: false }
+
+    const existing = (
+      await this.listAgentConversationMemories(
+        { conversation_id: conversation.id },
+        { take: 1 },
+        sharedContext
+      )
+    )[0]
+    if (existing?.last_message_id === latestMessage.id) {
+      return { memory: existing, updated: false }
     }
+
+    const orderedMessages = messages.slice().reverse()
+    const previousMessageIndex = existing
+      ? orderedMessages.findIndex(
+          (message) => message.id === existing.last_message_id
+        )
+      : -1
+    const unsummarizedMessages = orderedMessages
+      .slice(previousMessageIndex >= 0 ? previousMessageIndex + 1 : -4)
+      .map((message) => ({
+        body: message.body.slice(0, 800),
+        direction: message.direction as "INBOUND" | "OUTBOUND",
+      }))
+    const safeInput = {
+      previous_memory: existing
+        ? {
+            customer_facts: readMemoryItems(existing.customer_facts),
+            open_questions: readMemoryItems(existing.open_questions),
+            resolved_topics: readMemoryItems(existing.resolved_topics),
+            summary: existing.summary,
+          }
+        : null,
+      recent_messages: unsummarizedMessages,
+    }
+    let output = buildConversationMemoryFallback({
+      previous_summary: existing?.summary,
+      recent_messages: unsummarizedMessages,
+    })
+
+    if (
+      shouldRefreshConversationMemoryWithAi({
+        has_existing_memory: Boolean(existing),
+        message_count: messageCount,
+      })
+    ) {
+      try {
+      const credentials = await this.getActiveAiProviderCredentials(
+        "generation",
+        conversation.tenant_id
+      )
+      for (const credential of credentials) {
+        const adapter = createModelAdapter({
+          apiKey: credential.api_key,
+          model: credential.model,
+          provider: credential.provider,
+        })
+        const attemptKey =
+          `conversation-memory:${conversation.id}:${latestMessage.id}` +
+          `:provider:${adapter.provider}`
+        const priorRun = (
+          await this.listAgentModelRuns(
+            { idempotency_key: attemptKey },
+            { take: 1 },
+            sharedContext
+          )
+        )[0]
+        if (priorRun?.status === "SUCCEEDED" && priorRun.output) {
+          const cached = ConversationMemoryModelOutput.safeParse(
+            priorRun.output
+          )
+          if (cached.success) {
+            output = cached.data
+            break
+          }
+        }
+        if (priorRun) continue
+
+        const startedAt = new Date()
+        const modelRun = await this.createAgentModelRuns(
+          {
+            agent_id: "conversation-memory-agent",
+            agent_version: "1.0.0",
+            idempotency_key: attemptKey,
+            input: redactModelInput(safeInput) as Record<string, unknown>,
+            model: adapter.model,
+            prompt_key: CONVERSATION_MEMORY_PROMPT_KEY,
+            prompt_version: CONVERSATION_MEMORY_PROMPT_VERSION,
+            provider: adapter.provider,
+            redacted: true,
+            started_at: startedAt,
+            status: "RUNNING",
+          },
+          sharedContext
+        )
+        try {
+          const generated = await adapter.invoke({
+            agent_id: "conversation-memory-agent",
+            input: safeInput,
+            max_tokens: CONVERSATION_MEMORY_MAX_TOKENS,
+            output_schema: CONVERSATION_MEMORY_OUTPUT_SCHEMA,
+            prompt_key: CONVERSATION_MEMORY_PROMPT_KEY,
+            prompt_version: CONVERSATION_MEMORY_PROMPT_VERSION,
+            system_prompt: CONVERSATION_MEMORY_SYSTEM_PROMPT,
+          })
+          output = ConversationMemoryModelOutput.parse(generated)
+          await this.updateAgentModelRuns(
+            {
+              completed_at: new Date(),
+              id: modelRun.id,
+              latency_ms: Date.now() - startedAt.getTime(),
+              output,
+              status: "SUCCEEDED",
+            },
+            sharedContext
+          )
+          break
+        } catch (error) {
+          await this.updateAgentModelRuns(
+            {
+              completed_at: new Date(),
+              error:
+                error instanceof Error
+                  ? error.message.slice(0, 1_000)
+                  : "Conversation memory update failed",
+              id: modelRun.id,
+              latency_ms: Date.now() - startedAt.getTime(),
+              status: "FAILED",
+            },
+            sharedContext
+          )
+        }
+      }
+      } catch {
+        // The bounded deterministic memory remains available if all models fail.
+      }
+    }
+
+    const now = new Date()
+    const data = {
+      customer_facts: { items: output.customer_facts },
+      last_message_id: latestMessage.id,
+      open_questions: { items: output.open_questions },
+      resolved_topics: { items: output.resolved_topics },
+      source_message_count: messageCount,
+      summarized_at: now,
+      summary: output.summary,
+      tenant_id: conversation.tenant_id,
+      version: (existing?.version ?? 0) + 1,
+    }
+    const memory = existing
+      ? await this.updateAgentConversationMemories(
+          { ...data, id: existing.id },
+          sharedContext
+        )
+      : await this.createAgentConversationMemories(
+          { ...data, conversation_id: conversation.id },
+          sharedContext
+        )
+
+    await this.createAgentAuditEvents(
+      {
+        action: "conversation-memory-updated",
+        actor_id: "conversation-memory-agent",
+        actor_type: "agent",
+        correlation_id: `${conversation.id}:${latestMessage.id}`,
+        data: {
+          conversation_id: conversation.id,
+          last_message_id: latestMessage.id,
+          source_message_count: messageCount,
+          version: memory.version,
+        },
+        event_type: "agent.conversation.memory-updated",
+        recorded_at: now,
+        resource_id: memory.id,
+        resource_type: "agent_conversation_memory",
+      },
+      sharedContext
+    )
+
+    return { memory, updated: true }
   }
 
   @InjectManager()
@@ -484,34 +771,6 @@ class AgentOperationsModuleService extends MedusaService({
         MedusaError.Types.INVALID_DATA,
         "A secret hint is required for provider credentials."
       )
-    }
-
-    const otherCredentials = await this.listAgentAiProviderCredentials(
-      { tenant_id: tenantId },
-      {},
-      sharedContext
-    )
-    for (const credential of otherCredentials) {
-      if (credential.provider === input.provider) continue
-      const embeddingEnabled = input.embedding_enabled
-        ? false
-        : credential.embedding_enabled
-      const generationEnabled = input.generation_enabled
-        ? false
-        : credential.generation_enabled
-      if (
-        embeddingEnabled !== credential.embedding_enabled ||
-        generationEnabled !== credential.generation_enabled
-      ) {
-        await this.updateAgentAiProviderCredentials(
-          {
-            embedding_enabled: embeddingEnabled,
-            generation_enabled: generationEnabled,
-            id: credential.id,
-          },
-          sharedContext
-        )
-      }
     }
 
     const data = {
@@ -1587,48 +1846,66 @@ class AgentOperationsModuleService extends MedusaService({
     )
 
     try {
-      const credential = await this.getActiveAiProviderCredential(
+      const credentials = await this.getActiveAiProviderCredentials(
         "embedding",
         document.tenant_id
       )
-      const result = await createKnowledgeRagEngine(
-        process.env,
-        credential
-      ).indexDocuments(
-        chunks.map((chunk) => ({
-          checksum: chunk.checksum,
-          chunk_id: chunk.id,
-          citation_locator: chunk.citation_locator,
-          content: chunk.content,
-          document_id: document.id,
-          document_key: document.document_key,
-          locale: document.locale,
-          scope: document.scope,
-          tenant_id: document.tenant_id,
-          title: document.title,
-          version: document.version,
-        }))
-      )
-      if (result.status === "INDEXED") {
-        await this.createAgentAuditEvents(
-          {
-            action: "knowledge-vector-indexed",
-            actor_id: "knowledge-rag-indexer",
-            actor_type: "system",
-            correlation_id: `${document.document_key}:${document.version}`,
-            data: {
-              indexed_chunks: result.indexed_chunks,
-              provider: result.provider,
-            },
-            event_type: "agent.knowledge.vector-indexed",
-            recorded_at: new Date(),
-            resource_id: document.id,
-            resource_type: "agent_knowledge_document",
-          },
-          sharedContext
-        )
+      if (!credentials.length) {
+        return createKnowledgeRagEngine(process.env).indexDocuments([])
       }
-      return result
+
+      const vectorDocuments = chunks.map((chunk) => ({
+        checksum: chunk.checksum,
+        chunk_id: chunk.id,
+        citation_locator: chunk.citation_locator,
+        content: chunk.content,
+        document_id: document.id,
+        document_key: document.document_key,
+        locale: document.locale,
+        scope: document.scope,
+        tenant_id: document.tenant_id,
+        title: document.title,
+        version: document.version,
+      }))
+      let primaryResult
+      let lastError: unknown
+
+      for (const credential of credentials) {
+        try {
+          const result = await createKnowledgeRagEngine(
+            process.env,
+            credential
+          ).indexDocuments(vectorDocuments)
+          primaryResult ??= result
+          if (result.status === "INDEXED") {
+            await this.createAgentAuditEvents(
+              {
+                action: "knowledge-vector-indexed",
+                actor_id: "knowledge-rag-indexer",
+                actor_type: "system",
+                correlation_id: `${document.document_key}:${document.version}`,
+                data: {
+                  embedding_provider: credential.provider,
+                  indexed_chunks: result.indexed_chunks,
+                  provider: result.provider,
+                },
+                event_type: "agent.knowledge.vector-indexed",
+                recorded_at: new Date(),
+                resource_id: document.id,
+                resource_type: "agent_knowledge_document",
+              },
+              sharedContext
+            )
+          }
+        } catch (error) {
+          lastError = error
+        }
+      }
+
+      if (!primaryResult) {
+        throw lastError ?? new Error("No embedding provider could index knowledge.")
+      }
+      return primaryResult
     } catch (error) {
       return {
         error:
@@ -1673,36 +1950,53 @@ class AgentOperationsModuleService extends MedusaService({
     )
 
     try {
-      const credential = await this.getActiveAiProviderCredential(
+      const credentials = await this.getActiveAiProviderCredentials(
         "embedding",
         tenantId
       )
-      const result = await createKnowledgeRagEngine(
-        process.env,
-        credential
-      ).indexDocuments(
-        chunks.flatMap((chunk) => {
-          const document = documentsById.get(chunk.document_id)
-          if (!document) return []
-          return [
-            {
-              checksum: chunk.checksum,
-              chunk_id: chunk.id,
-              citation_locator: chunk.citation_locator,
-              content: chunk.content,
-              document_id: document.id,
-              document_key: document.document_key,
-              locale: document.locale,
-              scope: document.scope,
-              tenant_id: document.tenant_id,
-              title: document.title,
-              version: document.version,
-            },
-          ]
-        })
-      )
+      if (!credentials.length) {
+        const result = await createKnowledgeRagEngine(
+          process.env
+        ).indexDocuments([])
+        return { ...result, indexed_documents: 0 }
+      }
+      const vectorDocuments = chunks.flatMap((chunk) => {
+        const document = documentsById.get(chunk.document_id)
+        if (!document) return []
+        return [
+          {
+            checksum: chunk.checksum,
+            chunk_id: chunk.id,
+            citation_locator: chunk.citation_locator,
+            content: chunk.content,
+            document_id: document.id,
+            document_key: document.document_key,
+            locale: document.locale,
+            scope: document.scope,
+            tenant_id: document.tenant_id,
+            title: document.title,
+            version: document.version,
+          },
+        ]
+      })
+      let primaryResult
+      let lastError: unknown
+      for (const credential of credentials) {
+        try {
+          const result = await createKnowledgeRagEngine(
+            process.env,
+            credential
+          ).indexDocuments(vectorDocuments)
+          primaryResult ??= result
+        } catch (error) {
+          lastError = error
+        }
+      }
+      if (!primaryResult) {
+        throw lastError ?? new Error("No embedding provider could reindex knowledge.")
+      }
       return {
-        ...result,
+        ...primaryResult,
         indexed_documents: eligibleDocuments.length,
       }
     } catch (error) {
@@ -1764,6 +2058,32 @@ class AgentOperationsModuleService extends MedusaService({
       return { results: [], total_candidates: 0 }
     }
 
+    const knowledgeCacheKey = buildCustomerAssistantCacheKey(
+      "knowledge-search",
+      {
+        documents: documents.map((document) => ({
+          id: document.id,
+          updated_at: new Date(document.updated_at).toISOString(),
+          version: document.version,
+        })),
+        limit: parsed.limit,
+        locale: parsed.locale ?? "",
+        query: normalizeCustomerCacheText(parsed.query),
+        scope: parsed.scope ?? "",
+        tenant_id: parsed.tenant_id,
+      }
+    )
+    const caching = this.getCustomerAssistantCaching()
+    const cachedKnowledge = await readCustomerAssistantCache(
+      caching,
+      knowledgeCacheKey,
+      (value) => {
+        const result = KnowledgeSearchOutput.safeParse(value)
+        return result.success ? result.data : null
+      }
+    )
+    if (cachedKnowledge) return cachedKnowledge
+
     const chunks = await this.listAgentKnowledgeChunks(
       { document_id: documents.map((document) => document.id) },
       { order: { chunk_index: "ASC" }, take: 2_000 },
@@ -1772,38 +2092,56 @@ class AgentOperationsModuleService extends MedusaService({
 
     let semanticScores = new Map<string, number>()
     try {
-      const credential = await this.getActiveAiProviderCredential(
+      const credentials = await this.getActiveAiProviderCredentials(
         "embedding",
         parsed.tenant_id
       )
-      const results = await createKnowledgeRagEngine(
-        process.env,
-        credential
-      ).search({
-        candidate_limit: Math.min(Math.max(parsed.limit * 10, 20), 100),
-        locale: parsed.locale,
-        query: parsed.query,
-        scope: parsed.scope,
-        tenant_id: parsed.tenant_id,
-      })
       const eligibleChunkIds = new Set(chunks.map((chunk) => chunk.id))
-      semanticScores = new Map(
-        results
-          .filter((result) => eligibleChunkIds.has(result.chunk_id))
-          .map((result) => [result.chunk_id, result.score])
-      )
+      for (const credential of credentials) {
+        try {
+          const results = await createKnowledgeRagEngine(
+            process.env,
+            credential
+          ).search({
+            candidate_limit: Math.min(Math.max(parsed.limit * 10, 20), 100),
+            locale: parsed.locale,
+            query: parsed.query,
+            scope: parsed.scope,
+            tenant_id: parsed.tenant_id,
+          })
+          semanticScores = new Map(
+            results
+              .filter((result) => eligibleChunkIds.has(result.chunk_id))
+              .map((result) => [result.chunk_id, result.score])
+          )
+          if (semanticScores.size) break
+        } catch {
+          semanticScores = new Map()
+        }
+      }
     } catch {
       semanticScores = new Map()
     }
 
-    return semanticScores.size
+    const output = semanticScores.size
       ? searchKnowledgeChunksHybrid(parsed, documents, chunks, semanticScores)
       : searchKnowledgeChunks(parsed, documents, chunks)
+    await writeCustomerAssistantCache(caching, {
+      key: knowledgeCacheKey,
+      tags: [
+        "customer-assistant:knowledge",
+        `customer-assistant:tenant:${parsed.tenant_id}`,
+      ],
+      ttl: CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS.knowledge_search,
+      value: output,
+    })
+    return output
   }
 
   @InjectManager()
   async draftGovernedKnowledgeAnswer(
     input: {
+      conversation_memory?: string
       idempotency_key: string
       knowledge: KnowledgeSearchOutput
       locale: "en" | "vi"
@@ -1812,51 +2150,30 @@ class AgentOperationsModuleService extends MedusaService({
     },
     @MedusaContext() sharedContext: Context = {}
   ): Promise<KnowledgeAnswer> {
-    const fallback = buildKnowledgeAnswerFallback(input.knowledge, input.locale)
-
-    let adapter
-    try {
-      const credential = await this.getActiveAiProviderCredential(
-        "generation",
-        input.tenant_id
-      )
-      adapter = credential
-        ? createModelAdapter({
-            apiKey: credential.api_key,
-            model: credential.model,
-            provider: credential.provider,
-          })
-        : new DisabledModelAdapter()
-    } catch {
-      return fallback
-    }
-    if (adapter.provider === "disabled") return fallback
-
-    const existing = (
+    const reviewFallback = buildKnowledgeReviewFallback(input.locale)
+    const legacyRun = (
       await this.listAgentModelRuns(
         { idempotency_key: input.idempotency_key },
         { take: 1 },
         sharedContext
       )
     )[0]
-    if (existing?.status === "SUCCEEDED" && existing.output) {
-      const cached = KnowledgeAnswerModelOutput.safeParse(existing.output)
-      if (!cached.success) return fallback
-      if (cached.data.disposition === "ANSWER") {
-        return fallback.grounded &&
-          isKnowledgeAnswerBodySafe(cached.data.body, input.knowledge)
-          ? { ...fallback, body: cached.data.body, disposition: "ANSWER" }
-          : fallback
+    if (legacyRun?.status === "SUCCEEDED" && legacyRun.output) {
+      const cached = KnowledgeAnswerModelOutput.safeParse(legacyRun.output)
+      if (!cached.success) return reviewFallback
+      return {
+        ...resolveGovernedKnowledgeModelOutput(
+          cached.data,
+          input.knowledge,
+          input.locale
+        ),
+        optimization: {
+          ai_invoked: false,
+          cache_hit: true,
+          path: "MESSAGE_IDEMPOTENCY",
+        },
       }
-      if (
-        cached.data.disposition === "OUT_OF_SCOPE" ||
-        cached.data.disposition === "UNSAFE"
-      ) {
-        return buildScopedCustomerReply(cached.data.disposition, input.locale)
-      }
-      return fallback
     }
-    if (existing) return fallback
 
     const safeInput = {
       approved_knowledge: input.knowledge.results.map((result) => ({
@@ -1866,81 +2183,578 @@ class AgentOperationsModuleService extends MedusaService({
         version: result.version,
       })),
       locale: input.locale,
+      conversation_memory: isContextDependentKnowledgeQuestion(input.question)
+        ? input.conversation_memory?.slice(0, 1_600) ?? ""
+        : "",
       question: input.question.slice(0, 2_000),
     }
-    const startedAt = new Date()
-    const modelRun = await this.createAgentModelRuns(
-      {
-        agent_id: "customer-knowledge-agent",
-        agent_version: "1.0.0",
-        idempotency_key: input.idempotency_key,
-        input: redactModelInput(safeInput) as Record<string, unknown>,
-        model: adapter.model,
-        prompt_key: KNOWLEDGE_ANSWER_PROMPT_KEY,
-        prompt_version: KNOWLEDGE_ANSWER_PROMPT_VERSION,
-        provider: adapter.provider,
-        redacted: true,
-        started_at: startedAt,
-        status: "RUNNING",
-      },
-      sharedContext
-    )
-
+    let credentials
     try {
-      const generated = await adapter.invoke({
-        agent_id: "customer-knowledge-agent",
-        input: safeInput,
-        max_tokens: KNOWLEDGE_ANSWER_MAX_TOKENS,
-        output_schema: KNOWLEDGE_ANSWER_OUTPUT_SCHEMA,
-        prompt_key: KNOWLEDGE_ANSWER_PROMPT_KEY,
-        prompt_version: KNOWLEDGE_ANSWER_PROMPT_VERSION,
-        system_prompt: KNOWLEDGE_ANSWER_SYSTEM_PROMPT,
+      credentials = await this.getActiveAiProviderCredentials(
+        "generation",
+        input.tenant_id
+      )
+    } catch {
+      return reviewFallback
+    }
+
+    for (const credential of credentials) {
+      const adapter = createModelAdapter({
+        apiKey: credential.api_key,
+        model: credential.model,
+        provider: credential.provider,
       })
-      const output = KnowledgeAnswerModelOutput.parse(generated)
-      await this.updateAgentModelRuns(
+      const responseCacheKey = buildCustomerAssistantCacheKey(
+        "knowledge-answer",
         {
-          completed_at: new Date(),
-          id: modelRun.id,
-          latency_ms: Date.now() - startedAt.getTime(),
-          output,
-          status: "SUCCEEDED",
+          input: safeInput,
+          model: adapter.model,
+          prompt_key: KNOWLEDGE_ANSWER_PROMPT_KEY,
+          prompt_version: KNOWLEDGE_ANSWER_PROMPT_VERSION,
+          provider: adapter.provider,
+          tenant_id: input.tenant_id,
+        }
+      )
+      const cachedResponse = await readCustomerAssistantCache(
+        this.getCustomerAssistantCaching(),
+        responseCacheKey,
+        (value) => {
+          const result = KnowledgeAnswerModelOutput.safeParse(value)
+          return result.success ? result.data : null
+        }
+      )
+      if (cachedResponse) {
+        return {
+          ...resolveGovernedKnowledgeModelOutput(
+            cachedResponse,
+            input.knowledge,
+            input.locale
+          ),
+          optimization: {
+            ai_invoked: false,
+            cache_hit: true,
+            path: "AI_RESPONSE_CACHE",
+          },
+        }
+      }
+      const attemptKey = `${input.idempotency_key}:provider:${adapter.provider}`
+      const existing = (
+        await this.listAgentModelRuns(
+          { idempotency_key: attemptKey },
+          { take: 1 },
+          sharedContext
+        )
+      )[0]
+      if (existing?.status === "SUCCEEDED" && existing.output) {
+        const cached = KnowledgeAnswerModelOutput.safeParse(existing.output)
+        if (cached.success) {
+          return resolveGovernedKnowledgeModelOutput(
+            cached.data,
+            input.knowledge,
+            input.locale
+          )
+        }
+      }
+      if (existing?.status === "RUNNING") return reviewFallback
+      if (existing) continue
+
+      const startedAt = new Date()
+      const modelRun = await this.createAgentModelRuns(
+        {
+          agent_id: "customer-knowledge-agent",
+          agent_version: "1.0.0",
+          idempotency_key: attemptKey,
+          input: redactModelInput(safeInput) as Record<string, unknown>,
+          model: adapter.model,
+          prompt_key: KNOWLEDGE_ANSWER_PROMPT_KEY,
+          prompt_version: KNOWLEDGE_ANSWER_PROMPT_VERSION,
+          provider: adapter.provider,
+          redacted: true,
+          started_at: startedAt,
+          status: "RUNNING",
         },
         sharedContext
       )
-      if (output.disposition === "ANSWER") {
-        return fallback.grounded &&
-          isKnowledgeAnswerBodySafe(output.body, input.knowledge)
-          ? { ...fallback, body: output.body, disposition: "ANSWER" }
-          : fallback
+
+      try {
+        const generated = await adapter.invoke({
+          agent_id: "customer-knowledge-agent",
+          input: safeInput,
+          max_tokens: KNOWLEDGE_ANSWER_MAX_TOKENS,
+          output_schema: KNOWLEDGE_ANSWER_OUTPUT_SCHEMA,
+          prompt_key: KNOWLEDGE_ANSWER_PROMPT_KEY,
+          prompt_version: KNOWLEDGE_ANSWER_PROMPT_VERSION,
+          system_prompt: KNOWLEDGE_ANSWER_SYSTEM_PROMPT,
+        })
+        const output = KnowledgeAnswerModelOutput.parse(generated)
+        await writeCustomerAssistantCache(this.getCustomerAssistantCaching(), {
+          key: responseCacheKey,
+          tags: [
+            "customer-assistant:knowledge-answer",
+            `customer-assistant:tenant:${input.tenant_id}`,
+          ],
+          ttl: CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS.knowledge_answer,
+          value: output,
+        })
+        await this.updateAgentModelRuns(
+          {
+            completed_at: new Date(),
+            id: modelRun.id,
+            latency_ms: Date.now() - startedAt.getTime(),
+            output,
+            status: "SUCCEEDED",
+          },
+          sharedContext
+        )
+        return {
+          ...resolveGovernedKnowledgeModelOutput(
+            output,
+            input.knowledge,
+            input.locale
+          ),
+          optimization: {
+            ai_invoked: true,
+            cache_hit: false,
+            path: "AI_MODEL",
+          },
+        }
+      } catch (error) {
+        await this.updateAgentModelRuns(
+          {
+            completed_at: new Date(),
+            error:
+              error instanceof Error
+                ? error.message.slice(0, 1_000)
+                : "Customer knowledge answer failed",
+            id: modelRun.id,
+            latency_ms: Date.now() - startedAt.getTime(),
+            status: "FAILED",
+          },
+          sharedContext
+        )
       }
-      if (
-        output.disposition === "OUT_OF_SCOPE" ||
-        output.disposition === "UNSAFE"
-      ) {
-        return buildScopedCustomerReply(output.disposition, input.locale)
+    }
+
+    return reviewFallback
+  }
+
+  @InjectManager()
+  async draftCustomerProductAdvice(
+    input: {
+      catalog: CustomerCatalogSnapshot
+      conversation_memory?: string
+      idempotency_key: string
+      locale: "en" | "vi"
+      question: string
+      recent_messages: Array<{
+        body: string
+        direction: "INBOUND" | "OUTBOUND"
+      }>
+      tenant_id: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ): Promise<KnowledgeAnswer> {
+    const fallbackOutput = buildProductAdvisorFallback(
+      input.catalog,
+      input.locale
+    )
+    const fallback = formatProductAdvisorReply(
+      fallbackOutput,
+      input.catalog,
+      input.locale
+    )
+    const toAnswer = (
+      result: { body: string; product_ids: string[] },
+      optimization = {
+        ai_invoked: false,
+        cache_hit: false,
+        path: "DETERMINISTIC_FALLBACK",
       }
-      return fallback
-    } catch (error) {
-      await this.updateAgentModelRuns(
+    ) => ({
+      body: result.body,
+      citations: [],
+      disposition: "ANSWER" as const,
+      grounded: input.catalog.status === "READY",
+      locale: input.locale,
+      optimization,
+      product_ids: result.product_ids,
+    })
+    if (
+      input.catalog.status === "UNAVAILABLE" ||
+      !input.catalog.products.length
+    ) {
+      return toAnswer(fallback)
+    }
+    if (isCatalogOverviewRequest(input.question)) {
+      return toAnswer(fallback, {
+        ai_invoked: false,
+        cache_hit: false,
+        path: "DETERMINISTIC_CATALOG",
+      })
+    }
+
+    const legacyRun = (
+      await this.listAgentModelRuns(
+        { idempotency_key: input.idempotency_key },
+        { take: 1 },
+        sharedContext
+      )
+    )[0]
+    if (legacyRun?.status === "SUCCEEDED" && legacyRun.output) {
+      const cached = ProductAdvisorModelOutput.safeParse(legacyRun.output)
+      if (cached.success) {
+        return toAnswer(
+          resolveProductAdvisorModelOutput(
+            cached.data,
+            input.catalog,
+            input.locale
+          ),
+          {
+            ai_invoked: false,
+            cache_hit: true,
+            path: "MESSAGE_IDEMPOTENCY",
+          }
+        )
+      }
+    }
+
+    const safeInput = {
+      catalog: input.catalog.products.map((product) => ({
+        category_names: product.category_names,
+        collection_title: product.collection_title,
+        description: product.description?.slice(0, 1_000) ?? null,
+        id: product.id,
+        subtitle: product.subtitle,
+        title: product.title,
+        variants: product.variants.map((variant) => ({
+          availability: variant.availability,
+          available_quantity: variant.available_quantity,
+          currency_code: variant.currency_code,
+          id: variant.id,
+          price: variant.price,
+          title: variant.title,
+        })),
+      })),
+      conversation_memory: input.conversation_memory?.slice(0, 1_600) ?? "",
+      current_message: input.question.slice(0, 2_000),
+      locale: input.locale,
+      recent_conversation: input.recent_messages.slice(-6).map((message) => ({
+        body: message.body.slice(0, 600),
+        direction: message.direction,
+      })),
+    }
+    let credentials
+    try {
+      credentials = await this.getActiveAiProviderCredentials(
+        "generation",
+        input.tenant_id
+      )
+    } catch {
+      return toAnswer(fallback)
+    }
+
+    for (const credential of credentials) {
+      const adapter = createModelAdapter({
+        apiKey: credential.api_key,
+        model: credential.model,
+        provider: credential.provider,
+      })
+      const responseCacheKey = buildCustomerAssistantCacheKey(
+        "product-advice",
         {
-          completed_at: new Date(),
-          error:
-            error instanceof Error
-              ? error.message.slice(0, 1_000)
-              : "Customer knowledge answer failed",
-          id: modelRun.id,
-          latency_ms: Date.now() - startedAt.getTime(),
-          status: "FAILED",
+          input: safeInput,
+          model: adapter.model,
+          prompt_key: PRODUCT_ADVISOR_PROMPT_KEY,
+          prompt_version: PRODUCT_ADVISOR_PROMPT_VERSION,
+          provider: adapter.provider,
+          tenant_id: input.tenant_id,
+        }
+      )
+      const cachedResponse = await readCustomerAssistantCache(
+        this.getCustomerAssistantCaching(),
+        responseCacheKey,
+        (value) => {
+          const result = ProductAdvisorModelOutput.safeParse(value)
+          return result.success ? result.data : null
+        }
+      )
+      if (cachedResponse) {
+        return toAnswer(
+          resolveProductAdvisorModelOutput(
+            cachedResponse,
+            input.catalog,
+            input.locale
+          ),
+          {
+            ai_invoked: false,
+            cache_hit: true,
+            path: "AI_RESPONSE_CACHE",
+          }
+        )
+      }
+      const attemptKey = `${input.idempotency_key}:provider:${adapter.provider}`
+      const existing = (
+        await this.listAgentModelRuns(
+          { idempotency_key: attemptKey },
+          { take: 1 },
+          sharedContext
+        )
+      )[0]
+      if (existing?.status === "SUCCEEDED" && existing.output) {
+        const cached = ProductAdvisorModelOutput.safeParse(existing.output)
+        if (cached.success) {
+          return toAnswer(
+            resolveProductAdvisorModelOutput(
+              cached.data,
+              input.catalog,
+              input.locale
+            )
+          )
+        }
+      }
+      if (existing?.status === "RUNNING") return toAnswer(fallback)
+      if (existing) continue
+
+      const startedAt = new Date()
+      const modelRun = await this.createAgentModelRuns(
+        {
+          agent_id: "customer-product-advisor",
+          agent_version: "1.0.0",
+          idempotency_key: attemptKey,
+          input: redactModelInput(safeInput) as Record<string, unknown>,
+          model: adapter.model,
+          prompt_key: PRODUCT_ADVISOR_PROMPT_KEY,
+          prompt_version: PRODUCT_ADVISOR_PROMPT_VERSION,
+          provider: adapter.provider,
+          redacted: true,
+          started_at: startedAt,
+          status: "RUNNING",
         },
         sharedContext
       )
+      try {
+        const generated = await adapter.invoke({
+          agent_id: "customer-product-advisor",
+          input: safeInput,
+          max_tokens: PRODUCT_ADVISOR_MAX_TOKENS,
+          output_schema: PRODUCT_ADVISOR_OUTPUT_SCHEMA,
+          prompt_key: PRODUCT_ADVISOR_PROMPT_KEY,
+          prompt_version: PRODUCT_ADVISOR_PROMPT_VERSION,
+          system_prompt: PRODUCT_ADVISOR_SYSTEM_PROMPT,
+        })
+        const output = ProductAdvisorModelOutput.parse(generated)
+        await writeCustomerAssistantCache(this.getCustomerAssistantCaching(), {
+          key: responseCacheKey,
+          tags: [
+            "customer-assistant:product-advice",
+            `customer-assistant:tenant:${input.tenant_id}`,
+          ],
+          ttl: CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS.product_advice,
+          value: output,
+        })
+        await this.updateAgentModelRuns(
+          {
+            completed_at: new Date(),
+            id: modelRun.id,
+            latency_ms: Date.now() - startedAt.getTime(),
+            output,
+            status: "SUCCEEDED",
+          },
+          sharedContext
+        )
+        return toAnswer(
+          resolveProductAdvisorModelOutput(
+            output,
+            input.catalog,
+            input.locale
+          ),
+          {
+            ai_invoked: true,
+            cache_hit: false,
+            path: "AI_MODEL",
+          }
+        )
+      } catch (error) {
+        await this.updateAgentModelRuns(
+          {
+            completed_at: new Date(),
+            error:
+              error instanceof Error
+                ? error.message.slice(0, 1_000)
+                : "Customer product advice failed",
+            id: modelRun.id,
+            latency_ms: Date.now() - startedAt.getTime(),
+            status: "FAILED",
+          },
+          sharedContext
+        )
+      }
+    }
+
+    return toAnswer(fallback)
+  }
+
+  @InjectManager()
+  async classifyCustomerMessageIntent(
+    input: {
+      conversation_memory?: string
+      idempotency_key: string
+      locale: "en" | "vi"
+      message: string
+      recent_messages: Array<{
+        body: string
+        direction: "INBOUND" | "OUTBOUND"
+      }>
+      tenant_id: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ): Promise<CustomerMessageIntentResult> {
+    const fallback = defaultCustomerMessageIntent()
+    const legacyRun = (
+      await this.listAgentModelRuns(
+        { idempotency_key: input.idempotency_key },
+        { take: 1 },
+        sharedContext
+      )
+    )[0]
+    if (legacyRun?.status === "SUCCEEDED" && legacyRun.output) {
+      const cached = CustomerMessageIntentModelOutput.safeParse(legacyRun.output)
+      return cached.success ? cached.data : fallback
+    }
+
+    const safeInput = {
+      conversation_memory: input.conversation_memory?.slice(0, 1_600) ?? "",
+      current_message: input.message.slice(0, 2_000),
+      locale: input.locale,
+      recent_conversation: input.recent_messages.slice(-4).map((message) => ({
+        body: message.body.slice(0, 500),
+        direction: message.direction,
+      })),
+    }
+    let credentials
+    try {
+      credentials = await this.getActiveAiProviderCredentials(
+        "generation",
+        input.tenant_id
+      )
+    } catch {
       return fallback
     }
+
+    for (const credential of credentials) {
+      const adapter = createModelAdapter({
+        apiKey: credential.api_key,
+        model: credential.model,
+        provider: credential.provider,
+      })
+      const intentCacheKey = buildCustomerAssistantCacheKey("intent", {
+        input: safeInput,
+        model: adapter.model,
+        prompt_key: CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
+        prompt_version: CUSTOMER_MESSAGE_INTENT_PROMPT_VERSION,
+        provider: adapter.provider,
+        tenant_id: input.tenant_id,
+      })
+      const cachedIntent = await readCustomerAssistantCache(
+        this.getCustomerAssistantCaching(),
+        intentCacheKey,
+        (value) => {
+          const result = CustomerMessageIntentModelOutput.safeParse(value)
+          return result.success ? result.data : null
+        }
+      )
+      if (cachedIntent) return cachedIntent
+      const attemptKey = `${input.idempotency_key}:provider:${adapter.provider}`
+      const existing = (
+        await this.listAgentModelRuns(
+          { idempotency_key: attemptKey },
+          { take: 1 },
+          sharedContext
+        )
+      )[0]
+      if (existing?.status === "SUCCEEDED" && existing.output) {
+        const cached = CustomerMessageIntentModelOutput.safeParse(
+          existing.output
+        )
+        if (cached.success) return cached.data
+      }
+      if (existing?.status === "RUNNING") return fallback
+      if (existing) continue
+
+      const startedAt = new Date()
+      const modelRun = await this.createAgentModelRuns(
+        {
+          agent_id: "customer-intent-router",
+          agent_version: "1.0.0",
+          idempotency_key: attemptKey,
+          input: redactModelInput(safeInput) as Record<string, unknown>,
+          model: adapter.model,
+          prompt_key: CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
+          prompt_version: CUSTOMER_MESSAGE_INTENT_PROMPT_VERSION,
+          provider: adapter.provider,
+          redacted: true,
+          started_at: startedAt,
+          status: "RUNNING",
+        },
+        sharedContext
+      )
+
+      try {
+        const generated = await adapter.invoke({
+          agent_id: "customer-intent-router",
+          input: safeInput,
+          max_tokens: CUSTOMER_MESSAGE_INTENT_MAX_TOKENS,
+          output_schema: CUSTOMER_MESSAGE_INTENT_OUTPUT_SCHEMA,
+          prompt_key: CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
+          prompt_version: CUSTOMER_MESSAGE_INTENT_PROMPT_VERSION,
+          system_prompt: CUSTOMER_MESSAGE_INTENT_SYSTEM_PROMPT,
+        })
+        const output = CustomerMessageIntentModelOutput.parse(generated)
+        await writeCustomerAssistantCache(this.getCustomerAssistantCaching(), {
+          key: intentCacheKey,
+          tags: [
+            "customer-assistant:intent",
+            `customer-assistant:tenant:${input.tenant_id}`,
+          ],
+          ttl: CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS.intent,
+          value: output,
+        })
+        await this.updateAgentModelRuns(
+          {
+            completed_at: new Date(),
+            id: modelRun.id,
+            latency_ms: Date.now() - startedAt.getTime(),
+            output,
+            status: "SUCCEEDED",
+          },
+          sharedContext
+        )
+        return output
+      } catch (error) {
+        await this.updateAgentModelRuns(
+          {
+            completed_at: new Date(),
+            error:
+              error instanceof Error
+                ? error.message.slice(0, 1_000)
+                : "Customer intent classification failed",
+            id: modelRun.id,
+            latency_ms: Date.now() - startedAt.getTime(),
+            status: "FAILED",
+          },
+          sharedContext
+        )
+      }
+    }
+
+    return fallback
   }
 
   @InjectManager()
   async processCustomerKnowledgeQuestion(
-    input: ProcessCustomerKnowledgeQuestionInput,
+    input: ProcessCustomerKnowledgeQuestionInput & {
+      catalog_snapshot?: CustomerCatalogSnapshot
+    },
     @MedusaContext() sharedContext: Context = {}
   ) {
     const inbound = await this.retrieveAgentMessage(
@@ -2065,56 +2879,225 @@ class AgentOperationsModuleService extends MedusaService({
       )
     }
 
+    const [conversationMemory, customerMessages] = await Promise.all([
+      this.listAgentConversationMemories(
+        { conversation_id: conversation.id },
+        { take: 1 },
+        sharedContext
+      ).then((memories) => memories[0]),
+      this.listAgentMessages(
+        { direction: "INBOUND", sender_id: inbound.sender_id },
+        { order: { occurred_at: "DESC" }, take: 30 },
+        sharedContext
+      ),
+    ])
+    const priorConversationIds = [
+      ...new Set(
+        customerMessages
+          .map((message) => message.conversation_id)
+          .filter((conversationId) => conversationId !== conversation.id)
+      ),
+    ].slice(0, 8)
+    const tenantConversations = priorConversationIds.length
+      ? await this.listAgentConversations(
+          { id: priorConversationIds, tenant_id: conversation.tenant_id },
+          { take: priorConversationIds.length },
+          sharedContext
+        )
+      : []
+    const customerMemories = tenantConversations.length
+      ? await this.listAgentConversationMemories(
+          {
+            conversation_id: tenantConversations.map(
+              (candidate) => candidate.id
+            ),
+          },
+          { order: { summarized_at: "DESC" }, take: 5 },
+          sharedContext
+        )
+      : []
+    const memorySummary = buildCustomerConversationContext({
+      current_summary: conversationMemory?.summary,
+      previous_conversation_summaries: customerMemories.map(
+        (memory) => memory.summary
+      ),
+    })
+
     const question = inbound.body.trim()
     const locale = detectKnowledgeQuestionLocale(question)
     const explicitAttack = isExplicitPromptAttack(question)
-    const retrievedKnowledge = explicitAttack
-      ? { results: [], total_candidates: 0 }
-      : question.length >= 2
-        ? await this.searchGovernedKnowledge(
+    const smallTalk = explicitAttack
+      ? null
+      : buildCustomerSmallTalkReply(question, locale)
+    const fastIntent =
+      explicitAttack || smallTalk
+        ? null
+        : detectCustomerMessageFastIntent(question)
+    const recentMessages =
+      smallTalk ||
+      explicitAttack ||
+      (fastIntent && fastIntent !== "PRODUCT_DISCOVERY")
+      ? []
+      : await this.listAgentMessages(
+          { conversation_id: conversation.id },
+          { order: { occurred_at: "DESC" }, take: 7 },
+          sharedContext
+        )
+    const intent = explicitAttack
+      ? {
+          confidence: 1,
+          intent: "UNSAFE" as const,
+          reason: "Matched a backend security rule.",
+        }
+      : smallTalk
+        ? {
+            confidence: 1,
+            intent: "SMALL_TALK" as const,
+            reason: "Matched an unambiguous conversational fast path.",
+          }
+        : fastIntent
+          ? {
+              confidence: 1,
+              intent: fastIntent,
+              reason: "Matched an unambiguous retail information question.",
+            }
+        : await this.classifyCustomerMessageIntent(
             {
-              limit: 5,
+              conversation_memory: memorySummary,
+              idempotency_key: `customer-intent-model:${inbound.id}`,
               locale,
-              query: question.slice(0, 500),
-              scope: "customer_support",
+              message: question,
+              recent_messages: recentMessages
+                .slice()
+                .reverse()
+                .filter(
+                  (message) =>
+                    message.direction === "INBOUND" ||
+                    message.direction === "OUTBOUND"
+                )
+                .map((message) => ({
+                  body: message.body,
+                  direction: message.direction as "INBOUND" | "OUTBOUND",
+                })),
               tenant_id: conversation.tenant_id,
             },
             sharedContext
           )
-        : { results: [], total_candidates: 0 }
-    const knowledge = hasSufficientKnowledgeEvidence(retrievedKnowledge)
-      ? retrievedKnowledge
-      : { results: [], total_candidates: retrievedKnowledge.total_candidates }
-    const answer = explicitAttack
-      ? buildScopedCustomerReply("UNSAFE", locale)
-      : await this.draftGovernedKnowledgeAnswer(
-          {
-            idempotency_key: `customer-answer-model:${inbound.id}`,
-            knowledge,
-            locale,
-            question,
-            tenant_id: conversation.tenant_id,
-          },
-          sharedContext
-        )
-    if (answer.disposition === "HUMAN_REVIEW") {
+    const routedIntent = resolveCustomerMessageIntent(intent)
+    let reviewRouted = false
+    let supportTaskId: string | null = null
+    let answer: KnowledgeAnswer
+    if (routedIntent === "HUMAN_ACTION") {
       const escalation = await this.createCustomerKnowledgeEscalation(
         {
           conversation_id: conversation.id,
           inbound_message_id: inbound.id,
           locale,
           question,
+          reason: "NEEDS_STAFF_AUTHORITY",
         },
         sharedContext
       )
-
-      return {
-        delivery_id: null,
-        duplicate: escalation.duplicate,
-        grounded: false,
-        response_message_id: null,
-        support_task_id: escalation.task?.id ?? null,
+      reviewRouted = true
+      supportTaskId = escalation.task?.id ?? null
+      answer = buildCustomerReviewAcknowledgement(
+        locale,
+        "NEEDS_STAFF_AUTHORITY"
+      )
+    } else if (routedIntent === "SMALL_TALK" || routedIntent === "CLARIFY") {
+      answer =
+        smallTalk ??
+        {
+          body: buildCustomerIntentReply(routedIntent, locale),
+          citations: [],
+          disposition: routedIntent,
+          grounded: false,
+          locale,
+        }
+    } else if (routedIntent === "PRODUCT_DISCOVERY") {
+      const catalog = input.catalog_snapshot ?? {
+        products: [] as [],
+        query: question,
+        status: "UNAVAILABLE" as const,
+        total_count: 0 as const,
       }
+      answer = await this.draftCustomerProductAdvice(
+        {
+          catalog,
+          conversation_memory: memorySummary,
+          idempotency_key: `customer-product-advisor:${inbound.id}`,
+          locale,
+          question,
+          recent_messages: recentMessages
+            .slice()
+            .reverse()
+            .filter(
+              (message) =>
+                message.direction === "INBOUND" ||
+                message.direction === "OUTBOUND"
+            )
+            .map((message) => ({
+              body: message.body,
+              direction: message.direction as "INBOUND" | "OUTBOUND",
+            })),
+          tenant_id: conversation.tenant_id,
+        },
+        sharedContext
+      )
+    } else if (routedIntent === "OUT_OF_SCOPE" || routedIntent === "UNSAFE") {
+      answer = buildScopedCustomerReply(routedIntent, locale)
+    } else {
+      const retrievedKnowledge =
+        question.length >= 2
+          ? await this.searchGovernedKnowledge(
+              {
+                limit: 5,
+                locale,
+                query: [question, memorySummary]
+                  .filter(Boolean)
+                  .join("\nConversation context: ")
+                  .slice(0, 900),
+                scope: "customer_support",
+                tenant_id: conversation.tenant_id,
+              },
+              sharedContext
+            )
+          : { results: [], total_candidates: 0 }
+      const relevantKnowledge = filterKnowledgeEvidenceForQuestion(
+        question,
+        retrievedKnowledge
+      )
+      const knowledge = hasSufficientKnowledgeEvidence(relevantKnowledge)
+        ? relevantKnowledge
+        : { results: [], total_candidates: relevantKnowledge.total_candidates }
+      answer = await this.draftGovernedKnowledgeAnswer(
+        {
+          conversation_memory: memorySummary,
+          idempotency_key: `customer-answer-model:${inbound.id}`,
+          knowledge,
+          locale,
+          question,
+          tenant_id: conversation.tenant_id,
+        },
+        sharedContext
+      )
+    }
+    if (answer.disposition === "HUMAN_REVIEW" && !reviewRouted) {
+      const escalation = await this.createCustomerKnowledgeEscalation(
+        {
+          conversation_id: conversation.id,
+          inbound_message_id: inbound.id,
+          locale,
+          question,
+          reason: "NO_APPROVED_KNOWLEDGE",
+        },
+        sharedContext
+      )
+      supportTaskId = escalation.task?.id ?? null
+      answer = buildCustomerReviewAcknowledgement(
+        locale,
+        "NO_APPROVED_KNOWLEDGE"
+      )
     }
 
     const now = new Date()
@@ -2135,7 +3118,20 @@ class AgentOperationsModuleService extends MedusaService({
           grounded: answer.grounded,
           disposition: answer.disposition,
           inbound_message_id: inbound.id,
+          intent: routedIntent,
+          intent_confidence: intent.confidence,
           locale,
+          optimization: answer.optimization ?? {
+            ai_invoked: false,
+            cache_hit: false,
+            path: "DETERMINISTIC_OR_REVIEW",
+          },
+          product_ids: answer.product_ids ?? [],
+          grounding_source: answer.product_ids?.length
+            ? "LIVE_CATALOG"
+            : answer.grounded
+              ? "APPROVED_KNOWLEDGE"
+              : "CONVERSATION",
         },
       },
       sharedContext
@@ -2167,6 +3163,14 @@ class AgentOperationsModuleService extends MedusaService({
           grounded: answer.grounded,
           disposition: answer.disposition,
           inbound_message_id: inbound.id,
+          intent: routedIntent,
+          intent_confidence: intent.confidence,
+          optimization: answer.optimization ?? {
+            ai_invoked: false,
+            cache_hit: false,
+            path: "DETERMINISTIC_OR_REVIEW",
+          },
+          product_ids: answer.product_ids ?? [],
           response_message_id: response.id,
         },
         event_type: "agent.knowledge.answer-created",
@@ -2182,7 +3186,7 @@ class AgentOperationsModuleService extends MedusaService({
       duplicate: false,
       grounded: answer.grounded,
       response_message_id: response.id,
-      support_task_id: null,
+      support_task_id: supportTaskId,
     }
   }
 
@@ -2193,6 +3197,7 @@ class AgentOperationsModuleService extends MedusaService({
       inbound_message_id: string
       locale: "en" | "vi"
       question: string
+      reason: "NEEDS_STAFF_AUTHORITY" | "NO_APPROVED_KNOWLEDGE"
     },
     @MedusaContext() sharedContext: Context = {}
   ) {
@@ -2206,6 +3211,7 @@ class AgentOperationsModuleService extends MedusaService({
       inbound_message_id: string
       locale: "en" | "vi"
       question: string
+      reason: "NEEDS_STAFF_AUTHORITY" | "NO_APPROVED_KNOWLEDGE"
     },
     @MedusaContext() sharedContext: Context = {}
   ) {
@@ -2299,7 +3305,10 @@ class AgentOperationsModuleService extends MedusaService({
       {
         correlation_id: correlationId,
         event_id: inbound.id,
-        event_type: "support.knowledge-unanswered",
+        event_type:
+          input.reason === "NEEDS_STAFF_AUTHORITY"
+            ? "support.staff-action-requested"
+            : "support.knowledge-unanswered",
         event_version: 1,
         occurred_at: inbound.occurred_at,
         payload: {
@@ -2307,6 +3316,7 @@ class AgentOperationsModuleService extends MedusaService({
           conversation_id: conversation.id,
           locale: input.locale,
           question: input.question,
+          reason: input.reason,
         },
         processed_at: now,
         received_at: now,
@@ -2324,7 +3334,7 @@ class AgentOperationsModuleService extends MedusaService({
           channel: conversation.channel,
           customer_id: inbound.sender_id,
           locale: input.locale,
-          reason: "NO_APPROVED_KNOWLEDGE",
+          reason: input.reason,
         },
         correlation_id: correlationId,
         incident_type: "CUSTOMER_SUPPORT",
@@ -2334,7 +3344,10 @@ class AgentOperationsModuleService extends MedusaService({
         subject_type: "conversation",
         summary: input.question,
         tenant_id: conversation.tenant_id,
-        title: `Unanswered ${conversation.channel} customer question`,
+        title:
+          input.reason === "NEEDS_STAFF_AUTHORITY"
+            ? `${conversation.channel} customer request requiring staff action`
+            : `Unanswered ${conversation.channel} customer question`,
         trigger_event_id: event.id,
       },
       sharedContext
@@ -2345,7 +3358,9 @@ class AgentOperationsModuleService extends MedusaService({
         created_by_type: "agent",
         conversation_id: conversation.id,
         description:
-          "Review the customer's question, write a verified response, and send it back through the original channel.",
+          input.reason === "NEEDS_STAFF_AUTHORITY"
+            ? "Review the customer's request, make the authorized decision or action, and send a verified response through the original channel."
+            : "Review the customer's question, write a verified response, and send it back through the original channel.",
         due_at: new Date(now.getTime() + 30 * 60 * 1_000),
         idempotency_key: taskIdempotencyKey,
         incident_id: incident.id,
@@ -2357,6 +3372,7 @@ class AgentOperationsModuleService extends MedusaService({
           grounded: false,
           locale: input.locale,
           question: input.question,
+          routing_reason: input.reason,
           requires_human_review: true,
         },
         priority: "MEDIUM",
@@ -2376,7 +3392,7 @@ class AgentOperationsModuleService extends MedusaService({
         data: {
           channel: conversation.channel,
           conversation_id: conversation.id,
-          reason: "NO_APPROVED_KNOWLEDGE",
+          reason: input.reason,
           task_id: task.id,
         },
         event_type: "agent.support-response.escalated",
@@ -3211,24 +4227,6 @@ class AgentOperationsModuleService extends MedusaService({
 
     if (!deterministic.grounded) return deterministic
 
-    let adapter
-    try {
-      const credential = await this.getActiveAiProviderCredential(
-        "generation",
-        tenantId
-      )
-      adapter = credential
-        ? createModelAdapter({
-            apiKey: credential.api_key,
-            model: credential.model,
-            provider: credential.provider,
-          })
-        : new DisabledModelAdapter()
-    } catch {
-      return deterministic
-    }
-    if (adapter.provider === "disabled") return deterministic
-
     const activePrompts = await this.listAgentPromptTemplates(
       { prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY, status: "ACTIVE" },
       { order: { created_at: "DESC" }, take: 1 },
@@ -3247,18 +4245,17 @@ class AgentOperationsModuleService extends MedusaService({
       version: activePrompt?.version ?? CUSTOMER_SUPPORT_PROMPT_VERSION,
     }
 
-    const existing = (
+    const legacyRun = (
       await this.listAgentModelRuns(
         { idempotency_key: idempotencyKey },
         { take: 1 },
         sharedContext
       )
     )[0]
-    if (existing?.status === "SUCCEEDED" && existing.output) {
-      const cached = ResponseDraftOutput.safeParse(existing.output)
+    if (legacyRun?.status === "SUCCEEDED" && legacyRun.output) {
+      const cached = ResponseDraftOutput.safeParse(legacyRun.output)
       return cached.success ? cached.data : deterministic
     }
-    if (existing) return deterministic
 
     const safeInput = {
       approved_knowledge: parsed.knowledge.map((item) => ({
@@ -3276,67 +4273,100 @@ class AgentOperationsModuleService extends MedusaService({
       },
       question: parsed.question,
     }
-    const startedAt = new Date()
-    const modelRun = await this.createAgentModelRuns(
-      {
-        agent_id: "customer-support-agent",
-        agent_version: "0.2.0",
-        idempotency_key: idempotencyKey,
-        input: redactModelInput(safeInput) as Record<string, unknown>,
-        model: adapter.model,
-        prompt_key: prompt.prompt_key,
-        prompt_version: prompt.version,
-        provider: adapter.provider,
-        redacted: true,
-        started_at: startedAt,
-        status: "RUNNING",
-      },
-      sharedContext
-    )
-
+    let credentials
     try {
-      const generated = await adapter.invoke({
-        agent_id: "customer-support-agent",
-        input: safeInput,
-        max_tokens: prompt.max_tokens,
-        output_schema: prompt.output_schema,
-        prompt_key: prompt.prompt_key,
-        prompt_version: prompt.version,
-        system_prompt: prompt.system_prompt,
-      })
-      const output = ResponseDraftOutput.parse({
-        body: generated.body,
-        citations: deterministic.citations,
-        grounded: true,
-        requires_human_review: true,
-      })
-      await this.updateAgentModelRuns(
-        {
-          completed_at: new Date(),
-          id: modelRun.id,
-          latency_ms: Date.now() - startedAt.getTime(),
-          output,
-          status: "SUCCEEDED",
-        },
-        sharedContext
+      credentials = await this.getActiveAiProviderCredentials(
+        "generation",
+        tenantId
       )
-      return output
-    } catch (error) {
-      await this.updateAgentModelRuns(
-        {
-          completed_at: new Date(),
-          error:
-            error instanceof Error
-              ? error.message.slice(0, 1000)
-              : "Model draft failed",
-          id: modelRun.id,
-          latency_ms: Date.now() - startedAt.getTime(),
-          status: "FAILED",
-        },
-        sharedContext
-      )
+    } catch {
       return deterministic
     }
+
+    for (const credential of credentials) {
+      const adapter = createModelAdapter({
+        apiKey: credential.api_key,
+        model: credential.model,
+        provider: credential.provider,
+      })
+      const attemptKey = `${idempotencyKey}:provider:${adapter.provider}`
+      const existing = (
+        await this.listAgentModelRuns(
+          { idempotency_key: attemptKey },
+          { take: 1 },
+          sharedContext
+        )
+      )[0]
+      if (existing?.status === "SUCCEEDED" && existing.output) {
+        const cached = ResponseDraftOutput.safeParse(existing.output)
+        if (cached.success) return cached.data
+      }
+      if (existing?.status === "RUNNING") return deterministic
+      if (existing) continue
+
+      const startedAt = new Date()
+      const modelRun = await this.createAgentModelRuns(
+        {
+          agent_id: "customer-support-agent",
+          agent_version: "0.2.0",
+          idempotency_key: attemptKey,
+          input: redactModelInput(safeInput) as Record<string, unknown>,
+          model: adapter.model,
+          prompt_key: prompt.prompt_key,
+          prompt_version: prompt.version,
+          provider: adapter.provider,
+          redacted: true,
+          started_at: startedAt,
+          status: "RUNNING",
+        },
+        sharedContext
+      )
+
+      try {
+        const generated = await adapter.invoke({
+          agent_id: "customer-support-agent",
+          input: safeInput,
+          max_tokens: prompt.max_tokens,
+          output_schema: prompt.output_schema,
+          prompt_key: prompt.prompt_key,
+          prompt_version: prompt.version,
+          system_prompt: prompt.system_prompt,
+        })
+        const output = ResponseDraftOutput.parse({
+          body: generated.body,
+          citations: deterministic.citations,
+          grounded: true,
+          requires_human_review: true,
+        })
+        await this.updateAgentModelRuns(
+          {
+            completed_at: new Date(),
+            id: modelRun.id,
+            latency_ms: Date.now() - startedAt.getTime(),
+            output,
+            status: "SUCCEEDED",
+          },
+          sharedContext
+        )
+        return output
+      } catch (error) {
+        await this.updateAgentModelRuns(
+          {
+            completed_at: new Date(),
+            error:
+              error instanceof Error
+                ? error.message.slice(0, 1_000)
+                : "Model draft failed",
+            id: modelRun.id,
+            latency_ms: Date.now() - startedAt.getTime(),
+            status: "FAILED",
+          },
+          sharedContext
+        )
+      }
+    }
+
+    return deterministic
   }
 
   @InjectManager()

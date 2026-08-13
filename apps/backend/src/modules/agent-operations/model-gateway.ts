@@ -288,7 +288,12 @@ export class DeepSeekChatModelAdapter implements ModelGatewayAdapter {
         body: JSON.stringify({
           max_tokens: input.max_tokens,
           messages: [
-            { content: input.system_prompt, role: "system" },
+            {
+              content: `${input.system_prompt}\nReturn only valid JSON matching this JSON Schema: ${JSON.stringify(
+                input.output_schema
+              )}`,
+              role: "system",
+            },
             {
               content: JSON.stringify(redactModelInput(input.input)),
               role: "user",
@@ -307,9 +312,17 @@ export class DeepSeekChatModelAdapter implements ModelGatewayAdapter {
         signal: controller.signal,
       })
       if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as {
+          error?: { message?: string }
+        } | null
+        const providerMessage = payload?.error?.message
+          ?.replace(/[\r\n\t]+/g, " ")
+          .slice(0, 300)
         throw new MedusaError(
           MedusaError.Types.UNEXPECTED_STATE,
-          `Model provider returned HTTP ${response.status}.`
+          `Model provider returned HTTP ${response.status}${
+            providerMessage ? `: ${providerMessage}` : "."
+          }`
         )
       }
       const payload = (await response.json()) as {

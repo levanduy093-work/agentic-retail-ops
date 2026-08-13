@@ -21,6 +21,7 @@ import {
   MESSAGE_SEND_TOOL,
 } from "./tools/platform-command-tools"
 import { ORDER_READ_TOOL } from "./tools/order-tools"
+import { CATALOG_READ_TOOL } from "./tools/catalog-tools"
 import { RESPONSE_DRAFT_TOOL } from "./tools/response-tools"
 import { AgentToolDefinition, toAgentToolMetadata } from "./tool-contract"
 import { AGENT_CATALOG } from "./catalog-registry"
@@ -29,6 +30,7 @@ export const AGENT_TOOL_REGISTRY = {
   [APPROVAL_DECIDE_TOOL.name]: APPROVAL_DECIDE_TOOL,
   [APPROVAL_REQUEST_TOOL.name]: APPROVAL_REQUEST_TOOL,
   [AUDIT_SEARCH_TOOL.name]: AUDIT_SEARCH_TOOL,
+  [CATALOG_READ_TOOL.name]: CATALOG_READ_TOOL,
   [INVENTORY_GET_POSITION_TOOL.name]: INVENTORY_GET_POSITION_TOOL,
   [INVENTORY_EXECUTE_TRANSFER_TOOL.name]: INVENTORY_EXECUTE_TRANSFER_TOOL,
   [INCIDENT_CREATE_TOOL.name]: INCIDENT_CREATE_TOOL,

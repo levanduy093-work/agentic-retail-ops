@@ -1,0 +1,221 @@
+CHÍNH SÁCH VẬN HÀNH CỬA HÀNG VÀ HỖ TRỢ KHÁCH HÀNG
+
+Mã tài liệu: RETAIL-OPERATING-001
+Phiên bản: 1.0.0
+Hiệu lực từ: 13/08/2026
+Phạm vi: Cửa hàng bán lẻ tại Việt Nam; áp dụng cho website, ứng dụng, mạng xã hội, Telegram, live chat, điện thoại, email và tại quầy.
+Phân loại: DỮ LIỆU MÔ PHỎNG DÙNG ĐỂ KIỂM THỬ KNOWLEDGE HUB. Không phải chính sách vận hành, cam kết thương mại, tư vấn pháp lý hoặc chính sách thật để công bố cho khách hàng.
+
+PHẦN A. NGUYÊN TẮC PHỤC VỤ VÀ QUẢN TRỊ CÂU TRẢ LỜI
+
+A1. Mục tiêu phục vụ
+
+Cửa hàng phục vụ khách theo bốn nguyên tắc: chính xác, minh bạch, nhất quán giữa các kênh và tôn trọng dữ liệu cá nhân. Nhân viên hoặc trợ lý AI chỉ được trả lời theo thông tin đã được phê duyệt, còn hiệu lực và đúng phạm vi của yêu cầu.
+
+A2. Quy tắc áp dụng cho mọi kênh
+
+Mọi kênh hỗ trợ sử dụng cùng một chính sách. Kênh liên hệ chỉ thay đổi cách nhận và gửi tin, không thay đổi điều kiện giá, khuyến mãi, giao hàng, đổi trả, hoàn tiền hoặc bảo hành.
+
+Khi khách hỏi về giao dịch cụ thể, cần xin mã đơn hàng hoặc mã vận đơn. Không xác nhận thông tin đơn hàng, địa chỉ, số điện thoại, lịch sử mua hàng hoặc thanh toán nếu chưa xác minh được khách theo quy trình của kênh đó.
+
+Không yêu cầu, tiếp nhận, lưu hoặc nhắc lại mật khẩu, mã OTP, mã CVV, số thẻ thanh toán đầy đủ, ảnh CCCD/hộ chiếu hoặc thông tin đăng nhập. Nếu khách gửi dữ liệu nhạy cảm, yêu cầu khách xóa hoặc che dữ liệu đó và chuyển nhân viên xử lý khi cần.
+
+A3. Quy tắc cho trợ lý AI
+
+Trợ lý AI chỉ dùng knowledge đã được phê duyệt, còn hiệu lực và có citation. Không được tự tạo sản phẩm, giá, tồn kho, mã giảm giá, tình trạng đơn, mã vận đơn, thời gian hoàn tiền, mức bồi thường, lý do giao chậm hoặc lời hứa ngoại lệ.
+
+Nếu không có evidence phù hợp, evidence mâu thuẫn, khách yêu cầu hành động trên đơn hàng, hoặc đề nghị vượt chính sách, trợ lý AI phải nói rõ cần nhân viên kiểm tra và chuyển tuyến. Trợ lý AI không được tự hủy đơn, hoàn tiền, đổi địa chỉ, tạo khuyến mãi, gửi lại hàng hoặc chỉnh sửa điểm khách hàng thân thiết.
+
+A4. Giọng điệu và thời hạn phản hồi
+
+Trả lời ngắn, lịch sự, dùng ngôn ngữ của khách nếu có knowledge cùng locale. Không đổ lỗi cho khách, hãng vận chuyển hoặc nhà cung cấp khi chưa xác minh. Không công khai tranh chấp, thông tin đơn hàng hoặc dữ liệu khách trong nhóm chat công khai.
+
+Các yêu cầu có case cần được xác nhận đã tiếp nhận ngay trong cuộc trò chuyện. Thời gian giải quyết chỉ được nêu khi có SLA đã phê duyệt cho đúng loại case; nếu chưa có, dùng câu “bên mình sẽ cập nhật sau khi kiểm tra xong”, không ấn định thời gian.
+
+A5. Các trường hợp phải chuyển nhân viên ngay
+
+Chuyển nhân viên hỗ trợ khi có một trong các tình huống: không có chính sách được phê duyệt; thông tin mâu thuẫn; cần đọc dữ liệu đơn; yêu cầu hủy, hoàn tiền, gửi lại, bồi thường, đổi ngoại lệ hoặc mã ưu đãi ngoại lệ; giao sai/thiếu/lỗi; khiếu nại gay gắt; nghi ngờ lừa đảo; tranh chấp thanh toán; yêu cầu dữ liệu cá nhân; đe dọa pháp lý, báo chí hoặc cơ quan nhà nước; hoặc khách gửi dữ liệu nhạy cảm.
+
+Mẫu chuyển tuyến: “Mình đã ghi nhận yêu cầu và chuyển đến nhân viên hỗ trợ để kiểm tra. Bên mình sẽ phản hồi sau khi xác minh được thông tin liên quan.”
+
+PHẦN B. SẢN PHẨM, GIÁ VÀ NỘI DUNG BÁN HÀNG
+
+B1. Thông tin sản phẩm
+
+Thông tin có hiệu lực là tên hàng, mã SKU, biến thể, mô tả, thành phần/chất liệu, kích thước, hướng dẫn dùng, cảnh báo và điều kiện bảo hành hiển thị trong catalog được phê duyệt. Hình minh họa có thể khác màu sắc thực tế do thiết bị hiển thị; nhân viên không được cam kết đặc tính không có trong catalog.
+
+B2. Giá bán
+
+Giá áp dụng là giá hiển thị tại trang thanh toán hoặc hóa đơn tại thời điểm đơn được xác nhận, bằng VND và đã thể hiện cách tính thuế/phí theo cấu hình bán hàng. Giá trên quảng cáo, ảnh chụp màn hình, cache trình duyệt hoặc tin nhắn cũ không tự động thay thế giá tại checkout.
+
+Khi có lỗi niêm yết rõ ràng, cửa hàng có thể tạm dừng xác nhận đơn để kiểm tra. Nhân viên không tự thu thêm tiền hoặc yêu cầu khách chuyển khoản ngoài luồng thanh toán đã công bố. Bất kỳ điều chỉnh giá sau khi đơn xác nhận phải có phê duyệt quản lý và sự đồng ý rõ ràng của khách.
+
+B3. Tồn kho và đặt trước
+
+Sản phẩm chỉ được xem là giữ chỗ khi hệ thống xác nhận đơn hoặc cơ chế đặt trước được phê duyệt. Việc thêm vào giỏ không bảo đảm còn hàng. Nếu hết hàng sau khi khách đặt, nhân viên đề xuất chờ hàng, sản phẩm thay thế tương đương hoặc hủy/hoàn tiền theo case được duyệt; không tự ý thay đổi sản phẩm.
+
+B4. Khuyến mãi, quà tặng và mã giảm giá
+
+Khuyến mãi chỉ có giá trị theo điều kiện hiển thị: thời gian hiệu lực, sản phẩm/nhóm khách đủ điều kiện, số lượt dùng, giá trị tối thiểu, kênh áp dụng và quy tắc cộng dồn. Không áp dụng mã đã hết hạn, mã không đúng đối tượng, mã đã dùng hết lượt hoặc tự cộng dồn nhiều ưu đãi nếu điều kiện không cho phép.
+
+Quà tặng có thể giới hạn số lượng và chỉ được xác nhận khi đơn đủ điều kiện trong hệ thống. Không được hứa tặng voucher để xoa dịu khiếu nại. Ngoại lệ về khuyến mãi phải chuyển quản lý hỗ trợ khách hàng.
+
+PHẦN C. TẠO ĐƠN, XÁC NHẬN VÀ THAY ĐỔI ĐƠN
+
+C1. Tạo và xác nhận đơn
+
+Đơn có hiệu lực khi hệ thống tạo mã đơn và gửi xác nhận theo kênh đã đăng ký, sau khi thanh toán/điều kiện COD được chấp nhận. Khách có trách nhiệm kiểm tra người nhận, số điện thoại, địa chỉ, sản phẩm, số lượng, giá và phương thức thanh toán trong xác nhận đơn.
+
+C2. Sửa địa chỉ, số điện thoại, sản phẩm hoặc số lượng
+
+Yêu cầu thay đổi chỉ được xem xét trước khi đơn chuyển sang xử lý kho hoặc bàn giao hãng vận chuyển. Nhân viên phải kiểm tra trạng thái thực tế của đơn, tồn kho, chênh lệch giá và rủi ro thanh toán trước khi thực hiện. Nếu đơn đã xử lý hoặc bàn giao, không được cam kết sửa/hủy; tạo case để nhân viên có thẩm quyền kiểm tra.
+
+C3. Hủy đơn
+
+Khách có thể yêu cầu hủy, nhưng việc hủy phụ thuộc trạng thái đơn, thanh toán, tồn kho và vận chuyển. Khi đơn đã đóng gói, bàn giao hoặc giao thành công, không hứa hủy ngay. Nhân viên xác minh chủ đơn, ghi nhận lý do và tạo case; mọi hoàn tiền phát sinh tuân theo Phần F.
+
+C4. Đơn nghi ngờ gian lận hoặc lạm dụng
+
+Không thông báo chi tiết tiêu chí chống gian lận cho khách. Khi có dấu hiệu bất thường về thanh toán, nhiều đơn, địa chỉ, đổi trả hoặc mã giảm giá, tạm chuyển case đội rủi ro/nhân viên có thẩm quyền. Không buộc tội khách; dùng câu trung lập: “Đơn hàng đang cần được kiểm tra thêm trước khi xác nhận.”
+
+PHẦN D. THANH TOÁN, HÓA ĐƠN VÀ ĐỐI SOÁT
+
+D1. Phương thức thanh toán
+
+Chỉ chấp nhận phương thức được hiển thị tại checkout hoặc quầy. Cửa hàng không yêu cầu khách chuyển khoản vào tài khoản cá nhân và không gửi liên kết thanh toán ngoài kênh đã được xác thực.
+
+D2. Thanh toán thất bại hoặc bị trừ tiền nhưng chưa có đơn
+
+Khách cần cung cấp mã giao dịch đã che dữ liệu nhạy cảm, thời gian giao dịch, số tiền và kênh thanh toán. Nhân viên tạo case đối soát thanh toán. Không yêu cầu ảnh thẻ, OTP hoặc CVV. Không cam kết hoàn tiền trước khi cổng thanh toán và hệ thống đơn hàng được đối soát.
+
+D3. COD
+
+Khách thanh toán đúng số tiền hiển thị trên đơn cho đơn vị giao hàng. Nếu có chênh lệch, khách không nên trả thêm tiền không khớp đơn; cần liên hệ hỗ trợ kèm mã đơn. Thu phí COD hay thu hộ ngoài số tiền đơn phải được xác minh bằng case.
+
+D4. Hóa đơn
+
+Yêu cầu hóa đơn cần mã đơn, tên/tổ chức, mã số thuế, địa chỉ và email nhận hóa đơn theo biểu mẫu được phê duyệt. Việc xuất, điều chỉnh hoặc thay thế hóa đơn tuân thủ quy trình kế toán và pháp luật hiện hành; nhân viên không hứa thời điểm nếu chưa có SLA được phê duyệt.
+
+PHẦN E. XỬ LÝ KHO, GIAO HÀNG VÀ NHẬN HÀNG
+
+E1. Chuẩn bị hàng
+
+Đơn xác nhận trước 14:00 vào ngày làm việc được mục tiêu bàn giao hãng vận chuyển trong ngày. Đơn xác nhận sau 14:00 được mục tiêu bàn giao vào ngày làm việc kế tiếp. Đây là mục tiêu xử lý, không phải cam kết bồi thường tự động.
+
+E2. Thời gian giao tham chiếu
+
+Thời gian giao tham chiếu là 1–2 ngày làm việc tại nội thành Hà Nội hoặc TP.HCM, và 3–5 ngày làm việc tại tỉnh thành khác. Thời tiết, ngày lễ, khu vực xa, sự cố vận hành hoặc hãng vận chuyển có thể ảnh hưởng thời gian giao. Không hứa chính xác giờ giao khi chưa có dữ liệu tracking.
+
+E3. Tra cứu tracking và giao chậm
+
+Khách cung cấp mã đơn hoặc mã vận đơn để tra cứu. Nếu tracking không có cập nhật mới trong 48 giờ sau khi bàn giao, nhân viên mở case CS-DELIVERY-DELAY, ghi mã đơn, mã vận đơn và mốc tracking gần nhất. Không tự hứa hoàn tiền, gửi lại hàng hoặc tặng mã giảm giá trước khi có xác minh của hãng vận chuyển và phê duyệt.
+
+E4. Giao không thành công và giao sai địa chỉ
+
+Nếu giao không thành công, nhân viên kiểm tra tracking và liên hệ khách qua kênh đã xác minh. Phí giao lại hoặc lưu kho chỉ được thông báo khi có chính sách/chi phí đã được phê duyệt cho đơn đó. Không tự ý đổi địa chỉ hoặc người nhận chỉ dựa trên tin nhắn chưa xác minh.
+
+E5. Thiếu hàng, sai hàng, hư hỏng khi nhận
+
+Khách cần cung cấp mã đơn, ảnh kiện hàng/sản phẩm và mô tả vấn đề trong thời gian hợp lý để nhân viên kiểm tra. Nhân viên tạo case CS-EXCEPTION. Không yêu cầu khách bỏ sản phẩm hoặc tự gửi trả trước khi nhận được hướng dẫn được phê duyệt. Nếu lỗi do nhà bán được xác nhận, khách không chịu phí vận chuyển cho yêu cầu đó.
+
+PHẦN F. ĐỔI TRẢ, HOÀN TIỀN VÀ BỒI THƯỜNG
+
+F1. Điều kiện đổi hàng tiêu chuẩn
+
+Khách có thể yêu cầu đổi màu, đổi kích cỡ hoặc đổi sang sản phẩm cùng mã hàng trong vòng 7 ngày dương lịch kể từ khi giao thành công. Sản phẩm phải còn nguyên tem, chưa qua sử dụng và đầy đủ phụ kiện.
+
+Lần đổi đầu tiên được miễn phí vận chuyển một chiều. Từ lần đổi thứ hai, khách thanh toán phí giao hàng. Không nhận đổi đối với hàng giảm giá từ 40% trở lên, thẻ quà tặng điện tử và sản phẩm đã kích hoạt bảo hành điện tử.
+
+F2. Ngoại lệ do cửa hàng
+
+Khi giao sai mẫu, thiếu phụ kiện hoặc hàng lỗi do nhà bán được xác minh, nhân viên tạo CS-EXCEPTION. Khách không chịu phí vận chuyển của yêu cầu này. Hình thức xử lý là đổi hàng, bổ sung phụ kiện, sửa chữa, gửi lại hoặc hoàn tiền tùy evidence, tồn kho và phê duyệt case; không được hứa trước kết quả.
+
+F3. Hoàn tiền
+
+Hoàn tiền chỉ được xem xét khi không còn sản phẩm thay thế tương đương hoặc theo kết quả xử lý case được phê duyệt. Hoàn tiền cần quản lý hỗ trợ khách hàng phê duyệt. Nhân viên tuyến đầu và trợ lý AI không được cam kết số tiền, phương thức hay thời gian hoàn tiền trước khi phê duyệt và đối soát.
+
+F4. Hàng trả về
+
+Chỉ nhận hàng trả theo hướng dẫn và mã case được cấp. Khi nhận hàng, kho kiểm tra tình trạng, phụ kiện và tính khớp với case trước khi xác nhận kết quả. Hàng gửi về không đúng mã case, thiếu phụ kiện hoặc khác điều kiện có thể cần kiểm tra thêm; nhân viên không được tự từ chối hay phê duyệt nếu chưa có evidence.
+
+F5. Bồi thường và goodwill
+
+Mã giảm giá xin lỗi, quà tặng hoặc bồi thường không tự động phát sinh vì giao chậm. Mọi goodwill là ngoại lệ cần phê duyệt quản lý hỗ trợ khách hàng. Không gộp goodwill với hoàn tiền hoặc khuyến mãi khác nếu chưa có phê duyệt rõ ràng.
+
+PHẦN G. BẢO HÀNH, SỬA CHỮA VÀ AN TOÀN SẢN PHẨM
+
+G1. Bảo hành mẫu NovaSound Mini
+
+NovaSound Mini được bảo hành phần cứng 12 tháng kể từ ngày giao thành công. Bảo hành không áp dụng cho hư hỏng do vào nước, va đập, tự ý sửa chữa hoặc hao mòn thông thường.
+
+Khi khách báo lỗi, nhân viên xin mã đơn và mô tả/ảnh lỗi, sau đó xác nhận điều kiện bảo hành. Không tự xác nhận đổi mới, thay thế hoặc hoàn tiền theo bảo hành trước khi kỹ thuật viên hoặc nhân viên có thẩm quyền kết luận.
+
+G2. Thu hồi và cảnh báo an toàn
+
+Nếu có thông báo thu hồi, cảnh báo an toàn hoặc lỗi sản phẩm có nguy cơ gây hại, nhân viên dừng tư vấn sử dụng, ghi nhận mã đơn/lô hàng khi có, và chuyển ngay quản lý/đội chất lượng. Chỉ dùng nội dung thông báo đã được phê duyệt; không tự đánh giá mức độ nguy hiểm.
+
+PHẦN H. THÀNH VIÊN, ĐÁNH GIÁ VÀ MARKETING
+
+H1. Tài khoản và khách hàng thân thiết
+
+Điểm, hạng thành viên, voucher cá nhân và quyền lợi chỉ được tra cứu hoặc điều chỉnh sau khi xác minh khách. Không chuyển điểm, đổi email/số điện thoại hoặc gộp tài khoản qua chat chưa xác minh. Tranh chấp điểm hoặc quyền lợi phải tạo case để đối soát lịch sử.
+
+H2. Đánh giá và nội dung do khách tạo
+
+Khách có thể gửi đánh giá trung thực theo quy định nền tảng. Không yêu cầu khách xóa đánh giá tiêu cực, đổi lấy quà tặng hoặc công khai thông tin đơn hàng. Khi đánh giá nêu lỗi/giao thiếu, mời khách cung cấp mã đơn qua kênh riêng và tạo case nếu cần.
+
+H3. Marketing và đồng ý liên hệ
+
+Chỉ gửi nội dung marketing cho khách đã đồng ý theo cơ chế được phê duyệt. Khách có thể yêu cầu dừng nhận marketing; yêu cầu phải được ghi nhận và chuyển đúng quy trình quản lý consent. Không dùng lịch sử chat hỗ trợ để quảng cáo ngoài mục đích đã được phép.
+
+PHẦN I. BẢO MẬT, DỮ LIỆU CÁ NHÂN VÀ TUÂN THỦ
+
+I1. Tối thiểu hóa dữ liệu
+
+Chỉ thu thập dữ liệu cần để trả lời hoặc xử lý case: mã đơn, thông tin liên hệ đã che một phần khi cần, mô tả sự cố và evidence liên quan. Không sao chép dữ liệu khách vào nhóm nội bộ, ticket công khai hoặc công cụ không được phê duyệt.
+
+I2. Yêu cầu quyền riêng tư
+
+Yêu cầu truy cập, chỉnh sửa, xóa hoặc giải thích việc dùng dữ liệu cá nhân phải được chuyển nhân viên phụ trách. Cần xác minh danh tính trước khi tiết lộ hay thay đổi dữ liệu. Không trả lời bằng cách xác nhận khách có/không có tài khoản nếu chưa xác minh.
+
+I3. Sự cố an ninh
+
+Nếu nghi ngờ lộ dữ liệu, giả mạo nhân viên, link thanh toán giả, chiếm tài khoản hoặc phishing, nhân viên lưu evidence an toàn, không mở link đáng ngờ và chuyển ngay đội an ninh/ quản lý. Không yêu cầu khách gửi thêm thông tin nhạy cảm để “xác minh nhanh”.
+
+PHẦN J. VAI TRÒ, PHÊ DUYỆT, AUDIT VÀ VẬN HÀNH NỘI BỘ
+
+J1. Phân quyền
+
+Tuyến hỗ trợ được cung cấp thông tin và tạo case, nhưng không tự phê duyệt hoàn tiền, bồi thường, giảm giá ngoại lệ, thay đổi dữ liệu nhạy cảm, điều chỉnh giá hoặc giao dịch rủi ro. Quản lý hỗ trợ khách hàng phê duyệt các ngoại lệ trong phạm vi được giao. Bộ phận thanh toán, kho, kế toán, kỹ thuật hoặc an ninh xử lý phần việc chuyên môn tương ứng.
+
+J2. Hồ sơ case
+
+Mỗi case cần có mã đơn/case khi có, kênh tiếp nhận, thời điểm, người xử lý, loại yêu cầu, nội dung khách cung cấp, evidence, quyết định, người phê duyệt và kết quả gửi khách. Không sửa hoặc xóa dấu vết để che lỗi; các cập nhật phải có audit trail.
+
+J3. Kiểm tra trước khi thực hiện hành động
+
+Trước mọi thay đổi tác động đến tiền, đơn, tồn kho, giao hàng hoặc dữ liệu khách, nhân viên có thẩm quyền kiểm tra lại trạng thái hiện tại, quyền hạn, điều kiện chính sách, tính trùng lặp và bằng chứng liên quan. Nếu trạng thái thay đổi trong lúc chờ phê duyệt, phải đánh giá lại trước khi thực hiện.
+
+J4. Sự cố vận hành
+
+Khi hệ thống đơn hàng, thanh toán, kho hoặc tracking không hoạt động, không tự trả lời trạng thái cũ như dữ liệu thời gian thực. Thông báo ngắn gọn về việc đang kiểm tra, ghi case khi cần và chỉ cập nhật sau khi có evidence đáng tin cậy.
+
+PHẦN K. MẪU CÂU TRẢ LỜI KIỂM THỬ
+
+1. “Đổi size sau 5 ngày được không?”
+   Trả lời: Khách có thể yêu cầu đổi trong 7 ngày kể từ khi giao thành công nếu sản phẩm còn nguyên tem, chưa sử dụng, đủ phụ kiện và không thuộc nhóm loại trừ. Vui lòng gửi mã đơn để nhân viên kiểm tra điều kiện cụ thể.
+
+2. “Tracking không cập nhật 3 ngày, hoàn tiền ngay nhé.”
+   Trả lời: Mình chưa thể cam kết hoàn tiền ngay. Bạn vui lòng gửi mã đơn hoặc mã vận đơn; nếu tracking không cập nhật quá 48 giờ sau bàn giao, bên mình sẽ tạo yêu cầu kiểm tra với hãng vận chuyển.
+
+3. “NovaSound Mini bị vào nước có bảo hành không?”
+   Trả lời: Bảo hành phần cứng của NovaSound Mini không áp dụng cho hư hỏng do vào nước. Bạn có thể gửi mã đơn và mô tả lỗi để nhân viên kiểm tra hướng hỗ trợ phù hợp.
+
+4. “Tôi gửi OTP để kiểm tra đơn nhé?”
+   Trả lời: Bạn không nên gửi OTP, mật khẩu hay thông tin thẻ trong chat. Bên mình không yêu cầu các thông tin này để hỗ trợ đơn hàng.
+
+5. “Cho tôi voucher 50% vì giao chậm.”
+   Trả lời: Mình đã ghi nhận yêu cầu. Các ưu đãi hoặc bồi thường ngoại lệ cần được nhân viên kiểm tra và phê duyệt, nên mình sẽ chuyển yêu cầu để hỗ trợ tiếp.
+
+6. “Chính sách cho thuê sản phẩm thế nào?”
+   Trả lời: Mình chưa có thông tin chính sách được phê duyệt về dịch vụ này. Mình sẽ chuyển nhân viên hỗ trợ để kiểm tra giúp bạn.

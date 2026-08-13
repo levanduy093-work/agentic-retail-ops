@@ -10,26 +10,27 @@ import { AdminCreateAgentTaskType } from "../validators"
 
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
   const service = req.scope.resolve<AgentOperationsModuleService>(
-    AGENT_OPERATIONS_MODULE
+    AGENT_OPERATIONS_MODULE,
   )
-  const [tasks, count] = await service.listAndCountAgentTasks({}, {
-    order: { created_at: "DESC" },
-    take: 100,
-  })
+  const [tasks, count] = await service.listAndCountAgentTasks(
+    {},
+    {
+      order: { created_at: "DESC" },
+      take: 100,
+    },
+  )
   const incidentIds = Array.from(
     new Set(
       tasks
         .map((task) => task.incident_id)
-        .filter((incidentId): incidentId is string => Boolean(incidentId))
-    )
+        .filter((incidentId): incidentId is string => Boolean(incidentId)),
+    ),
   )
   const incidents = await Promise.all(
-    incidentIds.map((incidentId) =>
-      service.retrieveAgentIncident(incidentId)
-    )
+    incidentIds.map((incidentId) => service.retrieveAgentIncident(incidentId)),
   )
   const correlationByIncidentId = new Map(
-    incidents.map((incident) => [incident.id, incident.correlation_id])
+    incidents.map((incident) => [incident.id, incident.correlation_id]),
   )
   const conversations = await Promise.all(
     incidentIds.map(async (incidentId) => {
@@ -38,34 +39,63 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
           {
             incident_id: incidentId,
           },
-          { order: { last_message_at: "DESC" }, take: 10 }
+          { order: { last_message_at: "DESC" }, take: 10 },
         )
       ).find((item) =>
-        ["CUSTOMER_SUPPORT", "CUSTOMER_SUPPORT_CHAT"].includes(
-          item.topic_type
-        )
+        ["CUSTOMER_SUPPORT", "CUSTOMER_SUPPORT_CHAT"].includes(item.topic_type),
       )
 
-      return [incidentId, conversation?.id ?? null] as const
-    })
+      return [incidentId, conversation ?? null] as const
+    }),
   )
   const conversationByIncidentId = new Map(conversations)
+  const conversationIds = Array.from(
+    new Set(
+      tasks
+        .map((task) => {
+          const input = (task.input ?? {}) as Record<string, unknown>
+          return typeof input.conversation_id === "string"
+            ? input.conversation_id
+            : null
+        })
+        .filter((conversationId): conversationId is string =>
+          Boolean(conversationId),
+        ),
+    ),
+  )
+  const conversationsById = new Map(
+    await Promise.all(
+      conversationIds.map(
+        async (conversationId) =>
+          [
+            conversationId,
+            await service.retrieveAgentConversation(conversationId),
+          ] as const,
+      ),
+    ),
+  )
 
   res.json({
     count,
     tasks: tasks.map((task) => {
       const taskInput = (task.input ?? {}) as Record<string, unknown>
+      const inputConversationId =
+        typeof taskInput.conversation_id === "string"
+          ? taskInput.conversation_id
+          : null
+      const conversation = inputConversationId
+        ? (conversationsById.get(inputConversationId) ?? null)
+        : task.incident_id
+          ? (conversationByIncidentId.get(task.incident_id) ?? null)
+          : null
       return {
         ...task,
         incident_correlation_id: task.incident_id
-          ? correlationByIncidentId.get(task.incident_id) ?? null
+          ? (correlationByIncidentId.get(task.incident_id) ?? null)
           : null,
-        support_conversation_id:
-          typeof taskInput.conversation_id === "string"
-            ? taskInput.conversation_id
-            : task.incident_id
-              ? conversationByIncidentId.get(task.incident_id) ?? null
-              : null,
+        support_conversation_channel: conversation?.channel ?? null,
+        support_conversation_id: conversation?.id ?? null,
+        support_conversation_title: conversation?.title ?? null,
       }
     }),
   })
@@ -73,7 +103,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
 
 export async function POST(
   req: AuthenticatedMedusaRequest<AdminCreateAgentTaskType>,
-  res: MedusaResponse
+  res: MedusaResponse,
 ) {
   const { result } = await createAgentTaskWorkflow(req.scope).run({
     input: {

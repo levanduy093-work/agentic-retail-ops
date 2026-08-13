@@ -66,12 +66,32 @@ export default async function verifyAiProviderVault({ container }: ExecArgs) {
     assert.equal(
       switched.find((provider) => provider.provider === "GEMINI")
         ?.generation_enabled,
-      false
+      true
     )
     assert.equal(
       switched.find((provider) => provider.provider === "OPENAI")
         ?.generation_enabled,
       true
+    )
+
+    await service.configureAiProvider({
+      actor_id: "ai-provider-vault-verifier",
+      encrypted_api_key: encryptConnectorSecret(`deepseek-${apiKey}`),
+      embedding_enabled: false,
+      embedding_model: "unsupported",
+      generation_enabled: true,
+      generation_model: "deepseek-chat",
+      provider: "DEEPSEEK",
+      secret_hint: apiKey.slice(-4),
+      tenant_id: tenantId,
+    })
+    const generationCredentials = await service.getActiveAiProviderCredentials(
+      "generation",
+      tenantId
+    )
+    assert.deepEqual(
+      generationCredentials.map((credential) => credential.provider),
+      ["deepseek", "gemini", "openai"]
     )
 
     console.log(
@@ -80,7 +100,7 @@ export default async function verifyAiProviderVault({ container }: ExecArgs) {
           api_key_returned_by_status_api: false,
           encrypted_at_rest: true,
           provider: "GEMINI",
-          provider_purpose_switch_verified: true,
+          provider_failover_priority_verified: true,
           runtime_decryption_verified: true,
         },
         null,
@@ -88,7 +108,7 @@ export default async function verifyAiProviderVault({ container }: ExecArgs) {
       )
     )
   } finally {
-    for (const provider of ["GEMINI", "OPENAI"] as const) {
+    for (const provider of ["DEEPSEEK", "GEMINI", "OPENAI"] as const) {
       await service.disconnectAiProvider({
         actor_id: "ai-provider-vault-verifier",
         provider,

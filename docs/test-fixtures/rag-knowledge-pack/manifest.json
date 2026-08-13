@@ -24,6 +24,18 @@
     "expected_status": "APPROVED_FOR_TEST"
   },
   {
+    "file": "retail-store-operating-policy.txt",
+    "document_key": "RETAIL-OPERATING-001",
+    "version": "1.0.0",
+    "title": "Chính sách vận hành cửa hàng và hỗ trợ khách hàng (dữ liệu kiểm thử)",
+    "tenant_id": "default",
+    "scope": "customer_support",
+    "locale": "vi",
+    "citation_locator": "fixture://rag/retail-store-operating-policy",
+    "effective_at": "2026-08-13T00:00:00.000Z",
+    "expected_status": "APPROVED_FOR_TEST"
+  },
+  {
     "file": "ops-stock-transfer.md",
     "document_key": "OPS-STOCK-003",
     "version": "1.0.0",

@@ -107,6 +107,7 @@ const markSupportSimulatorReplySentStep = createStep(
           resource_id: message.id,
           resource_type: "agent_message"
         })
+        await service.refreshConversationMemory(message.conversation_id)
 
         return { duplicate: false, task: updatedTask }
       }

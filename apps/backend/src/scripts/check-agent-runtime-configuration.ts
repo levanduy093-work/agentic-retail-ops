@@ -5,6 +5,10 @@ import { getGoogleKnowledgeOAuthPlatformStatus } from "../modules/agent-operatio
 import { getKnowledgeRagRuntimeStatus } from "../modules/agent-operations/knowledge-rag-engine"
 import AgentOperationsModuleService from "../modules/agent-operations/service"
 import { TelegramChannelConfig } from "../modules/agent-operations/telegram"
+import {
+  AI_PROVIDER_PRIORITY,
+  sortAiProvidersByPriority,
+} from "../modules/agent-operations/ai-provider-routing"
 
 export default async function checkAgentRuntimeConfiguration({
   container,
@@ -26,12 +30,16 @@ export default async function checkAgentRuntimeConfiguration({
   const vault = getCredentialVaultStatus()
   const googlePlatform = getGoogleKnowledgeOAuthPlatformStatus()
   const rag = getKnowledgeRagRuntimeStatus()
-  const embeddingProvider = providers.find(
-    (provider) => provider.embedding_enabled
+  const embeddingProviders = sortAiProvidersByPriority(
+    providers.filter((provider) => provider.embedding_enabled),
+    "embedding"
   )
-  const generationProvider = providers.find(
-    (provider) => provider.generation_enabled
+  const generationProviders = sortAiProvidersByPriority(
+    providers.filter((provider) => provider.generation_enabled),
+    "generation"
   )
+  const embeddingProvider = embeddingProviders[0]
+  const generationProvider = generationProviders[0]
   const telegramConnection = telegramConnections[0]
   const telegramConfig = (telegramConnection?.config ?? {}) as Record<
     string,
@@ -83,7 +91,15 @@ export default async function checkAgentRuntimeConfiguration({
         checks,
         providers: {
           embedding: embeddingProvider?.provider ?? null,
+          embedding_failover: embeddingProviders.map(
+            (provider) => provider.provider
+          ),
+          embedding_priority: AI_PROVIDER_PRIORITY.embedding,
           generation: generationProvider?.provider ?? null,
+          generation_failover: generationProviders.map(
+            (provider) => provider.provider
+          ),
+          generation_priority: AI_PROVIDER_PRIORITY.generation,
         },
         ready_for_ai_customer_support:
           checks.active_prompt &&

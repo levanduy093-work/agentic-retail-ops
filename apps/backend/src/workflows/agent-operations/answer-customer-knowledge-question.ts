@@ -9,6 +9,12 @@ import {
 import { AGENT_OPERATIONS_MODULE } from "../../modules/agent-operations"
 import AgentOperationsModuleService from "../../modules/agent-operations/service"
 import { ProcessCustomerKnowledgeQuestionInput } from "../../modules/agent-operations/types"
+import { executeCatalogRead } from "../../modules/agent-operations/catalog-read-runtime"
+import {
+  extractCatalogSearchQuery,
+  isPotentialProductRequest,
+} from "../../modules/agent-operations/customer-product-advisor"
+import { detectKnowledgeQuestionLocale } from "../../modules/agent-operations/knowledge-answer"
 
 const answerCustomerKnowledgeQuestionStep = createStep(
   "answer-customer-knowledge-question",
@@ -18,9 +24,46 @@ const answerCustomerKnowledgeQuestionStep = createStep(
       AGENT_OPERATIONS_MODULE
     )
     const inbound = await service.retrieveAgentMessage(input.inbound_message_id)
+    let catalogSnapshot
+    const existingResponse = (
+      await service.listAgentMessages(
+        { idempotency_key: `customer-answer:${inbound.id}` },
+        { take: 1 }
+      )
+    )[0]
+    if (!existingResponse && isPotentialProductRequest(inbound.body)) {
+      const locale = detectKnowledgeQuestionLocale(inbound.body)
+      const catalogQuery = extractCatalogSearchQuery(inbound.body)
+      try {
+        const conversation = await service.retrieveAgentConversation(
+          inbound.conversation_id
+        )
+        const catalogRead = await executeCatalogRead(
+          container,
+          {
+            limit: 8,
+            locale,
+            query: catalogQuery,
+          },
+          { tenant_id: conversation.tenant_id }
+        )
+        catalogSnapshot = catalogRead.output
+      } catch {
+        catalogSnapshot = {
+          products: [] as [],
+          query: catalogQuery ?? null,
+          status: "UNAVAILABLE" as const,
+          total_count: 0 as const,
+        }
+      }
+    }
     const result = await locking.execute(
       `customer-knowledge-answer:${inbound.conversation_id}`,
-      () => service.processCustomerKnowledgeQuestion(input)
+      () =>
+        service.processCustomerKnowledgeQuestion({
+          ...input,
+          catalog_snapshot: catalogSnapshot,
+        })
     )
 
     return new StepResponse(result)

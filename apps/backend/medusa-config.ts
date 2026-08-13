@@ -54,6 +54,37 @@ const productionInfrastructureModules = isRedisInfrastructureEnabled
     ]
   : []
 
+const customerAssistantCachingModule = {
+  resolve: '@medusajs/caching',
+  options: isRedisInfrastructureEnabled
+    ? {
+        providers: [
+          {
+            resolve: '@medusajs/caching-redis',
+            id: 'customer-assistant-redis',
+            is_default: true,
+            options: {
+              prefix: 'synapse:customer-assistant:',
+              redisUrl,
+              ttl: 3600,
+            },
+          },
+        ],
+        ttl: 3600,
+      }
+    : {
+        in_memory: {
+          checkPeriod: 60,
+          enable: true,
+          maxKeys: 5000,
+          maxSize: 64 * 1024 * 1024,
+          ttl: 300,
+          useClones: true,
+        },
+        ttl: 300,
+      },
+}
+
 const injectDashboardThemeBridge = (code: string, id: string) => {
   const normalizedId = id.replace(/\\/g, '/')
   const providerMarker = 'var Providers ='
@@ -292,11 +323,13 @@ module.exports = defineConfig({
   },
   modules: [
     ...productionInfrastructureModules,
+    customerAssistantCachingModule,
     {
       resolve: '@medusajs/medusa/rbac',
     },
     {
       resolve: "./src/modules/agent-operations",
+      dependencies: [Modules.CACHING],
     },
     {
       resolve: '@medusajs/medusa/auth',

@@ -5,6 +5,7 @@ import { AGENT_OPERATIONS_MODULE } from "../../../../../modules/agent-operations
 import AgentOperationsModuleService from "../../../../../modules/agent-operations/service"
 import { getKnowledgeRagRuntimeStatus } from "../../../../../modules/agent-operations/knowledge-rag-engine"
 import { getAgentToolCoverage } from "../../../../../modules/agent-operations/tool-registry"
+import { sortAiProvidersByPriority } from "../../../../../modules/agent-operations/ai-provider-routing"
 
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
   const service = req.scope.resolve<AgentOperationsModuleService>(
@@ -40,6 +41,14 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     tool_catalog_complete: toolCoverage.complete,
     typed_tool_executor: toolCoverage.registered_count > 0,
   }
+  const embeddingProviders = sortAiProvidersByPriority(
+    aiProviders.filter((provider) => provider.embedding_enabled),
+    "embedding"
+  )
+  const generationProviders = sortAiProvidersByPriority(
+    aiProviders.filter((provider) => provider.generation_enabled),
+    "generation"
+  )
 
   res.json({
     checks,
@@ -60,8 +69,11 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     rag: {
       ...ragStatus,
       admin_embedding_provider:
-        aiProviders.find((provider) => provider.embedding_enabled)?.provider ??
-        null,
+        embeddingProviders[0]?.provider ?? null,
+    },
+    routing: {
+      embedding: embeddingProviders.map((provider) => provider.provider),
+      generation: generationProviders.map((provider) => provider.provider),
     },
   })
 }
