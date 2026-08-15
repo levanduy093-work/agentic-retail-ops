@@ -535,8 +535,8 @@ export const CustomerSupportContent = ({
         </Container>
       )}
 
-      <div className="grid gap-3 lg:h-[calc(100dvh-14rem)] lg:min-h-[520px] lg:grid-cols-[380px_minmax(0,1fr)]">
-        <Container className="p-0 lg:grid lg:h-full lg:min-h-0 lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:overflow-hidden">
+      <div className="grid gap-3 md:h-[calc(100dvh-14rem)] md:min-h-[520px] md:grid-cols-[380px_minmax(0,1fr)]">
+        <Container className="p-0 md:grid md:h-full md:min-h-0 md:grid-rows-[auto_auto_minmax(0,1fr)] md:overflow-hidden">
           <div className="flex gap-x-2 border-b border-ui-border-base px-4 py-3">
             <Button
               size="small"
@@ -564,7 +564,7 @@ export const CustomerSupportContent = ({
                   })}
             </Text>
           </div>
-          <div className="flex min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain px-3 pb-3">
+          <div className="flex min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain px-3 py-3 [scrollbar-gutter:stable]">
             {visibleConversations.length === 0 ? (
               <Text
                 size="small"
@@ -584,10 +584,14 @@ export const CustomerSupportContent = ({
 
                 return (
                   <Button
-                    className="h-auto min-h-0 w-full justify-start rounded-lg px-3 py-3 text-left"
+                    className={`h-auto w-full shrink-0 justify-start rounded-lg border px-3 py-3 text-left shadow-elevation-card-rest transition-colors ${
+                      isSelected
+                        ? "border-ui-border-interactive bg-ui-bg-highlight hover:bg-ui-bg-highlight"
+                        : "border-ui-border-base bg-ui-bg-base hover:bg-ui-bg-component-hover"
+                    }`}
                     key={item.id}
                     size="small"
-                    variant={isSelected ? "secondary" : "transparent"}
+                    variant="transparent"
                     onClick={() => setSelectedConversationId(item.id)}
                   >
                     <div className="flex min-w-0 flex-1 flex-col gap-y-1">
@@ -631,7 +635,7 @@ export const CustomerSupportContent = ({
           </div>
         </Container>
 
-        <Container className="p-0 lg:h-full lg:min-h-0 lg:overflow-hidden">
+        <Container className="p-0 md:h-full md:min-h-0 md:overflow-hidden">
           {!selectedConversation ? (
             <div className="flex min-h-[420px] items-center justify-center px-6 py-12">
               <Text
@@ -643,7 +647,7 @@ export const CustomerSupportContent = ({
               </Text>
             </div>
           ) : (
-            <div className="divide-y divide-ui-border-base lg:flex lg:h-full lg:min-h-0 lg:flex-col">
+            <div className="divide-y divide-ui-border-base md:flex md:h-full md:min-h-0 md:flex-col">
               <div className="flex shrink-0 flex-col gap-y-3 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex flex-col gap-y-1">
                   <Heading level="h2">{customerName}</Heading>
@@ -677,7 +681,7 @@ export const CustomerSupportContent = ({
                 </div>
               </div>
 
-              <div className="flex min-h-[460px] flex-col bg-ui-bg-subtle lg:min-h-0 lg:flex-1">
+              <div className="flex min-h-[460px] flex-col bg-ui-bg-subtle md:min-h-0 md:flex-1">
                 <div
                   className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-6 py-5"
                   key={selectedConversationId}
