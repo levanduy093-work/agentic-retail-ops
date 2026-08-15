@@ -201,7 +201,6 @@ export const AdminCreateKnowledgeDocument = z.strictObject({
   effective_at: z.string().datetime(),
   expires_at: z.string().datetime().optional(),
   locale: z.string().trim().min(2).max(20).default("vi"),
-  scope: z.string().trim().min(1).max(100).default("operations"),
   tenant_id: z.string().trim().min(1).default("default"),
   title: z.string().trim().min(1).max(500),
   version: z.string().trim().min(1).max(50),
@@ -211,7 +210,6 @@ export const AdminSearchKnowledge = z.strictObject({
   limit: z.number().int().min(1).max(20).default(5),
   locale: z.string().trim().min(2).max(20).optional(),
   query: z.string().trim().min(2).max(500),
-  scope: z.string().trim().min(1).max(100).optional(),
   tenant_id: z.string().trim().min(1).default("default"),
 })
 
@@ -240,7 +238,6 @@ export const AdminRetireKnowledgeDocument = z.strictObject({
 export const AdminCreateKnowledgeSource = z.strictObject({
   locale: z.enum(["en", "vi"]),
   name: z.string().trim().min(2).max(200),
-  scope: z.string().trim().min(1).max(100).default("customer_support"),
   source_type: z.enum([
     "GOOGLE_DOC",
     "GOOGLE_DRIVE",

@@ -31,6 +31,7 @@ import {
   createGoogleKnowledgeAccessToken,
   getGoogleKnowledgeOAuthPlatformStatus,
 } from "./google-knowledge-oauth"
+import type { GoogleDriveKnowledgeFetchResult } from "./google-drive-knowledge-connector"
 import AgentActionRequest from "./models/agent-action-request"
 import AgentApproval from "./models/agent-approval"
 import AgentAuditEvent from "./models/agent-audit-event"
@@ -171,6 +172,18 @@ import {
   detectCustomerMessageFastIntent,
   resolveCustomerMessageIntent,
 } from "./customer-message-intent"
+import {
+  CustomerConversationIntent,
+  CustomerConversationModelOutput,
+  CustomerConversationModelResult,
+  CUSTOMER_CONVERSATION_MAX_TOKENS,
+  CUSTOMER_CONVERSATION_OUTPUT_SCHEMA,
+  CUSTOMER_CONVERSATION_PROMPT_KEY,
+  CUSTOMER_CONVERSATION_PROMPT_VERSION,
+  CUSTOMER_CONVERSATION_SYSTEM_PROMPT,
+  CUSTOMER_CONVERSATION_TIMEOUT_MS,
+  isSafeCustomerConversationBody,
+} from "./customer-conversation-responder"
 import {
   isExplicitPromptAttack,
   normalizeCustomerChatSecurityConfig,
@@ -1342,12 +1355,7 @@ class AgentOperationsModuleService extends MedusaService({
   @InjectManager()
   async recordKnowledgeSourceSync(
     input: SyncKnowledgeSourceInput & {
-      fetch_result?: {
-        checksum: string
-        content: string
-        etag: string | null
-        final_url: string
-      }
+      fetch_result?: GoogleDriveKnowledgeFetchResult
       failure?: string
     },
     @MedusaContext() sharedContext: Context = {}
@@ -1429,12 +1437,7 @@ class AgentOperationsModuleService extends MedusaService({
   @InjectTransactionManager()
   protected async recordKnowledgeSourceSync_(
     input: SyncKnowledgeSourceInput & {
-      fetch_result?: {
-        checksum: string
-        content: string
-        etag: string | null
-        final_url: string
-      }
+      fetch_result?: GoogleDriveKnowledgeFetchResult
       failure?: string
     },
     @MedusaContext() sharedContext: Context = {}
@@ -1465,6 +1468,20 @@ class AgentOperationsModuleService extends MedusaService({
       return { document: null, source: updated, status: "FAILED" as const }
     }
 
+    if (input.fetch_result.unchanged) {
+      const updated = await this.updateAgentKnowledgeSources(
+        {
+          id: source.id,
+          last_checked_at: now,
+          last_error: null,
+          last_etag: input.fetch_result.etag,
+          last_sync_status: "UNCHANGED",
+        },
+        sharedContext
+      )
+      return { document: null, source: updated, status: "UNCHANGED" as const }
+    }
+
     if (source.last_checksum === input.fetch_result.checksum) {
       const updated = await this.updateAgentKnowledgeSources(
         {
@@ -1487,7 +1504,7 @@ class AgentOperationsModuleService extends MedusaService({
         document_key: `source-${source.id}`,
         effective_at: now.toISOString(),
         locale: source.locale,
-        owner_id: input.actor_id,
+        owner_id: source.owner_id,
         scope: source.scope,
         tenant_id: source.tenant_id,
         title: source.name,
@@ -1512,7 +1529,7 @@ class AgentOperationsModuleService extends MedusaService({
       {
         action: "knowledge-source-synchronized",
         actor_id: input.actor_id,
-        actor_type: "user",
+        actor_type: input.actor_type ?? "user",
         correlation_id: source.id,
         data: {
           checksum: input.fetch_result.checksum,
@@ -1689,7 +1706,7 @@ class AgentOperationsModuleService extends MedusaService({
       {
         action: "knowledge-approved",
         actor_id: input.actor_id,
-        actor_type: "user",
+        actor_type: input.actor_type ?? "user",
         correlation_id: `${document.document_key}:${document.version}`,
         data: { checksum: document.checksum },
         event_type: "agent.knowledge.approved",
@@ -1740,7 +1757,7 @@ class AgentOperationsModuleService extends MedusaService({
       {
         action: "knowledge-retired",
         actor_id: input.actor_id,
-        actor_type: "user",
+        actor_type: input.actor_type ?? "user",
         correlation_id: `${document.document_key}:${document.version}`,
         data: { reason: input.reason },
         event_type: "agent.knowledge.retired",
@@ -1823,6 +1840,38 @@ class AgentOperationsModuleService extends MedusaService({
       return { document, rag_index: ragIndex, source: updatedSource }
     }
 
+    const approval =
+      document.status === "DRAFT"
+        ? await this.approveGovernedKnowledgeDocument_(
+            {
+              actor_id: input.actor_id,
+              actor_type: input.actor_type,
+              document_id: document.id,
+            },
+            sharedContext
+          )
+        : { document, duplicate: true }
+    const supersededDocuments = (
+      await this.listAgentKnowledgeDocuments(
+        { document_key: document.document_key, status: "APPROVED" },
+        { take: 10_000 },
+        sharedContext
+      )
+    ).filter((candidate) => candidate.id !== document.id)
+
+    for (const superseded of supersededDocuments) {
+      await this.retireGovernedKnowledgeDocument_(
+        {
+          actor_id: input.actor_id,
+          actor_type: input.actor_type,
+          document_id: superseded.id,
+          reason: `Superseded by synchronized source version ${document.version}.`,
+        },
+        sharedContext
+      )
+      await this.removeGovernedKnowledgeDocumentIndex(superseded.id, sharedContext)
+    }
+
     const updatedSource = await this.updateAgentKnowledgeSources(
       { id: source.id, last_error: null },
       sharedContext
@@ -1831,13 +1880,15 @@ class AgentOperationsModuleService extends MedusaService({
       {
         action: "knowledge-source-prepared",
         actor_id: input.actor_id,
-        actor_type: "user",
+        actor_type: input.actor_type ?? "user",
         correlation_id: source.id,
         data: {
           document_id: document.id,
           indexed_chunks: ragIndex.indexed_chunks,
           provider: ragIndex.provider,
-          status: document.status,
+          auto_approved: approval.document.status === "APPROVED",
+          status: approval.document.status,
+          superseded_document_count: supersededDocuments.length,
         },
         event_type: "agent.knowledge-source.prepared",
         recorded_at: new Date(),
@@ -1847,7 +1898,7 @@ class AgentOperationsModuleService extends MedusaService({
       sharedContext
     )
 
-    return { document, rag_index: ragIndex, source: updatedSource }
+    return { document: approval.document, rag_index: ragIndex, source: updatedSource }
   }
 
   @InjectTransactionManager()
@@ -2082,6 +2133,7 @@ class AgentOperationsModuleService extends MedusaService({
           updated_at: new Date(document.updated_at).toISOString(),
           version: document.version,
         })),
+        retrieval_strategy: "topic-aware-v2",
         limit: parsed.limit,
         locale: parsed.locale ?? "",
         query: normalizeCustomerCacheText(parsed.query),
@@ -2107,7 +2159,11 @@ class AgentOperationsModuleService extends MedusaService({
     )
 
     const lexicalOutput = searchKnowledgeChunks(parsed, documents, chunks)
-    if (!shouldUseSemanticKnowledgeSearch(lexicalOutput)) {
+    const relevantLexicalOutput = filterKnowledgeEvidenceForQuestion(
+      parsed.query,
+      lexicalOutput
+    )
+    if (!shouldUseSemanticKnowledgeSearch(relevantLexicalOutput)) {
       await writeCustomerAssistantCache(caching, {
         key: knowledgeCacheKey,
         tags: [
@@ -2805,6 +2861,224 @@ class AgentOperationsModuleService extends MedusaService({
   }
 
   @InjectManager()
+  async draftCustomerConversationReply(
+    input: {
+      conversation_memory?: string
+      fallback_body: string
+      idempotency_key: string
+      intent: CustomerConversationIntent
+      locale: "en" | "vi"
+      message: string
+      recent_messages: Array<{
+        body: string
+        direction: "INBOUND" | "OUTBOUND"
+      }>
+      tenant_id: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ): Promise<KnowledgeAnswer> {
+    const fallback = (optimization = {
+      ai_invoked: false,
+      cache_hit: false,
+      path: "DETERMINISTIC_FALLBACK",
+    }): KnowledgeAnswer => ({
+      body: input.fallback_body,
+      citations: [],
+      disposition: input.intent,
+      grounded: false,
+      locale: input.locale,
+      optimization,
+    })
+    const toAnswer = (
+      output: CustomerConversationModelResult,
+      optimization: NonNullable<KnowledgeAnswer["optimization"]>
+    ): KnowledgeAnswer =>
+      isSafeCustomerConversationBody(output.body)
+        ? {
+            body: output.body,
+            citations: [],
+            disposition: input.intent,
+            grounded: false,
+            locale: input.locale,
+            optimization,
+          }
+        : fallback()
+
+    const legacyRun = (
+      await this.listAgentModelRuns(
+        { idempotency_key: input.idempotency_key },
+        { take: 1 },
+        sharedContext
+      )
+    )[0]
+    if (legacyRun?.status === "SUCCEEDED" && legacyRun.output) {
+      const cached = CustomerConversationModelOutput.safeParse(legacyRun.output)
+      return cached.success
+        ? toAnswer(cached.data, {
+            ai_invoked: false,
+            cache_hit: true,
+            path: "MESSAGE_IDEMPOTENCY",
+          })
+        : fallback()
+    }
+
+    const safeInput = {
+      compact_memory: input.conversation_memory?.slice(-800) ?? "",
+      current_message: input.message.slice(0, 800),
+      intent: input.intent,
+      locale: input.locale,
+      recent_conversation: input.recent_messages.slice(-4).map((message) => ({
+        body: message.body.slice(0, 320),
+        direction: message.direction,
+      })),
+    }
+    let credentials
+    try {
+      credentials = await this.getActiveAiProviderCredentials(
+        "generation",
+        input.tenant_id
+      )
+    } catch {
+      return fallback()
+    }
+
+    for (const credential of credentials) {
+      const adapter = createModelAdapter({
+        apiKey: credential.api_key,
+        model: credential.model,
+        provider: credential.provider,
+      })
+      const responseCacheKey = buildCustomerAssistantCacheKey(
+        "conversation-reply",
+        {
+          input: safeInput,
+          model: adapter.model,
+          prompt_key: CUSTOMER_CONVERSATION_PROMPT_KEY,
+          prompt_version: CUSTOMER_CONVERSATION_PROMPT_VERSION,
+          provider: adapter.provider,
+          tenant_id: input.tenant_id,
+        }
+      )
+      const cachedResponse = await readCustomerAssistantCache(
+        this.getCustomerAssistantCaching(),
+        responseCacheKey,
+        (value) => {
+          const result = CustomerConversationModelOutput.safeParse(value)
+          return result.success && isSafeCustomerConversationBody(result.data.body)
+            ? result.data
+            : null
+        }
+      )
+      if (cachedResponse) {
+        return toAnswer(cachedResponse, {
+          ai_invoked: false,
+          cache_hit: true,
+          path: "AI_RESPONSE_CACHE",
+        })
+      }
+
+      const attemptKey = `${input.idempotency_key}:provider:${adapter.provider}`
+      const existing = (
+        await this.listAgentModelRuns(
+          { idempotency_key: attemptKey },
+          { take: 1 },
+          sharedContext
+        )
+      )[0]
+      if (existing?.status === "SUCCEEDED" && existing.output) {
+        const cached = CustomerConversationModelOutput.safeParse(existing.output)
+        if (cached.success) {
+          return toAnswer(cached.data, {
+            ai_invoked: false,
+            cache_hit: true,
+            path: "MESSAGE_IDEMPOTENCY",
+          })
+        }
+      }
+      if (existing?.status === "RUNNING") return fallback()
+      if (existing) continue
+
+      const startedAt = new Date()
+      const modelRun = await this.createAgentModelRuns(
+        {
+          agent_id: "customer-conversation-agent",
+          agent_version: "1.0.0",
+          idempotency_key: attemptKey,
+          input: redactModelInput(safeInput) as Record<string, unknown>,
+          model: adapter.model,
+          prompt_key: CUSTOMER_CONVERSATION_PROMPT_KEY,
+          prompt_version: CUSTOMER_CONVERSATION_PROMPT_VERSION,
+          provider: adapter.provider,
+          redacted: true,
+          started_at: startedAt,
+          status: "RUNNING",
+        },
+        sharedContext
+      )
+
+      try {
+        const generated = await adapter.invoke({
+          agent_id: "customer-conversation-agent",
+          input: safeInput,
+          max_tokens: CUSTOMER_CONVERSATION_MAX_TOKENS,
+          output_schema: CUSTOMER_CONVERSATION_OUTPUT_SCHEMA,
+          prompt_key: CUSTOMER_CONVERSATION_PROMPT_KEY,
+          prompt_version: CUSTOMER_CONVERSATION_PROMPT_VERSION,
+          system_prompt: CUSTOMER_CONVERSATION_SYSTEM_PROMPT,
+          timeout_ms: CUSTOMER_CONVERSATION_TIMEOUT_MS,
+        })
+        const output = CustomerConversationModelOutput.parse(generated)
+        if (!isSafeCustomerConversationBody(output.body)) {
+          throw new MedusaError(
+            MedusaError.Types.INVALID_DATA,
+            "Customer conversation reply failed safety validation."
+          )
+        }
+        await writeCustomerAssistantCache(this.getCustomerAssistantCaching(), {
+          key: responseCacheKey,
+          tags: [
+            "customer-assistant:conversation-reply",
+            `customer-assistant:tenant:${input.tenant_id}`,
+          ],
+          ttl: CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS.conversation_reply,
+          value: output,
+        })
+        await this.updateAgentModelRuns(
+          {
+            completed_at: new Date(),
+            id: modelRun.id,
+            latency_ms: Date.now() - startedAt.getTime(),
+            output,
+            status: "SUCCEEDED",
+          },
+          sharedContext
+        )
+        return toAnswer(output, {
+          ai_invoked: true,
+          cache_hit: false,
+          path: "AI_MODEL",
+        })
+      } catch (error) {
+        await this.updateAgentModelRuns(
+          {
+            completed_at: new Date(),
+            error:
+              error instanceof Error
+                ? error.message.slice(0, 1_000)
+                : "Customer conversation reply failed",
+            id: modelRun.id,
+            latency_ms: Date.now() - startedAt.getTime(),
+            status: "FAILED",
+          },
+          sharedContext
+        )
+      }
+    }
+
+    return fallback()
+  }
+
+  @InjectManager()
   async processCustomerKnowledgeQuestion(
     input: ProcessCustomerKnowledgeQuestionInput & {
       catalog_snapshot?: CustomerCatalogSnapshot
@@ -2988,7 +3262,6 @@ class AgentOperationsModuleService extends MedusaService({
         ? null
         : detectCustomerMessageFastIntent(question)
     const recentMessages =
-      smallTalk ||
       explicitAttack ||
       (fastIntent && fastIntent !== "PRODUCT_DISCOVERY")
       ? []
@@ -3059,15 +3332,32 @@ class AgentOperationsModuleService extends MedusaService({
         "NEEDS_STAFF_AUTHORITY"
       )
     } else if (routedIntent === "SMALL_TALK" || routedIntent === "CLARIFY") {
-      answer =
-        smallTalk ??
+      answer = await this.draftCustomerConversationReply(
         {
-          body: buildCustomerIntentReply(routedIntent, locale),
-          citations: [],
-          disposition: routedIntent,
-          grounded: false,
+          conversation_memory: memorySummary,
+          fallback_body:
+            smallTalk?.body ?? buildCustomerIntentReply(routedIntent, locale),
+          idempotency_key: `customer-conversation-response:${inbound.id}`,
+          intent: routedIntent,
           locale,
-        }
+          message: question,
+          recent_messages: recentMessages
+            .slice()
+            .reverse()
+            .filter(
+              (message) =>
+                message.id !== inbound.id &&
+                (message.direction === "INBOUND" ||
+                  message.direction === "OUTBOUND")
+            )
+            .map((message) => ({
+              body: message.body,
+              direction: message.direction as "INBOUND" | "OUTBOUND",
+            })),
+          tenant_id: conversation.tenant_id,
+        },
+        sharedContext
+      )
     } else if (routedIntent === "PRODUCT_DISCOVERY") {
       const catalog = input.catalog_snapshot ?? {
         products: [] as [],
@@ -3107,10 +3397,12 @@ class AgentOperationsModuleService extends MedusaService({
               {
                 limit: 5,
                 locale,
-                query: [question, memorySummary]
-                  .filter(Boolean)
-                  .join("\nConversation context: ")
-                  .slice(0, 900),
+                query: isContextDependentKnowledgeQuestion(question)
+                  ? `${question}\nConversation context: ${memorySummary}`.slice(
+                      0,
+                      500
+                    )
+                  : question.slice(0, 500),
                 scope: "customer_support",
                 tenant_id: conversation.tenant_id,
               },

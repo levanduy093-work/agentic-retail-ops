@@ -233,11 +233,13 @@ export type CreateKnowledgeDocumentInput = {
 
 export type ApproveKnowledgeDocumentInput = {
   actor_id: string
+  actor_type?: "system" | "user"
   document_id: string
 }
 
 export type RetireKnowledgeDocumentInput = {
   actor_id: string
+  actor_type?: "system" | "user"
   document_id: string
   reason: string
 }
@@ -254,11 +256,13 @@ export type CreateKnowledgeSourceInput = {
 
 export type SyncKnowledgeSourceInput = {
   actor_id: string
+  actor_type?: "system" | "user"
   source_id: string
 }
 
 export type PrepareKnowledgeSourceInput = {
   actor_id: string
+  actor_type?: "system" | "user"
   source_id: string
 }
 

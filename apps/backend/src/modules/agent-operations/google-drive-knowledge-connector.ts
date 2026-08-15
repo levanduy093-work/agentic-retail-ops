@@ -13,6 +13,21 @@ export type GoogleKnowledgeSourceType =
   | "GOOGLE_DRIVE"
   | "GOOGLE_SHEET"
 
+export type GoogleDriveKnowledgeFetchResult =
+  | {
+      checksum: string
+      content: string
+      content_type: string
+      etag: string | null
+      final_url: string
+      unchanged: false
+    }
+  | {
+      etag: string
+      final_url: string
+      unchanged: true
+    }
+
 type GoogleDriveFileMetadata = {
   capabilities?: { canDownload?: boolean }
   id: string
@@ -184,8 +199,9 @@ export async function fetchGoogleDriveKnowledgeSource(
   options: {
     authorizationHeader?: string
     fetchImpl?: typeof fetch
+    knownEtag?: string | null
   } = {}
-) {
+): Promise<GoogleDriveKnowledgeFetchResult> {
   const parsed = validateGoogleKnowledgeSourceUrl(sourceUrl, sourceType)
   const fetchImpl = options.fetchImpl ?? fetch
   const authorization = options.authorizationHeader
@@ -232,6 +248,15 @@ export async function fetchGoogleDriveKnowledgeSource(
     )
   }
 
+  const etag = metadata.modifiedTime ?? metadata.md5Checksum ?? null
+  if (options.knownEtag && etag === options.knownEtag) {
+    return {
+      etag,
+      final_url: sourceUrl,
+      unchanged: true,
+    }
+  }
+
   const request = contentRequestFor(metadata)
   const contentResponse = await fetchWithTimeout(
     request.url,
@@ -270,7 +295,8 @@ export async function fetchGoogleDriveKnowledgeSource(
     checksum: checksumKnowledgeContent(content),
     content,
     content_type: request.content_type,
-    etag: metadata.modifiedTime ?? metadata.md5Checksum ?? null,
+    etag,
     final_url: sourceUrl,
+    unchanged: false,
   }
 }

@@ -4,6 +4,7 @@ import AgentOperationsModuleService from "../modules/agent-operations/service"
 
 const CUSTOMER_AGENT_IDS = new Set([
   "conversation-memory-agent",
+  "customer-conversation-agent",
   "customer-intent-router",
   "customer-knowledge-agent",
   "customer-product-advisor",

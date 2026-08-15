@@ -8,9 +8,9 @@
     "successAction": "Start Synapse Admin"
   },
   "knowledgeHub": {
-    "navigation": "Store guidance",
-    "title": "Store Knowledge Hub",
-    "subtitle": "Manage approved guidance that the system can use for customer support and store operations.",
+    "navigation": "Customer support chatbot",
+    "title": "Customer support chatbot",
+    "subtitle": "Configure AI and manage the knowledge the chatbot uses to advise and support customers.",
     "createAction": "Add guidance",
     "documents": "Store guidance",
     "documentsHint": "The system only uses approved guidance while it is in effect.",
@@ -18,9 +18,11 @@
     "empty": "No guidance yet. Create the first draft to begin.",
     "selectDocument": "Choose guidance on the left to see its content and usage status.",
     "views": {
+      "conversations": "Customer conversations",
       "documents": "Guidance",
       "sources": "Connected documents",
-      "search": "Check search"
+      "search": "Check search",
+      "ai": "AI configuration"
     },
     "emptyStatus": {
       "approved": "No guidance is currently in use.",
@@ -31,26 +33,42 @@
       "vi": "Vietnamese",
       "en": "English"
     },
-    "usedFor": "Used for {{scope}} · {{language}}",
+    "usedFor": "Used by the customer support chatbot · {{language}}",
     "guidanceContent": "Guidance employees and agents will follow",
     "approvalExplanation": "Only guidance marked “In use” can support an agent response.",
     "detailSummary": "Version {{version}} · {{chunks}} searchable sections",
     "source": "Where this guidance came from",
+    "sourceManual": "Added directly in the Knowledge Hub",
+    "sourceConnected": "Connected document: {{name}}",
     "searchableSections": "Sections the system can find",
     "sectionMeta": "Section {{number}} · {{words}} words",
+    "noSearchableSections": "This guidance has no searchable sections. Create it again or check the document processing pipeline.",
+    "detailError": "The guidance details could not be loaded. The list remains unchanged; retry to check the API connection.",
+    "retryAction": "Retry",
+    "knowledgeStatus": "Knowledge system status",
+    "knowledgeAvailability": {
+      "approved": "Available to AI and search",
+      "draft": "Not available to AI yet",
+      "retired": "Removed from AI and search"
+    },
+    "knowledgeAvailabilityHint": {
+      "approved": "Approved sections are retrieved from the same knowledge index used by connected documents.",
+      "draft": "Approve this draft to embed its sections and make them retrievable.",
+      "retired": "Retired sections are excluded from retrieval and agent responses."
+    },
     "approveAction": "Approve for system use",
     "retireAction": "Stop using this guidance",
     "retireReason": "A manager stopped this version from being used in the Knowledge Hub.",
     "testSearch": "Test information search",
-    "testSearchHint": "Enter a customer-like question to check which approved guidance the system finds.",
+    "testSearchHint": "Enter a customer-like question to check the knowledge used by the customer support chatbot.",
     "searchPlaceholder": "For example: Has the order been paid?",
     "searchAction": "Find guidance",
     "matchSource": "Matched section",
     "noMatch": "No matching approved guidance was found. The agent will ask an employee to check manually.",
     "cancel": "Cancel",
-    "saveDraft": "Save draft",
+    "saveDraft": "Save and use",
     "createTitle": "Create store guidance",
-    "createHint": "Guidance is saved as a draft. A manager must approve it before an agent may use it.",
+    "createHint": "Saving approves and indexes this guidance immediately so the system can use it.",
     "status": {
       "approved": "In use",
       "draft": "Waiting for approval",
@@ -75,8 +93,8 @@
     },
     "sources": {
       "title": "Connected knowledge sources",
-      "subtitle": "Connect documents so the system can automatically read, chunk, and embed sourced guidance for manager approval.",
-      "simpleSubtitle": "After you save a source, the system automatically reads, chunks, and embeds it. Changed versions are prepared the same way.",
+      "subtitle": "Connect documents so the system can automatically read, chunk, embed, and update approved guidance for the chatbot.",
+      "simpleSubtitle": "The system checks each Google Drive source every 10 minutes. It downloads, embeds, and replaces the active version only when its checksum changes.",
       "connectAction": "Connect a document",
       "loading": "Loading connected sources...",
       "empty": "No document is connected yet. Choose one or more documents to prepare the first draft.",
@@ -105,13 +123,14 @@
         "disconnectTitle": "Disconnect Google?",
         "disconnectConfirmation": "The encrypted refresh token will be deleted and Google revocation will be requested. Google sources stop updating until you reconnect."
       },
-      "syncAction": "Check and prepare",
+      "syncAction": "Check and update",
+      "openDocumentAction": "Open latest document",
       "deleteAction": "Delete",
       "deleteTitle": "Delete knowledge source?",
       "deleteConfirmation": "The system will delete {{name}}, every document version, and all generated chunks from the database, then remove related vectors. A minimal audit record is retained.",
       "saveAction": "Save and process {{count}} documents",
       "createTitle": "Connect a knowledge source",
-      "createHint": "Choose a document and its usage scope. Saving automatically reads, chunks, and embeds it; the resulting draft still requires manager approval before agents can use it.",
+      "createHint": "Choose a document. Saving automatically reads, chunks, embeds, and approves it for customer support chatbot use.",
       "automatic": {
         "supportedTitle": "Supported document types",
         "supportedHint": "If you choose another type, the system identifies it and explains the problem before saving.",
@@ -123,8 +142,8 @@
         "unsupportedTitle": "This document type is not supported",
         "unsupportedHint": "{{name}} is not a Google Doc, Google Sheet, DOCX, TXT, Markdown, or CSV file. Choose another document."
       },
-      "safetyTitle": "Approval remains required",
-      "safetyHint": "The system checks the source and creates a new draft only when its content changes. An authorized manager must review and approve that draft before agents can use it.",
+      "safetyTitle": "Automatic updates from selected sources",
+      "safetyHint": "The system only reads files you explicitly choose, stores checksums and versions, and replaces data only when content changes. Superseded versions stop being used so the chatbot does not cite old content.",
       "fields": {
         "type": "Document location",
         "name": "Source name",
@@ -139,7 +158,7 @@
       },
       "status": {
         "never": "Not checked yet",
-        "succeeded": "Embedded · awaiting approval",
+        "succeeded": "Updated · chatbot uses the latest version",
         "failed": "Processing needs attention",
         "unchanged": "No changes · vectors ready"
       },
@@ -147,7 +166,7 @@
         "connecting": "Saving the source connection...",
         "syncing": "Reading and splitting the document into chunks...",
         "embedding": "Creating embeddings and writing vectors...",
-        "ready": "Vector preparation complete. The draft is awaiting approval.",
+        "ready": "Vector preparation complete and the chatbot was updated.",
         "failed": "Processing stopped before vector preparation completed."
       },
       "messages": {
@@ -155,11 +174,12 @@
         "createError": "The Google document could not be connected. Check its access permission and select it again.",
         "deleted": "Deleted the source, {{documents}} document versions, and {{chunks}} content chunks.",
         "deleteError": "The knowledge source could not be purged. Data was kept to avoid leaving vectors behind.",
-        "prepared": "Document prepared successfully: {{chunks}} chunks were embedded. The draft is awaiting approval.",
-        "batchPrepared": "{{count}} documents were prepared. Their drafts are awaiting approval.",
+        "prepared": "Document updated: {{chunks}} chunks were embedded and the chatbot now uses the latest version.",
+        "batchPrepared": "{{count}} documents were updated for chatbot use.",
         "batchPartial": "{{processed}} documents were processed; {{failed}} need another check.",
+        "processingInBackground": "Documents are still being processed in the background. You can return to the list to follow progress.",
         "processingError": "The source could not be fully prepared. Its connection was kept so you can retry after checking access and embedding configuration.",
-        "synced": "Source checked and prepared for review.",
+        "synced": "Source checked and the chatbot was updated with the latest version.",
         "unchanged": "Source checked. Its content has not changed and its vectors remain ready.",
         "syncError": "The source could not be read or embedded. Review the connection and embedding configuration."
       }
@@ -167,6 +187,8 @@
     "messages": {
       "created": "Draft saved. Agents cannot use this guidance until it is approved.",
       "approved": "Approved. Agents can now find and cite this guidance.",
+      "approvedIndexed": "Approved and indexed {{chunks}} searchable sections for AI use.",
+      "approvedIndexWarning": "The guidance was approved, but its knowledge index is not ready ({{status}}). Check the embedding provider before relying on AI retrieval.",
       "retired": "Use stopped. Agents will no longer use this version.",
       "actionError": "The action could not be completed. Check the information and try again.",
       "searchError": "Guidance search is unavailable right now. Please try again."

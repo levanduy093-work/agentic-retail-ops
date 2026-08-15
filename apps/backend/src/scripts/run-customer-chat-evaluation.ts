@@ -27,7 +27,7 @@ const scenarios: Scenario[] = [
   {
     expected_intent: "SMALL_TALK",
     id: "shop-availability",
-    message: "Sốp có rảnh không?",
+    message: "Rảnh k sốp?",
     requires_friendly_tone: true,
   },
   {

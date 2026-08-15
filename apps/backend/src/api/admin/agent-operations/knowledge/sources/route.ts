@@ -29,6 +29,7 @@ export async function POST(
     input: {
       ...req.validatedBody,
       owner_id: req.auth_context.actor_id,
+      scope: "customer_support",
     },
   })
   res.status(result.duplicate ? 200 : 201).json(result)

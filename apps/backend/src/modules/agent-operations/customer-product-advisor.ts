@@ -277,11 +277,14 @@ export function buildProductAdvisorFallback(
 ): ProductAdvisorModelResult {
   if (catalog.status === "UNAVAILABLE") {
     return {
-      follow_up_question: null,
+      follow_up_question:
+        locale === "vi"
+          ? "Bạn thích phong cách nào hơn để sốp tư vấn sát gu của mình: năng động, lịch sự hay thoải mái?"
+          : "What style would suit you best: sporty, smart, or relaxed?",
       intro:
         locale === "vi"
-          ? "Sốp chưa truy vấn được catalog ngay lúc này. Bạn chờ một chút rồi nhắn lại giúp sốp nhé."
-          : "I can't reach the live catalog right now. Please try again in a moment.",
+          ? "Sốp vẫn ở đây để giúp bạn chọn món phù hợp nha."
+          : "I'm still here to help you find something that suits you.",
       recommendations: [],
     }
   }

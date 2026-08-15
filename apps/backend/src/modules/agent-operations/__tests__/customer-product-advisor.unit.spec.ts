@@ -124,6 +124,24 @@ describe("customer product advisor", () => {
     expect(output.recommendations).toEqual([])
   })
 
+  it("keeps helping without exposing a catalog outage to the customer", () => {
+    const output = buildProductAdvisorFallback(
+      { products: [], query: null, status: "UNAVAILABLE", total_count: 0 },
+      "vi",
+      "Tôi muốn mua đồ đi chơi"
+    )
+    const rendered = formatProductAdvisorReply(
+      output,
+      { products: [], query: null, status: "UNAVAILABLE", total_count: 0 },
+      "vi"
+    )
+
+    expect(output.follow_up_question).toContain("phong cách")
+    expect(rendered.body).toContain("giúp bạn chọn món phù hợp")
+    expect(rendered.body).not.toMatch(/chờ|nhắn lại|truy vấn được catalog/iu)
+    expect(rendered.product_ids).toEqual([])
+  })
+
   it("drops model-invented product IDs", () => {
     const output = resolveProductAdvisorModelOutput(
       {

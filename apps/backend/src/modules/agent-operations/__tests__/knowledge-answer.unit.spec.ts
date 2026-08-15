@@ -148,6 +148,16 @@ describe("grounded knowledge answers", () => {
     expect(buildCustomerSmallTalkReply("Sốp có rảnh không?", "vi")?.body).toContain(
       "sốp đang rảnh"
     )
+    expect(buildCustomerSmallTalkReply("Rảnh k sốp", "vi")?.body).toContain(
+      "sốp đang rảnh"
+    )
+  })
+
+  it("recognizes an approved return-policy document for a short return request", () => {
+    expect(
+      filterKnowledgeEvidenceForQuestion("Mình muốn trả hàng á", knowledge)
+        .results
+    ).toHaveLength(1)
   })
 
   it("rejects an order-status chunk for a return-process question", () => {
@@ -158,6 +168,7 @@ describe("grounded knowledge answers", () => {
           ...knowledge.results[0],
           excerpt:
             "Nhân viên cần kiểm tra trạng thái đơn hàng trước khi trả lời khách.",
+          document_key: "order-status",
           title: "Hướng dẫn trạng thái đơn hàng",
         },
       ],
@@ -175,6 +186,10 @@ describe("grounded knowledge answers", () => {
         knowledge
       ).results
     ).toHaveLength(1)
+    expect(
+      filterKnowledgeEvidenceForQuestion("Mình muốn trả hàng á", wrongTopic)
+        .results
+    ).toEqual([])
   })
 
   it("preserves human review when retrieved chunks do not answer the question", () => {

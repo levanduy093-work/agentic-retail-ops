@@ -3,6 +3,7 @@ import { createHash } from "node:crypto"
 
 export const CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS = {
   catalog: 10,
+  conversation_reply: 10 * 60,
   intent: 60 * 60,
   knowledge_answer: 60 * 60,
   knowledge_search: 5 * 60,

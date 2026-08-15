@@ -1,4 +1,3 @@
-import { defineRouteConfig } from "@medusajs/admin-sdk"
 import {
   Button,
   Container,
@@ -94,7 +93,13 @@ const includeCurrentModel = (
   ]
 }
 
-const AiConnectionsPage = () => {
+type AiConnectionsContentProps = {
+  embedded?: boolean
+}
+
+export const AiConnectionsContent = ({
+  embedded = false,
+}: AiConnectionsContentProps) => {
   const { t } = useTranslation()
   const confirm = usePrompt()
   const queryClient = useQueryClient()
@@ -280,12 +285,14 @@ const AiConnectionsPage = () => {
 
   return (
     <div className="flex flex-col gap-3">
-      <Container className="px-6 py-5">
-        <Heading>{t("aiProviders.title")}</Heading>
-        <Text className="mt-1 text-ui-fg-subtle" size="small">
-          {t("aiProviders.subtitle")}
-        </Text>
-      </Container>
+      {!embedded && (
+        <Container className="px-6 py-5">
+          <Heading>{t("aiProviders.title")}</Heading>
+          <Text className="mt-1 text-ui-fg-subtle" size="small">
+            {t("aiProviders.subtitle")}
+          </Text>
+        </Container>
+      )}
 
       <Container className="px-6 py-4">
         <Text size="small">{t("aiProviders.security")}</Text>
@@ -694,8 +701,6 @@ const AiConnectionsPage = () => {
   )
 }
 
-export const config = defineRouteConfig({
-  label: "AI",
-})
+const AiConnectionsPage = () => <AiConnectionsContent />
 
 export default AiConnectionsPage

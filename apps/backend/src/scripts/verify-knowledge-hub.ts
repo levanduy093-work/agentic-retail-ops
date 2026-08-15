@@ -54,12 +54,16 @@ export default async function verifyKnowledgeHub({ container }: ExecArgs) {
     false
   )
 
-  await approveKnowledgeDocumentWorkflow(container).run({
+  const { result: approval } = await approveKnowledgeDocumentWorkflow(
+    container
+  ).run({
     input: {
       actor_id: "knowledge-hub-verifier",
       document_id: creation.document.id,
     },
   })
+  assert.equal(approval.rag_index.status, "INDEXED")
+  assert.equal(approval.rag_index.indexed_chunks, chunks.length)
   const approvedSearch = await service.searchGovernedKnowledge({
     limit: 5,
     locale: "vi",
@@ -99,6 +103,7 @@ export default async function verifyKnowledgeHub({ container }: ExecArgs) {
     JSON.stringify(
       {
         approved_search_found_precise_chunk: true,
+        approval_rag_index_status: approval.rag_index.status,
         chunk_count: chunks.length,
         draft_excluded_from_search: true,
         document_id: creation.document.id,

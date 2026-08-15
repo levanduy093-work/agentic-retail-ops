@@ -253,9 +253,9 @@
     }
   },
   "knowledgeHub": {
-    "navigation": "Kho hướng dẫn",
-    "title": "Kho hướng dẫn của cửa hàng",
-    "subtitle": "Quản lý những thông tin đã được duyệt để hệ thống dùng khi hỗ trợ khách hàng và vận hành cửa hàng.",
+    "navigation": "Chatbot CSKH",
+    "title": "Chatbot hỗ trợ khách hàng",
+    "subtitle": "Thiết lập AI và quản lý kho kiến thức mà chatbot dùng để tư vấn, hỗ trợ khách hàng.",
     "createAction": "Thêm hướng dẫn",
     "documents": "Danh sách hướng dẫn",
     "documentsHint": "Chỉ bản đã duyệt và còn hiệu lực mới được hệ thống sử dụng.",
@@ -263,9 +263,11 @@
     "empty": "Chưa có hướng dẫn nào. Hãy tạo bản nháp đầu tiên.",
     "selectDocument": "Chọn một hướng dẫn bên trái để xem nội dung và trạng thái sử dụng.",
     "views": {
+      "conversations": "Hội thoại khách hàng",
       "documents": "Hướng dẫn",
       "sources": "Tài liệu kết nối",
-      "search": "Kiểm tra tìm kiếm"
+      "search": "Kiểm tra tìm kiếm",
+      "ai": "Cấu hình AI"
     },
     "emptyStatus": {
       "approved": "Chưa có hướng dẫn nào đang được sử dụng.",
@@ -276,26 +278,42 @@
       "vi": "Tiếng Việt",
       "en": "Tiếng Anh"
     },
-    "usedFor": "Dùng cho {{scope}} · {{language}}",
+    "usedFor": "Dùng cho chatbot hỗ trợ khách hàng · {{language}}",
     "guidanceContent": "Nội dung nhân viên và agent sẽ làm theo",
     "approvalExplanation": "Chỉ hướng dẫn có trạng thái “Đang được sử dụng” mới được dùng để hỗ trợ agent trả lời.",
     "detailSummary": "Bản {{version}} · {{chunks}} đoạn có thể tìm kiếm",
     "source": "Nguồn gốc của hướng dẫn",
+    "sourceManual": "Được thêm trực tiếp trong Kho hướng dẫn",
+    "sourceConnected": "Tài liệu đã kết nối: {{name}}",
     "searchableSections": "Các đoạn hệ thống có thể tìm thấy",
     "sectionMeta": "Đoạn {{number}} · {{words}} từ",
+    "noSearchableSections": "Hướng dẫn này chưa có đoạn nào để tìm kiếm. Hãy tạo lại hoặc kiểm tra quy trình xử lý tài liệu.",
+    "detailError": "Không tải được chi tiết hướng dẫn. Danh sách vẫn được giữ nguyên; hãy thử lại để kiểm tra kết nối API.",
+    "retryAction": "Thử lại",
+    "knowledgeStatus": "Trạng thái hệ thống knowledge",
+    "knowledgeAvailability": {
+      "approved": "AI và tìm kiếm đang sử dụng",
+      "draft": "AI chưa được phép sử dụng",
+      "retired": "Đã loại khỏi AI và tìm kiếm"
+    },
+    "knowledgeAvailabilityHint": {
+      "approved": "Các đoạn đã duyệt được truy xuất từ cùng hệ thống knowledge với tài liệu kết nối.",
+      "draft": "Duyệt bản nháp để embedding các đoạn và cho phép hệ thống truy xuất.",
+      "retired": "Các đoạn đã ngừng dùng bị loại khỏi kết quả tìm kiếm và câu trả lời của agent."
+    },
     "approveAction": "Duyệt để hệ thống sử dụng",
     "retireAction": "Ngừng sử dụng hướng dẫn",
     "retireReason": "Quản lý chủ động ngừng sử dụng phiên bản này từ Kho hướng dẫn.",
     "testSearch": "Thử tìm thông tin",
-    "testSearchHint": "Nhập câu hỏi giống khách hàng để kiểm tra hệ thống sẽ tìm thấy hướng dẫn nào.",
+    "testSearchHint": "Nhập câu hỏi giống khách hàng để kiểm tra kho kiến thức mà chatbot hỗ trợ khách hàng sẽ dùng.",
     "searchPlaceholder": "Ví dụ: đơn hàng đã thanh toán chưa?",
     "searchAction": "Tìm hướng dẫn",
     "matchSource": "Đoạn được tìm thấy",
     "noMatch": "Không tìm thấy hướng dẫn đã duyệt phù hợp. Agent sẽ yêu cầu nhân viên tự kiểm tra.",
     "cancel": "Hủy",
-    "saveDraft": "Lưu bản nháp",
+    "saveDraft": "Lưu và sử dụng",
     "createTitle": "Tạo hướng dẫn mới",
-    "createHint": "Hướng dẫn được lưu dưới dạng bản nháp. Quản lý phải duyệt trước khi agent được phép sử dụng.",
+    "createHint": "Khi lưu, hướng dẫn được duyệt và lập chỉ mục ngay để hệ thống sử dụng.",
     "status": {
       "approved": "Đang được sử dụng",
       "draft": "Chờ duyệt",
@@ -320,8 +338,8 @@
     },
     "sources": {
       "title": "Nguồn hướng dẫn đã kết nối",
-      "subtitle": "Kết nối tài liệu để hệ thống tự đọc, chia đoạn và embedding hướng dẫn có nguồn trước khi quản lý duyệt.",
-      "simpleSubtitle": "Sau khi lưu nguồn, hệ thống tự đọc, chia đoạn và embedding. Các phiên bản thay đổi cũng được chuẩn bị theo cùng quy trình.",
+      "subtitle": "Kết nối tài liệu để hệ thống tự đọc, chia đoạn, embedding và cập nhật bản đã duyệt cho chatbot.",
+      "simpleSubtitle": "Hệ thống kiểm tra từng nguồn Google Drive mỗi 10 phút. Chỉ khi checksum thay đổi mới tải lại, embedding, thay bản cũ và tự dùng bản mới.",
       "connectAction": "Kết nối tài liệu",
       "loading": "Đang tải các nguồn đã kết nối...",
       "empty": "Chưa có tài liệu nào. Hãy chọn một hoặc nhiều tài liệu để hệ thống chuẩn bị bản nháp đầu tiên.",
@@ -350,13 +368,14 @@
         "disconnectTitle": "Ngắt kết nối Google?",
         "disconnectConfirmation": "Hệ thống sẽ xóa refresh token đã mã hóa và yêu cầu Google thu hồi quyền. Các nguồn Google sẽ ngừng cập nhật cho đến khi kết nối lại."
       },
-      "syncAction": "Kiểm tra và xử lý",
+      "syncAction": "Kiểm tra và cập nhật",
+      "openDocumentAction": "Mở tài liệu mới nhất",
       "deleteAction": "Xóa",
       "deleteTitle": "Xóa nguồn tài liệu?",
       "deleteConfirmation": "Hệ thống sẽ xóa {{name}}, mọi bản tài liệu và toàn bộ đoạn nội dung đã tạo từ nguồn này khỏi cơ sở dữ liệu, đồng thời dọn vector liên quan. Nhật ký kiểm toán tối thiểu vẫn được giữ.",
       "saveAction": "Lưu và xử lý {{count}} tài liệu",
       "createTitle": "Kết nối nguồn hướng dẫn",
-      "createHint": "Chọn tài liệu và phạm vi sử dụng. Khi lưu, hệ thống tự đọc, chia đoạn và embedding; bản nháp vẫn cần quản lý duyệt trước khi agent được sử dụng.",
+      "createHint": "Chọn tài liệu. Khi lưu, hệ thống tự đọc, chia đoạn, embedding và tự duyệt để chatbot hỗ trợ khách hàng dùng.",
       "automatic": {
         "supportedTitle": "Các loại tài liệu được hỗ trợ",
         "supportedHint": "Nếu bạn chọn loại khác, hệ thống sẽ nhận biết và báo rõ trước khi lưu.",
@@ -368,8 +387,8 @@
         "unsupportedTitle": "Tài liệu này chưa được hỗ trợ",
         "unsupportedHint": "{{name}} không phải Google Docs, Google Sheets, DOCX, TXT, Markdown hoặc CSV. Hãy chọn tài liệu khác."
       },
-      "safetyTitle": "Vẫn bắt buộc quản lý duyệt",
-      "safetyHint": "Hệ thống kiểm tra nguồn và chỉ tạo bản nháp mới khi nội dung thay đổi. Quản lý có quyền phải đọc và duyệt thì agent mới được sử dụng.",
+      "safetyTitle": "Tự cập nhật từ nguồn đã chọn",
+      "safetyHint": "Hệ thống chỉ đọc tệp bạn chủ động chọn, lưu checksum và phiên bản, rồi chỉ thay dữ liệu khi nội dung thay đổi. Bản cũ được ngừng dùng để chatbot không trích dẫn nội dung cũ.",
       "fields": {
         "type": "Tài liệu đang nằm ở đâu",
         "name": "Tên nguồn dễ nhận biết",
@@ -384,7 +403,7 @@
       },
       "status": {
         "never": "Chưa kiểm tra",
-        "succeeded": "Đã embedding · chờ duyệt",
+        "succeeded": "Đã cập nhật · chatbot dùng bản mới nhất",
         "failed": "Quá trình xử lý cần kiểm tra",
         "unchanged": "Nội dung không đổi · vector sẵn sàng"
       },
@@ -392,7 +411,7 @@
         "connecting": "Đang lưu kết nối nguồn...",
         "syncing": "Đang đọc và chia tài liệu thành các đoạn...",
         "embedding": "Đang tạo embedding và ghi vector...",
-        "ready": "Đã chuẩn bị xong vector. Bản nháp đang chờ duyệt.",
+        "ready": "Đã chuẩn bị xong vector và tự cập nhật chatbot.",
         "failed": "Quá trình dừng trước khi chuẩn bị vector hoàn tất."
       },
       "messages": {
@@ -400,11 +419,12 @@
         "createError": "Không thể kết nối tài liệu Google. Hãy kiểm tra quyền truy cập và chọn lại tài liệu.",
         "deleted": "Đã xóa nguồn, {{documents}} bản tài liệu và {{chunks}} đoạn nội dung.",
         "deleteError": "Không thể xóa sạch nguồn tài liệu. Hệ thống đã giữ nguyên dữ liệu để tránh sót vector.",
-        "prepared": "Đã chuẩn bị tài liệu: {{chunks}} đoạn đã được embedding. Bản nháp đang chờ duyệt.",
-        "batchPrepared": "Đã chuẩn bị {{count}} tài liệu. Các bản nháp đang chờ duyệt.",
+        "prepared": "Đã cập nhật tài liệu: {{chunks}} đoạn đã được embedding và chatbot đang dùng bản mới nhất.",
+        "batchPrepared": "Đã cập nhật {{count}} tài liệu để chatbot dùng.",
         "batchPartial": "Đã xử lý {{processed}} tài liệu; {{failed}} tài liệu cần kiểm tra lại.",
+        "processingInBackground": "Tài liệu vẫn đang được xử lý nền. Bạn có thể quay lại danh sách để theo dõi.",
         "processingError": "Chưa thể chuẩn bị hoàn tất tài liệu. Kết nối nguồn vẫn được giữ để bạn thử lại sau khi kiểm tra quyền truy cập và cấu hình embedding.",
-        "synced": "Đã kiểm tra và chuẩn bị nguồn để quản lý xem xét.",
+        "synced": "Đã kiểm tra nguồn và cập nhật chatbot bằng phiên bản mới nhất.",
         "unchanged": "Đã kiểm tra nguồn. Nội dung không thay đổi và vector vẫn sẵn sàng.",
         "syncError": "Không thể đọc hoặc embedding nguồn. Hãy kiểm tra kết nối và cấu hình embedding."
       }
@@ -412,6 +432,8 @@
     "messages": {
       "created": "Đã lưu bản nháp. Hướng dẫn chưa được agent sử dụng cho đến khi được duyệt.",
       "approved": "Đã duyệt. Agent có thể tìm và trích dẫn hướng dẫn này.",
+      "approvedIndexed": "Đã duyệt và lập chỉ mục {{chunks}} đoạn để AI sử dụng.",
+      "approvedIndexWarning": "Hướng dẫn đã được duyệt nhưng chỉ mục knowledge chưa sẵn sàng ({{status}}). Hãy kiểm tra nhà cung cấp embedding trước khi dùng AI.",
       "retired": "Đã ngừng sử dụng. Agent sẽ không dùng phiên bản này nữa.",
       "actionError": "Không thể hoàn tất thao tác. Hãy kiểm tra dữ liệu và thử lại.",
       "searchError": "Không thể tìm hướng dẫn lúc này. Vui lòng thử lại."

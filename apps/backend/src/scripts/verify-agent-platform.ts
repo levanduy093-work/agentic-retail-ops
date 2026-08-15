@@ -2,7 +2,12 @@ import assert from "node:assert/strict"
 import { ExecArgs, IRbacModuleService } from "@medusajs/framework/types"
 import { Modules } from "@medusajs/framework/utils"
 import { AGENT_CATALOG } from "../modules/agent-operations/catalog-registry"
+import {
+  CUSTOMER_SUPPORT_PROMPT_KEY,
+  CUSTOMER_SUPPORT_PROMPT_VERSION,
+} from "../modules/agent-operations/customer-support-prompt"
 import { isKnowledgeEligible } from "../modules/agent-operations/knowledge"
+import { AGENT_RBAC_POLICY_DEFINITIONS } from "../modules/agent-operations/rbac-policies"
 import { AGENT_OPERATIONS_MODULE } from "../modules/agent-operations"
 import AgentOperationsModuleService from "../modules/agent-operations/service"
 import {
@@ -16,6 +21,7 @@ import { AgentTaskStatus } from "../modules/agent-operations/types"
 import { approveKnowledgeDocumentWorkflow } from "../workflows/agent-operations/approve-knowledge-document"
 import { createAgentTaskWorkflow } from "../workflows/agent-operations/create-agent-task"
 import { executeAgentActionWorkflow } from "../workflows/agent-operations/execute-agent-action"
+import { retireKnowledgeDocumentWorkflow } from "../workflows/agent-operations/retire-knowledge-document"
 import { requestAgentActionWorkflow } from "../workflows/agent-operations/request-agent-action"
 import { runAgentEvaluationWorkflow } from "../workflows/agent-operations/run-agent-evaluation"
 import { transitionAgentTaskWorkflow } from "../workflows/agent-operations/transition-agent-task"
@@ -26,6 +32,24 @@ export default async function verifyAgentPlatform({ container }: ExecArgs) {
   )
   const rbac = container.resolve<IRbacModuleService>(Modules.RBAC)
   const verificationId = `verify-agent-platform-${Date.now()}`
+  const staleKnowledgeArtifacts = (
+    await service.listAgentKnowledgeDocuments({}, { take: 10_000 })
+  ).filter(
+    (document) =>
+      document.status === "APPROVED" &&
+      document.title === "Platform verification knowledge" &&
+      document.document_key.startsWith("verify-agent-platform-")
+  )
+
+  for (const document of staleKnowledgeArtifacts) {
+    await retireKnowledgeDocumentWorkflow(container).run({
+      input: {
+        actor_id: "platform-verifier",
+        document_id: document.id,
+        reason: "Clean up a completed platform verification artifact",
+      },
+    })
+  }
 
   assert.equal(AGENT_CATALOG.length, 17)
 
@@ -261,6 +285,8 @@ export default async function verifyAgentPlatform({ container }: ExecArgs) {
     content: "This content is approved only for platform runtime verification.",
     document_key: verificationId,
     effective_at: new Date(Date.now() - 1_000).toISOString(),
+    locale: "en",
+    scope: "platform_verification",
     title: "Platform verification knowledge",
     version: "1.0.0",
   }
@@ -305,6 +331,15 @@ export default async function verifyAgentPlatform({ container }: ExecArgs) {
   })
   assert.equal(knowledgeApproved.document.status, "APPROVED")
   assert.equal(isKnowledgeEligible(knowledgeApproved.document), true)
+  const { result: knowledgeRetired } =
+    await retireKnowledgeDocumentWorkflow(container).run({
+      input: {
+        actor_id: "platform-verifier",
+        document_id: knowledgeApproved.document.id,
+        reason: "Completed platform runtime verification",
+      },
+    })
+  assert.equal(knowledgeRetired.document.status, "RETIRED")
 
   const scenarios = await service.listAgentEvaluationCases({
     scenario_key: "SHIP-001",
@@ -333,17 +368,44 @@ export default async function verifyAgentPlatform({ container }: ExecArgs) {
   const roles = await rbac.listRbacRoles({ name: "operations_manager" })
   assert.equal(roles.length, 1)
   const rolePolicies = await rbac.listPoliciesForRole(roles[0].id)
-  assert.equal(rolePolicies.length, 21)
-  assert.equal(
-    (await service.listAgentPolicyDefinitions({ status: "ACTIVE" })).length,
-    10
+  assert.equal(rolePolicies.length, AGENT_RBAC_POLICY_DEFINITIONS.length)
+  const activePolicyKeys = new Set(
+    (await service.listAgentPolicyDefinitions({ status: "ACTIVE" })).map(
+      (policy) => policy.policy_key
+    )
   )
+  const requiredPolicyKeys = [
+    "inventory.transfer.requires-operations-manager",
+    "task.create.agent-authorized",
+    "task.assign.agent-authorized",
+    "task.escalate.agent-authorized",
+    "incident.create.agent-authorized",
+    "incident.update.agent-authorized",
+    "approval.request.agent-authorized",
+    "approval.decide.operations-manager",
+    "knowledge.propose.agent-authorized",
+    "message.send.agent-authorized",
+  ]
+  assert.ok(requiredPolicyKeys.every((key) => activePolicyKeys.has(key)))
   assert.equal(
-    (await service.listAgentPromptTemplates({ status: "ACTIVE" })).length,
+    (
+      await service.listAgentPromptTemplates({
+        prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY,
+        status: "ACTIVE",
+        version: CUSTOMER_SUPPORT_PROMPT_VERSION,
+      })
+    ).length,
     1
   )
   assert.equal(
-    (await service.listAgentChannelConnections({ status: "ACTIVE" })).length,
+    (
+      await service.listAgentChannelConnections({
+        account_ref: "default-admin",
+        channel: "IN_APP",
+        status: "ACTIVE",
+        tenant_id: "default",
+      })
+    ).length,
     1
   )
 
@@ -352,7 +414,8 @@ export default async function verifyAgentPlatform({ container }: ExecArgs) {
       {
         catalog_agents: AGENT_CATALOG.length,
         evaluation_status: evaluation.run.status,
-        knowledge_status: knowledgeApproved.document.status,
+        cleaned_knowledge_artifacts: staleKnowledgeArtifacts.length,
+        knowledge_status: "APPROVED_THEN_RETIRED",
         knowledge_tool_status: knowledgeExecution.action.status,
         operations_manager_policies: rolePolicies.length,
         task_gateway_statuses: [

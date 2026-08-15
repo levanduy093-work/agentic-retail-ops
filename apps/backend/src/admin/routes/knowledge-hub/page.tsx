@@ -17,11 +17,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { FormEvent, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { sdk } from "../../lib/sdk"
+import { AiConnectionsContent } from "../ai-connections/page"
+import { CustomerSupportContent } from "../customer-support/page"
 import {
   GooglePickerCredential,
   type GooglePickerSelection,
   openGoogleKnowledgePicker,
 } from "./google-picker"
+import {
+  findKnowledgeDocumentSource,
+  isKnowledgeVerificationArtifact,
+} from "./knowledge-hub-utils"
 
 type KnowledgeDocument = {
   citation_locator: string
@@ -55,6 +61,23 @@ type KnowledgeListResponse = {
 type KnowledgeDetailResponse = {
   chunks: KnowledgeChunk[]
   document: KnowledgeDocument
+}
+
+type KnowledgeCreateResponse = {
+  chunk_count: number
+  document: KnowledgeDocument
+  duplicate: boolean
+}
+
+type KnowledgeApprovalResponse = {
+  document: KnowledgeDocument
+  duplicate: boolean
+  rag_index: {
+    error?: string
+    indexed_chunks: number
+    provider: string
+    status: "DISABLED" | "FAILED" | "INDEXED" | "SKIPPED"
+  }
 }
 
 type KnowledgeSearchResponse = {
@@ -147,8 +170,6 @@ const statusColor = (status: KnowledgeDocument["status"]) => {
 
 const isoFromLocal = (value: string) => new Date(value).toISOString()
 
-const isVerifierRecord = (ownerId: string) => ownerId.endsWith("-verifier")
-
 const sourceHostname = (sourceUrl: string) => {
   try {
     return new URL(sourceUrl).hostname
@@ -205,13 +226,10 @@ const KnowledgeHubPage = () => {
   const [sourceOpen, setSourceOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeView, setActiveView] = useState<
-    "documents" | "search" | "sources"
-  >("documents")
-  const [documentStatus, setDocumentStatus] =
-    useState<KnowledgeDocument["status"]>("APPROVED")
+    "ai" | "conversations" | "documents" | "search" | "sources"
+  >("conversations")
   const [searchQuery, setSearchQuery] = useState("")
   const [searchLocale, setSearchLocale] = useState("vi")
-  const [searchScope, setSearchScope] = useState("customer_support")
   const [pickerLoading, setPickerLoading] = useState(false)
   const [sourceProcessing, setSourceProcessing] =
     useState<SourceProcessingState | null>(null)
@@ -230,14 +248,12 @@ const KnowledgeHubPage = () => {
     document_key: "",
     effective_at: new Date().toISOString().slice(0, 16),
     locale: "vi",
-    scope: "customer_support",
     title: "",
     version: "1.0.0",
   })
   const [sourceForm, setSourceForm] = useState({
     locale: "vi",
     name: "",
-    scope: "customer_support",
     source_type: "GOOGLE_DRIVE" as KnowledgeSource["source_type"],
     source_url: "",
   })
@@ -274,31 +290,26 @@ const KnowledgeHubPage = () => {
   const visibleDocuments = useMemo(
     () =>
       (documents.data?.documents ?? []).filter(
-        (document) => !isVerifierRecord(document.owner_id)
+        (document) => !isKnowledgeVerificationArtifact(document)
       ),
     [documents.data?.documents]
   )
   const visibleSources = useMemo(
     () =>
       (sources.data?.sources ?? []).filter(
-        (source) => !isVerifierRecord(source.owner_id)
+        (source) => !source.owner_id.endsWith("-verifier")
       ),
     [sources.data?.sources]
   )
-  const filteredDocuments = useMemo(
+  const detailSource = useMemo(
     () =>
-      visibleDocuments.filter((document) => document.status === documentStatus),
-    [documentStatus, visibleDocuments]
+      detail.data
+        ? findKnowledgeDocumentSource(detail.data.document, visibleSources)
+        : undefined,
+    [detail.data, visibleSources]
   )
-  const counts = useMemo(
-    () =>
-      visibleDocuments.reduce(
-        (result, document) => ({
-          ...result,
-          [document.status]: result[document.status] + 1,
-        }),
-        { APPROVED: 0, DRAFT: 0, RETIRED: 0 }
-      ),
+  const filteredDocuments = useMemo(
+    () => visibleDocuments.filter((document) => document.status === "APPROVED"),
     [visibleDocuments]
   )
   const sourcePipelineBusy = Boolean(
@@ -380,36 +391,46 @@ const KnowledgeHubPage = () => {
     return { prepareResult, syncResult }
   }
   const createDocument = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const documentKey = `manual-${Date.now()}`
-      return sdk.client.fetch("/admin/agent-operations/knowledge", {
-        body: {
-          ...form,
+      const creation = await sdk.client.fetch<KnowledgeCreateResponse>(
+        "/admin/agent-operations/knowledge",
+        {
+          body: {
+            ...form,
           citation_locator: `manual://knowledge/${documentKey}`,
           document_key: documentKey,
           effective_at: isoFromLocal(form.effective_at),
-          tenant_id: "default",
-          version: "1.0.0",
-        },
-        method: "POST",
-      })
+            tenant_id: "default",
+            version: "1.0.0",
+          },
+          method: "POST",
+        }
+      )
+      const approval = await sdk.client.fetch<KnowledgeApprovalResponse>(
+        `/admin/agent-operations/knowledge/${creation.document.id}/approve`,
+        { method: "POST" }
+      )
+      return { approval, document: creation.document }
     },
     onError: () => toast.error(t("knowledgeHub.messages.actionError")),
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       setCreateOpen(false)
+      setSelectedId(result.document.id)
       await refresh()
-      toast.success(t("knowledgeHub.messages.created"))
-    },
-  })
-  const approveDocument = useMutation({
-    mutationFn: (id: string) =>
-      sdk.client.fetch(`/admin/agent-operations/knowledge/${id}/approve`, {
-        method: "POST",
-      }),
-    onError: () => toast.error(t("knowledgeHub.messages.actionError")),
-    onSuccess: async () => {
-      await refresh()
-      toast.success(t("knowledgeHub.messages.approved"))
+      if (result.approval.rag_index.status === "INDEXED") {
+        toast.success(
+          t("knowledgeHub.messages.approvedIndexed", {
+            chunks: result.approval.rag_index.indexed_chunks,
+          })
+        )
+        return
+      }
+      toast.error(
+        t("knowledgeHub.messages.approvedIndexWarning", {
+          status: result.approval.rag_index.status,
+        })
+      )
     },
   })
   const retireDocument = useMutation({
@@ -433,7 +454,6 @@ const KnowledgeHubPage = () => {
             limit: 5,
             locale: searchLocale,
             query: searchQuery,
-            scope: searchScope,
             tenant_id: "default",
           },
           method: "POST",
@@ -473,6 +493,7 @@ const KnowledgeHubPage = () => {
             method: "POST",
           })
           sourceCreated = true
+          await refreshSources()
           await runSourcePipeline(created.source.id, { end, start })
           outcomes.push({ selection, source_created: true })
         } catch (error) {
@@ -515,11 +536,11 @@ const KnowledgeHubPage = () => {
         )
         return
       }
+      setSourceProcessing(null)
       setSourceOpen(false)
       setSourceForm({
         locale: "vi",
         name: "",
-        scope: "customer_support",
         source_type: "GOOGLE_DRIVE",
         source_url: "",
       })
@@ -545,6 +566,7 @@ const KnowledgeHubPage = () => {
     },
     onSuccess: async ({ prepareResult, syncResult }) => {
       await Promise.all([refreshSources(), refresh()])
+      setSourceProcessing(null)
       toast.success(
         t(
           syncResult.status === "UNCHANGED"
@@ -676,36 +698,49 @@ const KnowledgeHubPage = () => {
     setSourceForm({
       locale: "vi",
       name: "",
-      scope: "customer_support",
       source_type: "GOOGLE_DRIVE",
       source_url: "",
     })
     setSourceOpen(true)
   }
 
+  const closeSourceConnection = () => {
+    setSourceOpen(false)
+    if (createSource.isPending) {
+      toast.info(t("knowledgeHub.sources.messages.processingInBackground"))
+    }
+  }
+
+  const openSourceDocument = (source: KnowledgeSource) => {
+    if (!source.last_document_id) return
+    setSelectedId(source.last_document_id)
+    setActiveView("documents")
+  }
+
   return (
     <div className="flex flex-col gap-y-3">
       <Container className="p-0">
-        <div className="flex items-center justify-between gap-4 px-6 py-5">
-          <div className="max-w-2xl">
-            <Heading level="h1">{t("knowledgeHub.title")}</Heading>
-            <Text className="text-ui-fg-subtle" size="small">
-              {t("knowledgeHub.subtitle")}
-            </Text>
-          </div>
+        <div className="flex items-center justify-between gap-4 px-6 py-4">
+          <Heading level="h1">{t("knowledgeHub.title")}</Heading>
           {activeView === "documents" && (
             <Button size="small" onClick={() => setCreateOpen(true)}>
               {t("knowledgeHub.createAction")}
             </Button>
           )}
           {activeView === "sources" && (
-            <Button size="small" onClick={openSourceConnection}>
+            <Button
+              disabled={createSource.isPending || sourcePipelineBusy}
+              onClick={openSourceConnection}
+              size="small"
+            >
               {t("knowledgeHub.sources.connectAction")}
             </Button>
           )}
         </div>
         <div className="flex gap-1 border-t px-4 py-2">
-          {(["documents", "sources", "search"] as const).map((view) => (
+          {(
+            ["conversations", "documents", "sources", "search", "ai"] as const
+          ).map((view) => (
             <Button
               key={view}
               onClick={() => setActiveView(view)}
@@ -718,22 +753,16 @@ const KnowledgeHubPage = () => {
         </div>
       </Container>
 
+      {activeView === "conversations" && <CustomerSupportContent embedded />}
+
+      {activeView === "ai" && <AiConnectionsContent embedded />}
+
       {activeView === "documents" && (
         <Container className="p-0">
-          <div className="flex flex-wrap gap-2 border-b px-6 py-3">
-            {(["APPROVED", "DRAFT", "RETIRED"] as const).map((status) => (
-              <Button
-                key={status}
-                onClick={() => setDocumentStatus(status)}
-                size="small"
-                variant={
-                  documentStatus === status ? "secondary" : "transparent"
-                }
-              >
-                {t(`knowledgeHub.status.${status.toLowerCase()}`)} ·{" "}
-                {counts[status]}
-              </Button>
-            ))}
+          <div className="border-b px-6 py-3">
+            <Text leading="compact" size="small" weight="plus">
+              {t("knowledgeHub.status.approved")} · {filteredDocuments.length}
+            </Text>
           </div>
           <div className="grid min-h-[520px] grid-cols-1 lg:grid-cols-[320px_1fr]">
             <div className="border-b lg:border-b-0 lg:border-r">
@@ -771,9 +800,7 @@ const KnowledgeHubPage = () => {
               ))}
               {!documents.isLoading && !filteredDocuments.length && (
                 <Text className="px-6 py-8 text-ui-fg-subtle" size="small">
-                  {t(
-                    `knowledgeHub.emptyStatus.${documentStatus.toLowerCase()}`
-                  )}
+                  {t("knowledgeHub.emptyStatus.approved")}
                 </Text>
               )}
             </div>
@@ -787,6 +814,19 @@ const KnowledgeHubPage = () => {
                 <Text className="text-ui-fg-subtle" size="small">
                   {t("knowledgeHub.loading")}
                 </Text>
+              ) : detail.isError ? (
+                <div className="flex max-w-lg flex-col items-start gap-3 rounded-lg border border-ui-border-error bg-ui-bg-base px-5 py-5">
+                  <Text className="text-ui-fg-error" size="small">
+                    {t("knowledgeHub.detailError")}
+                  </Text>
+                  <Button
+                    onClick={() => detail.refetch()}
+                    size="small"
+                    variant="secondary"
+                  >
+                    {t("knowledgeHub.retryAction")}
+                  </Button>
+                </div>
               ) : detail.data ? (
                 <div className="mx-auto flex max-w-3xl flex-col gap-6">
                   <div className="flex items-start justify-between gap-4">
@@ -813,16 +853,13 @@ const KnowledgeHubPage = () => {
                           ),
                         })}
                       </Text>
+                      <Text className="text-ui-fg-muted" size="xsmall">
+                        {t("knowledgeHub.detailSummary", {
+                          chunks: detail.data.chunks.length,
+                          version: detail.data.document.version,
+                        })}
+                      </Text>
                     </div>
-                    {detail.data.document.status === "DRAFT" && (
-                      <Button
-                        isLoading={approveDocument.isPending}
-                        onClick={() => approveDocument.mutate(selectedId)}
-                        size="small"
-                      >
-                        {t("knowledgeHub.approveAction")}
-                      </Button>
-                    )}
                     {detail.data.document.status === "APPROVED" && (
                       <Button
                         isLoading={retireDocument.isPending}
@@ -834,6 +871,45 @@ const KnowledgeHubPage = () => {
                       </Button>
                     )}
                   </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-lg border border-ui-border-base bg-ui-bg-base px-4 py-4">
+                      <Text size="small" weight="plus">
+                        {t("knowledgeHub.source")}
+                      </Text>
+                      <Text className="mt-2" size="small">
+                        {detailSource
+                          ? t("knowledgeHub.sourceConnected", {
+                              name: detailSource.name,
+                            })
+                          : t("knowledgeHub.sourceManual")}
+                      </Text>
+                      <Text
+                        className="mt-1 break-all text-ui-fg-muted"
+                        size="xsmall"
+                      >
+                        {detail.data.document.citation_locator}
+                      </Text>
+                    </div>
+                    <div className="rounded-lg border border-ui-border-base bg-ui-bg-base px-4 py-4">
+                      <Text size="small" weight="plus">
+                        {t("knowledgeHub.knowledgeStatus")}
+                      </Text>
+                      <div className="mt-2">
+                        <StatusBadge
+                          color={statusColor(detail.data.document.status)}
+                        >
+                          {t(
+                            `knowledgeHub.knowledgeAvailability.${detail.data.document.status.toLowerCase()}`
+                          )}
+                        </StatusBadge>
+                      </div>
+                      <Text className="mt-2 text-ui-fg-muted" size="xsmall">
+                        {t(
+                          `knowledgeHub.knowledgeAvailabilityHint.${detail.data.document.status.toLowerCase()}`
+                        )}
+                      </Text>
+                    </div>
+                  </div>
                   <div className="rounded-lg bg-ui-bg-subtle px-5 py-5">
                     <Text leading="compact" size="small" weight="plus">
                       {t("knowledgeHub.guidanceContent")}
@@ -841,6 +917,38 @@ const KnowledgeHubPage = () => {
                     <Text className="mt-3 whitespace-pre-wrap" size="small">
                       {detail.data.document.content}
                     </Text>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <Text size="small" weight="plus">
+                      {t("knowledgeHub.searchableSections")}
+                    </Text>
+                    {detail.data.chunks.map((chunk) => (
+                      <div
+                        className="rounded-lg border border-ui-border-base bg-ui-bg-base px-4 py-4"
+                        key={chunk.id}
+                      >
+                        <Text className="text-ui-fg-muted" size="xsmall">
+                          {t("knowledgeHub.sectionMeta", {
+                            number: chunk.chunk_index + 1,
+                            words: chunk.word_count,
+                          })}
+                        </Text>
+                        <Text className="mt-2 whitespace-pre-wrap" size="small">
+                          {chunk.content}
+                        </Text>
+                        <Text
+                          className="mt-2 break-all text-ui-fg-muted"
+                          size="xsmall"
+                        >
+                          {chunk.citation_locator}
+                        </Text>
+                      </div>
+                    ))}
+                    {!detail.data.chunks.length && (
+                      <Text className="text-ui-fg-error" size="small">
+                        {t("knowledgeHub.noSearchableSections")}
+                      </Text>
+                    )}
                   </div>
                   <Text className="text-ui-fg-muted" size="xsmall">
                     {t("knowledgeHub.approvalExplanation")}
@@ -977,7 +1085,8 @@ const KnowledgeHubPage = () => {
                           {t("knowledgeHub.sources.connectionErrorHint")}
                         </Text>
                       )}
-                      {sourceProcessing?.source_id === source.id && (
+                      {sourcePipelineBusy &&
+                        sourceProcessing?.source_id === source.id && (
                         <SourceProgress
                           {...sourceProcessing}
                           label={t(
@@ -987,6 +1096,17 @@ const KnowledgeHubPage = () => {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
+                      {source.last_document_id &&
+                        source.last_sync_status !== "FAILED" && (
+                          <Button
+                            disabled={sourcePipelineBusy}
+                            onClick={() => openSourceDocument(source)}
+                            size="small"
+                            variant="secondary"
+                          >
+                            {t("knowledgeHub.sources.openDocumentAction")}
+                          </Button>
+                        )}
                       <Button
                         disabled={sourcePipelineBusy || deleteSource.isPending}
                         isLoading={
@@ -1028,7 +1148,7 @@ const KnowledgeHubPage = () => {
               {t("knowledgeHub.testSearchHint")}
             </Text>
           </div>
-          <div className="grid max-w-4xl grid-cols-1 gap-3 md:grid-cols-[1fr_140px_180px_auto]">
+          <div className="grid max-w-3xl grid-cols-1 gap-3 md:grid-cols-[1fr_140px_auto]">
             <Input
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder={t("knowledgeHub.searchPlaceholder")}
@@ -1041,25 +1161,6 @@ const KnowledgeHubPage = () => {
               <Select.Content>
                 <Select.Item value="vi">Tiếng Việt</Select.Item>
                 <Select.Item value="en">English</Select.Item>
-              </Select.Content>
-            </Select>
-            <Select onValueChange={setSearchScope} value={searchScope}>
-              <Select.Trigger>
-                <Select.Value />
-              </Select.Trigger>
-              <Select.Content>
-                <Select.Item value="customer_support">
-                  {t("knowledgeHub.scopes.customerSupport")}
-                </Select.Item>
-                <Select.Item value="operations">
-                  {t("knowledgeHub.scopes.operations")}
-                </Select.Item>
-                <Select.Item value="returns">
-                  {t("knowledgeHub.scopes.returns")}
-                </Select.Item>
-                <Select.Item value="fulfillment">
-                  {t("knowledgeHub.scopes.fulfillment")}
-                </Select.Item>
               </Select.Content>
             </Select>
             <Button
@@ -1122,7 +1223,7 @@ const KnowledgeHubPage = () => {
                   value={form.title}
                 />
               </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="max-w-48">
                 <div className="flex flex-col gap-2">
                   <Label>{t("knowledgeHub.fields.language")}</Label>
                   <Select
@@ -1137,33 +1238,6 @@ const KnowledgeHubPage = () => {
                     <Select.Content>
                       <Select.Item value="vi">Tiếng Việt</Select.Item>
                       <Select.Item value="en">English</Select.Item>
-                    </Select.Content>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label>{t("knowledgeHub.fields.scope")}</Label>
-                  <Select
-                    onValueChange={(scope) =>
-                      setForm((current) => ({ ...current, scope }))
-                    }
-                    value={form.scope}
-                  >
-                    <Select.Trigger>
-                      <Select.Value />
-                    </Select.Trigger>
-                    <Select.Content>
-                      <Select.Item value="customer_support">
-                        {t("knowledgeHub.scopes.customerSupport")}
-                      </Select.Item>
-                      <Select.Item value="operations">
-                        {t("knowledgeHub.scopes.operations")}
-                      </Select.Item>
-                      <Select.Item value="returns">
-                        {t("knowledgeHub.scopes.returns")}
-                      </Select.Item>
-                      <Select.Item value="fulfillment">
-                        {t("knowledgeHub.scopes.fulfillment")}
-                      </Select.Item>
                     </Select.Content>
                   </Select>
                 </div>
@@ -1216,7 +1290,8 @@ const KnowledgeHubPage = () => {
       <Drawer
         open={sourceOpen}
         onOpenChange={(open) => {
-          if (!createSource.isPending) setSourceOpen(open)
+          if (open) setSourceOpen(true)
+          else closeSourceConnection()
         }}
       >
         <Drawer.Content>
@@ -1345,7 +1420,7 @@ const KnowledgeHubPage = () => {
                     : t("knowledgeHub.sources.oauth.chooseFileAction")}
                 </Button>
               </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="max-w-48">
                 <div className="flex flex-col gap-2">
                   <Label>{t("knowledgeHub.fields.language")}</Label>
                   <Select
@@ -1360,33 +1435,6 @@ const KnowledgeHubPage = () => {
                     <Select.Content>
                       <Select.Item value="vi">Tiếng Việt</Select.Item>
                       <Select.Item value="en">English</Select.Item>
-                    </Select.Content>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label>{t("knowledgeHub.fields.scope")}</Label>
-                  <Select
-                    onValueChange={(scope) =>
-                      setSourceForm((current) => ({ ...current, scope }))
-                    }
-                    value={sourceForm.scope}
-                  >
-                    <Select.Trigger>
-                      <Select.Value />
-                    </Select.Trigger>
-                    <Select.Content>
-                      <Select.Item value="customer_support">
-                        {t("knowledgeHub.scopes.customerSupport")}
-                      </Select.Item>
-                      <Select.Item value="operations">
-                        {t("knowledgeHub.scopes.operations")}
-                      </Select.Item>
-                      <Select.Item value="returns">
-                        {t("knowledgeHub.scopes.returns")}
-                      </Select.Item>
-                      <Select.Item value="fulfillment">
-                        {t("knowledgeHub.scopes.fulfillment")}
-                      </Select.Item>
                     </Select.Content>
                   </Select>
                 </div>
@@ -1419,8 +1467,7 @@ const KnowledgeHubPage = () => {
           <Drawer.Footer>
             <div className="flex w-full items-center justify-end gap-2">
               <Button
-                disabled={createSource.isPending}
-                onClick={() => setSourceOpen(false)}
+                onClick={closeSourceConnection}
                 size="small"
                 variant="secondary"
               >
@@ -1450,7 +1497,7 @@ const KnowledgeHubPage = () => {
 }
 
 export const config = defineRouteConfig({
-  label: "Hướng dẫn / Knowledge",
+  label: "Chatbot CSKH",
 })
 
 export default KnowledgeHubPage

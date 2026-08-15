@@ -32,6 +32,7 @@ const syncKnowledgeSourceStep = createStep(
             source.source_type,
             {
               authorizationHeader: googleAuthorizationHeader,
+              knownEtag: source.last_etag,
             }
           )
           return service.recordKnowledgeSourceSync({

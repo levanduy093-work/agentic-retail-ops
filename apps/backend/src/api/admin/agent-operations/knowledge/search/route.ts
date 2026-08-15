@@ -13,6 +13,9 @@ export async function POST(
   const service = req.scope.resolve<AgentOperationsModuleService>(
     AGENT_OPERATIONS_MODULE
   )
-  const result = await service.searchGovernedKnowledge(req.validatedBody)
+  const result = await service.searchGovernedKnowledge({
+    ...req.validatedBody,
+    scope: "customer_support",
+  })
   res.json(result)
 }

@@ -146,7 +146,7 @@ export async function openGoogleKnowledgePicker(
 
   return new Promise<GooglePickerSelection[] | null>((resolve) => {
     const view = new pickerApi.DocsView()
-      .setIncludeFolders(false)
+      .setIncludeFolders(true)
       .setMimeTypes(GOOGLE_KNOWLEDGE_PICKER_MIME_TYPES)
       .setSelectFolderEnabled(false)
       // Google recommends LIST with drive.file because thumbnail access is not

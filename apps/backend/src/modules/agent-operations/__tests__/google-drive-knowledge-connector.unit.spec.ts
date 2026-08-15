@@ -107,8 +107,43 @@ describe("Google Drive knowledge connector", () => {
       }
     )
 
+    expect(result.unchanged).toBe(false)
+    if (result.unchanged) throw new Error("Expected downloaded spreadsheet content")
     expect(result.content_type).toBe("text/csv")
     expect(fetchImpl.mock.calls[1][0]).toContain("/export?mimeType=text%2Fcsv")
+  })
+
+  it("uses the stored Drive version to avoid downloading unchanged content", async () => {
+    const etag = "2026-08-14T03:00:00.000Z"
+    const fetchImpl = jest.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          capabilities: { canDownload: true },
+          id: "1234567890_doc-id",
+          mimeType: "application/vnd.google-apps.document",
+          modifiedTime: etag,
+          name: "Support policy",
+        }),
+        { status: 200 }
+      )
+    )
+
+    const result = await fetchGoogleDriveKnowledgeSource(
+      "https://docs.google.com/document/d/1234567890_doc-id/edit",
+      "GOOGLE_DOC",
+      {
+        authorizationHeader: "Bearer test-token",
+        fetchImpl: fetchImpl as typeof fetch,
+        knownEtag: etag,
+      }
+    )
+
+    expect(result).toEqual({
+      etag,
+      final_url: "https://docs.google.com/document/d/1234567890_doc-id/edit",
+      unchanged: true,
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
 
   it("downloads DOCX files and extracts their text", async () => {
@@ -144,6 +179,8 @@ describe("Google Drive knowledge connector", () => {
       }
     )
 
+    expect(result.unchanged).toBe(false)
+    if (result.unchanged) throw new Error("Expected downloaded DOCX content")
     expect(result.content_type).toBe(
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )

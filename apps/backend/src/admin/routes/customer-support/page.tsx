@@ -1,4 +1,3 @@
-import { defineRouteConfig } from "@medusajs/admin-sdk"
 import {
   Button,
   Container,
@@ -140,15 +139,28 @@ const customerNameFromConversation = (conversation: {
 }) => {
   const title = conversation.title?.trim()
   if (title) {
-    return title.replace(/^(Telegram|Zalo|Slack|Teams)\s+[—–-]\s+/i, "")
+    const customerName = title.replace(
+      /^(Telegram|Zalo|Slack|Teams)\s+[—–-]\s+/i,
+      "",
+    )
+
+    return /^(customer-chat-eval-\d+|qa retained customer-chat evaluation)/i.test(
+      customerName,
+    )
+      ? "Khách hàng (kiểm thử)"
+      : customerName
   }
 
   return "Customer"
 }
 
-const customerInitial = (name: string) => name.trim().charAt(0).toUpperCase()
+type CustomerSupportContentProps = {
+  embedded?: boolean
+}
 
-const CustomerSupportPage = () => {
+export const CustomerSupportContent = ({
+  embedded = false,
+}: CustomerSupportContentProps) => {
   const { i18n, t } = useTranslation()
   const queryClient = useQueryClient()
   const [view, setView] = useState<"attention" | "all">("attention")
@@ -497,28 +509,34 @@ const CustomerSupportPage = () => {
 
   return (
     <div className="flex flex-col gap-y-3">
-      <Container className="p-0">
-        <div className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-col gap-y-1">
-            <Heading level="h1">{t("supportDesk.title")}</Heading>
-            <Text size="small" leading="compact" className="text-ui-fg-subtle">
-              {t("supportDesk.subtitle")}
-            </Text>
+      {!embedded && (
+        <Container className="p-0">
+          <div className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-y-1">
+              <Heading level="h1">{t("supportDesk.title")}</Heading>
+              <Text
+                size="small"
+                leading="compact"
+                className="text-ui-fg-subtle"
+              >
+                {t("supportDesk.subtitle")}
+              </Text>
+            </div>
+            {import.meta.env.DEV && (
+              <Button
+                size="small"
+                variant="secondary"
+                onClick={() => setSimulatorOpen(true)}
+              >
+                {t("supportDesk.openSimulator")}
+              </Button>
+            )}
           </div>
-          {import.meta.env.DEV && (
-            <Button
-              size="small"
-              variant="secondary"
-              onClick={() => setSimulatorOpen(true)}
-            >
-              {t("supportDesk.openSimulator")}
-            </Button>
-          )}
-        </div>
-      </Container>
+        </Container>
+      )}
 
-      <div className="grid gap-3 lg:grid-cols-[340px_minmax(0,1fr)]">
-        <Container className="h-fit p-0">
+      <div className="grid gap-3 lg:h-[calc(100dvh-14rem)] lg:min-h-[520px] lg:grid-cols-[380px_minmax(0,1fr)]">
+        <Container className="p-0 lg:grid lg:h-full lg:min-h-0 lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:overflow-hidden">
           <div className="flex gap-x-2 border-b border-ui-border-base px-4 py-3">
             <Button
               size="small"
@@ -546,7 +564,7 @@ const CustomerSupportPage = () => {
                   })}
             </Text>
           </div>
-          <div className="flex flex-col gap-2 px-3 pb-3">
+          <div className="flex min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain px-3 pb-3">
             {visibleConversations.length === 0 ? (
               <Text
                 size="small"
@@ -566,59 +584,45 @@ const CustomerSupportPage = () => {
 
                 return (
                   <Button
-                    className="h-auto w-full justify-start whitespace-normal rounded-lg px-3 py-3 text-left"
+                    className="h-auto min-h-0 w-full justify-start rounded-lg px-3 py-3 text-left"
                     key={item.id}
                     size="small"
                     variant={isSelected ? "secondary" : "transparent"}
                     onClick={() => setSelectedConversationId(item.id)}
                   >
-                    <div className="flex min-w-0 flex-1 items-start gap-3">
-                      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ui-bg-component shadow-elevation-card-rest">
-                        <Text size="small" leading="compact" weight="plus">
-                          {customerInitial(itemCustomerName)}
-                        </Text>
-                      </div>
-                      <div className="flex min-w-0 flex-1 flex-col gap-y-1">
-                        <div className="flex items-center justify-between gap-x-2">
-                          <Text size="small" leading="compact" weight="plus">
-                            {itemCustomerName}
-                          </Text>
-                          <Text
-                            size="xsmall"
-                            leading="compact"
-                            className="shrink-0 text-ui-fg-subtle"
-                          >
-                            {formatDate(item.last_message_at)}
-                          </Text>
-                        </div>
+                    <div className="flex min-w-0 flex-1 flex-col gap-y-1">
+                      <div className="flex min-w-0 items-center justify-between gap-x-2">
                         <Text
+                          className="truncate"
                           size="small"
                           leading="compact"
-                          className="line-clamp-2 text-ui-fg-subtle"
+                          weight="plus"
                         >
-                          {item.latest_message?.body ??
-                            item.memory?.summary ??
-                            item.title}
+                          {itemCustomerName}
                         </Text>
-                        <div className="flex items-center justify-between gap-x-2">
-                          <Text
-                            size="xsmall"
-                            leading="compact"
-                            className="text-ui-fg-muted"
-                          >
-                            {item.channel}
-                          </Text>
-                          <StatusBadge
-                            color={
-                              item.requires_human_attention ? "orange" : "green"
-                            }
-                          >
-                            {item.requires_human_attention
+                        <div
+                          aria-label={
+                            item.requires_human_attention
                               ? t("supportDesk.needsHuman")
-                              : t("supportDesk.aiHandling")}
-                          </StatusBadge>
-                        </div>
+                              : t("supportDesk.aiHandling")
+                          }
+                          className={`size-2 shrink-0 rounded-full ${
+                            item.requires_human_attention
+                              ? "bg-ui-tag-orange-icon"
+                              : "bg-ui-tag-green-icon"
+                          }`}
+                          role="img"
+                        />
                       </div>
+                      <Text
+                        className="line-clamp-2 text-ui-fg-subtle"
+                        size="small"
+                        leading="compact"
+                      >
+                        {item.latest_message?.body ??
+                          item.memory?.summary ??
+                          item.title}
+                      </Text>
                     </div>
                   </Button>
                 )
@@ -627,7 +631,7 @@ const CustomerSupportPage = () => {
           </div>
         </Container>
 
-        <Container className="p-0">
+        <Container className="p-0 lg:h-full lg:min-h-0 lg:overflow-hidden">
           {!selectedConversation ? (
             <div className="flex min-h-[420px] items-center justify-center px-6 py-12">
               <Text
@@ -639,8 +643,8 @@ const CustomerSupportPage = () => {
               </Text>
             </div>
           ) : (
-            <div className="divide-y divide-ui-border-base">
-              <div className="flex flex-col gap-y-3 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
+            <div className="divide-y divide-ui-border-base lg:flex lg:h-full lg:min-h-0 lg:flex-col">
+              <div className="flex shrink-0 flex-col gap-y-3 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex flex-col gap-y-1">
                   <Heading level="h2">{customerName}</Heading>
                   <Text
@@ -673,53 +677,11 @@ const CustomerSupportPage = () => {
                 </div>
               </div>
 
-              <div className="bg-ui-bg-base px-6 py-4">
-                <div className="flex items-center justify-between gap-3">
-                  <Text size="small" leading="compact" weight="plus">
-                    {t("supportDesk.conversationMemory")}
-                  </Text>
-                  {conversation.data?.memory && (
-                    <Text
-                      size="xsmall"
-                      leading="compact"
-                      className="text-ui-fg-muted"
-                    >
-                      {t("supportDesk.memoryVersion", {
-                        count: conversation.data.memory.source_message_count,
-                        version: conversation.data.memory.version,
-                      })}
-                    </Text>
-                  )}
-                </div>
-                <Text
-                  size="small"
-                  leading="compact"
-                  className="mt-2 text-ui-fg-subtle"
+              <div className="flex min-h-[460px] flex-col bg-ui-bg-subtle lg:min-h-0 lg:flex-1">
+                <div
+                  className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-6 py-5"
+                  key={selectedConversationId}
                 >
-                  {conversation.data?.memory?.summary ??
-                    t("supportDesk.memoryPending")}
-                </Text>
-                {conversation.data?.memory?.open_questions.length ? (
-                  <div className="mt-3 flex flex-col gap-1">
-                    <Text size="xsmall" leading="compact" weight="plus">
-                      {t("supportDesk.openQuestions")}
-                    </Text>
-                    {conversation.data.memory.open_questions.map((question) => (
-                      <Text
-                        className="text-ui-fg-subtle"
-                        key={question}
-                        leading="compact"
-                        size="xsmall"
-                      >
-                        • {question}
-                      </Text>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="flex min-h-[460px] flex-col bg-ui-bg-subtle">
-                <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-6 py-5">
                   {conversation.isLoading ? (
                     <Text
                       size="small"
@@ -808,7 +770,7 @@ const CustomerSupportPage = () => {
                 ) : null}
               </div>
 
-              <div className="flex flex-col gap-y-2 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex shrink-0 flex-col gap-y-2 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   {!selectedTask && (
                     <Text
@@ -1158,10 +1120,6 @@ const CustomerSupportPage = () => {
   )
 }
 
-export const config = defineRouteConfig({
-  label: "supportDesk.navigation",
-  rank: 29,
-  translationNs: "translation",
-})
+const CustomerSupportPage = () => <CustomerSupportContent />
 
 export default CustomerSupportPage
