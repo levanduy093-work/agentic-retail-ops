@@ -235,8 +235,8 @@ export function buildKnowledgeReviewFallback(locale: "en" | "vi"): KnowledgeAnsw
   return {
     body:
       locale === "vi"
-        ? "Câu hỏi này cần được kiểm tra thêm trước khi trả lời."
-        : "This question needs to be checked before it can be answered.",
+        ? "Dạ thông tin này shop cần kiểm tra lại để hỗ trợ bạn chính xác nhất ạ. Trong lúc chờ, bạn có cần shop tư vấn thêm về sản phẩm, chọn size hay kiểm tra đơn hàng nào không nhé?"
+        : "This question needs to be verified before it can be answered.",
     citations: [],
     disposition: "HUMAN_REVIEW",
     grounded: false,
@@ -251,11 +251,11 @@ export function buildCustomerReviewAcknowledgement(
   const body =
     locale === "vi"
       ? reason === "NEEDS_STAFF_AUTHORITY"
-        ? "Nội dung này cần nhân viên có thẩm quyền kiểm tra trước khi cửa hàng có thể trả lời chính xác."
-        : "Sốp chưa có đủ thông tin đã được duyệt để trả lời chính xác; nhân viên cần kiểm tra thêm trước khi cửa hàng có thể xác nhận thông tin này."
+        ? "Dạ thông tin này cần được kiểm tra kỹ hơn để phản hồi chính xác cho bạn ạ. Bạn đợi shop một chút nhé!"
+        : "Dạ thông tin này shop cần kiểm tra lại để hỗ trợ bạn chính xác nhất ạ. Trong lúc chờ, bạn có cần shop tư vấn thêm về sản phẩm, chọn size hay kiểm tra đơn hàng nào không nhé?"
       : reason === "NEEDS_STAFF_AUTHORITY"
         ? "An authorized staff member needs to verify this before the store can answer accurately."
-        : "I don't have enough approved information to answer accurately; staff need to verify it before the store can confirm it."
+        : "I will need to verify this information with our team to help you accurately. In the meantime, is there anything else regarding products, sizing, or orders I can help with?"
   return {
     body,
     citations: [],
@@ -372,7 +372,7 @@ export function hasSufficientKnowledgeEvidence(
   knowledge: KnowledgeSearchOutput
 ) {
   return knowledge.results.some((result) =>
-    result.score <= 1 ? result.score >= 0.35 : result.score >= 2
+    result.score <= 1 ? result.score >= 0.35 : result.score >= 4
   )
 }
 
@@ -413,13 +413,10 @@ const knowledgeTopics = {
     "bao lau nhan",
     "delivery",
     "giao hang",
-    "giao",
     "khi nao giao",
     "khi nao nhan",
     "phi giao",
-    "phi ship",
     "phi van chuyen",
-    "ship",
     "shipping",
     "thoi gian giao",
     "thoi gian van chuyen",
@@ -446,6 +443,11 @@ const knowledgeTopics = {
     "thanh toan",
     "the tin dung",
     "tien mat",
+    "vietqr",
+    "visa",
+    "mastercard",
+    "xuat hoa don",
+    "hoa don vat",
   ],
   return: [
     "bi loi",
@@ -460,9 +462,18 @@ const knowledgeTopics = {
     "hoan tien",
     "hong hoc",
     "hong",
-    "khieu nai",
+    "loi nsx",
     "loi nha san xuat",
     "loi san pham",
+    "phi ship doi tra",
+    "phi ship hang loi",
+    "phi doi tra",
+    "phi tra hang",
+    "loi rach",
+    "bi rach",
+    "bi hong",
+    "hang rach",
+    "hang hong",
     "refund",
     "return",
     "tien hoan",
@@ -476,7 +487,81 @@ const knowledgeTopics = {
     "sua chua",
     "warranty",
   ],
+  promotion: [
+    "khuyen mai",
+    "tich diem",
+    "thanh vien",
+    "voucher",
+    "giam gia",
+    "uu dai",
+    "ma giam gia",
+    "chiet khau",
+    "qua tang",
+    "sinh nhat",
+    "hang thanh vien",
+  ],
+  escalation: [
+    "khiếu nại",
+    "khieu nai",
+    "phan nan",
+    "thai do",
+    "giong dieu",
+    "escalation",
+    "gap quan ly",
+    "tong dai",
+    "cskh",
+    "xu ly khieu nai",
+  ],
+  store_profile: [
+    "gio mo cua",
+    "gio lam viec",
+    "dia chi",
+    "hotline",
+    "ho so cua hang",
+    "lien he",
+    "shop mo cua",
+    "tu may gio",
+  ],
+  size_guide: [
+    "chon size",
+    "bang size",
+    "tu van size",
+    "size ao",
+    "size quan",
+    "chieu cao",
+    "can nang",
+    "cach chon size",
+  ],
+  privacy: [
+    "bao mat",
+    "quyen rieng tu",
+    "thong tin ca nhan",
+    "bao mat du lieu",
+    "an toan du lieu",
+    "du lieu ai",
+    "du lieu ca nhan",
+    "chinh sach bao mat",
+  ],
 } as const
+
+const unapprovedPolicySubjects = [
+  "cho thue",
+  "thue quan ao",
+  "thue trang phuc",
+  "tra gop",
+  "lai suat",
+  "nhuong quyen",
+  "mua si",
+  "ban buon",
+  "cong tac vien",
+  "tuyen dung",
+  "viet code",
+  "viet script",
+  "python",
+  "cao du lieu",
+  "system prompt",
+  "api key",
+]
 
 function detectEvidenceTopics(value: string) {
   const normalized = ` ${value
@@ -500,10 +585,33 @@ export function filterKnowledgeEvidenceForQuestion(
   question: string,
   knowledge: KnowledgeSearchOutput
 ): KnowledgeSearchOutput {
+  const normalizedQuestion = question
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/gu, "")
+    .replace(/đ/giu, "d")
+    .toLocaleLowerCase()
+
+  const matchedUnapprovedSubject = unapprovedPolicySubjects.find((subject) =>
+    normalizedQuestion.includes(subject)
+  )
+
   const questionTokens = normalizedEvidenceTokens(question)
   const questionTopics = detectEvidenceTopics(question)
   const results = knowledge.results.filter((result) => {
     const evidence = `${result.title}\n${result.excerpt}`
+    const normalizedEvidence = evidence
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/gu, "")
+      .replace(/đ/giu, "d")
+      .toLocaleLowerCase()
+
+    if (
+      matchedUnapprovedSubject &&
+      !normalizedEvidence.includes(matchedUnapprovedSubject)
+    ) {
+      return false
+    }
+
     const evidenceTopics = detectEvidenceTopics(evidence)
     if (
       questionTopics.size &&

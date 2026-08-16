@@ -312,7 +312,7 @@ describe("grounded knowledge answers", () => {
       disposition: "HUMAN_REVIEW",
       grounded: false,
     })
-    expect(answer.body).toContain("nhân viên cần kiểm tra")
+    expect(answer.body).toContain("shop cần kiểm tra lại")
     expect(answer.body).not.toContain("phản hồi tiếp")
   })
 

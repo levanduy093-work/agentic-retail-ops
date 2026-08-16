@@ -264,10 +264,10 @@ const retailTopicKeywords: Record<string, string[]> = {
   delivery: [
     "giao hang",
     "van chuyen",
-    "phi ship",
     "phi giao",
+    "phi van chuyen",
     "thoi gian giao",
-    "ship",
+    "thoi gian van chuyen",
     "shipping",
     "delivery",
   ],
@@ -290,6 +290,8 @@ const retailTopicKeywords: Record<string, string[]> = {
     "vietqr",
     "visa",
     "mastercard",
+    "xuat hoa don",
+    "hoa don vat",
   ],
   return: [
     "doi tra",
@@ -301,12 +303,72 @@ const retailTopicKeywords: Record<string, string[]> = {
     "bi loi",
     "loi nsx",
     "loi nha san xuat",
-    "khieu nai",
+    "phi ship doi tra",
+    "phi ship hang loi",
+    "phi doi tra",
+    "phi tra hang",
+    "loi rach",
+    "bi rach",
+    "bi hong",
+    "hang rach",
+    "hang hong",
     "tra tien",
     "refund",
     "return",
   ],
   warranty: ["bao hanh", "bao tri", "sua chua", "warranty"],
+  promotion: [
+    "khuyen mai",
+    "tich diem",
+    "thanh vien",
+    "voucher",
+    "giam gia",
+    "uu dai",
+    "ma giam gia",
+    "chiet khau",
+    "qua tang",
+    "sinh nhat",
+    "hang thanh vien",
+  ],
+  escalation: [
+    "khiếu nại",
+    "khieu nai",
+    "phan nan",
+    "thai do",
+    "giong dieu",
+    "escalation",
+    "gap quan ly",
+    "tong dai",
+    "cskh",
+    "xu ly khieu nai",
+  ],
+  store_profile: [
+    "gio mo cua",
+    "gio lam viec",
+    "dia chi",
+    "hotline",
+    "ho so cua hang",
+    "lien he",
+    "shop mo cua",
+    "tu may gio",
+  ],
+  size_guide: [
+    "chon size",
+    "bang size",
+    "tu van size",
+    "size ao",
+    "size quan",
+    "chieu cao",
+    "can nang",
+    "cach chon size",
+  ],
+  privacy: [
+    "bao mat",
+    "quyen rieng tu",
+    "du lieu",
+    "thong tin ca nhan",
+    "bao mat du lieu",
+  ],
 }
 
 function detectTextTopics(text: string): Set<string> {
@@ -374,114 +436,47 @@ function scoreKnowledgeDocument(
   let score = 0
 
   const queryTopics = detectTextTopics(normalizedQuery)
-  const docTopics = detectTextTopics(`${title} ${key} ${content}`)
+  const docTitleTopics = detectTextTopics(`${title} ${key}`)
+  const docContentTopics = detectTextTopics(content)
   if (queryTopics.size > 0) {
-    const hasMatchingTopic = [...queryTopics].some((t) => docTopics.has(t))
-    if (hasMatchingTopic) {
-      score += 10
+    const hasMatchingTitleTopic = [...queryTopics].some((t) =>
+      docTitleTopics.has(t)
+    )
+    if (hasMatchingTitleTopic) {
+      score += 16
+    } else {
+      const hasMatchingContentTopic = [...queryTopics].some((t) =>
+        docContentTopics.has(t)
+      )
+      if (hasMatchingContentTopic) {
+        score += 8
+      }
     }
   }
 
-  if (title.includes(normalizedQuery)) score += 12
-  if (key.includes(normalizedQuery)) score += 8
+  if (title.includes(normalizedQuery)) score += 16
+  if (key.includes(normalizedQuery)) score += 12
   if (content.includes(normalizedQuery)) score += 6
 
   const trigrams = extractNgrams(queryTokens, 3)
   for (const trigram of trigrams) {
-    if (title.includes(trigram)) score += 6
-    if (key.includes(trigram)) score += 4
+    if (title.includes(trigram)) score += 8
+    if (key.includes(trigram)) score += 6
     if (content.includes(trigram)) score += 3
   }
 
   const bigrams = extractNgrams(queryTokens, 2)
   for (const bigram of bigrams) {
-    if (title.includes(bigram)) score += 4
-    if (key.includes(bigram)) score += 3
+    if (title.includes(bigram)) score += 6
+    if (key.includes(bigram)) score += 4
     if (content.includes(bigram)) score += 2
   }
 
-  const genericTokens = new Set([
-    "ai",
-    "bang",
-    "bao",
-    "cac",
-    "cho",
-    "chua",
-    "co",
-    "code",
-    "cua",
-    "da",
-    "dang",
-    "dan",
-    "de",
-    "den",
-    "di",
-    "do",
-    "duoc",
-    "giai",
-    "gi",
-    "hai",
-    "hang",
-    "ho",
-    "huong",
-    "khi",
-    "khong",
-    "la",
-    "lam",
-    "lay",
-    "loai",
-    "minh",
-    "mot",
-    "nam",
-    "nao",
-    "nay",
-    "neu",
-    "ngay",
-    "nguoi",
-    "nhan",
-    "nhieu",
-    "nhung",
-    "noi",
-    "oi",
-    "phai",
-    "phuong",
-    "qua",
-    "ra",
-    "roi",
-    "sao",
-    "se",
-    "shop",
-    "so",
-    "sop",
-    "tai",
-    "the",
-    "thi",
-    "thoi",
-    "thuc",
-    "tieng",
-    "tim",
-    "to",
-    "toi",
-    "trong",
-    "truoc",
-    "tu",
-    "va",
-    "vao",
-    "ve",
-    "vi",
-    "viet",
-    "voi",
-    "vua",
-  ])
-
   const uniqueTokens = [...new Set(queryTokens)]
   for (const token of uniqueTokens) {
-    const isDomainToken = !genericTokens.has(token) && token.length >= 2
-    const tokenWeight = isDomainToken ? 2.5 : 0.25
-
-    if (titleTokens.has(token)) score += tokenWeight * 2
-    if (keyTokens.has(token)) score += tokenWeight * 1.5
-    if (contentTokens.has(token)) score += tokenWeight
+    if (titleTokens.has(token)) score += 0.6
+    if (keyTokens.has(token)) score += 0.4
+    if (contentTokens.has(token)) score += 0.5
   }
 
   return score
