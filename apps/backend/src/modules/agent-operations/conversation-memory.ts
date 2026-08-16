@@ -189,24 +189,128 @@ export function buildConversationMemoryFallback(input: {
   }
 }
 
+export function formatRelativeTime(
+  pastDate: Date | string,
+  baseDate: Date | string = new Date()
+): string {
+  const past = new Date(pastDate).getTime()
+  const now = new Date(baseDate).getTime()
+  const diffMs = Math.max(0, now - past)
+  const diffMinutes = Math.floor(diffMs / (1000 * 60))
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  if (diffMinutes < 1) return "vừa xong"
+  if (diffMinutes < 60) return `${diffMinutes} phút trước`
+  if (diffHours < 24) return `${diffHours} giờ trước`
+  if (diffDays === 1) return "hôm qua"
+  if (diffDays < 7) return `${diffDays} ngày trước`
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} tuần trước`
+  return `${Math.floor(diffDays / 30)} tháng trước`
+}
+
+export function analyzeConversationTimeGap(
+  lastMessageAt: Date | string | null | undefined,
+  currentMessageAt: Date | string = new Date()
+): {
+  elapsed_minutes: number
+  gap_category: "INSTANT" | "SAME_DAY" | "MULTI_DAY"
+  gap_description: string
+} {
+  if (!lastMessageAt) {
+    return {
+      elapsed_minutes: 0,
+      gap_category: "INSTANT",
+      gap_description: "Cuộc trò chuyện mới bắt đầu.",
+    }
+  }
+  const lastTime = new Date(lastMessageAt).getTime()
+  const currentTime = new Date(currentMessageAt).getTime()
+  const diffMs = Math.max(0, currentTime - lastTime)
+  const elapsedMinutes = Math.floor(diffMs / (1000 * 60))
+
+  if (elapsedMinutes < 15) {
+    return {
+      elapsed_minutes: elapsedMinutes,
+      gap_category: "INSTANT",
+      gap_description: "Khách đang nhắn tin liên tục trong phiên.",
+    }
+  }
+  if (elapsedMinutes < 24 * 60) {
+    const hours = Math.floor(elapsedMinutes / 60)
+    return {
+      elapsed_minutes: elapsedMinutes,
+      gap_category: "SAME_DAY",
+      gap_description: `Khách tạm ngưng và quay lại sau ${hours > 0 ? `${hours} giờ` : `${elapsedMinutes} phút`}.`,
+    }
+  }
+  const days = Math.floor(elapsedMinutes / (24 * 60))
+  return {
+    elapsed_minutes: elapsedMinutes,
+    gap_category: "MULTI_DAY",
+    gap_description: `Khách quay lại sau ${days} ngày (cần chào mừng và tiếp nối nếu có việc dang dở).`,
+  }
+}
+
 export function buildCustomerConversationContext(input: {
+  current_message_at?: Date | string
   current_summary?: string | null
+  customer_facts?: string[]
+  last_message_at?: Date | string | null
+  open_questions?: string[]
   profile_preferences?: string[]
+  resolved_topics?: string[]
 }) {
-  const current = input.current_summary?.trim().slice(-1_100) ?? ""
+  const parts: string[] = []
+
+  // 1. Dòng thời gian & Khoảng cách phiên
+  if (input.last_message_at) {
+    const gap = analyzeConversationTimeGap(
+      input.last_message_at,
+      input.current_message_at
+    )
+    parts.push(`Timeline context: ${gap.gap_description}`)
+  }
+
+  // 2. Việc đang dang dở (Open Loops)
+  const openLoops = (input.open_questions ?? [])
+    .filter(isSafeMemoryText)
+    .slice(0, 4)
+  if (openLoops.length) {
+    parts.push(`Pending open loops: ${openLoops.join("; ")}`)
+  }
+
+  // 3. Sự thật đã thống nhất & hoàn tất (Resolved Milestones & Facts)
+  const resolved = (input.resolved_topics ?? [])
+    .filter(isSafeMemoryText)
+    .slice(0, 4)
+  if (resolved.length) {
+    parts.push(`Resolved milestones: ${resolved.join("; ")}`)
+  }
+
+  const facts = (input.customer_facts ?? [])
+    .filter(isSafeMemoryText)
+    .slice(0, 6)
+  if (facts.length) {
+    parts.push(`Stated customer facts: ${facts.join("; ")}`)
+  }
+
+  // 4. Hồ sơ sở thích dài hạn
   const profile = (input.profile_preferences ?? [])
     .map((preference) => preference.replace(/\s+/gu, " ").trim())
     .filter(Boolean)
     .slice(0, 6)
-    .join(" | ")
-    .slice(0, 420)
-  return [
-    current ? `Current conversation: ${current}` : "",
-    profile ? `Customer profile preferences: ${profile}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n")
-    .slice(0, 1_600)
+  if (profile.length) {
+    parts.push(`Customer profile preferences: ${profile.join(" | ")}`)
+  }
+
+  // 5. Bản tóm tắt tiến trình
+  const summary = input.current_summary?.trim()
+  if (summary && isSafeMemoryText(summary)) {
+    parts.push(`Current conversation: ${summary}`)
+  }
+
+  return parts.join("\n").slice(0, 2_000)
 }
 
 export function hasExplicitHistoricalCustomerReference(message: string) {

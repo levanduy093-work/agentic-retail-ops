@@ -286,6 +286,8 @@ import {
   CONVERSATION_MEMORY_PROMPT_VERSION,
   CONVERSATION_MEMORY_SYSTEM_PROMPT,
   CONVERSATION_MEMORY_TIMEOUT_MS,
+  formatRelativeTime,
+  analyzeConversationTimeGap,
   isSafeConversationMemoryOutput,
   hasExplicitHistoricalCustomerReference,
   mergeConversationMemoryOutput,
@@ -2599,6 +2601,7 @@ class AgentOperationsModuleService extends MedusaService({
       knowledge: KnowledgeSearchOutput
       locale: "en" | "vi"
       question: string
+      recent_messages?: Array<{ body: string; direction: "INBOUND" | "OUTBOUND" }>
       tenant_id: string
     },
     @MedusaContext() sharedContext: Context = {}
@@ -2651,10 +2654,13 @@ class AgentOperationsModuleService extends MedusaService({
         version: result.version,
       })),
       locale: input.locale,
-      conversation_memory: isContextDependentKnowledgeQuestion(input.question)
-        ? input.conversation_memory?.slice(-900) ?? ""
-        : "",
+      conversation_memory: input.conversation_memory?.slice(-900) ?? "",
       question: input.question.slice(0, 1_000),
+      recent_conversation:
+        input.recent_messages?.slice(-4).map((m) => ({
+          body: m.body.slice(0, 400),
+          direction: m.direction,
+        })) ?? [],
     }
     let credentials
     try {
@@ -3667,10 +3673,15 @@ class AgentOperationsModuleService extends MedusaService({
         new Date(preference.expires_at).getTime() > profileContextNow.getTime()
     )
     const memorySummary = buildCustomerConversationContext({
+      current_message_at: inbound.occurred_at,
       current_summary: startsNewTopic ? null : conversationMemory?.summary,
+      customer_facts: conversationMemory?.customer_facts as string[] | undefined,
+      last_message_at: conversation.last_message_at,
+      open_questions: conversationMemory?.open_questions as string[] | undefined,
       profile_preferences: referencesPriorContext
         ? formatCustomerProfilePreferences(activeProfilePreferences)
         : [],
+      resolved_topics: conversationMemory?.resolved_topics as string[] | undefined,
     })
 
     const explicitAttack = isExplicitPromptAttack(question)
@@ -3682,6 +3693,29 @@ class AgentOperationsModuleService extends MedusaService({
           sharedContext
         )
     const contextMessages = startsNewTopic ? [] : recentMessages
+    const mapRecentMessagesWithTime = (
+      messages: typeof contextMessages,
+      excludeInboundId?: string
+    ) => {
+      return messages
+        .slice()
+        .reverse()
+        .filter(
+          (message) =>
+            (!excludeInboundId || message.id !== excludeInboundId) &&
+            (message.direction === "INBOUND" || message.direction === "OUTBOUND")
+        )
+        .map((message) => {
+          const relativeTime = formatRelativeTime(
+            message.occurred_at,
+            inbound.occurred_at
+          )
+          return {
+            body: `[${relativeTime}] ${message.body}`,
+            direction: message.direction as "INBOUND" | "OUTBOUND",
+          }
+        })
+    }
     const locale =
       input.customer_order_lookup_locale ??
       resolveCustomerConversationLocale(question, recentMessages)
@@ -3794,18 +3828,7 @@ class AgentOperationsModuleService extends MedusaService({
             idempotency_key: `customer-intent-model:${inbound.id}`,
             locale,
             message: question,
-            recent_messages: contextMessages
-              .slice()
-              .reverse()
-              .filter(
-                (message) =>
-                  message.direction === "INBOUND" ||
-                  message.direction === "OUTBOUND"
-              )
-              .map((message) => ({
-                body: message.body,
-                direction: message.direction as "INBOUND" | "OUTBOUND",
-              })),
+            recent_messages: mapRecentMessagesWithTime(contextMessages),
             tenant_id: conversation.tenant_id,
           },
           sharedContext
@@ -3850,19 +3873,10 @@ class AgentOperationsModuleService extends MedusaService({
           intent: routedIntent,
           locale,
           message: question,
-          recent_messages: contextMessages
-            .slice()
-            .reverse()
-            .filter(
-              (message) =>
-                message.id !== inbound.id &&
-                (message.direction === "INBOUND" ||
-                  message.direction === "OUTBOUND")
-            )
-            .map((message) => ({
-              body: message.body,
-              direction: message.direction as "INBOUND" | "OUTBOUND",
-            })),
+          recent_messages: mapRecentMessagesWithTime(
+            contextMessages,
+            inbound.id
+          ),
           tenant_id: conversation.tenant_id,
         },
         sharedContext
@@ -3881,18 +3895,7 @@ class AgentOperationsModuleService extends MedusaService({
           idempotency_key: `customer-product-advisor:${inbound.id}`,
           locale,
           question,
-          recent_messages: contextMessages
-            .slice()
-            .reverse()
-            .filter(
-              (message) =>
-                message.direction === "INBOUND" ||
-                message.direction === "OUTBOUND"
-            )
-            .map((message) => ({
-              body: message.body,
-              direction: message.direction as "INBOUND" | "OUTBOUND",
-            })),
+          recent_messages: mapRecentMessagesWithTime(contextMessages),
           tenant_id: conversation.tenant_id,
         },
         sharedContext
@@ -3900,18 +3903,25 @@ class AgentOperationsModuleService extends MedusaService({
     } else if (routedIntent === "OUT_OF_SCOPE" || routedIntent === "UNSAFE") {
       answer = buildScopedCustomerReply(routedIntent, locale)
     } else {
+      const recentInboundBodies = contextMessages
+        .filter((m) => m.direction === "INBOUND" && m.id !== inbound.id)
+        .slice(0, 2)
+        .map((m) => m.body)
+        .join(" ")
+      const contextualContext = [recentInboundBodies, memorySummary]
+        .filter(Boolean)
+        .join(" ")
+      const contextualQuery =
+        isContextDependentKnowledgeQuestion(question) && contextualContext
+          ? `${contextualContext} ${question}`
+          : question
       const retrievedKnowledge =
         question.length >= 2
           ? await this.searchGovernedKnowledge(
               {
                 limit: 5,
                 locale,
-                query: isContextDependentKnowledgeQuestion(question)
-                  ? `${question}\nConversation context: ${memorySummary}`.slice(
-                      0,
-                      500
-                    )
-                  : question.slice(0, 500),
+                query: contextualQuery.slice(0, 500),
                 scope: "customer_support",
                 tenant_id: conversation.tenant_id,
               },
@@ -3919,7 +3929,7 @@ class AgentOperationsModuleService extends MedusaService({
             )
           : { results: [], total_candidates: 0 }
       const relevantKnowledge = filterKnowledgeEvidenceForQuestion(
-        question,
+        contextualQuery,
         retrievedKnowledge
       )
       const knowledge = hasSufficientKnowledgeEvidence(relevantKnowledge)
@@ -3932,6 +3942,10 @@ class AgentOperationsModuleService extends MedusaService({
           knowledge,
           locale,
           question,
+          recent_messages: mapRecentMessagesWithTime(
+            contextMessages,
+            inbound.id
+          ),
           tenant_id: conversation.tenant_id,
         },
         sharedContext

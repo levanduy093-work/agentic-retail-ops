@@ -71,11 +71,22 @@ export function isContextDependentKnowledgeQuestion(question: string) {
   const normalized = question
     .normalize("NFKC")
     .toLocaleLowerCase()
+    .replace(/[?!.,;:'"“”‘’()[\]{}]/gu, " ")
     .replace(/\s+/gu, " ")
     .trim()
-  return /^(vậy|thế|còn|nó|cái đó|mẫu đó|loại đó|trường hợp đó|what about|how about|and that|then)(?:\s|$)/iu.test(
-    normalized
-  )
+  if (normalized.length <= 3) return true
+  if (
+    /^(?:vậy|thế|thế còn|còn|nó|cái đó|mẫu đó|loại đó|trường hợp đó|giá|phí|tiền|bao nhiêu|bao lâu|khi nào|ở đâu|thế nào|sao ạ|sao sốp|sao shop|như thế nào|thế nào ạ|có được không|được không|what about|how about|and that|then|how much|how long)(?:\s|$)/iu.test(
+      normalized
+    )
+  ) {
+    return true
+  }
+  const hasExplicitTopic =
+    /(?:đổi trả|trả hàng|hoàn tiền|giao hàng|vận chuyển|bảo hành|thanh toán|voucher|khuyến mãi|khiếu nại|quy trình|chính sách|giờ mở cửa|địa chỉ|mã đơn|order)/iu.test(
+      normalized
+    )
+  return normalized.length < 35 && !hasExplicitTopic
 }
 
 export function detectKnowledgeQuestionLocale(question: string): "en" | "vi" {

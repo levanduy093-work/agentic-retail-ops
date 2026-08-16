@@ -1,7 +1,9 @@
 import {
+  analyzeConversationTimeGap,
   buildCustomerConversationContext,
   buildConversationMemoryFallback,
   ConversationMemoryModelOutput,
+  formatRelativeTime,
   hasExplicitHistoricalCustomerReference,
   isSafeConversationMemoryOutput,
   mergeConversationMemoryOutput,
@@ -154,5 +156,59 @@ describe("conversation memory", () => {
         message_count: 6,
       })
     ).toBe(true)
+  })
+
+  it("formats relative time correctly in Vietnamese", () => {
+    const now = new Date("2026-08-17T10:00:00Z")
+    const justNow = new Date("2026-08-17T09:59:45Z")
+    const fiveMinutesAgo = new Date("2026-08-17T09:55:00Z")
+    const twoHoursAgo = new Date("2026-08-17T08:00:00Z")
+    const yesterday = new Date("2026-08-16T10:00:00Z")
+    const threeDaysAgo = new Date("2026-08-14T10:00:00Z")
+
+    expect(formatRelativeTime(justNow, now)).toBe("vừa xong")
+    expect(formatRelativeTime(fiveMinutesAgo, now)).toBe("5 phút trước")
+    expect(formatRelativeTime(twoHoursAgo, now)).toBe("2 giờ trước")
+    expect(formatRelativeTime(yesterday, now)).toBe("hôm qua")
+    expect(formatRelativeTime(threeDaysAgo, now)).toBe("3 ngày trước")
+  })
+
+  it("analyzes conversation time gap into distinct lifecycle categories", () => {
+    const now = new Date("2026-08-17T10:00:00Z")
+    const fiveMinutesAgo = new Date("2026-08-17T09:55:00Z")
+    const threeHoursAgo = new Date("2026-08-17T07:00:00Z")
+    const twoDaysAgo = new Date("2026-08-15T10:00:00Z")
+
+    const instantGap = analyzeConversationTimeGap(fiveMinutesAgo, now)
+    expect(instantGap.gap_category).toBe("INSTANT")
+
+    const sameDayGap = analyzeConversationTimeGap(threeHoursAgo, now)
+    expect(sameDayGap.gap_category).toBe("SAME_DAY")
+    expect(sameDayGap.gap_description).toContain("3 giờ")
+
+    const multiDayGap = analyzeConversationTimeGap(twoDaysAgo, now)
+    expect(multiDayGap.gap_category).toBe("MULTI_DAY")
+    expect(multiDayGap.gap_description).toContain("2 ngày")
+  })
+
+  it("assembles structured temporal context with open loops and milestones", () => {
+    const now = new Date("2026-08-17T10:00:00Z")
+    const twoDaysAgo = new Date("2026-08-15T10:00:00Z")
+
+    const context = buildCustomerConversationContext({
+      current_message_at: now,
+      current_summary: "Khách đang quan tâm áo khoác bomber.",
+      customer_facts: ["Khách mặc size M.", "Ngân sách 500k."],
+      last_message_at: twoDaysAgo,
+      open_questions: ["Khách chưa chốt mẫu áo."],
+      profile_preferences: ["Size M (đã xác nhận)"],
+      resolved_topics: ["Đã báo phí ship 30.000đ."],
+    })
+
+    expect(context).toContain("Timeline context")
+    expect(context).toContain("Pending open loops: Khách chưa chốt mẫu áo.")
+    expect(context).toContain("Resolved milestones: Đã báo phí ship 30.000đ.")
+    expect(context).toContain("Stated customer facts: Khách mặc size M.; Ngân sách 500k.")
+    expect(context).toContain("Current conversation: Khách đang quan tâm áo khoác bomber.")
   })
 })
