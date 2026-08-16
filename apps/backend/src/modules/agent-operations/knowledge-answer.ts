@@ -346,7 +346,7 @@ export function buildCustomerSmallTalkReply(
       locale === "vi"
         ? addressedAsShop
           ? `Có nè, sốp đang rảnh và sẵn sàng hỗ trợ bạn đây! Bạn cần sốp tư vấn sản phẩm gì ạ? ${friendlyFace}`
-          : `Có nè, mình là nhân viên CSKH của Synapse và đang sẵn sàng hỗ trợ bạn! Bạn cần mình tư vấn sản phẩm gì ạ? ${friendlyFace}`
+          : `Có nè, mình đang rảnh và sẵn sàng hỗ trợ bạn! Bạn cần mình tư vấn sản phẩm gì ạ? ${friendlyFace}`
         : "I'm here and ready to help! What product can I help you find?"
   } else if (identity.test(normalized)) {
     body =
@@ -409,33 +409,89 @@ function normalizedEvidenceTokens(value: string) {
 }
 
 const knowledgeTopics = {
-  delivery: ["delivery", "giao", "shipping", "van chuyen"],
-  order_status: ["order status", "status", "trang thai", "theo doi don"],
-  payment: ["payment", "thanh toan"],
+  delivery: [
+    "bao lau nhan",
+    "delivery",
+    "giao hang",
+    "giao",
+    "khi nao giao",
+    "khi nao nhan",
+    "phi giao",
+    "phi ship",
+    "phi van chuyen",
+    "ship",
+    "shipping",
+    "thoi gian giao",
+    "thoi gian van chuyen",
+    "van chuyen",
+  ],
+  order_status: [
+    "don cua toi",
+    "don hang cua toi",
+    "kiem tra don",
+    "ma don",
+    "order status",
+    "status",
+    "theo doi don",
+    "tra cuu don",
+    "tracking",
+    "trang thai don",
+    "trang thai",
+  ],
+  payment: [
+    "banking",
+    "chuyen khoan",
+    "cod",
+    "payment",
+    "thanh toan",
+    "the tin dung",
+    "tien mat",
+  ],
   return: [
+    "bi loi",
     "damaged",
-    "doi tra",
     "doi hang",
+    "doi mau",
     "doi san pham",
+    "doi size",
+    "doi tra",
+    "hang bi loi",
+    "hang loi",
     "hoan tien",
+    "hong hoc",
     "hong",
+    "khieu nai",
+    "loi nha san xuat",
+    "loi san pham",
     "refund",
     "return",
+    "tien hoan",
     "tra hang",
+    "tra lai",
+    "tra tien",
   ],
-  warranty: ["bao hanh", "warranty"],
+  warranty: [
+    "bao hanh",
+    "bao tri",
+    "sua chua",
+    "warranty",
+  ],
 } as const
 
 function detectEvidenceTopics(value: string) {
-  const normalized = value
+  const normalized = ` ${value
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/gu, "")
     .replace(/đ/giu, "d")
     .toLocaleLowerCase()
     .replace(/[^a-z0-9]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim()} `
   return new Set(
     Object.entries(knowledgeTopics).flatMap(([topic, patterns]) =>
-      patterns.some((pattern) => normalized.includes(pattern)) ? [topic] : []
+      patterns.some((pattern) => normalized.includes(` ${pattern} `))
+        ? [topic]
+        : []
     )
   )
 }
@@ -457,7 +513,10 @@ export function filterKnowledgeEvidenceForQuestion(
     }
     if (questionTopics.size) return true
     const evidenceTokens = normalizedEvidenceTokens(evidence)
-    return [...questionTokens].some((token) => evidenceTokens.has(token))
+    const matchingTokens = [...questionTokens].filter((token) =>
+      evidenceTokens.has(token)
+    )
+    return matchingTokens.length >= 2
   })
 
   return { results, total_candidates: knowledge.total_candidates }

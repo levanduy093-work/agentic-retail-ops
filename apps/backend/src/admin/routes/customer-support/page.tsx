@@ -30,6 +30,7 @@ type SupportTask = {
   assigned_to_id: string | null
   assigned_to_type: string | null
   completed_at: string | null
+  conversation_id?: string | null
   created_at: string
   due_at: string | null
   id: string
@@ -179,6 +180,72 @@ export const CustomerSupportContent = ({
   const [transferReason, setTransferReason] = useState("")
   const locale = i18n.language.startsWith("vi") ? "vi-VN" : "en-US"
 
+  const [isLiveConnected, setIsLiveConnected] = useState(false)
+
+  useEffect(() => {
+    let eventSource: EventSource | null = null
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
+
+    const connectSSE = () => {
+      try {
+        eventSource = new EventSource(
+          "/admin/agent-operations/conversations/stream",
+          { withCredentials: true }
+        )
+
+        eventSource.onopen = () => {
+          setIsLiveConnected(true)
+        }
+
+        eventSource.addEventListener("conversation.updated", () => {
+          queryClient.invalidateQueries({
+            queryKey: ["customer-support-conversations"],
+          })
+          queryClient.invalidateQueries({
+            queryKey: ["customer-support-tasks"],
+          })
+        })
+
+        eventSource.addEventListener("message.created", () => {
+          queryClient.invalidateQueries({
+            queryKey: ["customer-support-conversations"],
+          })
+          queryClient.invalidateQueries({
+            queryKey: ["customer-support-conversation"],
+          })
+        })
+
+        eventSource.addEventListener("task.updated", () => {
+          queryClient.invalidateQueries({
+            queryKey: ["customer-support-tasks"],
+          })
+          queryClient.invalidateQueries({
+            queryKey: ["customer-support-conversation"],
+          })
+          queryClient.invalidateQueries({
+            queryKey: ["customer-support-conversations"],
+          })
+        })
+
+        eventSource.onerror = () => {
+          setIsLiveConnected(false)
+          eventSource?.close()
+          reconnectTimeout = setTimeout(connectSSE, 5000)
+        }
+      } catch {
+        setIsLiveConnected(false)
+        reconnectTimeout = setTimeout(connectSSE, 5000)
+      }
+    }
+
+    connectSSE()
+
+    return () => {
+      if (reconnectTimeout) clearTimeout(reconnectTimeout)
+      if (eventSource) eventSource.close()
+    }
+  }, [queryClient])
+
   const currentUser = useQuery({
     queryFn: () =>
       sdk.admin.user.me({ fields: "id,email,first_name,last_name" }),
@@ -195,7 +262,7 @@ export const CustomerSupportContent = ({
         "/admin/agent-operations/conversations?customer_support=true&limit=100",
       ),
     queryKey: ["customer-support-conversations"],
-    refetchInterval: 10_000,
+    refetchInterval: 15_000,
   })
   const simulatorOrders = useQuery({
     enabled: simulatorOpen,
@@ -222,12 +289,6 @@ export const CustomerSupportContent = ({
   const selectedConversation = allConversations.find(
     (conversation) => conversation.id === selectedConversationId,
   )
-  const selectedTask = supportTasks.find(
-    (task) => task.support_conversation_id === selectedConversationId,
-  )
-  const selectedSimulatorOrder = simulatorOrders.data?.orders.find(
-    (order) => order.id === simulatorOrderId,
-  ) as SimulatorOrder | undefined
   const conversation = useQuery({
     enabled: Boolean(selectedConversationId),
     queryFn: () =>
@@ -237,6 +298,33 @@ export const CustomerSupportContent = ({
     queryKey: ["customer-support-conversation", selectedConversationId],
     refetchInterval: 10_000,
   })
+  const selectedSimulatorOrder = simulatorOrders.data?.orders.find(
+    (order) => order.id === simulatorOrderId,
+  ) as SimulatorOrder | undefined
+
+  const activeConversationTasks = conversation.data?.support_tasks ?? []
+  const selectedTask =
+    activeConversationTasks.find(
+      (task) => !TERMINAL_STATUSES.includes(task.status),
+    ) ??
+    (selectedConversation?.support_task &&
+    !TERMINAL_STATUSES.includes(selectedConversation.support_task.status)
+      ? selectedConversation.support_task
+      : null) ??
+    supportTasks.find(
+      (task) =>
+        (task.support_conversation_id === selectedConversationId ||
+          task.conversation_id === selectedConversationId) &&
+        !TERMINAL_STATUSES.includes(task.status),
+    ) ??
+    activeConversationTasks[0] ??
+    selectedConversation?.support_task ??
+    supportTasks.find(
+      (task) =>
+        task.support_conversation_id === selectedConversationId ||
+        task.conversation_id === selectedConversationId,
+    ) ??
+    null
 
   useEffect(() => {
     if (
@@ -328,31 +416,89 @@ export const CustomerSupportContent = ({
     },
   })
 
-  const completeDraft = useMutation({
+  const submitAndSendReply = useMutation({
     mutationFn: async (task: SupportTask) => {
-      if (reply.trim().length < 3) {
+      const text = reply.trim()
+      const existingResponseBody =
+        typeof task.result?.response_body === "string"
+          ? task.result.response_body.trim()
+          : ""
+      const messageBody = text.length >= 3 ? text : existingResponseBody
+      if (messageBody.length < 3) {
         throw new Error(t("supportDesk.replyRequired"))
       }
-      return sdk.client.fetch(
-        `/admin/agent-operations/tasks/${task.id}/transition`,
-        {
-          body: {
-            expected_status: "IN_PROGRESS",
-            result: {
-              message_sent: false,
-              response_body: reply.trim(),
-              review_language: locale,
-              reviewed_by_human: true,
+
+      const userId = currentUser.data?.user.id
+      let currentTask = task
+      let status = currentTask.status
+
+      if (status === "TODO") {
+        const claimed = await sdk.client.fetch<{ task: SupportTask }>(
+          `/admin/agent-operations/tasks/${task.id}/transition`,
+          {
+            body: {
+              assigned_to_id: userId,
+              assigned_to_type: "user",
+              expected_status: "TODO",
+              status: "CLAIMED",
             },
-            status: "COMPLETED",
+            method: "POST",
           },
+        )
+        currentTask = claimed.task ?? { ...currentTask, status: "CLAIMED" }
+        status = "CLAIMED"
+      }
+      if (["CLAIMED", "WAITING"].includes(status)) {
+        const inProgress = await sdk.client.fetch<{ task: SupportTask }>(
+          `/admin/agent-operations/tasks/${task.id}/transition`,
+          {
+            body: {
+              assigned_to_id: userId,
+              assigned_to_type: "user",
+              expected_status: status,
+              status: "IN_PROGRESS",
+            },
+            method: "POST",
+          },
+        )
+        currentTask = inProgress.task ?? { ...currentTask, status: "IN_PROGRESS" }
+        status = "IN_PROGRESS"
+      }
+      if (
+        status === "IN_PROGRESS" ||
+        (status !== "COMPLETED" && !TERMINAL_STATUSES.includes(status))
+      ) {
+        const completed = await sdk.client.fetch<{ task: SupportTask }>(
+          `/admin/agent-operations/tasks/${task.id}/transition`,
+          {
+            body: {
+              expected_status: "IN_PROGRESS",
+              result: {
+                message_sent: false,
+                response_body: messageBody,
+                review_language: locale,
+                reviewed_by_human: true,
+              },
+              status: "COMPLETED",
+            },
+            method: "POST",
+          },
+        )
+        currentTask = completed.task
+      }
+
+      return sdk.client.fetch(
+        `/admin/agent-operations/tasks/${task.id}/send-reviewed-reply`,
+        {
+          body: { expected_task_updated_at: currentTask.updated_at },
           method: "POST",
         },
       )
     },
     onError: (error) => toast.error(errorMessage(error)),
     onSuccess: async () => {
-      toast.success(t("supportDesk.draftCompleted"))
+      toast.success(t("supportDesk.reviewedReplySent"))
+      setSendOpen(false)
       await invalidateSupportData()
     },
   })
@@ -463,23 +609,6 @@ export const CustomerSupportContent = ({
     },
   })
 
-  const sendReviewedReply = useMutation({
-    mutationFn: (task: SupportTask) =>
-      sdk.client.fetch(
-        `/admin/agent-operations/tasks/${task.id}/send-reviewed-reply`,
-        {
-          body: { expected_task_updated_at: task.updated_at },
-          method: "POST",
-        },
-      ),
-    onError: (error) => toast.error(errorMessage(error)),
-    onSuccess: async () => {
-      toast.success(t("supportDesk.reviewedReplySent"))
-      setSendOpen(false)
-      await invalidateSupportData()
-    },
-  })
-
   const humanStatus = (status: string) =>
     t(`supportDesk.status.${status.toLowerCase()}`, { defaultValue: status })
   const formatDate = (value: string | null) =>
@@ -510,13 +639,19 @@ export const CustomerSupportContent = ({
     selectedTask.assigned_to_type === "user" &&
     selectedTask.assigned_to_id !== currentUser.data?.user.id,
   )
-  const canEdit =
-    selectedTask?.status === "IN_PROGRESS" &&
-    !assignedToOther &&
-    !assignedToManager
   const messageSent = selectedTask?.result?.message_sent === true
-  const canClearHistory =
-    !selectedTask || TERMINAL_STATUSES.includes(selectedTask.status)
+  const canEdit =
+    Boolean(selectedTask) &&
+    !["CANCELLED", "DEAD"].includes(selectedTask!.status) &&
+    !assignedToManager &&
+    !messageSent
+  const canSend =
+    Boolean(selectedTask) &&
+    !["CANCELLED", "DEAD"].includes(selectedTask!.status) &&
+    !assignedToManager &&
+    !assignedToOther &&
+    !messageSent
+  const canClearHistory = Boolean(selectedConversation)
 
   if (tasks.isLoading || conversations.isLoading || currentUser.isLoading) {
     return (
@@ -558,21 +693,26 @@ export const CustomerSupportContent = ({
 
       <div className="grid gap-3 md:h-[calc(100dvh-14rem)] md:min-h-[520px] md:grid-cols-[380px_minmax(0,1fr)]">
         <Container className="p-0 md:grid md:h-full md:min-h-0 md:grid-rows-[auto_auto_minmax(0,1fr)] md:overflow-hidden">
-          <div className="flex gap-x-2 border-b border-ui-border-base px-4 py-3">
-            <Button
-              size="small"
-              variant={view === "attention" ? "primary" : "secondary"}
-              onClick={() => setView("attention")}
-            >
-              {t("supportDesk.attentionTab")}
-            </Button>
-            <Button
-              size="small"
-              variant={view === "all" ? "primary" : "secondary"}
-              onClick={() => setView("all")}
-            >
-              {t("supportDesk.allConversationsTab")}
-            </Button>
+          <div className="flex items-center justify-between border-b border-ui-border-base px-4 py-3">
+            <div className="flex gap-x-2">
+              <Button
+                size="small"
+                variant={view === "attention" ? "primary" : "secondary"}
+                onClick={() => setView("attention")}
+              >
+                {t("supportDesk.attentionTab")}
+              </Button>
+              <Button
+                size="small"
+                variant={view === "all" ? "primary" : "secondary"}
+                onClick={() => setView("all")}
+              >
+                {t("supportDesk.allConversationsTab")}
+              </Button>
+            </div>
+            <StatusBadge color={isLiveConnected ? "green" : "grey"}>
+              {isLiveConnected ? "Realtime" : "Connecting"}
+            </StatusBadge>
           </div>
           <div className="px-4 py-3">
             <Text size="small" leading="compact" className="text-ui-fg-subtle">
@@ -781,9 +921,10 @@ export const CustomerSupportContent = ({
                   )}
                 </div>
 
-                {selectedTask ? (
+                {selectedTask && !messageSent ? (
                   <div className="border-t border-ui-border-base bg-ui-bg-base px-6 py-4">
                     <Textarea
+                      className="resize-none cursor-text"
                       aria-label={t("supportDesk.suggestedReply")}
                       disabled={!canEdit}
                       placeholder={t("supportDesk.suggestedReply")}
@@ -857,49 +998,20 @@ export const CustomerSupportContent = ({
                         {t("supportDesk.transferManager")}
                       </Button>
                     )}
-                  {selectedTask &&
-                    ["TODO", "CLAIMED", "WAITING"].includes(
-                      selectedTask.status,
-                    ) &&
-                    !assignedToManager && (
-                      <Button
-                        size="small"
-                        disabled={assignedToOther}
-                        isLoading={takeTask.isPending}
-                        onClick={() => takeTask.mutate(selectedTask)}
-                      >
-                        {selectedTask.status === "TODO"
-                          ? t("supportDesk.takeRequest")
-                          : t("supportDesk.continueRequest")}
-                      </Button>
-                    )}
-                  {canEdit && selectedTask && (
+                  {canSend && selectedTask && (
                     <Button
                       size="small"
-                      variant="secondary"
-                      disabled={completeDraft.isPending}
-                      onClick={() => setReleaseOpen(true)}
+                      disabled={
+                        reply.trim().length < 3 &&
+                        (typeof selectedTask.result?.response_body !== "string" ||
+                          selectedTask.result.response_body.trim().length < 3)
+                      }
+                      isLoading={submitAndSendReply.isPending}
+                      onClick={() => selectedTask && submitAndSendReply.mutate(selectedTask)}
                     >
-                      {t("supportDesk.releaseRequest")}
+                      {t("supportDesk.sendReply", { defaultValue: "Gửi phản hồi cho khách" })}
                     </Button>
                   )}
-                  {canEdit && selectedTask && (
-                    <Button
-                      size="small"
-                      disabled={reply.trim().length < 3}
-                      isLoading={completeDraft.isPending}
-                      onClick={() => completeDraft.mutate(selectedTask)}
-                    >
-                      {t("supportDesk.completeDraft")}
-                    </Button>
-                  )}
-                  {selectedTask?.status === "COMPLETED" &&
-                    selectedTask.support_conversation_id &&
-                    !messageSent && (
-                      <Button size="small" onClick={() => setSendOpen(true)}>
-                        {t("supportDesk.sendReviewedReply")}
-                      </Button>
-                    )}
                 </div>
               </div>
             </div>
@@ -1027,49 +1139,6 @@ export const CustomerSupportContent = ({
         </FocusModal.Content>
       </FocusModal>
 
-      <Drawer open={sendOpen} onOpenChange={setSendOpen}>
-        <Drawer.Content>
-          <Drawer.Header>
-            <Drawer.Title>{t("supportDesk.sendReviewedTitle")}</Drawer.Title>
-          </Drawer.Header>
-          <Drawer.Body className="flex flex-col gap-y-4 p-4">
-            <Text size="small" leading="compact" className="text-ui-fg-subtle">
-              {t("supportDesk.sendReviewedDescription")}
-            </Text>
-            <div className="rounded-md bg-ui-bg-subtle px-4 py-3">
-              <Text size="small" leading="compact">
-                {typeof selectedTask?.result?.response_body === "string"
-                  ? selectedTask.result.response_body
-                  : "—"}
-              </Text>
-            </div>
-          </Drawer.Body>
-          <Drawer.Footer>
-            <div className="flex justify-end gap-x-2">
-              <Drawer.Close asChild>
-                <Button
-                  size="small"
-                  variant="secondary"
-                  disabled={sendReviewedReply.isPending}
-                >
-                  {t("supportDesk.cancel")}
-                </Button>
-              </Drawer.Close>
-              <Button
-                size="small"
-                disabled={!selectedTask}
-                isLoading={sendReviewedReply.isPending}
-                onClick={() =>
-                  selectedTask && sendReviewedReply.mutate(selectedTask)
-                }
-              >
-                {t("supportDesk.confirmReviewedSend")}
-              </Button>
-            </div>
-          </Drawer.Footer>
-        </Drawer.Content>
-      </Drawer>
-
       <Drawer open={transferOpen} onOpenChange={setTransferOpen}>
         <Drawer.Content>
           <Drawer.Header>
@@ -1175,7 +1244,8 @@ export const CustomerSupportContent = ({
               </Drawer.Close>
               <Button
                 size="small"
-                disabled={!selectedConversation || !canClearHistory}
+                variant="danger"
+                disabled={!selectedConversation || clearConversationHistory.isPending}
                 isLoading={clearConversationHistory.isPending}
                 onClick={() =>
                   selectedConversation &&

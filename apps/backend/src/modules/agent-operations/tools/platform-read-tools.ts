@@ -245,14 +245,111 @@ function normalizeSearchText(value: string) {
   return value
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/giu, "d")
     .toLocaleLowerCase("vi")
+    .replace(/[^a-z0-9]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim()
+}
+
+function extractNgrams(tokens: string[], n: number) {
+  const ngrams: string[] = []
+  for (let i = 0; i <= tokens.length - n; i++) {
+    ngrams.push(tokens.slice(i, i + n).join(" "))
+  }
+  return ngrams
+}
+
+const retailTopicKeywords: Record<string, string[]> = {
+  delivery: [
+    "giao hang",
+    "van chuyen",
+    "phi ship",
+    "phi giao",
+    "thoi gian giao",
+    "ship",
+    "shipping",
+    "delivery",
+  ],
+  order_status: [
+    "tra cuu don",
+    "kiem tra don",
+    "trang thai don",
+    "don cua toi",
+    "theo doi don",
+    "tracking",
+    "ma don",
+  ],
+  payment: [
+    "thanh toan",
+    "chuyen khoan",
+    "banking",
+    "cod",
+    "tien mat",
+    "the tin dung",
+    "vietqr",
+    "visa",
+    "mastercard",
+  ],
+  return: [
+    "doi tra",
+    "tra hang",
+    "hoan tien",
+    "doi size",
+    "doi mau",
+    "hang loi",
+    "bi loi",
+    "loi nsx",
+    "loi nha san xuat",
+    "khieu nai",
+    "tra tien",
+    "refund",
+    "return",
+  ],
+  warranty: ["bao hanh", "bao tri", "sua chua", "warranty"],
+}
+
+function detectTextTopics(text: string): Set<string> {
+  const normalized = ` ${normalizeSearchText(text)} `
+  const matched = new Set<string>()
+  for (const [topic, patterns] of Object.entries(retailTopicKeywords)) {
+    if (patterns.some((pattern) => normalized.includes(` ${pattern} `))) {
+      matched.add(topic)
+    }
+  }
+  return matched
 }
 
 function createExcerpt(content: string, normalizedQuery: string) {
+  if (content.length <= 1_200) {
+    return content.trim()
+  }
+
   const normalizedContent = normalizeSearchText(content)
-  const firstToken = normalizedQuery.split(/\s+/).find(Boolean) ?? ""
-  const matchIndex = firstToken ? normalizedContent.indexOf(firstToken) : -1
-  const start = Math.max(0, matchIndex === -1 ? 0 : matchIndex - 240)
+  const tokens = normalizedQuery
+    .split(/\s+/)
+    .filter((token) => token.length >= 3)
+
+  let matchIndex = -1
+  const bigrams = extractNgrams(tokens, 2)
+  for (const bigram of bigrams) {
+    const idx = normalizedContent.indexOf(bigram)
+    if (idx !== -1) {
+      matchIndex = idx
+      break
+    }
+  }
+  if (matchIndex === -1) {
+    for (const token of tokens) {
+      const idx = normalizedContent.indexOf(token)
+      if (idx !== -1) {
+        matchIndex = idx
+        break
+      }
+    }
+  }
+
+  const start = matchIndex === -1 || matchIndex <= 150 ? 0 : matchIndex - 60
   const excerpt = content.slice(start, start + 1_200).trim()
 
   return start > 0 ? `...${excerpt}` : excerpt
@@ -262,26 +359,129 @@ function scoreKnowledgeDocument(
   document: KnowledgeDocumentSearchSource,
   normalizedQuery: string
 ) {
-  const tokens = [
-    ...new Set(
-      normalizedQuery
-        .split(/\s+/)
-        .filter((token) => token.length >= 2)
-    ),
-  ]
+  const queryTokens = normalizedQuery
+    .split(/\s+/)
+    .filter((token) => token.length >= 2)
+  if (!queryTokens.length) return 0
+
   const title = normalizeSearchText(document.title)
   const key = normalizeSearchText(document.document_key)
   const content = normalizeSearchText(document.content)
+  const titleTokens = new Set(title.split(/\s+/))
+  const keyTokens = new Set(key.split(/\s+/))
+  const contentTokens = new Set(content.split(/\s+/))
+
   let score = 0
 
-  if (title.includes(normalizedQuery)) score += 8
-  if (key.includes(normalizedQuery)) score += 6
-  if (content.includes(normalizedQuery)) score += 3
+  const queryTopics = detectTextTopics(normalizedQuery)
+  const docTopics = detectTextTopics(`${title} ${key} ${content}`)
+  if (queryTopics.size > 0) {
+    const hasMatchingTopic = [...queryTopics].some((t) => docTopics.has(t))
+    if (hasMatchingTopic) {
+      score += 10
+    }
+  }
 
-  for (const token of tokens) {
-    if (title.includes(token)) score += 4
-    if (key.includes(token)) score += 3
-    if (content.includes(token)) score += 1
+  if (title.includes(normalizedQuery)) score += 12
+  if (key.includes(normalizedQuery)) score += 8
+  if (content.includes(normalizedQuery)) score += 6
+
+  const trigrams = extractNgrams(queryTokens, 3)
+  for (const trigram of trigrams) {
+    if (title.includes(trigram)) score += 6
+    if (key.includes(trigram)) score += 4
+    if (content.includes(trigram)) score += 3
+  }
+
+  const bigrams = extractNgrams(queryTokens, 2)
+  for (const bigram of bigrams) {
+    if (title.includes(bigram)) score += 4
+    if (key.includes(bigram)) score += 3
+    if (content.includes(bigram)) score += 2
+  }
+
+  const genericTokens = new Set([
+    "ai",
+    "bang",
+    "bao",
+    "cac",
+    "cho",
+    "chua",
+    "co",
+    "code",
+    "cua",
+    "da",
+    "dang",
+    "dan",
+    "de",
+    "den",
+    "di",
+    "do",
+    "duoc",
+    "giai",
+    "gi",
+    "hai",
+    "hang",
+    "ho",
+    "huong",
+    "khi",
+    "khong",
+    "la",
+    "lam",
+    "lay",
+    "loai",
+    "minh",
+    "mot",
+    "nam",
+    "nao",
+    "nay",
+    "neu",
+    "ngay",
+    "nguoi",
+    "nhan",
+    "nhieu",
+    "nhung",
+    "noi",
+    "oi",
+    "phai",
+    "phuong",
+    "qua",
+    "ra",
+    "roi",
+    "sao",
+    "se",
+    "shop",
+    "so",
+    "sop",
+    "tai",
+    "the",
+    "thi",
+    "thoi",
+    "thuc",
+    "tieng",
+    "tim",
+    "to",
+    "toi",
+    "trong",
+    "truoc",
+    "tu",
+    "va",
+    "vao",
+    "ve",
+    "vi",
+    "viet",
+    "voi",
+    "vua",
+  ])
+
+  const uniqueTokens = [...new Set(queryTokens)]
+  for (const token of uniqueTokens) {
+    const isDomainToken = !genericTokens.has(token) && token.length >= 2
+    const tokenWeight = isDomainToken ? 2.5 : 0.25
+
+    if (titleTokens.has(token)) score += tokenWeight * 2
+    if (keyTokens.has(token)) score += tokenWeight * 1.5
+    if (contentTokens.has(token)) score += tokenWeight
   }
 
   return score

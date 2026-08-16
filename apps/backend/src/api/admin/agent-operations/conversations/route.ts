@@ -102,7 +102,10 @@ export async function GET(
         ),
         requires_human_attention: Boolean(
           supportTask &&
-            !["COMPLETED", "CANCELLED", "DEAD"].includes(supportTask.status)
+            (!["COMPLETED", "CANCELLED", "DEAD"].includes(supportTask.status) ||
+              (supportTask.status === "COMPLETED" &&
+                (supportTask.result as Record<string, unknown> | null)
+                  ?.message_sent !== true)),
         ),
         support_task: supportTask,
       }

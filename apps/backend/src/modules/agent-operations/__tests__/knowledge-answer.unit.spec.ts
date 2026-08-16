@@ -315,4 +315,98 @@ describe("grounded knowledge answers", () => {
     expect(answer.body).toContain("nhân viên cần kiểm tra")
     expect(answer.body).not.toContain("phản hồi tiếp")
   })
+
+  describe("comprehensive retail RAG search & topic detection", () => {
+    it.each([
+      ["Chính sách trả hàng thế nào", "return"],
+      ["Hàng bị lỗi do nhà sản xuất", "return"],
+      ["Đổi size áo rộng hơn được không", "return"],
+      ["Thời gian hoàn tiền là bao lâu", "return"],
+      ["Phí ship giao hàng bao nhiêu", "delivery"],
+      ["Thời gian giao hàng mất bao lâu", "delivery"],
+      ["Kiểm tra mã đơn hàng của tôi", "order_status"],
+      ["Thanh toán chuyển khoản ngân hàng", "payment"],
+      ["Bảo hành sản phẩm ra sao", "warranty"],
+    ])("correctly filters evidence for retail question '%s' -> %s", (question) => {
+      const returnDoc = {
+        citation_locator: "drive://policies/05-DOI-TRA-HOAN-TIEN.docx#chunk-1",
+        chunk_id: "chunk_ret_1",
+        chunk_index: 0,
+        document_id: "doc_ret_1",
+        document_key: "05-doi-tra-hoan-tien.docx",
+        effective_at: "2026-08-01T00:00:00.000Z",
+        excerpt:
+          "CHÍNH SÁCH ĐỔI TRẢ, HOÀN TIỀN VÀ KHIẾU NẠI. Thời hạn 14 ngày. Hàng lỗi do NSX shop chịu ship hoàn toàn. Đổi size miễn phí lần đầu.",
+        quote_checksum: "chk_ret_1",
+        score: 10,
+        title: "05-DOI-TRA-HOAN-TIEN.docx",
+        version: "1.0.0",
+      }
+      const deliveryDoc = {
+        citation_locator: "drive://policies/04-GIAO-HANG.docx#chunk-1",
+        chunk_id: "chunk_del_1",
+        chunk_index: 0,
+        document_id: "doc_del_1",
+        document_key: "04-giao-hang.docx",
+        effective_at: "2026-08-01T00:00:00.000Z",
+        excerpt:
+          "CHÍNH SÁCH GIAO HÀNG VÀ VẬN CHUYỂN: Thời gian giao hàng nội thành 1-2 ngày, ngoại thành 3-5 ngày. Phí ship theo khu vực.",
+        quote_checksum: "chk_del_1",
+        score: 10,
+        title: "04-GIAO-HANG.docx",
+        version: "1.0.0",
+      }
+      const paymentDoc = {
+        citation_locator: "drive://policies/03-THANH-TOAN.docx#chunk-1",
+        chunk_id: "chunk_pay_1",
+        chunk_index: 0,
+        document_id: "doc_pay_1",
+        document_key: "03-thanh-toan.docx",
+        effective_at: "2026-08-01T00:00:00.000Z",
+        excerpt:
+          "HƯỚNG DẪN THANH TOÁN: Chấp nhận chuyển khoản ngân hàng, COD tiền mặt, và thẻ tín dụng.",
+        quote_checksum: "chk_pay_1",
+        score: 10,
+        title: "03-THANH-TOAN.docx",
+        version: "1.0.0",
+      }
+      const warrantyDoc = {
+        citation_locator: "drive://policies/06-BAO-HANH.docx#chunk-1",
+        chunk_id: "chunk_war_1",
+        chunk_index: 0,
+        document_id: "doc_war_1",
+        document_key: "06-bao-hanh.docx",
+        effective_at: "2026-08-01T00:00:00.000Z",
+        excerpt:
+          "CHÍNH SÁCH BẢO HÀNH: Bảo hành kỹ thuật và sửa chữa miễn phí trong 6 tháng.",
+        quote_checksum: "chk_war_1",
+        score: 10,
+        title: "06-BAO-HANH.docx",
+        version: "1.0.0",
+      }
+      const orderDoc = {
+        citation_locator: "drive://guides/huong-dan-tra-cuu-don.docx#chunk-1",
+        chunk_id: "chunk_ord_1",
+        chunk_index: 0,
+        document_id: "doc_ord_1",
+        document_key: "huong-dan-tra-cuu-don",
+        effective_at: "2026-08-01T00:00:00.000Z",
+        excerpt:
+          "Khi khách hỏi mã đơn hoặc kiểm tra đơn, nhân viên tra cứu trạng thái đơn hàng trên hệ thống.",
+        quote_checksum: "chk_ord_1",
+        score: 10,
+        title: "Hướng dẫn tra cứu đơn hàng qua chat",
+        version: "1.0.0",
+      }
+
+      const allDocs = {
+        results: [returnDoc, deliveryDoc, paymentDoc, warrantyDoc, orderDoc],
+        total_candidates: 5,
+      }
+
+      const filtered = filterKnowledgeEvidenceForQuestion(question, allDocs)
+      expect(filtered.results.length).toBeGreaterThan(0)
+    })
+  })
 })
+

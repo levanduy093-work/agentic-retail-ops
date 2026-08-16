@@ -26,29 +26,35 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
         .filter((incidentId): incidentId is string => Boolean(incidentId)),
     ),
   )
-  const incidents = await Promise.all(
-    incidentIds.map((incidentId) => service.retrieveAgentIncident(incidentId)),
-  )
+  const incidents = incidentIds.length
+    ? await service.listAgentIncidents(
+        { id: incidentIds },
+        { take: incidentIds.length },
+      )
+    : []
   const correlationByIncidentId = new Map(
     incidents.map((incident) => [incident.id, incident.correlation_id]),
   )
-  const conversations = await Promise.all(
-    incidentIds.map(async (incidentId) => {
-      const conversation = (
-        await service.listAgentConversations(
-          {
-            incident_id: incidentId,
-          },
-          { order: { last_message_at: "DESC" }, take: 10 },
-        )
-      ).find((item) =>
-        ["CUSTOMER_SUPPORT", "CUSTOMER_SUPPORT_CHAT"].includes(item.topic_type),
+  const incidentConversations = incidentIds.length
+    ? await service.listAgentConversations(
+        { incident_id: incidentIds },
+        { order: { last_message_at: "DESC" }, take: incidentIds.length * 5 },
       )
+    : []
+  const conversationByIncidentId = new Map<
+    string,
+    (typeof incidentConversations)[0]
+  >()
+  for (const conv of incidentConversations) {
+    if (
+      conv.incident_id &&
+      !conversationByIncidentId.has(conv.incident_id) &&
+      ["CUSTOMER_SUPPORT", "CUSTOMER_SUPPORT_CHAT"].includes(conv.topic_type)
+    ) {
+      conversationByIncidentId.set(conv.incident_id, conv)
+    }
+  }
 
-      return [incidentId, conversation ?? null] as const
-    }),
-  )
-  const conversationByIncidentId = new Map(conversations)
   const conversationIds = Array.from(
     new Set(
       tasks
@@ -56,35 +62,33 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
           const input = (task.input ?? {}) as Record<string, unknown>
           return typeof input.conversation_id === "string"
             ? input.conversation_id
-            : null
+            : (task.conversation_id ?? null)
         })
         .filter((conversationId): conversationId is string =>
           Boolean(conversationId),
         ),
     ),
   )
+  const directConversations = conversationIds.length
+    ? await service.listAgentConversations(
+        { id: conversationIds },
+        { take: conversationIds.length },
+      )
+    : []
   const conversationsById = new Map(
-    await Promise.all(
-      conversationIds.map(
-        async (conversationId) =>
-          [
-            conversationId,
-            await service.retrieveAgentConversation(conversationId),
-          ] as const,
-      ),
-    ),
+    directConversations.map((conv) => [conv.id, conv] as const),
   )
 
   res.json({
     count,
     tasks: tasks.map((task) => {
       const taskInput = (task.input ?? {}) as Record<string, unknown>
-      const inputConversationId =
-        typeof taskInput.conversation_id === "string"
+      const directConversationId =
+        (typeof taskInput.conversation_id === "string"
           ? taskInput.conversation_id
-          : null
-      const conversation = inputConversationId
-        ? (conversationsById.get(inputConversationId) ?? null)
+          : null) ?? task.conversation_id
+      const conversation = directConversationId
+        ? (conversationsById.get(directConversationId) ?? null)
         : task.incident_id
           ? (conversationByIncidentId.get(task.incident_id) ?? null)
           : null
@@ -93,8 +97,11 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
         incident_correlation_id: task.incident_id
           ? (correlationByIncidentId.get(task.incident_id) ?? null)
           : null,
-        support_conversation_channel: conversation?.channel ?? null,
-        support_conversation_id: conversation?.id ?? null,
+        support_conversation_channel:
+          conversation?.channel ??
+          (typeof taskInput.channel === "string" ? taskInput.channel : null),
+        support_conversation_id:
+          conversation?.id ?? task.conversation_id ?? directConversationId ?? null,
         support_conversation_title: conversation?.title ?? null,
       }
     }),

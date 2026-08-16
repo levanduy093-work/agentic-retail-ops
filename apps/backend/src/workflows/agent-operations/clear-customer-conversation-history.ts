@@ -29,7 +29,7 @@ const clearCustomerConversationHistoryStep = createStep(
         const conversation = await service.retrieveAgentConversation(
           input.conversation_id
         )
-        const [messages, memories, preferences, supportTasks] = await Promise.all([
+        const [messages, memories, preferences, tasks] = await Promise.all([
           service.listAgentMessages({ conversation_id: conversation.id }),
           service.listAgentConversationMemories(
             { conversation_id: conversation.id },
@@ -41,19 +41,21 @@ const clearCustomerConversationHistoryStep = createStep(
           service.listAgentTasks(
             {
               conversation_id: conversation.id,
-              task_type: "SUPPORT_RESPONSE_REVIEW",
             },
-            { take: 50 }
+            { take: 100 }
           ),
         ])
-        const hasActiveSupportTask = supportTasks.some(
+        const activeTasks = tasks.filter(
           (task) => !["COMPLETED", "CANCELLED", "DEAD"].includes(task.status)
         )
-        if (hasActiveSupportTask) {
-          throw new MedusaError(
-            MedusaError.Types.UNEXPECTED_STATE,
-            "Complete, release, or cancel the active support request before clearing this conversation."
-          )
+        const now = new Date()
+        for (const task of activeTasks) {
+          await service.updateAgentTasks({
+            completed_at: now,
+            failure: "Cancelled due to customer conversation history clear",
+            id: task.id,
+            status: "CANCELLED",
+          })
         }
 
         if (messages.length) {
@@ -75,18 +77,20 @@ const clearCustomerConversationHistoryStep = createStep(
           actor_type: "user",
           correlation_id: input.idempotency_key,
           data: {
+            cancelled_task_count: activeTasks.length,
             cleared_memory: Boolean(memories[0]),
             cleared_message_count: messages.length,
             cleared_preference_count: preferences.length,
             conversation_id: conversation.id,
           },
           event_type: "agent.conversation.history-cleared",
-          recorded_at: new Date(),
+          recorded_at: now,
           resource_id: conversation.id,
           resource_type: "agent_conversation",
         })
 
         return {
+          cancelled_task_count: activeTasks.length,
           cleared_memory: Boolean(memories[0]),
           cleared_message_count: messages.length,
           cleared_preference_count: preferences.length,

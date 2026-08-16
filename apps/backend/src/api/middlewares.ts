@@ -28,12 +28,50 @@ import {
   AdminTransitionAgentTask,
   TelegramWebhookUpdate,
 } from "./admin/agent-operations/validators"
+import { StoreCreateCustomerChatMessage } from "./store/customer-chat/validators"
 
   const routes: MiddlewareRoute[] = [
     {
       matcher: "/webhooks/agent-operations/telegram/:id",
       method: "POST",
       middlewares: [validateAndTransformBody(TelegramWebhookUpdate)],
+    },
+    {
+      matcher: "/store/customer-chat/messages",
+      method: "POST",
+      middlewares: [
+        authenticate("customer", ["session", "bearer"], {
+          allowUnauthenticated: true,
+        }),
+        validateAndTransformBody(StoreCreateCustomerChatMessage),
+      ],
+    },
+    {
+      matcher: "/store/customer-chat/customer/active-conversation",
+      method: "GET",
+      middlewares: [
+        authenticate("customer", ["session", "bearer"], {
+          allowUnauthenticated: true,
+        }),
+      ],
+    },
+    {
+      matcher: "/store/customer-chat/conversations/:id",
+      method: "GET",
+      middlewares: [
+        authenticate("customer", ["session", "bearer"], {
+          allowUnauthenticated: true,
+        }),
+      ],
+    },
+    {
+      matcher: "/store/customer-chat/conversations/:id/stream",
+      method: "GET",
+      middlewares: [
+        authenticate("customer", ["session", "bearer"], {
+          allowUnauthenticated: true,
+        }),
+      ],
     },
     {
       matcher: "/store/customers/link-google",
@@ -117,6 +155,11 @@ import {
     },
     {
       matcher: "/admin/agent-operations/conversations",
+      method: "GET",
+      policies: [{ resource: "agent_conversation", operation: "read" }],
+    },
+    {
+      matcher: "/admin/agent-operations/conversations/stream",
       method: "GET",
       policies: [{ resource: "agent_conversation", operation: "read" }],
     },

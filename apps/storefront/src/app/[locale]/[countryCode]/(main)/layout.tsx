@@ -10,6 +10,8 @@ import Nav from "@modules/layout/templates/nav"
 import FreeShippingPriceNudge from "@modules/shipping/components/free-shipping-price-nudge"
 import NavigationProgress from "@modules/layout/components/navigation-progress"
 
+import CustomerChatWidget from "@modules/customer-chat/components/chat-widget"
+
 export const metadata: Metadata = {
   metadataBase: new URL(getBaseURL()),
 }
@@ -18,7 +20,11 @@ export const metadata: Metadata = {
 // layout must render per request instead of being mixed with static product pages.
 export const dynamic = "force-dynamic"
 
-export default async function PageLayout(props: { children: React.ReactNode }) {
+export default async function PageLayout(props: {
+  children: React.ReactNode
+  params: Promise<{ countryCode: string; locale: string }>
+}) {
+  const { countryCode, locale } = await props.params
   const [customer, cart] = await Promise.all([
     retrieveCustomer(),
     retrieveCart(),
@@ -47,6 +53,11 @@ export default async function PageLayout(props: { children: React.ReactNode }) {
         />
       )}
       {props.children}
+      <CustomerChatWidget
+        customer={customer}
+        countryCode={countryCode}
+        locale={locale}
+      />
       <Footer />
     </>
   )

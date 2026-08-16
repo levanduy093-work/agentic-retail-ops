@@ -85,19 +85,22 @@ const prepareSupportSimulatorReplyStep = createStep<
 
     const incident = await service.retrieveAgentIncident(task.incident_id)
     const taskInput = (task.input ?? {}) as Record<string, unknown>
-    const conversation =
+    const targetConversationId =
       typeof taskInput.conversation_id === "string"
-        ? await service.retrieveAgentConversation(taskInput.conversation_id)
-        : (
-            await service.listAgentConversations(
-              {
-                channel: "IN_APP",
-                incident_id: incident.id,
-                topic_type: "CUSTOMER_SUPPORT",
-              },
-              { take: 1 }
-            )
-          )[0]
+        ? taskInput.conversation_id
+        : task.conversation_id
+    const conversation = targetConversationId
+      ? await service.retrieveAgentConversation(targetConversationId)
+      : (
+          await service.listAgentConversations(
+            {
+              channel: "IN_APP",
+              incident_id: incident.id,
+              topic_type: "CUSTOMER_SUPPORT",
+            },
+            { take: 1 }
+          )
+        )[0]
     const metadata = (conversation?.metadata ?? {}) as Record<string, unknown>
     const isSimulator =
       conversation?.channel === "IN_APP" && metadata.simulator === true

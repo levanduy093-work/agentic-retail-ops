@@ -127,6 +127,7 @@ import {
   buildCustomerOrderLookupReply,
   buildCustomerReviewAcknowledgement,
   buildDeliveryTimeGuidanceAnswer,
+  buildKnowledgeAnswerFallback,
   buildKnowledgeReviewFallback,
   buildScopedCustomerReply,
   detectKnowledgeQuestionLocale,
@@ -296,6 +297,7 @@ import {
   readCustomerAssistantCache,
   writeCustomerAssistantCache,
 } from "./customer-assistant-cache"
+import { agentRealtimeHub } from "./realtime-hub"
 
 class AgentOperationsModuleService extends MedusaService({
   AgentActionRequest,
@@ -325,6 +327,83 @@ class AgentOperationsModuleService extends MedusaService({
   AgentTask,
   AgentToolCall,
 }) {
+  async broadcastMessageCreated(msg: {
+    body: string
+    channel: string
+    conversation_id: string
+    direction: "INBOUND" | "OUTBOUND"
+    id: string
+    message_type: string
+    occurred_at: string | Date
+    product_media?: Array<{
+      image_url: string
+      product_id: string
+      product_url?: string | null
+      title: string
+    }>
+    sender_id: string
+    sender_type: string
+    status: string
+    structured_content?: Record<string, unknown> | null
+  }) {
+    agentRealtimeHub.emitMessageCreated({
+      body: msg.body,
+      channel: msg.channel,
+      conversation_id: msg.conversation_id,
+      direction: msg.direction,
+      id: msg.id,
+      message_type: msg.message_type,
+      occurred_at:
+        msg.occurred_at instanceof Date
+          ? msg.occurred_at.toISOString()
+          : String(msg.occurred_at),
+      product_media: msg.product_media,
+      sender_id: msg.sender_id,
+      sender_type: msg.sender_type,
+      status: msg.status,
+      structured_content: msg.structured_content,
+    })
+  }
+
+  async broadcastConversationUpdated(conv: {
+    channel: string
+    id: string
+    last_message_at: string | Date
+    metadata?: Record<string, unknown> | null
+    title?: string | null
+  }) {
+    agentRealtimeHub.emitConversationUpdated({
+      channel: conv.channel,
+      conversation_id: conv.id,
+      id: conv.id,
+      last_message_at:
+        conv.last_message_at instanceof Date
+          ? conv.last_message_at.toISOString()
+          : String(conv.last_message_at),
+      requires_human_attention: Boolean(
+        conv.metadata?.requires_human_attention
+      ),
+      title: conv.title ?? "Customer Support",
+    })
+  }
+
+  async broadcastTaskUpdated(task: {
+    assigned_to_id: string | null
+    id: string
+    priority: string
+    status: string
+    support_conversation_id: string | null
+    task_type: string
+  }) {
+    agentRealtimeHub.emitTaskUpdated({
+      assigned_to_id: task.assigned_to_id,
+      id: task.id,
+      priority: task.priority,
+      status: task.status,
+      support_conversation_id: task.support_conversation_id,
+      task_type: task.task_type,
+    })
+  }
   protected getCustomerAssistantCaching() {
     return (
       this as unknown as {
@@ -2387,6 +2466,16 @@ class AgentOperationsModuleService extends MedusaService({
         input.tenant_id
       )
     } catch {
+      if (input.knowledge.results.length > 0) {
+        return {
+          ...buildKnowledgeAnswerFallback(input.knowledge, input.locale),
+          optimization: {
+            ai_invoked: false,
+            cache_hit: false,
+            path: "GROUNDED_KNOWLEDGE_FALLBACK",
+          },
+        }
+      }
       return reviewFallback
     }
 
@@ -2525,6 +2614,17 @@ class AgentOperationsModuleService extends MedusaService({
           },
           sharedContext
         )
+      }
+    }
+
+    if (input.knowledge.results.length > 0) {
+      return {
+        ...buildKnowledgeAnswerFallback(input.knowledge, input.locale),
+        optimization: {
+          ai_invoked: false,
+          cache_hit: false,
+          path: "GROUNDED_KNOWLEDGE_FALLBACK",
+        },
       }
     }
 
@@ -3420,6 +3520,13 @@ class AgentOperationsModuleService extends MedusaService({
         { id: conversation.id, last_message_at: now },
         sharedContext
       )
+      this.broadcastMessageCreated(response)
+      this.broadcastConversationUpdated({
+        channel: conversation.channel,
+        id: conversation.id,
+        last_message_at: now,
+        title: conversation.title,
+      })
       await this.createAgentAuditEvents(
         {
           action: "customer-order-lookup-response-created",
@@ -3704,6 +3811,13 @@ class AgentOperationsModuleService extends MedusaService({
       { id: conversation.id, last_message_at: now },
       sharedContext
     )
+    this.broadcastMessageCreated(response)
+    this.broadcastConversationUpdated({
+      channel: conversation.channel,
+      id: conversation.id,
+      last_message_at: now,
+      title: conversation.title,
+    })
     await this.createAgentAuditEvents(
       {
         action: "customer-knowledge-answer-created",
@@ -3935,6 +4049,21 @@ class AgentOperationsModuleService extends MedusaService({
       },
       sharedContext
     )
+    this.broadcastTaskUpdated({
+      assigned_to_id: task.assigned_to_id,
+      id: task.id,
+      priority: task.priority,
+      status: task.status,
+      support_conversation_id: conversation.id,
+      task_type: task.task_type,
+    })
+    this.broadcastConversationUpdated({
+      channel: conversation.channel,
+      id: conversation.id,
+      last_message_at: now,
+      metadata: { requires_human_attention: true },
+      title: conversation.title,
+    })
     await this.createAgentAuditEvents(
       {
         action: "customer-question-escalated",

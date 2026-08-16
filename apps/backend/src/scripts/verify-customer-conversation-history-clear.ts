@@ -59,6 +59,17 @@ export default async function verifyCustomerConversationHistoryClear({
     tenant_id: "default",
     value: "M",
   })
+  const task = await service.createAgentTasks({
+    conversation_id: conversation.id,
+    created_by_id: "system",
+    created_by_type: "system",
+    idempotency_key: `${runId}:task`,
+    priority: "HIGH",
+    status: "TODO",
+    task_type: "SUPPORT_RESPONSE_REVIEW",
+    tenant_id: "default",
+    title: `Task for ${runId}`,
+  })
 
   const { result } = await clearCustomerConversationHistoryWorkflow(
     container
@@ -73,6 +84,9 @@ export default async function verifyCustomerConversationHistoryClear({
   assert.equal(result.cleared_message_count, 1)
   assert.equal(result.cleared_memory, true)
   assert.equal(result.cleared_preference_count, 1)
+  assert.equal(result.cancelled_task_count, 1)
+  const updatedTask = await service.retrieveAgentTask(task.id)
+  assert.equal(updatedTask.status, "CANCELLED")
   assert.equal(
     (await service.listAgentMessages({ conversation_id: conversation.id })).length,
     0
@@ -100,6 +114,7 @@ export default async function verifyCustomerConversationHistoryClear({
 
   console.log(
     JSON.stringify({
+      cancelled_task_count: result.cancelled_task_count,
       cleared_memory: result.cleared_memory,
       cleared_message_count: result.cleared_message_count,
       cleared_preference_count: result.cleared_preference_count,
