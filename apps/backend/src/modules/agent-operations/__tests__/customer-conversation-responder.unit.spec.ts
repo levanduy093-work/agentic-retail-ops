@@ -24,7 +24,7 @@ describe("customer conversation responder", () => {
     ).toBe(false)
     expect(
       isSafeCustomerConversationBody(
-        `Mình đây! Bạn cần gì nào? ${friendlyFace}${sparkle}`
+        `Mình đây! Bạn cần gì nào? ${friendlyFace}${sparkle}${sparkle}${friendlyFace}${sparkle}`
       )
     ).toBe(false)
     expect(
@@ -45,7 +45,7 @@ describe("customer conversation responder", () => {
       "at most one useful follow-up question"
     )
     expect(CUSTOMER_CONVERSATION_SYSTEM_PROMPT).toContain(
-      "nhân viên CSKH của Synapse"
+      "customer service staff"
     )
   })
 })

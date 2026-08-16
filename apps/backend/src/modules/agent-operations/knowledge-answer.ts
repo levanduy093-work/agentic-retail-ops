@@ -79,14 +79,59 @@ export function isContextDependentKnowledgeQuestion(question: string) {
 }
 
 export function detectKnowledgeQuestionLocale(question: string): "en" | "vi" {
-  return /[ăâđêôơưĂÂĐÊÔƠƯ]|[àáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/iu.test(
-    question
-  ) ||
-    /\b(xin chao|chao shop|chào sốp|sốp|shop oi|cam on|tam biet|alo|a lo|da|vang)\b/iu.test(
-      question
+  const normalized = question.trim().toLocaleLowerCase()
+  const isExplicitEnglish =
+    /^(?:what|how|where|when|why|who|can you|could you|do you|please|i want to|i need|tell me|is there|are there|how much|can i)\b/i.test(
+      normalized
+    ) ||
+    /\b(?:shipping policy|return policy|warranty policy|refund policy|delivery time)\b/i.test(
+      normalized
     )
-    ? "vi"
-    : "en"
+
+  if (isExplicitEnglish) {
+    return "en"
+  }
+
+  const hasVietnamese =
+    /[ăâđêôơưĂÂĐÊÔƠƯ]|[àáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/iu.test(question) ||
+    /\b(?:xin chao|chao|shop|sốp|ad|alo|a lo|da|vang|ạ|nhe|nha|muon|can|mua|ban|quan|ao|vay|dam|size|don|hang|phi|ship|giao|doi|tra|hoan|tien|bao|hanh|k|ko|khum|hong|chs|dc|sao|the|nao|gi|dau|nay|do|nhe|nhi)\b/iu.test(
+      normalized
+    )
+
+  return hasVietnamese ? "vi" : "vi" // Default to Vietnamese for the retail store
+}
+
+export function resolveCustomerConversationLocale(
+  question: string,
+  recentMessages: Array<{ body: string; direction: string }>,
+  defaultLocale: "en" | "vi" = "vi"
+): "en" | "vi" {
+  const normalized = question.trim().toLocaleLowerCase()
+  const isExplicitEnglish =
+    /^(?:what|how|where|when|why|who|can you|could you|do you|please|i want to|i need|tell me|is there|are there|how much|can i)\b/i.test(
+      normalized
+    ) ||
+    /\b(?:shipping policy|return policy|warranty policy|refund policy|delivery time)\b/i.test(
+      normalized
+    )
+
+  if (isExplicitEnglish) {
+    return "en"
+  }
+
+  const hasVietnameseHistory = recentMessages.some(
+    (m) =>
+      /[ăâđêôơưĂÂĐÊÔƠƯ]|[àáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/iu.test(m.body) ||
+      /\b(?:xin chao|chao|shop|sốp|ạ|nhe|nha|muon|can|mua|quan|ao|size|don|hang|giao|doi|tra)\b/iu.test(
+        m.body.toLocaleLowerCase()
+      )
+  )
+
+  if (hasVietnameseHistory) {
+    return "vi"
+  }
+
+  return detectKnowledgeQuestionLocale(question) || defaultLocale
 }
 
 export function buildKnowledgeAnswerFallback(
@@ -246,16 +291,18 @@ export function buildKnowledgeReviewFallback(locale: "en" | "vi"): KnowledgeAnsw
 
 export function buildCustomerReviewAcknowledgement(
   locale: "en" | "vi",
-  reason: "NEEDS_STAFF_AUTHORITY" | "NO_APPROVED_KNOWLEDGE"
+  reason: "NEEDS_STAFF_AUTHORITY" | "NO_APPROVED_KNOWLEDGE",
+  customMessage?: string
 ): KnowledgeAnswer {
   const body =
-    locale === "vi"
+    customMessage ||
+    (locale === "vi"
       ? reason === "NEEDS_STAFF_AUTHORITY"
         ? "Dạ thông tin này cần được kiểm tra kỹ hơn để phản hồi chính xác cho bạn ạ. Bạn đợi shop một chút nhé!"
         : "Dạ thông tin này shop cần kiểm tra lại để hỗ trợ bạn chính xác nhất ạ. Trong lúc chờ, bạn có cần shop tư vấn thêm về sản phẩm, chọn size hay kiểm tra đơn hàng nào không nhé?"
       : reason === "NEEDS_STAFF_AUTHORITY"
         ? "An authorized staff member needs to verify this before the store can answer accurately."
-        : "I will need to verify this information with our team to help you accurately. In the meantime, is there anything else regarding products, sizing, or orders I can help with?"
+        : "I will need to verify this information with our team to help you accurately. In the meantime, is there anything else regarding products, sizing, or orders I can help with?")
   return {
     body,
     citations: [],
@@ -292,13 +339,22 @@ const friendlyFace = String.fromCodePoint(0x1f60a)
 
 export function buildCustomerSmallTalkReply(
   message: string,
-  locale: "en" | "vi"
+  locale: "en" | "vi",
+  customSettings?: {
+    bot_role?: string
+    brand_name?: string
+    greeting_message_en?: string
+    greeting_message_vi?: string
+  }
 ): KnowledgeAnswer | null {
   const normalized = normalizeSmallTalk(message)
   if (!normalized || normalized.length > 100) return null
 
+  const brand = customSettings?.brand_name?.trim() || "Synapse"
+  const role = customSettings?.bot_role?.trim() || "nhân viên CSKH"
+
   const greeting =
-    /^(xin chào|chào(?: bạn| shop| sốp| ad| admin)?|shop ơi|sốp ơi|ad ơi|alo|a lô|hello(?: there)?|hi(?: there)?|hey|good (?:morning|afternoon|evening))(?: bạn| shop| sốp| bot| nhé| nha| ạ| ơi)*$/iu
+    /^(xin chào|chào(?: bạn| shop| sốp| ad| admin)?|shop ơi|sốp ơi|ad ơi|al+o+|a l+ô+|hel+o+(?: there)?|hi+(?: there)?|he+y+|good (?:morning|afternoon|evening))(?: bạn| shop| sốp| bot| nhé| nha| ạ| ơi)*$/iu
   const thanks =
     /^(cảm ơn|cám ơn|thanks|thank you)(?: bạn| shop| nhiều| nhé| nha| ạ| very much| so much)*$/iu
   const farewell =
@@ -315,12 +371,17 @@ export function buildCustomerSmallTalkReply(
 
   let body: string | null = null
   if (greeting.test(normalized)) {
-    body =
-      locale === "vi"
-        ? addressedAsShop
-          ? `Chào bạn, sốp là nhân viên CSKH của Synapse đây! Bạn cần sốp tư vấn gì ạ? ${friendlyFace}`
-          : `Chào bạn, mình là nhân viên CSKH của Synapse. Bạn cần mình tư vấn gì ạ? ${friendlyFace}`
+    if (locale === "vi") {
+      body = customSettings?.greeting_message_vi
+        ? customSettings.greeting_message_vi
+        : addressedAsShop
+          ? `Chào bạn, sốp là ${role} của ${brand} đây! Bạn cần sốp tư vấn gì ạ? ${friendlyFace}`
+          : `Chào bạn, mình là ${role} của ${brand}. Bạn cần mình tư vấn gì ạ? ${friendlyFace}`
+    } else {
+      body = customSettings?.greeting_message_en
+        ? customSettings.greeting_message_en
         : "Hello! How can I help you today?"
+    }
   } else if (thanks.test(normalized)) {
     body =
       locale === "vi"
@@ -352,8 +413,8 @@ export function buildCustomerSmallTalkReply(
     body =
       locale === "vi"
         ? addressedAsShop
-          ? "Dạ, sốp là nhân viên CSKH của Synapse. Sốp có thể tư vấn sản phẩm, kiểm tra tồn kho và giải đáp các chính sách đã được duyệt cho bạn."
-          : "Mình là nhân viên CSKH của Synapse. Mình có thể tư vấn sản phẩm, kiểm tra tồn kho và giải đáp các chính sách đã được duyệt cho bạn."
+          ? `Dạ, sốp là ${role} của ${brand}. Sốp có thể tư vấn sản phẩm, kiểm tra tồn kho và giải đáp các chính sách đã được duyệt cho bạn.`
+          : `Mình là ${role} của ${brand}. Mình có thể tư vấn sản phẩm, kiểm tra tồn kho và giải đáp các chính sách đã được duyệt cho bạn.`
         : "I'm the store's product and customer-service advisor. I can search the catalog, check inventory, and answer approved store-policy questions."
   }
 

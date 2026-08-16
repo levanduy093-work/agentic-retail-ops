@@ -134,7 +134,7 @@ const answerCustomerKnowledgeQuestionStep = createStep(
                 direction: message.direction as "INBOUND" | "OUTBOUND",
               }))
             )
-          const catalogRead = await executeCatalogRead(
+          let catalogRead = await executeCatalogRead(
             container,
             {
               limit: 8,
@@ -143,6 +143,17 @@ const answerCustomerKnowledgeQuestionStep = createStep(
             },
             { tenant_id: conversation.tenant_id }
           )
+          if (!catalogRead.output.products.length) {
+            catalogRead = await executeCatalogRead(
+              container,
+              {
+                limit: 8,
+                locale,
+                query: undefined,
+              },
+              { tenant_id: conversation.tenant_id }
+            )
+          }
           catalogSnapshot = catalogRead.output
         }
       } catch {

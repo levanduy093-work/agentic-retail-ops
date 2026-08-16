@@ -131,6 +131,7 @@ import {
   buildKnowledgeReviewFallback,
   buildScopedCustomerReply,
   detectKnowledgeQuestionLocale,
+  resolveCustomerConversationLocale,
   formatChannelKnowledgeAnswer,
   filterKnowledgeEvidenceForQuestion,
   hasSufficientKnowledgeEvidence,
@@ -195,6 +196,13 @@ import {
   normalizeCustomerChatSecurityConfig,
 } from "./customer-chat-security"
 import { isCustomerSupportConversation } from "./channel-principal"
+import {
+  AssistantSettings,
+  AssistantSettingsSchema,
+  ASSISTANT_SETTINGS_PROMPT_KEY,
+  DEFAULT_ASSISTANT_SETTINGS,
+  MANAGED_PROMPTS_REGISTRY,
+} from "./assistant-settings"
 import {
   createKnowledgeRagEngine,
   deleteKnowledgeDocumentVectors,
@@ -412,43 +420,179 @@ class AgentOperationsModuleService extends MedusaService({
     ).__container__[Modules.CACHING] as ICachingModuleService | undefined
   }
 
-  async getCustomerSupportPromptConfiguration() {
+  @InjectManager()
+  async getPromptConfiguration(
+    promptKey: string,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const metadata = MANAGED_PROMPTS_REGISTRY[promptKey]
+    const defaultMaxTokens =
+      metadata?.default_max_tokens ?? CUSTOMER_SUPPORT_DEFAULT_MAX_TOKENS
+    const defaultSystemPrompt =
+      metadata?.default_system_prompt ?? CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT
+    const defaultVersion =
+      metadata?.version ?? CUSTOMER_SUPPORT_PROMPT_VERSION
+    const title = metadata?.title ?? promptKey
+    const description = metadata?.description ?? ""
+
     const prompts = await this.listAgentPromptTemplates(
-      { prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY, status: "ACTIVE" },
-      { order: { created_at: "DESC" }, take: 1 }
+      { prompt_key: promptKey, status: "ACTIVE" },
+      { order: { created_at: "DESC" }, take: 1 },
+      sharedContext
     )
     const active = prompts[0]
 
     return {
       customized: Boolean(
-        active &&
-        active.system_prompt !== CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT
+        active && active.system_prompt !== defaultSystemPrompt
       ),
-      default_system_prompt: CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT,
-      max_tokens: active?.max_tokens ?? CUSTOMER_SUPPORT_DEFAULT_MAX_TOKENS,
-      prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY,
-      system_prompt:
-        active?.system_prompt ?? CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT,
+      default_max_tokens: defaultMaxTokens,
+      default_system_prompt: defaultSystemPrompt,
+      description,
+      max_tokens: active?.max_tokens ?? defaultMaxTokens,
+      prompt_key: promptKey,
+      system_prompt: active?.system_prompt ?? defaultSystemPrompt,
+      title,
       updated_at: active?.updated_at ?? null,
-      version: active?.version ?? CUSTOMER_SUPPORT_PROMPT_VERSION,
+      version: active?.version ?? defaultVersion,
     }
   }
 
   @InjectManager()
-  async configureCustomerSupportPrompt(
-    input: ConfigureCustomerSupportPromptInput,
+  async getCustomerSupportPromptConfiguration(
     @MedusaContext() sharedContext: Context = {}
   ) {
-    return this.configureCustomerSupportPrompt_(input, sharedContext)
+    return this.getPromptConfiguration(
+      CUSTOMER_SUPPORT_PROMPT_KEY,
+      sharedContext
+    )
+  }
+
+  @InjectManager()
+  async getAssistantSettings(
+    @MedusaContext() sharedContext: Context = {}
+  ): Promise<AssistantSettings> {
+    const prompts = await this.listAgentPromptTemplates(
+      { prompt_key: ASSISTANT_SETTINGS_PROMPT_KEY, status: "ACTIVE" },
+      { order: { created_at: "DESC" }, take: 1 },
+      sharedContext
+    )
+    const active = prompts[0]
+    if (!active?.system_prompt) return { ...DEFAULT_ASSISTANT_SETTINGS }
+    try {
+      const parsed = JSON.parse(active.system_prompt)
+      const valid = AssistantSettingsSchema.safeParse(parsed)
+      return valid.success ? valid.data : { ...DEFAULT_ASSISTANT_SETTINGS }
+    } catch {
+      return { ...DEFAULT_ASSISTANT_SETTINGS }
+    }
+  }
+
+  @InjectManager()
+  async configureAssistantSettings(
+    input: { actor_id?: string; settings: Partial<AssistantSettings> },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.configureAssistantSettings_(input, sharedContext)
   }
 
   @InjectTransactionManager()
-  protected async configureCustomerSupportPrompt_(
-    input: ConfigureCustomerSupportPromptInput,
+  protected async configureAssistantSettings_(
+    input: { actor_id?: string; settings: Partial<AssistantSettings> },
     @MedusaContext() sharedContext: Context = {}
   ) {
+    const current = await this.getAssistantSettings(sharedContext)
+    const merged = AssistantSettingsSchema.parse({
+      ...current,
+      ...input.settings,
+    })
     const activePrompts = await this.listAgentPromptTemplates(
-      { prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY, status: "ACTIVE" },
+      { prompt_key: ASSISTANT_SETTINGS_PROMPT_KEY, status: "ACTIVE" },
+      { order: { created_at: "DESC" } },
+      sharedContext
+    )
+    const now = new Date()
+    const version = `settings-${now.toISOString().replace(/[-:.]/g, "")}`
+    const prompt = await this.createAgentPromptTemplates(
+      {
+        agent_id: "customer-support-agent",
+        approved_at: now,
+        approved_by: input.actor_id ?? "admin",
+        input_schema: {},
+        max_tokens: 1000,
+        output_schema: {},
+        prompt_key: ASSISTANT_SETTINGS_PROMPT_KEY,
+        status: "ACTIVE",
+        system_prompt: JSON.stringify(merged),
+        version,
+      },
+      sharedContext
+    )
+
+    for (const active of activePrompts) {
+      await this.updateAgentPromptTemplates(
+        { id: active.id, status: "RETIRED" },
+        sharedContext
+      )
+    }
+
+    await this.createAgentAuditEvents(
+      {
+        action: "customer-assistant-settings-updated",
+        actor_id: input.actor_id ?? "admin",
+        actor_type: "user",
+        correlation_id: prompt.id,
+        data: merged,
+      },
+      sharedContext
+    )
+
+    return merged
+  }
+
+  @InjectManager()
+  async listAllPromptsAndSettings(
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const settings = await this.getAssistantSettings(sharedContext)
+    const promptKeys = Object.keys(MANAGED_PROMPTS_REGISTRY)
+    const prompts = await Promise.all(
+      promptKeys.map((key) => this.getPromptConfiguration(key, sharedContext))
+    )
+    return { prompts, settings }
+  }
+
+  @InjectManager()
+  async configureManagedPrompt(
+    input: {
+      actor_id?: string
+      max_tokens?: number
+      prompt_key: string
+      system_prompt: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.configureManagedPrompt_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async configureManagedPrompt_(
+    input: {
+      actor_id?: string
+      max_tokens?: number
+      prompt_key: string
+      system_prompt: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const metadata = MANAGED_PROMPTS_REGISTRY[input.prompt_key]
+    const maxTokens =
+      input.max_tokens ??
+      metadata?.default_max_tokens ??
+      CUSTOMER_SUPPORT_DEFAULT_MAX_TOKENS
+
+    const activePrompts = await this.listAgentPromptTemplates(
+      { prompt_key: input.prompt_key, status: "ACTIVE" },
       { order: { created_at: "DESC" } },
       sharedContext
     )
@@ -458,11 +602,11 @@ class AgentOperationsModuleService extends MedusaService({
       {
         agent_id: "customer-support-agent",
         approved_at: now,
-        approved_by: input.actor_id,
-        input_schema: CUSTOMER_SUPPORT_DEFAULT_INPUT_SCHEMA,
-        max_tokens: input.max_tokens,
-        output_schema: CUSTOMER_SUPPORT_DEFAULT_OUTPUT_SCHEMA,
-        prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY,
+        approved_by: input.actor_id ?? "admin",
+        input_schema: {},
+        max_tokens: maxTokens,
+        output_schema: {},
+        prompt_key: input.prompt_key,
         status: "ACTIVE",
         system_prompt: input.system_prompt.trim(),
         version,
@@ -479,8 +623,8 @@ class AgentOperationsModuleService extends MedusaService({
 
     await this.createAgentAuditEvents(
       {
-        action: "customer-support-prompt-activated",
-        actor_id: input.actor_id,
+        action: `prompt-${input.prompt_key}-activated`,
+        actor_id: input.actor_id ?? "admin",
         actor_type: "user",
         correlation_id: prompt.id,
         data: {
@@ -488,23 +632,76 @@ class AgentOperationsModuleService extends MedusaService({
           prompt_key: prompt.prompt_key,
           version: prompt.version,
         },
-        event_type: "agent.prompt.activated",
-        recorded_at: now,
-        resource_id: prompt.id,
-        resource_type: "agent_prompt_template",
       },
       sharedContext
     )
 
-    return {
-      customized:
-        prompt.system_prompt !== CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT,
-      max_tokens: prompt.max_tokens,
-      prompt_key: prompt.prompt_key,
-      system_prompt: prompt.system_prompt,
-      updated_at: prompt.updated_at,
-      version: prompt.version,
+    return this.getPromptConfiguration(input.prompt_key, sharedContext)
+  }
+
+  @InjectManager()
+  async resetManagedPrompt(
+    input: { actor_id?: string; prompt_key: string },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.resetManagedPrompt_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async resetManagedPrompt_(
+    input: { actor_id?: string; prompt_key: string },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const keysToReset =
+      input.prompt_key === "all"
+        ? [
+            ...Object.keys(MANAGED_PROMPTS_REGISTRY),
+            ASSISTANT_SETTINGS_PROMPT_KEY,
+          ]
+        : [input.prompt_key]
+
+    for (const key of keysToReset) {
+      const activePrompts = await this.listAgentPromptTemplates(
+        { prompt_key: key, status: "ACTIVE" },
+        {},
+        sharedContext
+      )
+      for (const active of activePrompts) {
+        await this.updateAgentPromptTemplates(
+          { id: active.id, status: "RETIRED" },
+          sharedContext
+        )
+      }
     }
+
+    await this.createAgentAuditEvents(
+      {
+        action: "prompts-reset-to-default",
+        actor_id: input.actor_id ?? "admin",
+        actor_type: "user",
+        correlation_id: input.prompt_key,
+        data: { prompt_key: input.prompt_key },
+      },
+      sharedContext
+    )
+
+    return this.listAllPromptsAndSettings(sharedContext)
+  }
+
+  @InjectManager()
+  async configureCustomerSupportPrompt(
+    input: ConfigureCustomerSupportPromptInput,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.configureManagedPrompt_(
+      {
+        actor_id: input.actor_id,
+        max_tokens: input.max_tokens,
+        prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY,
+        system_prompt: input.system_prompt,
+      },
+      sharedContext
+    )
   }
 
   async getAiProviderStatuses(tenantId = "default") {
@@ -2558,14 +2755,18 @@ class AgentOperationsModuleService extends MedusaService({
       )
 
       try {
+        const promptConfig = await this.getPromptConfiguration(
+          KNOWLEDGE_ANSWER_PROMPT_KEY,
+          sharedContext
+        )
         const generated = await adapter.invoke({
           agent_id: "customer-knowledge-agent",
           input: safeInput,
-          max_tokens: KNOWLEDGE_ANSWER_MAX_TOKENS,
+          max_tokens: promptConfig.max_tokens,
           output_schema: KNOWLEDGE_ANSWER_OUTPUT_SCHEMA,
           prompt_key: KNOWLEDGE_ANSWER_PROMPT_KEY,
-          prompt_version: KNOWLEDGE_ANSWER_PROMPT_VERSION,
-          system_prompt: KNOWLEDGE_ANSWER_SYSTEM_PROMPT,
+          prompt_version: promptConfig.version,
+          system_prompt: promptConfig.system_prompt,
           timeout_ms: KNOWLEDGE_ANSWER_TIMEOUT_MS,
         })
         const output = KnowledgeAnswerModelOutput.parse(generated)
@@ -2851,14 +3052,18 @@ class AgentOperationsModuleService extends MedusaService({
         sharedContext
       )
       try {
+        const promptConfig = await this.getPromptConfiguration(
+          PRODUCT_ADVISOR_PROMPT_KEY,
+          sharedContext
+        )
         const generated = await adapter.invoke({
           agent_id: "customer-product-advisor",
           input: safeInput,
-          max_tokens: PRODUCT_ADVISOR_MAX_TOKENS,
+          max_tokens: promptConfig.max_tokens,
           output_schema: PRODUCT_ADVISOR_OUTPUT_SCHEMA,
           prompt_key: PRODUCT_ADVISOR_PROMPT_KEY,
-          prompt_version: PRODUCT_ADVISOR_PROMPT_VERSION,
-          system_prompt: PRODUCT_ADVISOR_SYSTEM_PROMPT,
+          prompt_version: promptConfig.version,
+          system_prompt: promptConfig.system_prompt,
           timeout_ms: PRODUCT_ADVISOR_TIMEOUT_MS,
         })
         const output = ProductAdvisorModelOutput.parse(generated)
@@ -3020,14 +3225,18 @@ class AgentOperationsModuleService extends MedusaService({
       )
 
       try {
+        const promptConfig = await this.getPromptConfiguration(
+          CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
+          sharedContext
+        )
         const generated = await adapter.invoke({
           agent_id: "customer-intent-router",
           input: safeInput,
-          max_tokens: CUSTOMER_MESSAGE_INTENT_MAX_TOKENS,
+          max_tokens: promptConfig.max_tokens,
           output_schema: CUSTOMER_MESSAGE_INTENT_OUTPUT_SCHEMA,
           prompt_key: CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
-          prompt_version: CUSTOMER_MESSAGE_INTENT_PROMPT_VERSION,
-          system_prompt: CUSTOMER_MESSAGE_INTENT_SYSTEM_PROMPT,
+          prompt_version: promptConfig.version,
+          system_prompt: promptConfig.system_prompt,
           timeout_ms: CUSTOMER_MESSAGE_INTENT_TIMEOUT_MS,
         })
         const output = CustomerMessageIntentModelOutput.parse(generated)
@@ -3228,14 +3437,18 @@ class AgentOperationsModuleService extends MedusaService({
       )
 
       try {
+        const promptConfig = await this.getPromptConfiguration(
+          CUSTOMER_CONVERSATION_PROMPT_KEY,
+          sharedContext
+        )
         const generated = await adapter.invoke({
           agent_id: "customer-conversation-agent",
           input: safeInput,
-          max_tokens: CUSTOMER_CONVERSATION_MAX_TOKENS,
+          max_tokens: promptConfig.max_tokens,
           output_schema: CUSTOMER_CONVERSATION_OUTPUT_SCHEMA,
           prompt_key: CUSTOMER_CONVERSATION_PROMPT_KEY,
-          prompt_version: CUSTOMER_CONVERSATION_PROMPT_VERSION,
-          system_prompt: CUSTOMER_CONVERSATION_SYSTEM_PROMPT,
+          prompt_version: promptConfig.version,
+          system_prompt: promptConfig.system_prompt,
           timeout_ms: CUSTOMER_CONVERSATION_TIMEOUT_MS,
         })
         const output = CustomerConversationModelOutput.parse(generated)
@@ -3554,17 +3767,9 @@ class AgentOperationsModuleService extends MedusaService({
         support_task_id: null,
       }
     }
+    const settings = await this.getAssistantSettings(sharedContext)
     const explicitAttack = isExplicitPromptAttack(question)
-    const smallTalk = explicitAttack
-      ? null
-      : buildCustomerSmallTalkReply(question, locale)
-    const fastIntent =
-      explicitAttack || smallTalk
-        ? null
-        : detectCustomerMessageFastIntent(question)
-    const recentMessages =
-      explicitAttack ||
-      (fastIntent && fastIntent !== "PRODUCT_DISCOVERY")
+    const recentMessages = explicitAttack
       ? []
       : await this.listAgentMessages(
           { conversation_id: conversation.id },
@@ -3572,46 +3777,41 @@ class AgentOperationsModuleService extends MedusaService({
           sharedContext
         )
     const contextMessages = startsNewTopic ? [] : recentMessages
+    const resolvedLocale =
+      input.customer_order_lookup_locale ??
+      resolveCustomerConversationLocale(question, recentMessages)
+    const smallTalk = explicitAttack
+      ? null
+      : buildCustomerSmallTalkReply(question, resolvedLocale, settings)
+    const locale = resolvedLocale
     const intent = explicitAttack
       ? {
           confidence: 1,
           intent: "UNSAFE" as const,
           reason: "Matched a backend security rule.",
         }
-      : smallTalk
-        ? {
-            confidence: 1,
-            intent: "SMALL_TALK" as const,
-            reason: "Matched an unambiguous conversational fast path.",
-          }
-        : fastIntent
-          ? {
-              confidence: 1,
-              intent: fastIntent,
-              reason: "Matched an unambiguous retail information question.",
-            }
-        : await this.classifyCustomerMessageIntent(
-            {
-              conversation_memory: memorySummary,
-              idempotency_key: `customer-intent-model:${inbound.id}`,
-              locale,
-              message: question,
-              recent_messages: contextMessages
-                .slice()
-                .reverse()
-                .filter(
-                  (message) =>
-                    message.direction === "INBOUND" ||
-                    message.direction === "OUTBOUND"
-                )
-                .map((message) => ({
-                  body: message.body,
-                  direction: message.direction as "INBOUND" | "OUTBOUND",
-                })),
-              tenant_id: conversation.tenant_id,
-            },
-            sharedContext
-          )
+      : await this.classifyCustomerMessageIntent(
+          {
+            conversation_memory: memorySummary,
+            idempotency_key: `customer-intent-model:${inbound.id}`,
+            locale,
+            message: question,
+            recent_messages: contextMessages
+              .slice()
+              .reverse()
+              .filter(
+                (message) =>
+                  message.direction === "INBOUND" ||
+                  message.direction === "OUTBOUND"
+              )
+              .map((message) => ({
+                body: message.body,
+                direction: message.direction as "INBOUND" | "OUTBOUND",
+              })),
+            tenant_id: conversation.tenant_id,
+          },
+          sharedContext
+        )
     const routedIntent = resolveCustomerMessageIntent(intent)
     let reviewRouted = false
     let supportTaskId: string | null = null
@@ -3631,21 +3831,23 @@ class AgentOperationsModuleService extends MedusaService({
       supportTaskId = escalation.task?.id ?? null
       answer = buildCustomerReviewAcknowledgement(
         locale,
-        "NEEDS_STAFF_AUTHORITY"
+        "NEEDS_STAFF_AUTHORITY",
+        locale === "vi"
+          ? settings.review_ack_message_vi
+          : settings.review_ack_message_en
       )
-    } else if (routedIntent === "SMALL_TALK" && smallTalk) {
-      answer = smallTalk
     } else if (routedIntent === "SMALL_TALK" || routedIntent === "CLARIFY") {
       answer = await this.draftCustomerConversationReply(
         {
           conversation_memory: memorySummary,
           fallback_body:
             smallTalk?.body ??
-              buildCustomerIntentReply(
-                routedIntent,
-                locale,
-                isCustomerAddressingShop(question)
-              ),
+            buildCustomerIntentReply(
+              routedIntent,
+              locale,
+              isCustomerAddressingShop(question),
+              settings
+            ),
           idempotency_key: `customer-conversation-response:${inbound.id}`,
           intent: routedIntent,
           locale,
@@ -3751,7 +3953,10 @@ class AgentOperationsModuleService extends MedusaService({
       supportTaskId = escalation.task?.id ?? null
       answer = buildCustomerReviewAcknowledgement(
         locale,
-        "NO_APPROVED_KNOWLEDGE"
+        "NO_APPROVED_KNOWLEDGE",
+        locale === "vi"
+          ? settings.review_ack_message_vi
+          : settings.review_ack_message_en
       )
     }
 

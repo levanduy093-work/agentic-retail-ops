@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next"
 import { sdk } from "../../lib/sdk"
 import { AiConnectionsContent } from "../ai-connections/page"
 import { CustomerSupportContent } from "../customer-support/page"
+import { PromptsConfigContent } from "./prompts-config"
 import {
   GooglePickerCredential,
   type GooglePickerSelection,
@@ -226,7 +227,7 @@ const KnowledgeHubPage = () => {
   const [sourceOpen, setSourceOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeView, setActiveView] = useState<
-    "ai" | "conversations" | "documents" | "search" | "sources"
+    "ai" | "conversations" | "documents" | "prompts" | "search" | "sources"
   >("conversations")
   const [searchQuery, setSearchQuery] = useState("")
   const [searchLocale, setSearchLocale] = useState("vi")
@@ -739,7 +740,14 @@ const KnowledgeHubPage = () => {
         </div>
         <div className="flex gap-1 border-t px-4 py-2">
           {(
-            ["conversations", "documents", "sources", "search", "ai"] as const
+            [
+              "conversations",
+              "documents",
+              "sources",
+              "search",
+              "prompts",
+              "ai",
+            ] as const
           ).map((view) => (
             <Button
               key={view}
@@ -747,13 +755,17 @@ const KnowledgeHubPage = () => {
               size="small"
               variant={activeView === view ? "secondary" : "transparent"}
             >
-              {t(`knowledgeHub.views.${view}`)}
+              {view === "prompts"
+                ? "Trợ lý & Prompts"
+                : t(`knowledgeHub.views.${view}`)}
             </Button>
           ))}
         </div>
       </Container>
 
       {activeView === "conversations" && <CustomerSupportContent embedded />}
+
+      {activeView === "prompts" && <PromptsConfigContent />}
 
       {activeView === "ai" && <AiConnectionsContent embedded />}
 

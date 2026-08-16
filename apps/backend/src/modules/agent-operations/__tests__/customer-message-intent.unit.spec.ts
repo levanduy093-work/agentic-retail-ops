@@ -76,6 +76,11 @@ describe("customer message intent routing", () => {
         "Mình muốn trả hàng á, quy trình thế nào?"
       )
     ).toBe("STORE_QUESTION")
+    expect(
+      detectCustomerMessageFastIntent(
+        "Mình cần bảo hành quần áo đã mua bên sốp á"
+      )
+    ).toBe("STORE_QUESTION")
     expect(detectCustomerMessageFastIntent("Hủy đơn hàng cho tôi ngay")).toBe(
       "HUMAN_ACTION"
     )

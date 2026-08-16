@@ -55,21 +55,47 @@ Use compact memory and recent conversation only to resolve references and short 
 export function buildCustomerIntentReply(
   intent: "CLARIFY" | "SMALL_TALK",
   locale: "en" | "vi",
-  addressedAsShop = false
+  addressedAsShop = false,
+  customSettings?: {
+    bot_role?: string
+    brand_name?: string
+    clarify_message_en?: string
+    clarify_message_vi?: string
+    greeting_message_en?: string
+    greeting_message_vi?: string
+  }
 ) {
+  const brand = customSettings?.brand_name || "Synapse"
+  const role = customSettings?.bot_role || "nhân viên CSKH"
+
   if (intent === "SMALL_TALK") {
-    return locale === "vi"
-      ? addressedAsShop
-        ? "Dạ, sốp là nhân viên CSKH của Synapse đây. Bạn cần sốp hỗ trợ gì ạ?"
-        : "Chào bạn, mình là nhân viên CSKH của Synapse. Bạn cần mình hỗ trợ gì ạ?"
-      : "I'm doing well, thank you! How can I help you today?"
+    if (locale === "vi") {
+      if (customSettings?.greeting_message_vi) {
+        return customSettings.greeting_message_vi
+      }
+      return addressedAsShop
+        ? `Dạ, sốp là ${role} của ${brand} đây. Bạn cần sốp hỗ trợ gì ạ?`
+        : `Chào bạn, mình là ${role} của ${brand}. Bạn cần mình hỗ trợ gì ạ?`
+    }
+    return (
+      customSettings?.greeting_message_en ||
+      `Hello, I'm ${brand} customer support. How can I help you today?`
+    )
   }
 
-  return locale === "vi"
-    ? addressedAsShop
-      ? "Sốp là nhân viên CSKH của Synapse và sẵn sàng hỗ trợ. Bạn cho sốp biết cụ thể sản phẩm, đơn hàng hoặc vấn đề đang quan tâm nhé?"
-      : "Mình là nhân viên CSKH của Synapse và sẵn sàng hỗ trợ. Bạn cho mình biết cụ thể sản phẩm, đơn hàng hoặc vấn đề đang quan tâm nhé?"
-    : "I'm ready to help. Could you tell me which product, order, or issue you need help with?"
+  if (locale === "vi") {
+    if (customSettings?.clarify_message_vi) {
+      return customSettings.clarify_message_vi
+    }
+    return addressedAsShop
+      ? `Sốp là ${role} của ${brand} và sẵn sàng hỗ trợ. Bạn cho sốp biết cụ thể sản phẩm, đơn hàng hoặc vấn đề đang quan tâm nhé?`
+      : `Mình là ${role} của ${brand} và sẵn sàng hỗ trợ. Bạn cho mình biết cụ thể sản phẩm, đơn hàng hoặc vấn đề đang quan tâm nhé?`
+  }
+
+  return (
+    customSettings?.clarify_message_en ||
+    "I'm ready to help. Could you tell me which product, order, or issue you need help with?"
+  )
 }
 
 export function isCustomerAddressingShop(message: string) {
@@ -86,8 +112,14 @@ export function detectCustomerMessageFastIntent(
     )
   if (requestsPrivateDataOrAction) return "HUMAN_ACTION"
 
+  const isKnowledgeOrPolicyQuestion =
+    /(bảo hành|đổi trả|trả hàng|hoàn tiền|chính sách|quy trình|điều kiện|thời gian giao|bao lâu|phí ship|phí giao|thanh toán|hóa đơn|vat|tích điểm|thành viên|khiếu nại|bảo mật|giờ mở cửa|giờ làm việc|địa chỉ shop|warranty|return|refund|policy)/iu.test(
+      normalized
+    )
+  if (isKnowledgeOrPolicyQuestion) return "STORE_QUESTION"
+
   const asksForProducts =
-    /(bán gì|bán về (?:đồ )?gì|có gì bán|shop có gì|sốp có gì|sản phẩm nào|tư vấn|gợi ý|recommend|suggest|áo|quần|váy|đầm|giày|dép|túi|phụ kiện|mẫu (?:đầu|thứ|số)|cái (?:đầu|thứ|số))/iu.test(
+    /(bán gì|bán về (?:đồ )?gì|bán (?:đồ|sản phẩm) gì|có bán|shop có bán|sốp có bán|shop có gì|sốp có gì|có gì bán|có những mẫu nào|có sản phẩm nào|sản phẩm nào|tìm (?:áo|quần|váy|đầm|giày|dép|túi|mẫu|sản phẩm)|mua (?:áo|quần|váy|đầm|giày|dép|túi|mẫu|sản phẩm)|tư vấn (?:mẫu|áo|quần|váy|đầm|sản phẩm)|gợi ý (?:mẫu|áo|quần|váy|đầm|sản phẩm)|recommend|suggest)/iu.test(
       normalized
     )
   if (asksForProducts) return "PRODUCT_DISCOVERY"
