@@ -3673,8 +3673,19 @@ class AgentOperationsModuleService extends MedusaService({
         : [],
     })
 
+    const explicitAttack = isExplicitPromptAttack(question)
+    const recentMessages = explicitAttack
+      ? []
+      : await this.listAgentMessages(
+          { conversation_id: conversation.id },
+          { order: { occurred_at: "DESC" }, take: 7 },
+          sharedContext
+        )
+    const contextMessages = startsNewTopic ? [] : recentMessages
     const locale =
-      input.customer_order_lookup_locale ?? detectKnowledgeQuestionLocale(question)
+      input.customer_order_lookup_locale ??
+      resolveCustomerConversationLocale(question, recentMessages)
+
     if (input.customer_order_lookup) {
       const answer = buildCustomerOrderLookupReply(
         input.customer_order_lookup,
@@ -3768,22 +3779,9 @@ class AgentOperationsModuleService extends MedusaService({
       }
     }
     const settings = await this.getAssistantSettings(sharedContext)
-    const explicitAttack = isExplicitPromptAttack(question)
-    const recentMessages = explicitAttack
-      ? []
-      : await this.listAgentMessages(
-          { conversation_id: conversation.id },
-          { order: { occurred_at: "DESC" }, take: 7 },
-          sharedContext
-        )
-    const contextMessages = startsNewTopic ? [] : recentMessages
-    const resolvedLocale =
-      input.customer_order_lookup_locale ??
-      resolveCustomerConversationLocale(question, recentMessages)
     const smallTalk = explicitAttack
       ? null
-      : buildCustomerSmallTalkReply(question, resolvedLocale, settings)
-    const locale = resolvedLocale
+      : buildCustomerSmallTalkReply(question, locale, settings)
     const intent = explicitAttack
       ? {
           confidence: 1,

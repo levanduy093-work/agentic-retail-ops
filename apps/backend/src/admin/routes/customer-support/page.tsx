@@ -710,9 +710,6 @@ export const CustomerSupportContent = ({
                 {t("supportDesk.allConversationsTab")}
               </Button>
             </div>
-            <StatusBadge color={isLiveConnected ? "green" : "grey"}>
-              {isLiveConnected ? "Realtime" : "Connecting"}
-            </StatusBadge>
           </div>
           <div className="px-4 py-3">
             <Text size="small" leading="compact" className="text-ui-fg-subtle">
