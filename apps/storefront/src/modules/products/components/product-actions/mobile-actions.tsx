@@ -17,6 +17,7 @@ type MobileActionsProps = {
   variant?: HttpTypes.StoreProductVariant
   options: Record<string, string | undefined>
   updateOptions: (title: string, value: string) => void
+  optionAvailability: Record<string, Record<string, boolean>>
   inStock?: boolean
   handleAddToCart: () => void
   isAdding?: boolean
@@ -29,6 +30,7 @@ const MobileActions: React.FC<MobileActionsProps> = ({
   variant,
   options,
   updateOptions,
+  optionAvailability,
   inStock,
   handleAddToCart,
   isAdding,
@@ -100,24 +102,28 @@ const MobileActions: React.FC<MobileActionsProps> = ({
                 <div></div>
               )}
             </div>
-            <div className={clx("grid grid-cols-2 w-full gap-x-4", {
-              "!grid-cols-1": isSimple
-            })}>
-              {!isSimple && <Button
-                onClick={open}
-                variant="secondary"
-                className="w-full"
-                data-testid="mobile-actions-button"
-              >
-                <div className="flex items-center justify-between w-full">
-                  <span>
-                    {variant
-                      ? Object.values(options).join(" / ")
-                      : t("product.select_options")}
-                  </span>
-                  <ChevronDown />
-                </div>
-              </Button>}
+            <div
+              className={clx("grid grid-cols-2 w-full gap-x-4", {
+                "!grid-cols-1": isSimple,
+              })}
+            >
+              {!isSimple && (
+                <Button
+                  onClick={open}
+                  variant="secondary"
+                  className="w-full"
+                  data-testid="mobile-actions-button"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span>
+                      {variant
+                        ? Object.values(options).join(" / ")
+                        : t("product.select_options")}
+                    </span>
+                    <ChevronDown />
+                  </div>
+                </Button>
+              )}
               <Button
                 onClick={handleAddToCart}
                 disabled={!inStock || !variant}
@@ -184,6 +190,7 @@ const MobileActions: React.FC<MobileActionsProps> = ({
                                 current={options[option.id]}
                                 updateOption={updateOptions}
                                 title={option.title ?? ""}
+                                availability={optionAvailability[option.id]}
                                 disabled={optionsDisabled}
                               />
                             </div>

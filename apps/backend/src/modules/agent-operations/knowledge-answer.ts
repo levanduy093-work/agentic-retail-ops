@@ -37,6 +37,13 @@ export type KnowledgeAnswer = {
     product_url: string | null
     title: string
   }>
+  pending_customer_input?: "ORDER_REFERENCE"
+  live_order?: {
+    display_id: number
+    fulfillment_status: string
+    order_status: string
+    payment_status: string
+  }
 }
 
 export const KNOWLEDGE_ANSWER_PROMPT_KEY = "knowledge.customer-answer"
@@ -118,6 +125,112 @@ export function buildKnowledgeAnswerFallback(
   }
 }
 
+export function buildDeliveryTimeGuidanceAnswer(
+  question: string,
+  knowledge: KnowledgeSearchOutput,
+  locale: "en" | "vi"
+): KnowledgeAnswer | null {
+  const asksDeliveryTime =
+    /(thời gian (?:giao hàng|vận chuyển)|(?:giao hàng|vận chuyển).*(?:bao lâu|mất bao lâu)|delivery time|shipping time|how long.*(?:delivery|shipping))/iu.test(
+      question
+    )
+  if (!asksDeliveryTime) return null
+
+  const supportingEvidence = knowledge.results.find((result) =>
+    /(trạng thái.*(?:giao hàng|vận chuyển)|(?:giao hàng|vận chuyển).*trạng thái)/iu.test(
+      result.excerpt
+    )
+  )
+  if (!supportingEvidence) return null
+
+  return {
+    body:
+      locale === "vi"
+        ? "Để kiểm tra chính xác thời gian giao hàng, bạn gửi giúp sốp mã đơn (ví dụ #123) nhé. Sốp sẽ kiểm tra trạng thái thanh toán và giao hàng của đúng đơn đó trước khi xác nhận."
+        : "To check delivery timing accurately, please send the order number (for example, #123). The store will check that order's payment and delivery status before confirming it.",
+    citations: [
+      {
+        document_id: supportingEvidence.document_id,
+        locator: supportingEvidence.citation_locator,
+        quote_checksum: supportingEvidence.quote_checksum,
+        title: supportingEvidence.title,
+        version: supportingEvidence.version,
+      },
+    ],
+    disposition: "ANSWER",
+    grounded: true,
+    locale,
+    pending_customer_input: "ORDER_REFERENCE",
+  }
+}
+
+export function buildCustomerOrderLookupReply(
+  lookup: import("./customer-order-lookup").CustomerOrderLookup,
+  locale: "en" | "vi"
+): KnowledgeAnswer {
+  if (lookup.status === "ACCOUNT_NOT_LINKED") {
+    return {
+      body:
+        locale === "vi"
+          ? "Để bảo vệ thông tin đơn hàng, sốp chỉ có thể tra cứu sau khi tài khoản chat đã được liên kết và xác minh. Bạn vui lòng liên kết tài khoản trước rồi gửi lại mã đơn nhé."
+          : "To protect order information, the store can look it up only after this chat account is linked and verified. Please link your account, then send the order number again.",
+      citations: [],
+      disposition: "CLARIFY",
+      grounded: false,
+      locale,
+    }
+  }
+  if (lookup.status === "NOT_OWNER") {
+    return {
+      body:
+        locale === "vi"
+          ? "Mã đơn này không khớp với tài khoản đã liên kết, nên sốp không thể hiển thị thông tin đơn. Bạn kiểm tra lại mã đơn hoặc dùng đúng tài khoản đặt hàng nhé."
+          : "This order number does not match the linked account, so the store cannot show its information. Please check the order number or use the account that placed the order.",
+      citations: [],
+      disposition: "CLARIFY",
+      grounded: false,
+      locale,
+    }
+  }
+  if (lookup.status === "NOT_FOUND") {
+    return {
+      body:
+        locale === "vi"
+          ? "Sốp chưa tìm thấy mã đơn này. Bạn kiểm tra lại mã đơn hiển thị trong xác nhận đặt hàng (ví dụ #123) rồi gửi lại nhé."
+          : "The store could not find that order number. Please check the number shown in your order confirmation (for example, #123) and send it again.",
+      citations: [],
+      disposition: "CLARIFY",
+      grounded: false,
+      locale,
+    }
+  }
+
+  if (lookup.status === "FOUND") {
+    const order = lookup.order
+    return {
+      body:
+        locale === "vi"
+          ? `Đơn #${order.display_id} hiện có trạng thái đơn hàng: ${order.order_status}; thanh toán: ${order.payment_status}; giao hàng: ${order.fulfillment_status}. Từ các trạng thái hiện có, sốp chưa thể xác nhận một mốc thời gian giao cụ thể.`
+          : `Order #${order.display_id} currently has order status: ${order.order_status}; payment: ${order.payment_status}; delivery: ${order.fulfillment_status}. Based on these current statuses, the store cannot confirm a specific delivery time yet.`,
+      citations: [],
+      disposition: "ANSWER",
+      grounded: true,
+      live_order: {
+        display_id: order.display_id,
+        fulfillment_status: order.fulfillment_status,
+        order_status: order.order_status,
+        payment_status: order.payment_status,
+      },
+      locale,
+    }
+  }
+
+  return buildCustomerOrderLookupReply(
+    { display_id: lookup.display_id, status: "NOT_FOUND" },
+    locale
+  )
+}
+
 export function buildKnowledgeReviewFallback(locale: "en" | "vi"): KnowledgeAnswer {
   return {
     body:
@@ -138,11 +251,11 @@ export function buildCustomerReviewAcknowledgement(
   const body =
     locale === "vi"
       ? reason === "NEEDS_STAFF_AUTHORITY"
-        ? "Sốp đã ghi nhận yêu cầu của bạn. Nội dung này cần nhân viên có thẩm quyền kiểm tra trước khi trả lời chính xác; sốp sẽ phản hồi tiếp ngay trong cuộc trò chuyện này nhé."
-        : "Sốp chưa có đủ thông tin đã được duyệt để trả lời chính xác. Sốp đã ghi nhận câu hỏi để nhân viên kiểm tra và phản hồi tiếp trong cuộc trò chuyện này nhé."
+        ? "Nội dung này cần nhân viên có thẩm quyền kiểm tra trước khi cửa hàng có thể trả lời chính xác."
+        : "Sốp chưa có đủ thông tin đã được duyệt để trả lời chính xác; nhân viên cần kiểm tra thêm trước khi cửa hàng có thể xác nhận thông tin này."
       : reason === "NEEDS_STAFF_AUTHORITY"
-        ? "I've recorded your request. An authorized staff member needs to verify it before we can answer accurately, and we'll follow up in this conversation."
-        : "I don't have enough approved information to answer accurately. I've recorded your question for staff to verify and follow up in this conversation."
+        ? "An authorized staff member needs to verify this before the store can answer accurately."
+        : "I don't have enough approved information to answer accurately; staff need to verify it before the store can confirm it."
   return {
     body,
     citations: [],
@@ -197,13 +310,16 @@ export function buildCustomerSmallTalkReply(
   const availability =
     /^(?:(?:shop|sốp|bạn)(?: ơi)? (?:có )?rảnh không|rảnh không (?:shop|sốp|bạn)(?: ơi)?)(?: vậy| ạ| nha| nhé)*$/iu
   const identity =
-    /^(?:bạn|shop|sốp) là ai(?: vậy| thế| ạ)?$/iu
+    /(?:(?:bạn|shop|sốp|mình).{0,32}(?:là ai|tên gì)|(?:bạn|shop|sốp) là ai)(?: (?:vậy|thế|nhỉ|ạ))*$/iu
+  const addressedAsShop = /(?:\bsốp\b|\bshop\b)/iu.test(normalized)
 
   let body: string | null = null
   if (greeting.test(normalized)) {
     body =
       locale === "vi"
-        ? `Chào bạn, sốp đây! Hôm nay bạn cần sốp tư vấn gì ạ? ${friendlyFace}`
+        ? addressedAsShop
+          ? `Chào bạn, sốp là nhân viên CSKH của Synapse đây! Bạn cần sốp tư vấn gì ạ? ${friendlyFace}`
+          : `Chào bạn, mình là nhân viên CSKH của Synapse. Bạn cần mình tư vấn gì ạ? ${friendlyFace}`
         : "Hello! How can I help you today?"
   } else if (thanks.test(normalized)) {
     body =
@@ -228,12 +344,16 @@ export function buildCustomerSmallTalkReply(
   } else if (availability.test(normalized)) {
     body =
       locale === "vi"
-        ? `Có nè, sốp đang rảnh và sẵn sàng hỗ trợ bạn đây! Bạn cần sốp tư vấn sản phẩm gì ạ? ${friendlyFace}`
+        ? addressedAsShop
+          ? `Có nè, sốp đang rảnh và sẵn sàng hỗ trợ bạn đây! Bạn cần sốp tư vấn sản phẩm gì ạ? ${friendlyFace}`
+          : `Có nè, mình là nhân viên CSKH của Synapse và đang sẵn sàng hỗ trợ bạn! Bạn cần mình tư vấn sản phẩm gì ạ? ${friendlyFace}`
         : "I'm here and ready to help! What product can I help you find?"
   } else if (identity.test(normalized)) {
     body =
       locale === "vi"
-        ? "Sốp là chuyên viên tư vấn của cửa hàng. Sốp có thể tìm sản phẩm trong catalog, kiểm tra tồn kho và giải đáp chính sách đã được duyệt cho bạn."
+        ? addressedAsShop
+          ? "Dạ, sốp là nhân viên CSKH của Synapse. Sốp có thể tư vấn sản phẩm, kiểm tra tồn kho và giải đáp các chính sách đã được duyệt cho bạn."
+          : "Mình là nhân viên CSKH của Synapse. Mình có thể tư vấn sản phẩm, kiểm tra tồn kho và giải đáp các chính sách đã được duyệt cho bạn."
         : "I'm the store's product and customer-service advisor. I can search the catalog, check inventory, and answer approved store-policy questions."
   }
 
@@ -335,12 +455,7 @@ export function filterKnowledgeEvidenceForQuestion(
     ) {
       return false
     }
-    if (questionTopics.size) {
-      const documentTopics = detectEvidenceTopics(
-        `${result.title}\n${result.document_key}`
-      )
-      return [...questionTopics].some((topic) => documentTopics.has(topic))
-    }
+    if (questionTopics.size) return true
     const evidenceTokens = normalizedEvidenceTokens(evidence)
     return [...questionTokens].some((token) => evidenceTokens.has(token))
   })

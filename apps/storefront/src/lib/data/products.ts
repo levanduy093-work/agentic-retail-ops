@@ -59,6 +59,7 @@ export const listProducts = async ({
   }
   const locale = await getRequestLocale()
 
+  const isProductDetail = Boolean(queryParams?.handle)
   const next = {
     revalidate: 60,
     ...(await getCacheOptions("products")),
@@ -78,8 +79,10 @@ export const listProducts = async ({
           ...queryParams,
         },
         headers,
-        next,
-        cache: "force-cache",
+        // Purchase availability must reflect the latest warehouse inventory.
+        ...(isProductDetail
+          ? { cache: "no-store" as const }
+          : { cache: "force-cache" as const, next }),
       }
     )
     .then(({ products, count }) => {

@@ -14,6 +14,9 @@ loadEnv(process.env.NODE_ENV || 'development', process.cwd())
 // HTTP permission enforcement disabled. Deployments can still set this value
 // explicitly, while local development is secure by default.
 process.env.MEDUSA_FF_RBAC ??= 'true'
+// The dashboard exposes Property Labels, whose API is guarded by this
+// Medusa feature flag. Keep an explicit deployment value authoritative.
+process.env.MEDUSA_FF_VIEW_CONFIGURATIONS ??= 'true'
 
 const isGoogleAuthConfigured = Boolean(process.env.GOOGLE_CLIENT_ID)
 const isRedisInfrastructureEnabled =

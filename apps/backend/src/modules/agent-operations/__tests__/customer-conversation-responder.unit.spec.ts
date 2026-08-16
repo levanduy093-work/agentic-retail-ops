@@ -44,5 +44,8 @@ describe("customer conversation responder", () => {
     expect(CUSTOMER_CONVERSATION_SYSTEM_PROMPT).toContain(
       "at most one useful follow-up question"
     )
+    expect(CUSTOMER_CONVERSATION_SYSTEM_PROMPT).toContain(
+      "nhân viên CSKH của Synapse"
+    )
   })
 })

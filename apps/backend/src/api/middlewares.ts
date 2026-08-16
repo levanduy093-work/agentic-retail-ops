@@ -12,6 +12,7 @@ import {
   AdminCreateSupportSimulatorMessage,
   AdminConfigureAiProvider,
   AdminConfigureAiPrompt,
+  AdminClearAgentConversation,
   AdminDiscoverAiModels,
   AdminDecideAgentApproval,
   AdminIngestInventoryLowEvent,
@@ -123,6 +124,12 @@ import {
       matcher: "/admin/agent-operations/conversations/:id",
       method: "GET",
       policies: [{ resource: "agent_conversation", operation: "read" }],
+    },
+    {
+      matcher: "/admin/agent-operations/conversations/:id/clear-history",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminClearAgentConversation)],
+      policies: [{ resource: "agent_conversation", operation: "delete" }],
     },
     {
       matcher: "/admin/agent-operations/conversations/:id/messages",

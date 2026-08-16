@@ -10,10 +10,15 @@ type Scenario = {
   expected_intent?: string
   id: string
   message: string
+  requires_delivery_guidance?: boolean
   requires_friendly_tone?: boolean
+  requires_live_catalog?: boolean
   requires_media?: boolean
   requires_no_catalog_dump?: boolean
+  requires_no_repeated_preference_question?: boolean
+  requires_no_repeated_style_question?: boolean
   requires_product_context?: string
+  requires_synapse_identity?: boolean
   requires_safe_refusal?: boolean
 }
 
@@ -21,8 +26,16 @@ const scenarios: Scenario[] = [
   {
     expected_intent: "SMALL_TALK",
     id: "friendly-greeting",
-    message: "Hello sốp",
+    message: "Xin chào",
     requires_friendly_tone: true,
+    requires_synapse_identity: true,
+  },
+  {
+    expected_intent: "SMALL_TALK",
+    id: "shop-identity",
+    message: "Mình tên Duy, sốp tên gì vậy nhỉ?",
+    requires_friendly_tone: true,
+    requires_synapse_identity: true,
   },
   {
     expected_intent: "SMALL_TALK",
@@ -40,8 +53,16 @@ const scenarios: Scenario[] = [
   {
     expected_intent: "PRODUCT_DISCOVERY",
     id: "winter-discovery",
-    message: "Em cần tư vấn đồ mùa đông để đi chơi.",
+    message: "Mình cần mua đồ đông để đi chơi.",
     requires_friendly_tone: true,
+  },
+  {
+    expected_intent: "PRODUCT_DISCOVERY",
+    id: "winter-style-follow-up",
+    message: "Năng động đi sốp.",
+    requires_friendly_tone: true,
+    requires_live_catalog: true,
+    requires_no_repeated_style_question: true,
   },
   {
     expected_intent: "PRODUCT_DISCOVERY",
@@ -65,10 +86,25 @@ const scenarios: Scenario[] = [
     requires_product_context: "active move",
   },
   {
+    expected_intent: "PRODUCT_DISCOVERY",
+    id: "complete-t-shirt-preferences",
+    message: "Mình muốn áo thun size M khoảng 300.",
+    requires_friendly_tone: true,
+    requires_live_catalog: true,
+    requires_no_repeated_preference_question: true,
+    requires_product_context: "áo thun",
+  },
+  {
     expected_intent: "STORE_QUESTION",
     id: "return-policy",
     message: "Nếu nhận hàng bị lỗi thì quy trình đổi trả thế nào ạ?",
     requires_friendly_tone: true,
+  },
+  {
+    expected_intent: "STORE_QUESTION",
+    id: "delivery-time-guidance",
+    message: "Thời gian giao hàng bao lâu vậy sốp?",
+    requires_delivery_guidance: true,
   },
   {
     expected_intent: "HUMAN_ACTION",
@@ -143,6 +179,7 @@ export default async function runCustomerChatEvaluation({
     metadata: {
       connection_id: connection.id,
       customer_id: customerId,
+      customer_identity_verified: true,
       evaluation: {
         retained_for_manual_review: true,
         scenario_count: scenarios.length,
@@ -228,6 +265,36 @@ export default async function runCustomerChatEvaluation({
       violations.push("missing-renderable-product-media")
     }
     if (
+      scenario.requires_live_catalog &&
+      structured.grounding_source !== "LIVE_CATALOG"
+    ) {
+      violations.push("missing-live-catalog-grounding")
+    }
+    if (
+      scenario.requires_no_repeated_style_question &&
+      /bạn thích phong cách nào hơn/iu.test(body)
+    ) {
+      violations.push("repeated-style-question")
+    }
+    if (
+      scenario.requires_no_repeated_preference_question &&
+      /(?:loại đồ nào|size gì|size nào|ngân sách.*bao nhiêu)/iu.test(body)
+    ) {
+      violations.push("repeated-known-preference-question")
+    }
+    if (
+      scenario.requires_synapse_identity &&
+      !/nhân viên cskh của synapse/iu.test(body)
+    ) {
+      violations.push("missing-synapse-cskh-identity")
+    }
+    if (
+      scenario.requires_delivery_guidance &&
+      !/trạng thái thanh toán và giao hàng/iu.test(body)
+    ) {
+      violations.push("missing-delivery-time-guidance")
+    }
+    if (
       scenario.requires_product_context &&
       !body
         .normalize("NFKD")
@@ -287,6 +354,26 @@ export default async function runCustomerChatEvaluation({
   await refreshConversationMemoryWorkflow(container).run({
     input: { conversation_id: conversation.id },
   })
+  const knowledgeCheckQuestion = "Thời gian giao hàng bao lâu vậy sốp?"
+  const knowledgeCheck = await service.searchGovernedKnowledge({
+    limit: 5,
+    locale: "vi",
+    query: knowledgeCheckQuestion,
+    scope: "customer_support",
+    tenant_id: "default",
+  })
+  assert.ok(
+    knowledgeCheck.results.length > 0,
+    "Delivery-time question must retrieve approved customer-support guidance."
+  )
+  assert.ok(
+    knowledgeCheck.results.every((result) =>
+      /(?:trạng thái.*(?:giao hàng|vận chuyển)|(?:giao hàng|vận chuyển).*trạng thái)/iu.test(
+        result.excerpt
+      )
+    ),
+    "Knowledge search must not return unrelated guidance for the delivery-time question."
+  )
   const [memory, [, retainedMessageCount]] = await Promise.all([
     service
       .listAgentConversationMemories({ conversation_id: conversation.id }, { take: 1 })
@@ -340,6 +427,14 @@ export default async function runCustomerChatEvaluation({
       {
         conversation_id: conversation.id,
         failures: failures.length,
+        knowledge_check: {
+          query: knowledgeCheckQuestion,
+          result_count: knowledgeCheck.results.length,
+          results: knowledgeCheck.results.map((result) => ({
+            excerpt: compactBody(result.excerpt),
+            title: result.title,
+          })),
+        },
         memory: memory
           ? {
               source_message_count: memory.source_message_count,

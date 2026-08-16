@@ -54,17 +54,26 @@ Use compact memory and recent conversation only to resolve references and short 
 
 export function buildCustomerIntentReply(
   intent: "CLARIFY" | "SMALL_TALK",
-  locale: "en" | "vi"
+  locale: "en" | "vi",
+  addressedAsShop = false
 ) {
   if (intent === "SMALL_TALK") {
     return locale === "vi"
-      ? "Mình ổn, cảm ơn bạn! Hôm nay bạn cần mình hỗ trợ gì ạ?"
+      ? addressedAsShop
+        ? "Dạ, sốp là nhân viên CSKH của Synapse đây. Bạn cần sốp hỗ trợ gì ạ?"
+        : "Chào bạn, mình là nhân viên CSKH của Synapse. Bạn cần mình hỗ trợ gì ạ?"
       : "I'm doing well, thank you! How can I help you today?"
   }
 
   return locale === "vi"
-    ? "Mình sẵn sàng hỗ trợ. Bạn có thể cho mình biết cụ thể sản phẩm, đơn hàng hoặc vấn đề bạn đang quan tâm không ạ?"
+    ? addressedAsShop
+      ? "Sốp là nhân viên CSKH của Synapse và sẵn sàng hỗ trợ. Bạn cho sốp biết cụ thể sản phẩm, đơn hàng hoặc vấn đề đang quan tâm nhé?"
+      : "Mình là nhân viên CSKH của Synapse và sẵn sàng hỗ trợ. Bạn cho mình biết cụ thể sản phẩm, đơn hàng hoặc vấn đề đang quan tâm nhé?"
     : "I'm ready to help. Could you tell me which product, order, or issue you need help with?"
+}
+
+export function isCustomerAddressingShop(message: string) {
+  return /(?:\bsốp\b|\bshop\b)/iu.test(message.normalize("NFKC"))
 }
 
 export function detectCustomerMessageFastIntent(

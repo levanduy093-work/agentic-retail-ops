@@ -40,6 +40,7 @@ import AgentConnectorCredential from "./models/agent-connector-credential"
 import AgentAiProviderCredential from "./models/agent-ai-provider-credential"
 import AgentConversation from "./models/agent-conversation"
 import AgentConversationMemory from "./models/agent-conversation-memory"
+import AgentCustomerPreference from "./models/agent-customer-preference"
 import AgentDelivery from "./models/agent-delivery"
 import AgentEvaluationRun from "./models/agent-evaluation-run"
 import AgentEvaluationCase from "./models/agent-evaluation-scenario"
@@ -123,7 +124,9 @@ import {
 } from "./knowledge"
 import {
   buildCustomerSmallTalkReply,
+  buildCustomerOrderLookupReply,
   buildCustomerReviewAcknowledgement,
+  buildDeliveryTimeGuidanceAnswer,
   buildKnowledgeReviewFallback,
   buildScopedCustomerReply,
   detectKnowledgeQuestionLocale,
@@ -146,6 +149,7 @@ import {
   buildCatalogOverviewReply,
   buildProductAdvisorFallback,
   CustomerCatalogSnapshot,
+  extractCustomerProductPreferences,
   formatProductAdvisorReply,
   isCatalogOverviewRequest,
   isPublicCustomerUrl,
@@ -170,6 +174,7 @@ import {
   CUSTOMER_MESSAGE_INTENT_TIMEOUT_MS,
   defaultCustomerMessageIntent,
   detectCustomerMessageFastIntent,
+  isCustomerAddressingShop,
   resolveCustomerMessageIntent,
 } from "./customer-message-intent"
 import {
@@ -273,8 +278,17 @@ import {
   CONVERSATION_MEMORY_SYSTEM_PROMPT,
   CONVERSATION_MEMORY_TIMEOUT_MS,
   isSafeConversationMemoryOutput,
+  hasExplicitHistoricalCustomerReference,
+  mergeConversationMemoryOutput,
+  startsExplicitNewProductTopic,
   shouldRefreshConversationMemoryWithAi,
 } from "./conversation-memory"
+import {
+  addDays,
+  CUSTOMER_PREFERENCE_EXPIRY_DAYS,
+  extractExplicitCustomerPreferences,
+  formatCustomerProfilePreferences,
+} from "./customer-preferences"
 import {
   buildCustomerAssistantCacheKey,
   CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS,
@@ -292,6 +306,7 @@ class AgentOperationsModuleService extends MedusaService({
   AgentAiProviderCredential,
   AgentConversation,
   AgentConversationMemory,
+  AgentCustomerPreference,
   AgentDelivery,
   AgentEvaluationRun,
   AgentEvaluationCase,
@@ -594,6 +609,15 @@ class AgentOperationsModuleService extends MedusaService({
       recent_messages: unsummarizedMessages,
     }
     let output = buildConversationMemoryFallback({
+      previous_customer_facts: existing
+        ? readMemoryItems(existing.customer_facts)
+        : [],
+      previous_open_questions: existing
+        ? readMemoryItems(existing.open_questions)
+        : [],
+      previous_resolved_topics: existing
+        ? readMemoryItems(existing.resolved_topics)
+        : [],
       previous_summary: existing?.summary,
       recent_messages: unsummarizedMessages,
     })
@@ -630,7 +654,7 @@ class AgentOperationsModuleService extends MedusaService({
             priorRun.output
           )
           if (cached.success) {
-            output = cached.data
+            output = mergeConversationMemoryOutput(output, cached.data)
             break
           }
         }
@@ -671,7 +695,7 @@ class AgentOperationsModuleService extends MedusaService({
               "Conversation memory contained unsafe content."
             )
           }
-          output = parsedOutput
+          output = mergeConversationMemoryOutput(output, parsedOutput)
           await this.updateAgentModelRuns(
             {
               completed_at: new Date(),
@@ -747,6 +771,67 @@ class AgentOperationsModuleService extends MedusaService({
     )
 
     return { memory, updated: true }
+  }
+
+  @InjectManager()
+  async recordExplicitCustomerPreferences(
+    input: {
+      conversation_id: string
+      customer_id: string
+      message_id: string
+      message: string
+      tenant_id: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const candidates = extractExplicitCustomerPreferences(input.message)
+    if (!candidates.length) return []
+
+    const now = new Date()
+    for (const candidate of candidates) {
+      const existing = (
+        await this.listAgentCustomerPreferences(
+          {
+            customer_id: input.customer_id,
+            preference_type: candidate.preference_type,
+            tenant_id: input.tenant_id,
+            value: candidate.value,
+          },
+          { order: { last_confirmed_at: "DESC" }, take: 1 },
+          sharedContext
+        )
+      )[0]
+      const status: "CUSTOMER_STATED" | "CONFIRMED" =
+        candidate.status === "CONFIRMED" || existing?.status === "CONFIRMED"
+          ? "CONFIRMED"
+          : "CUSTOMER_STATED"
+      const preferenceData = {
+        expires_at: addDays(now, CUSTOMER_PREFERENCE_EXPIRY_DAYS[status]),
+        last_confirmed_at: now,
+        source_conversation_id: input.conversation_id,
+        source_message_id: input.message_id,
+        status,
+      }
+      if (existing) {
+        await this.updateAgentCustomerPreferences(
+          { ...preferenceData, id: existing.id },
+          sharedContext
+        )
+      } else {
+        await this.createAgentCustomerPreferences(
+          {
+            ...preferenceData,
+            customer_id: input.customer_id,
+            preference_type: candidate.preference_type,
+            tenant_id: input.tenant_id,
+            value: candidate.value,
+          },
+          sharedContext
+        )
+      }
+    }
+
+    return candidates
   }
 
   @InjectManager()
@@ -2133,7 +2218,7 @@ class AgentOperationsModuleService extends MedusaService({
           updated_at: new Date(document.updated_at).toISOString(),
           version: document.version,
         })),
-        retrieval_strategy: "topic-aware-v2",
+        retrieval_strategy: "topic-aware-v3",
         limit: parsed.limit,
         locale: parsed.locale ?? "",
         query: normalizeCustomerCacheText(parsed.query),
@@ -2150,7 +2235,9 @@ class AgentOperationsModuleService extends MedusaService({
         return result.success ? result.data : null
       }
     )
-    if (cachedKnowledge) return cachedKnowledge
+    if (cachedKnowledge) {
+      return filterKnowledgeEvidenceForQuestion(parsed.query, cachedKnowledge)
+    }
 
     const chunks = await this.listAgentKnowledgeChunks(
       { document_id: documents.map((document) => document.id) },
@@ -2171,9 +2258,9 @@ class AgentOperationsModuleService extends MedusaService({
           `customer-assistant:tenant:${parsed.tenant_id}`,
         ],
         ttl: CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS.knowledge_search,
-        value: lexicalOutput,
+        value: relevantLexicalOutput,
       })
-      return lexicalOutput
+      return relevantLexicalOutput
     }
 
     let semanticScores = new Map<string, number>()
@@ -2212,6 +2299,10 @@ class AgentOperationsModuleService extends MedusaService({
     const output = semanticScores.size
       ? searchKnowledgeChunksHybrid(parsed, documents, chunks, semanticScores)
       : searchKnowledgeChunks(parsed, documents, chunks)
+    const relevantOutput = filterKnowledgeEvidenceForQuestion(
+      parsed.query,
+      output
+    )
     await writeCustomerAssistantCache(caching, {
       key: knowledgeCacheKey,
       tags: [
@@ -2219,9 +2310,9 @@ class AgentOperationsModuleService extends MedusaService({
         `customer-assistant:tenant:${parsed.tenant_id}`,
       ],
       ttl: CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS.knowledge_search,
-      value: output,
+      value: relevantOutput,
     })
-    return output
+    return relevantOutput
   }
 
   @InjectManager()
@@ -2236,6 +2327,21 @@ class AgentOperationsModuleService extends MedusaService({
     },
     @MedusaContext() sharedContext: Context = {}
   ): Promise<KnowledgeAnswer> {
+    const deliveryTimeGuidance = buildDeliveryTimeGuidanceAnswer(
+      input.question,
+      input.knowledge,
+      input.locale
+    )
+    if (deliveryTimeGuidance) {
+      return {
+        ...deliveryTimeGuidance,
+        optimization: {
+          ai_invoked: false,
+          cache_hit: false,
+          path: "DETERMINISTIC_DELIVERY_TIME_GUIDANCE",
+        },
+      }
+    }
     const reviewFallback = buildKnowledgeReviewFallback(input.locale)
     const legacyRun = (
       await this.listAgentModelRuns(
@@ -2494,7 +2600,7 @@ class AgentOperationsModuleService extends MedusaService({
       return toAnswer(fallback)
     }
     if (isCatalogOverviewRequest(input.question)) {
-      return toAnswer(buildCatalogOverviewReply(input.catalog, input.locale), {
+      return toAnswer(buildCatalogOverviewReply(input.catalog, input.locale, input.question), {
         ai_invoked: false,
         cache_hit: false,
         path: "DETERMINISTIC_CATALOG",
@@ -2515,7 +2621,8 @@ class AgentOperationsModuleService extends MedusaService({
           resolveProductAdvisorModelOutput(
             cached.data,
             input.catalog,
-            input.locale
+            input.locale,
+            input.question
           ),
           {
             ai_invoked: false,
@@ -2550,6 +2657,7 @@ class AgentOperationsModuleService extends MedusaService({
         body: message.body.slice(0, 400),
         direction: message.direction,
       })),
+      shopping_preferences: extractCustomerProductPreferences(input.question),
     }
     let credentials
     try {
@@ -2591,7 +2699,8 @@ class AgentOperationsModuleService extends MedusaService({
           resolveProductAdvisorModelOutput(
             cachedResponse,
             input.catalog,
-            input.locale
+            input.locale,
+            input.question
           ),
           {
             ai_invoked: false,
@@ -2615,7 +2724,8 @@ class AgentOperationsModuleService extends MedusaService({
             resolveProductAdvisorModelOutput(
               cached.data,
               input.catalog,
-              input.locale
+              input.locale,
+              input.question
             )
           )
         }
@@ -2675,7 +2785,8 @@ class AgentOperationsModuleService extends MedusaService({
           resolveProductAdvisorModelOutput(
             output,
             input.catalog,
-            input.locale
+            input.locale,
+            input.question
           ),
           {
             ai_invoked: true,
@@ -3207,52 +3318,135 @@ class AgentOperationsModuleService extends MedusaService({
       )
     }
 
-    const [conversationMemory, customerMessages] = await Promise.all([
+    const question = inbound.body.trim()
+    const referencesPriorContext = hasExplicitHistoricalCustomerReference(question)
+    const startsNewTopic = startsExplicitNewProductTopic(question)
+    const [conversationMemory, customerProfilePreferences] = await Promise.all([
       this.listAgentConversationMemories(
         { conversation_id: conversation.id },
         { take: 1 },
         sharedContext
       ).then((memories) => memories[0]),
-      this.listAgentMessages(
-        { direction: "INBOUND", sender_id: inbound.sender_id },
-        { order: { occurred_at: "DESC" }, take: 30 },
-        sharedContext
-      ),
+      referencesPriorContext
+        ? this.listAgentCustomerPreferences(
+            {
+              customer_id: inbound.sender_id,
+              tenant_id: conversation.tenant_id,
+            },
+            { order: { last_confirmed_at: "DESC" }, take: 12 },
+            sharedContext
+          )
+        : Promise.resolve([]),
     ])
-    const priorConversationIds = [
-      ...new Set(
-        customerMessages
-          .map((message) => message.conversation_id)
-          .filter((conversationId) => conversationId !== conversation.id)
-      ),
-    ].slice(0, 8)
-    const tenantConversations = priorConversationIds.length
-      ? await this.listAgentConversations(
-          { id: priorConversationIds, tenant_id: conversation.tenant_id },
-          { take: priorConversationIds.length },
-          sharedContext
-        )
-      : []
-    const customerMemories = tenantConversations.length
-      ? await this.listAgentConversationMemories(
-          {
-            conversation_id: tenantConversations.map(
-              (candidate) => candidate.id
-            ),
-          },
-          { order: { summarized_at: "DESC" }, take: 5 },
-          sharedContext
-        )
-      : []
+    await this.recordExplicitCustomerPreferences(
+      {
+        conversation_id: conversation.id,
+        customer_id: inbound.sender_id,
+        message: question,
+        message_id: inbound.id,
+        tenant_id: conversation.tenant_id,
+      },
+      sharedContext
+    )
+    const profileContextNow = new Date()
+    const activeProfilePreferences = customerProfilePreferences.filter(
+      (preference) =>
+        new Date(preference.expires_at).getTime() > profileContextNow.getTime()
+    )
     const memorySummary = buildCustomerConversationContext({
-      current_summary: conversationMemory?.summary,
-      previous_conversation_summaries: customerMemories.map(
-        (memory) => memory.summary
-      ),
+      current_summary: startsNewTopic ? null : conversationMemory?.summary,
+      profile_preferences: referencesPriorContext
+        ? formatCustomerProfilePreferences(activeProfilePreferences)
+        : [],
     })
 
-    const question = inbound.body.trim()
-    const locale = detectKnowledgeQuestionLocale(question)
+    const locale =
+      input.customer_order_lookup_locale ?? detectKnowledgeQuestionLocale(question)
+    if (input.customer_order_lookup) {
+      const answer = buildCustomerOrderLookupReply(
+        input.customer_order_lookup,
+        locale
+      )
+      const now = new Date()
+      const response = await this.createAgentMessages(
+        {
+          body: formatChannelKnowledgeAnswer(answer),
+          channel: conversation.channel,
+          conversation_id: conversation.id,
+          direction: "OUTBOUND",
+          idempotency_key: responseIdempotencyKey,
+          message_type: "TEXT",
+          occurred_at: now,
+          sender_id: "customer-knowledge-agent",
+          sender_type: "agent",
+          status: "AVAILABLE",
+          structured_content: {
+            citations: [],
+            disposition: answer.disposition,
+            grounded: answer.grounded,
+            grounding_source:
+              input.customer_order_lookup.status === "FOUND"
+                ? "LIVE_ORDER"
+                : "CONVERSATION",
+            inbound_message_id: inbound.id,
+            intent: "STORE_QUESTION",
+            intent_confidence: 1,
+            live_order: answer.live_order ?? null,
+            locale,
+            optimization: {
+              ai_invoked: false,
+              cache_hit: false,
+              path: "VERIFIED_CUSTOMER_ORDER_LOOKUP",
+            },
+            product_ids: [],
+            product_media: [],
+          },
+        },
+        sharedContext
+      )
+      const delivery = await this.createAgentDeliveries(
+        {
+          attempt_count: 0,
+          available_at: now,
+          channel: conversation.channel,
+          connection_id: connection.id,
+          idempotency_key: `message:${response.id}:delivery`,
+          message_id: response.id,
+          status: "PENDING",
+        },
+        sharedContext
+      )
+      await this.updateAgentConversations(
+        { id: conversation.id, last_message_at: now },
+        sharedContext
+      )
+      await this.createAgentAuditEvents(
+        {
+          action: "customer-order-lookup-response-created",
+          actor_id: "customer-knowledge-agent",
+          actor_type: "agent",
+          correlation_id:
+            `${conversation.channel.toLowerCase()}:${connection.id}:${inbound.id}`,
+          data: {
+            display_id: input.customer_order_lookup.display_id,
+            lookup_status: input.customer_order_lookup.status,
+            response_message_id: response.id,
+          },
+          event_type: "agent.customer-order.lookup-response-created",
+          recorded_at: now,
+          resource_id: response.id,
+          resource_type: "agent_message",
+        },
+        sharedContext
+      )
+      return {
+        delivery_id: delivery.id,
+        duplicate: false,
+        grounded: answer.grounded,
+        response_message_id: response.id,
+        support_task_id: null,
+      }
+    }
     const explicitAttack = isExplicitPromptAttack(question)
     const smallTalk = explicitAttack
       ? null
@@ -3270,6 +3464,7 @@ class AgentOperationsModuleService extends MedusaService({
           { order: { occurred_at: "DESC" }, take: 7 },
           sharedContext
         )
+    const contextMessages = startsNewTopic ? [] : recentMessages
     const intent = explicitAttack
       ? {
           confidence: 1,
@@ -3294,7 +3489,7 @@ class AgentOperationsModuleService extends MedusaService({
               idempotency_key: `customer-intent-model:${inbound.id}`,
               locale,
               message: question,
-              recent_messages: recentMessages
+              recent_messages: contextMessages
                 .slice()
                 .reverse()
                 .filter(
@@ -3331,17 +3526,24 @@ class AgentOperationsModuleService extends MedusaService({
         locale,
         "NEEDS_STAFF_AUTHORITY"
       )
+    } else if (routedIntent === "SMALL_TALK" && smallTalk) {
+      answer = smallTalk
     } else if (routedIntent === "SMALL_TALK" || routedIntent === "CLARIFY") {
       answer = await this.draftCustomerConversationReply(
         {
           conversation_memory: memorySummary,
           fallback_body:
-            smallTalk?.body ?? buildCustomerIntentReply(routedIntent, locale),
+            smallTalk?.body ??
+              buildCustomerIntentReply(
+                routedIntent,
+                locale,
+                isCustomerAddressingShop(question)
+              ),
           idempotency_key: `customer-conversation-response:${inbound.id}`,
           intent: routedIntent,
           locale,
           message: question,
-          recent_messages: recentMessages
+          recent_messages: contextMessages
             .slice()
             .reverse()
             .filter(
@@ -3372,7 +3574,7 @@ class AgentOperationsModuleService extends MedusaService({
           idempotency_key: `customer-product-advisor:${inbound.id}`,
           locale,
           question,
-          recent_messages: recentMessages
+          recent_messages: contextMessages
             .slice()
             .reverse()
             .filter(
@@ -3474,8 +3676,11 @@ class AgentOperationsModuleService extends MedusaService({
           },
           product_ids: answer.product_ids ?? [],
           product_media: answer.product_media ?? [],
+          pending_customer_input: answer.pending_customer_input ?? null,
           grounding_source: answer.product_ids?.length
             ? "LIVE_CATALOG"
+            : answer.live_order
+              ? "LIVE_ORDER"
             : answer.grounded
               ? "APPROVED_KNOWLEDGE"
               : "CONVERSATION",

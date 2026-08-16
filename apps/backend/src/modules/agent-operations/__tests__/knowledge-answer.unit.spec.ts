@@ -1,6 +1,8 @@
 import {
   buildCustomerSmallTalkReply,
+  buildCustomerOrderLookupReply,
   buildCustomerReviewAcknowledgement,
+  buildDeliveryTimeGuidanceAnswer,
   buildKnowledgeAnswerFallback,
   detectKnowledgeQuestionLocale,
   filterKnowledgeEvidenceForQuestion,
@@ -52,6 +54,38 @@ describe("grounded knowledge answers", () => {
     ).toContain(
       "Nguồn:\n1. Chính sách đổi trả (1.0)"
     )
+  })
+
+  it("asks for an order number before any delivery-status lookup", () => {
+    const deliveryKnowledge = {
+      results: [
+        {
+          ...knowledge.results[0],
+          excerpt:
+            "Khi khách hỏi trạng thái đơn hàng, nhân viên cần kiểm tra trạng thái thanh toán và giao hàng trực tiếp trên hệ thống trước khi trả lời.",
+        },
+      ],
+      total_candidates: 1,
+    }
+    const answer = buildDeliveryTimeGuidanceAnswer(
+      "Thời gian giao hàng bao lâu vậy sốp?",
+      deliveryKnowledge,
+      "vi"
+    )
+
+    expect(answer?.body).toContain("mã đơn")
+    expect(answer?.pending_customer_input).toBe("ORDER_REFERENCE")
+  })
+
+  it("does not disclose an order when the linked customer does not own it", () => {
+    const answer = buildCustomerOrderLookupReply(
+      { display_id: 123, status: "NOT_OWNER" },
+      "vi"
+    )
+
+    expect(answer.grounded).toBe(false)
+    expect(answer.body).toContain("không khớp")
+    expect(answer.body).not.toContain("thanh toán:")
   })
 
   it("skips semantic embedding when lexical evidence is already strong", () => {
@@ -153,6 +187,16 @@ describe("grounded knowledge answers", () => {
     )
   })
 
+  it("uses Synapse CSKH as the default identity and mirrors shop wording only when used by the customer", () => {
+    expect(buildCustomerSmallTalkReply("Xin chào", "vi")?.body).toContain(
+      "nhân viên CSKH của Synapse"
+    )
+    expect(
+      buildCustomerSmallTalkReply("mình tên Duy sốp tên gì vậy nhỉ", "vi")
+        ?.body
+    ).toContain("sốp là nhân viên CSKH của Synapse")
+  })
+
   it("recognizes an approved return-policy document for a short return request", () => {
     expect(
       filterKnowledgeEvidenceForQuestion("Mình muốn trả hàng á", knowledge)
@@ -192,6 +236,51 @@ describe("grounded knowledge answers", () => {
     ).toEqual([])
   })
 
+  it("keeps order preparation and shipping guidance for a delivery-time question", () => {
+    const deliveryGuidance = {
+      ...knowledge,
+      results: [
+        {
+          ...knowledge.results[0],
+          document_key: "order-status-response-guide",
+          excerpt:
+            "Khi khách hỏi thời gian giao hàng, nhân viên cần kiểm tra trạng thái chuẩn bị hàng và vận chuyển trước khi trả lời.",
+          title: "Hướng dẫn trả lời trạng thái đơn hàng",
+        },
+      ],
+    }
+
+    expect(
+      filterKnowledgeEvidenceForQuestion(
+        "Thời gian giao hàng bao lâu?",
+        deliveryGuidance
+      ).results
+    ).toHaveLength(1)
+  })
+
+  it("turns approved order-status guidance into a safe delivery-time answer", () => {
+    const deliveryGuidance = buildDeliveryTimeGuidanceAnswer(
+      "Thời gian giao hàng bao lâu?",
+      {
+        ...knowledge,
+        results: [
+          {
+            ...knowledge.results[0],
+            excerpt:
+              "Khi khách hỏi trạng thái đơn hàng, nhân viên cần kiểm tra trạng thái thanh toán và giao hàng trực tiếp trên hệ thống trước khi trả lời.",
+          },
+        ],
+      },
+      "vi"
+    )
+
+    expect(deliveryGuidance).toMatchObject({
+      disposition: "ANSWER",
+      grounded: true,
+    })
+    expect(deliveryGuidance?.body).toContain("trạng thái thanh toán và giao hàng")
+  })
+
   it("preserves human review when retrieved chunks do not answer the question", () => {
     const answer = resolveGovernedKnowledgeModelOutput(
       {
@@ -223,6 +312,7 @@ describe("grounded knowledge answers", () => {
       disposition: "HUMAN_REVIEW",
       grounded: false,
     })
-    expect(answer.body).toContain("nhân viên kiểm tra")
+    expect(answer.body).toContain("nhân viên cần kiểm tra")
+    expect(answer.body).not.toContain("phản hồi tiếp")
   })
 })

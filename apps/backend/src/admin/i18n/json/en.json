@@ -295,6 +295,11 @@
     "confirmSimulatorSend": "Send checked response",
     "simulatorReplySent": "The checked response was sent to the internal test chat.",
     "simulatorAlreadySent": "Sent to the customer after employee confirmation.",
+    "clearHistory": "Clear chat and AI memory",
+    "clearHistoryTitle": "Clear this chat and AI memory?",
+    "clearHistoryDescription": "This removes every message and the AI memory for this conversation from the web chat. The next message starts a new conversation without the old context.",
+    "confirmClearHistory": "Clear chat and AI memory",
+    "historyCleared": "Chat and AI memory were cleared. The next consultation starts fresh.",
     "status": {
       "todo": "Waiting for an employee",
       "claimed": "Taken by an employee",

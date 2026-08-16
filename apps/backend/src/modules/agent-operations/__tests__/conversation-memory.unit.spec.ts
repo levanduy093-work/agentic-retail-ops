@@ -2,7 +2,10 @@ import {
   buildCustomerConversationContext,
   buildConversationMemoryFallback,
   ConversationMemoryModelOutput,
+  hasExplicitHistoricalCustomerReference,
   isSafeConversationMemoryOutput,
+  mergeConversationMemoryOutput,
+  startsExplicitNewProductTopic,
   shouldRefreshConversationMemoryWithAi,
 } from "../conversation-memory"
 
@@ -21,18 +24,87 @@ describe("conversation memory", () => {
     expect(ConversationMemoryModelOutput.parse(result)).toEqual(result)
   })
 
-  it("combines current chat memory with tenant-scoped customer history", () => {
-    const context = buildCustomerConversationContext({
-      current_summary: "Customer is choosing a cotton shirt.",
-      previous_conversation_summaries: [
-        "Customer prefers black and usually chooses size M.",
+  it("keeps durable structured facts when deterministic fallback is used", () => {
+    const result = buildConversationMemoryFallback({
+      previous_customer_facts: ["Khách thích phong cách năng động."],
+      previous_open_questions: ["Chưa rõ size."],
+      previous_resolved_topics: ["Đã xác nhận cần đồ mùa đông."],
+      previous_summary: "Khách đang tìm đồ mùa đông.",
+      recent_messages: [{ body: "Năng động đi sốp", direction: "INBOUND" }],
+    })
+
+    expect(result.customer_facts).toContain("Khách thích phong cách năng động.")
+    expect(result.open_questions).toContain("Chưa rõ size.")
+    expect(result.resolved_topics).toContain("Đã xác nhận cần đồ mùa đông.")
+  })
+
+  it("derives and preserves explicit shopping preferences when the model compacts memory", () => {
+    const fallback = buildConversationMemoryFallback({
+      recent_messages: [
+        {
+          body: "Áo Khoác Active Move, em nữ mặc size M, thích năng động, tầm 600 nghìn.",
+          direction: "INBOUND",
+        },
+      ],
+    })
+    const merged = mergeConversationMemoryOutput(fallback, {
+      customer_facts: ["Khách cần tư vấn áo khoác."],
+      open_questions: [],
+      resolved_topics: [],
+      summary: "Khách cần tư vấn sản phẩm.",
+    })
+
+    expect(merged.customer_facts.join(" ")).toContain("Active Move")
+    expect(merged.customer_facts.join(" ")).toContain("size M")
+    expect(merged.customer_facts.join(" ")).toContain("năng động")
+  })
+
+  it("retains a generic product, size, and budget stated in one customer message", () => {
+    const result = buildConversationMemoryFallback({
+      recent_messages: [
+        {
+          body: "Mình muốn áo thun size M khoảng 300.",
+          direction: "INBOUND",
+        },
       ],
     })
 
+    expect(result.customer_facts).toContain("Khách đang tìm áo thun.")
+    expect(result.customer_facts).toContain("Khách mặc size M.")
+    expect(result.customer_facts).toContain("Ngân sách khoảng 300.000 đồng.")
+  })
+
+  it("uses only current chat memory by default and accepts a scoped profile separately", () => {
+    const context = buildCustomerConversationContext({
+      current_summary: "Customer is choosing a cotton shirt.",
+      profile_preferences: ["Size M (đã xác nhận, hết hạn 16/2/2027)"],
+    })
+
     expect(context).toContain("Current conversation")
-    expect(context).toContain("Previous conversations with this customer")
-    expect(context).toContain("size M")
+    expect(context).toContain("Customer profile preferences")
+    expect(context).toContain("Size M")
     expect(context.length).toBeLessThanOrEqual(1_600)
+  })
+
+  it("does not include old conversation context unless the customer references it", () => {
+    expect(
+      hasExplicitHistoricalCustomerReference("Mình muốn một áo thun mới")
+    ).toBe(false)
+    expect(
+      hasExplicitHistoricalCustomerReference("Vẫn size M như lần trước nhé")
+    ).toBe(true)
+    expect(
+      hasExplicitHistoricalCustomerReference("Cho mình xem mẫu lúc nãy")
+    ).toBe(true)
+  })
+
+  it("starts a clean product topic when the customer states a new need", () => {
+    expect(startsExplicitNewProductTopic("Tôi muốn áo thun size M")).toBe(
+      true
+    )
+    expect(startsExplicitNewProductTopic("Vẫn size M cho mẫu lúc nãy")).toBe(
+      false
+    )
   })
 
   it("does not retain prompt attacks or secrets in fallback memory", () => {

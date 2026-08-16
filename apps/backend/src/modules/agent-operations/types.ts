@@ -423,6 +423,8 @@ export type ProcessAgentConversationMessageInput = {
 }
 
 export type ProcessCustomerKnowledgeQuestionInput = {
+  customer_order_lookup?: import("./customer-order-lookup").CustomerOrderLookup
+  customer_order_lookup_locale?: "en" | "vi"
   inbound_message_id: string
 }
 

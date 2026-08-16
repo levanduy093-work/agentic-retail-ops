@@ -168,6 +168,7 @@ export const CustomerSupportContent = ({
     string | null
   >(null)
   const [reply, setReply] = useState("")
+  const [clearHistoryOpen, setClearHistoryOpen] = useState(false)
   const [releaseOpen, setReleaseOpen] = useState(false)
   const [sendOpen, setSendOpen] = useState(false)
   const [simulatorLocale, setSimulatorLocale] = useState<"en" | "vi">("vi")
@@ -444,6 +445,24 @@ export const CustomerSupportContent = ({
     },
   })
 
+  const clearConversationHistory = useMutation({
+    mutationFn: (conversationId: string) =>
+      sdk.client.fetch(
+        `/admin/agent-operations/conversations/${conversationId}/clear-history`,
+        {
+          body: { idempotency_key: crypto.randomUUID() },
+          method: "POST",
+        },
+      ),
+    onError: (error) => toast.error(errorMessage(error)),
+    onSuccess: async () => {
+      toast.success(t("supportDesk.historyCleared"))
+      setClearHistoryOpen(false)
+      setSelectedConversationId(null)
+      await invalidateSupportData()
+    },
+  })
+
   const sendReviewedReply = useMutation({
     mutationFn: (task: SupportTask) =>
       sdk.client.fetch(
@@ -496,6 +515,8 @@ export const CustomerSupportContent = ({
     !assignedToOther &&
     !assignedToManager
   const messageSent = selectedTask?.result?.message_sent === true
+  const canClearHistory =
+    !selectedTask || TERMINAL_STATUSES.includes(selectedTask.status)
 
   if (tasks.isLoading || conversations.isLoading || currentUser.isLoading) {
     return (
@@ -814,6 +835,16 @@ export const CustomerSupportContent = ({
                   )}
                 </div>
                 <div className="flex flex-wrap justify-end gap-2">
+                  <Button
+                    size="small"
+                    variant="secondary"
+                    disabled={
+                      !canClearHistory || clearConversationHistory.isPending
+                    }
+                    onClick={() => setClearHistoryOpen(true)}
+                  >
+                    {t("supportDesk.clearHistory")}
+                  </Button>
                   {selectedTask &&
                     !TERMINAL_STATUSES.includes(selectedTask.status) &&
                     !assignedToManager && (
@@ -1115,6 +1146,43 @@ export const CustomerSupportContent = ({
                 onClick={() => selectedTask && releaseTask.mutate(selectedTask)}
               >
                 {t("supportDesk.confirmRelease")}
+              </Button>
+            </div>
+          </Drawer.Footer>
+        </Drawer.Content>
+      </Drawer>
+
+      <Drawer open={clearHistoryOpen} onOpenChange={setClearHistoryOpen}>
+        <Drawer.Content>
+          <Drawer.Header>
+            <Drawer.Title>{t("supportDesk.clearHistoryTitle")}</Drawer.Title>
+          </Drawer.Header>
+          <Drawer.Body className="p-4">
+            <Text size="small" leading="compact" className="text-ui-fg-subtle">
+              {t("supportDesk.clearHistoryDescription")}
+            </Text>
+          </Drawer.Body>
+          <Drawer.Footer>
+            <div className="flex justify-end gap-x-2">
+              <Drawer.Close asChild>
+                <Button
+                  size="small"
+                  variant="secondary"
+                  disabled={clearConversationHistory.isPending}
+                >
+                  {t("supportDesk.cancel")}
+                </Button>
+              </Drawer.Close>
+              <Button
+                size="small"
+                disabled={!selectedConversation || !canClearHistory}
+                isLoading={clearConversationHistory.isPending}
+                onClick={() =>
+                  selectedConversation &&
+                  clearConversationHistory.mutate(selectedConversation.id)
+                }
+              >
+                {t("supportDesk.confirmClearHistory")}
               </Button>
             </div>
           </Drawer.Footer>

@@ -29,6 +29,14 @@ const optionsAsKeymap = (
   }, {})
 }
 
+const isVariantPurchasable = (variant: HttpTypes.StoreProductVariant) => {
+  return (
+    !variant.manage_inventory ||
+    Boolean(variant.allow_backorder) ||
+    (variant.inventory_quantity ?? 0) > 0
+  )
+}
+
 export default function ProductActions({
   product,
   disabled,
@@ -78,6 +86,37 @@ export default function ProductActions({
     })
   }, [product.variants, options])
 
+  const optionAvailability = useMemo(() => {
+    return (product.options || []).reduce<
+      Record<string, Record<string, boolean>>
+    >((availability, option) => {
+      availability[option.id] = (option.values || []).reduce<
+        Record<string, boolean>
+      >((values, optionValue) => {
+        const candidateOptions = {
+          ...options,
+          [option.id]: optionValue.value,
+        }
+
+        values[optionValue.value] = (product.variants || []).some((variant) => {
+          const variantOptions = optionsAsKeymap(variant.options)
+
+          return (
+            isVariantPurchasable(variant) &&
+            Object.entries(candidateOptions).every(
+              ([optionId, value]) =>
+                value === undefined || variantOptions?.[optionId] === value
+            )
+          )
+        })
+
+        return values
+      }, {})
+
+      return availability
+    }, {})
+  }, [options, product.options, product.variants])
+
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString())
     const value = isValidVariant ? selectedVariant?.id : null
@@ -96,28 +135,10 @@ export default function ProductActions({
   }, [isValidVariant, pathname, router, searchParams, selectedVariant])
 
   // check if the selected variant is in stock
-  const inStock = useMemo(() => {
-    // If we don't manage inventory, we can always add to cart
-    if (selectedVariant && !selectedVariant.manage_inventory) {
-      return true
-    }
-
-    // If we allow back orders on the variant, we can add to cart
-    if (selectedVariant?.allow_backorder) {
-      return true
-    }
-
-    // If there is inventory available, we can add to cart
-    if (
-      selectedVariant?.manage_inventory &&
-      (selectedVariant?.inventory_quantity || 0) > 0
-    ) {
-      return true
-    }
-
-    // Otherwise, we can't add to cart
-    return false
-  }, [selectedVariant])
+  const inStock = useMemo(
+    () => Boolean(selectedVariant && isVariantPurchasable(selectedVariant)),
+    [selectedVariant]
+  )
 
   const actionsRef = useRef<HTMLDivElement>(null)
 
@@ -139,9 +160,7 @@ export default function ProductActions({
     } catch (error) {
       console.error("Failed to add product to cart", error)
       setAddError(
-        error instanceof Error
-          ? error.message
-          : t("product.add_to_cart_error")
+        error instanceof Error ? error.message : t("product.add_to_cart_error")
       )
     } finally {
       setIsAdding(false)
@@ -162,6 +181,7 @@ export default function ProductActions({
                       current={options[option.id]}
                       updateOption={setOptionValue}
                       title={option.title ?? ""}
+                      availability={optionAvailability[option.id]}
                       data-testid="product-options"
                       disabled={!!disabled || isAdding}
                     />
@@ -189,7 +209,7 @@ export default function ProductActions({
           isLoading={isAdding}
           data-testid="add-product-button"
         >
-          {!selectedVariant && !options
+          {!selectedVariant
             ? t("product.select_variant")
             : !inStock || !isValidVariant
             ? t("product.out_of_stock")
@@ -205,6 +225,7 @@ export default function ProductActions({
           variant={selectedVariant}
           options={options}
           updateOptions={setOptionValue}
+          optionAvailability={optionAvailability}
           inStock={inStock}
           handleAddToCart={handleAddToCart}
           isAdding={isAdding}

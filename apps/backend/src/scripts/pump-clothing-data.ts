@@ -279,7 +279,7 @@ export default async function pumpClothingData({
         fields: ["id"],
       });
 
-      const [existingLevels] = await inventoryService.listInventoryLevels({
+      const existingLevels = await inventoryService.listInventoryLevels({
         location_id: stockLocation.id,
       });
       const existingItemIds = new Set(

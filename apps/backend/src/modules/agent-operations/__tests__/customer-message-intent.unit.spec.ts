@@ -61,7 +61,12 @@ describe("customer message intent routing", () => {
   })
 
   it("provides direct conversational and clarification replies", () => {
-    expect(buildCustomerIntentReply("SMALL_TALK", "vi")).toContain("Hôm nay")
+    expect(buildCustomerIntentReply("SMALL_TALK", "vi")).toContain(
+      "nhân viên CSKH của Synapse"
+    )
+    expect(buildCustomerIntentReply("SMALL_TALK", "vi", true)).toContain(
+      "sốp là nhân viên CSKH của Synapse"
+    )
     expect(buildCustomerIntentReply("CLARIFY", "en")).toContain("Could you")
   })
 

@@ -46,6 +46,8 @@
     "agent:analyze-customer-ai-latency": "medusa exec ./src/scripts/analyze-customer-ai-latency.ts",
     "agent:apply-provider-priority": "medusa exec ./src/scripts/apply-ai-provider-priority.ts",
     "agent:backfill-conversation-memory": "medusa exec ./src/scripts/backfill-conversation-memory.ts",
+    "agent:verify-customer-context-boundaries": "medusa exec ./src/scripts/verify-customer-context-boundaries.ts",
+    "agent:verify-clear-conversation-history": "medusa exec ./src/scripts/verify-customer-conversation-history-clear.ts",
     "agent:verify-ai-provider-vault": "medusa exec ./src/scripts/verify-ai-provider-vault.ts",
     "agent:check-config": "medusa exec ./src/scripts/check-agent-runtime-configuration.ts",
     "lint": "medusa lint",

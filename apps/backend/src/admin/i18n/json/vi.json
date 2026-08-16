@@ -540,6 +540,11 @@
     "confirmSimulatorSend": "Gửi câu trả lời đã kiểm tra",
     "simulatorReplySent": "Đã gửi câu trả lời vào kênh chat thử nghiệm nội bộ.",
     "simulatorAlreadySent": "Đã gửi cho khách sau khi nhân viên xác nhận.",
+    "clearHistory": "Xóa chat và memory",
+    "clearHistoryTitle": "Xóa chat và memory AI?",
+    "clearHistoryDescription": "Thao tác này xóa toàn bộ tin nhắn và memory AI của cuộc hội thoại này khỏi web chat. Lượt nhắn tiếp theo sẽ bắt đầu một hội thoại mới, không dùng dữ liệu cũ.",
+    "confirmClearHistory": "Xóa chat và memory",
+    "historyCleared": "Đã xóa chat và memory AI. Lượt tư vấn tiếp theo sẽ bắt đầu mới.",
     "status": {
       "todo": "Chưa có người nhận",
       "claimed": "Đã có người nhận",

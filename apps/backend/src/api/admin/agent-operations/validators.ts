@@ -155,6 +155,14 @@ export const AdminSendAgentConversationMessage = z.strictObject({
   message_type: z.literal("COMMAND"),
 })
 
+export const AdminClearAgentConversation = z.strictObject({
+  idempotency_key: z.string().trim().min(1).max(200),
+})
+
+export type AdminClearAgentConversationType = z.infer<
+  typeof AdminClearAgentConversation
+>
+
 export const AdminCreateAgentTask = z.strictObject({
   description: z.string().trim().max(4000).optional(),
   due_at: z.string().datetime().optional(),

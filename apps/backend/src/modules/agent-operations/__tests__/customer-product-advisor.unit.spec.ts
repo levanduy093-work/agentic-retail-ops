@@ -1,12 +1,15 @@
 import {
   buildProductAdvisorFallback,
   buildCatalogOverviewReply,
+  extractCustomerProductPreferences,
   extractCatalogSearchQuery,
   extractRecentCatalogSearchQuery,
   formatProductAdvisorReply,
   isCatalogOverviewRequest,
+  isProductDiscoveryFollowUp,
   isPotentialProductRequest,
   resolveProductAdvisorModelOutput,
+  shouldReadCatalogForCustomerMessage,
 } from "../customer-product-advisor"
 
 describe("customer product advisor", () => {
@@ -43,6 +46,13 @@ describe("customer product advisor", () => {
 
   it("detects catalog browsing and extracts a bounded search query", () => {
     expect(isPotentialProductRequest("Sốp bán gì thế?")).toBe(true)
+    expect(isPotentialProductRequest("Mình cần mua đồ đông")).toBe(true)
+    expect(isProductDiscoveryFollowUp("Năng động đi sốp")).toBe(true)
+    expect(
+      shouldReadCatalogForCustomerMessage("Năng động đi sốp", [
+        "Mình cần mua đồ đông",
+      ])
+    ).toBe(true)
     expect(extractCatalogSearchQuery("Sốp bán gì thế?")).toBeUndefined()
     expect(extractCatalogSearchQuery("Tư vấn áo nam cho mình")).toContain(
       "áo"
@@ -55,6 +65,12 @@ describe("customer product advisor", () => {
     expect(
       extractCatalogSearchQuery("Em nữ, mặc size M, tầm 600 nghìn thôi sốp.")
     ).toBeUndefined()
+    expect(
+      extractCatalogSearchQuery("Mình muốn size M khoảng 300 áo thun")
+    ).toBe("áo thun")
+    expect(
+      extractCustomerProductPreferences("Mình muốn size M khoảng 300 áo thun")
+    ).toEqual({ budget_max: 300000, product_query: "áo thun", size: "M" })
     expect(
       extractRecentCatalogSearchQuery([
         { body: "Mẫu đó còn size M không?", direction: "INBOUND" },
@@ -82,6 +98,18 @@ describe("customer product advisor", () => {
       "https://shop.example/vi/vn/products/ao-thun-cotton"
     )
     expect(output.product_ids).toEqual(["prod_1"])
+  })
+
+  it("uses the supplied size and budget before asking for another preference", () => {
+    const output = buildProductAdvisorFallback(
+      catalog,
+      "vi",
+      "Mình muốn áo thun size M khoảng 300"
+    )
+
+    expect(output.recommendations[0]?.reason).toContain("199.000")
+    expect(output.follow_up_question).toContain("màu")
+    expect(output.follow_up_question).not.toMatch(/loại đồ|size|ngân sách/iu)
   })
 
   it("answers a broad catalog question as a proactive consultation", () => {
@@ -136,8 +164,8 @@ describe("customer product advisor", () => {
       "vi"
     )
 
-    expect(output.follow_up_question).toContain("phong cách")
-    expect(rendered.body).toContain("giúp bạn chọn món phù hợp")
+    expect(output.follow_up_question).toContain("loại đồ")
+    expect(rendered.body).toContain("thêm một chút thông tin")
     expect(rendered.body).not.toMatch(/chờ|nhắn lại|truy vấn được catalog/iu)
     expect(rendered.product_ids).toEqual([])
   })
