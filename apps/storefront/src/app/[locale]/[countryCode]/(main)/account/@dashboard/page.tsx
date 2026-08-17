@@ -12,12 +12,13 @@ export const metadata: Metadata = {
 
 export default async function OverviewTemplate() {
   const customer = await retrieveCustomer().catch(() => null)
-  const orders =
-    (await listOrders(5, 0, undefined, null).catch(() => null)) || null
 
   if (!customer) {
-    notFound()
+    return null
   }
+
+  const orders =
+    (await listOrders(5, 0, undefined, null).catch(() => null)) || null
 
   return <Overview customer={customer} orders={orders} />
 }

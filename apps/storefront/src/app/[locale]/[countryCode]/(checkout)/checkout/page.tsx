@@ -4,13 +4,21 @@ import PaymentWrapper from "@modules/checkout/components/payment-wrapper"
 import CheckoutForm from "@modules/checkout/templates/checkout-form"
 import CheckoutSummary from "@modules/checkout/templates/checkout-summary"
 import { Metadata } from "next"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 
 export const metadata: Metadata = {
   title: "Checkout",
 }
 
-export default async function Checkout() {
+type Props = {
+  params: Promise<{
+    locale: string
+    countryCode: string
+  }>
+}
+
+export default async function Checkout(props: Props) {
+  const { locale, countryCode } = await props.params
   const cart = await retrieveCart()
 
   if (!cart) {
@@ -18,6 +26,10 @@ export default async function Checkout() {
   }
 
   const customer = await retrieveCustomer()
+
+  if (!customer) {
+    redirect(`/${locale}/${countryCode}/account?redirectTo=/checkout`)
+  }
 
   return (
     <div className="content-container grid grid-cols-1 gap-8 py-8 small:grid-cols-[minmax(0,1fr)_400px] small:py-12">
@@ -32,3 +44,4 @@ export default async function Checkout() {
     </div>
   )
 }
+

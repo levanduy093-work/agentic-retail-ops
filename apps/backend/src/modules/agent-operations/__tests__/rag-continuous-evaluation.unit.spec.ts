@@ -14,6 +14,7 @@ describe("Continuous RAG Knowledge Benchmark & Ground-Truth Verification", () =>
   const returnPolicyDoc = {
     approved_at: "2026-08-01T00:00:00.000Z",
     citation_locator: "drive://policies/05-DOI-TRA-HOAN-TIEN.docx",
+    content: "CHÍNH SÁCH ĐỔI TRẢ, HOÀN TIỀN VÀ KHIẾU NẠI",
     document_key: "05-doi-tra-hoan-tien.docx",
     effective_at: "2026-08-01T00:00:00.000Z",
     expires_at: null,
@@ -26,6 +27,7 @@ describe("Continuous RAG Knowledge Benchmark & Ground-Truth Verification", () =>
   const shippingPolicyDoc = {
     approved_at: "2026-08-01T00:00:00.000Z",
     citation_locator: "drive://policies/04-GIAO-HANG.docx",
+    content: "CHÍNH SÁCH VẬN CHUYỂN VÀ GIAO NHẬN",
     document_key: "04-giao-hang.docx",
     effective_at: "2026-08-01T00:00:00.000Z",
     expires_at: null,
@@ -38,6 +40,7 @@ describe("Continuous RAG Knowledge Benchmark & Ground-Truth Verification", () =>
   const paymentPolicyDoc = {
     approved_at: "2026-08-01T00:00:00.000Z",
     citation_locator: "drive://policies/03-DON-HANG-THANH-TOAN.docx",
+    content: "QUY TRÌNH ĐẶT HÀNG VÀ CHÍNH SÁCH THANH TOÁN",
     document_key: "03-don-hang-thanh-toan.docx",
     effective_at: "2026-08-01T00:00:00.000Z",
     expires_at: null,
@@ -50,6 +53,7 @@ describe("Continuous RAG Knowledge Benchmark & Ground-Truth Verification", () =>
   const warrantyPolicyDoc = {
     approved_at: "2026-08-01T00:00:00.000Z",
     citation_locator: "drive://policies/06-BAO-HANH-CHAT-LUONG.docx",
+    content: "CHÍNH SÁCH BẢO HÀNH VÀ CAM KẾT CHẤT LƯỢNG",
     document_key: "06-bao-hanh-chat-luong.docx",
     effective_at: "2026-08-01T00:00:00.000Z",
     expires_at: null,
@@ -62,6 +66,7 @@ describe("Continuous RAG Knowledge Benchmark & Ground-Truth Verification", () =>
   const orderLookupGuideDoc = {
     approved_at: "2026-08-01T00:00:00.000Z",
     citation_locator: "drive://guides/huong-dan-tra-cuu-don-hang.docx",
+    content: "Hướng dẫn tra cứu đơn hàng qua chat",
     document_key: "huong-dan-tra-cuu-don-hang",
     effective_at: "2026-08-01T00:00:00.000Z",
     expires_at: null,

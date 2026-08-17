@@ -205,7 +205,7 @@ async function runSimulation() {
         const answer = buildKnowledgeAnswerFallback(filteredEvidence, "vi")
         const formatted = formatChannelKnowledgeAnswer(answer, 4000, { include_citations: true })
         console.log(`📄 Tài liệu trích xuất: ${filteredEvidence.results[0].title}`)
-        console.log(`🔍 Nguồn citation: ${answer.citations[0]?.citation_locator}`)
+        console.log(`🔍 Nguồn citation: ${(answer.citations[0] as any)?.citation_locator || answer.citations[0]?.locator || ""}`)
         console.log(`🤖 Bot trả lời:\n${formatted}`)
         passed++
         console.log(`✅ Kết quả: ĐẠT (Trích xuất chuẩn 100% tài liệu và có đầy đủ bằng chứng)\n`)

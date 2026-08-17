@@ -1,11 +1,13 @@
+"use client"
+
 import { login } from "@lib/data/customer"
 import { LOGIN_VIEW } from "@modules/account/templates/login-template"
 import ErrorMessage from "@modules/checkout/components/error-message"
 import { SubmitButton } from "@modules/checkout/components/submit-button"
 import Input from "@modules/common/components/input"
 import GoogleSignInButton from "@modules/account/components/google-sign-in-button"
-import { useSearchParams } from "next/navigation"
-import { useActionState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useActionState, useEffect } from "react"
 import { useTranslation } from "@lib/i18n/client"
 
 type Props = {
@@ -15,8 +17,25 @@ type Props = {
 const Login = ({ setCurrentView }: Props) => {
   const t = useTranslation()
   const [message, formAction] = useActionState(login, null)
+  const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const googleAuthError = searchParams.get("google_auth_error")
+
+  useEffect(() => {
+    if (message?.state === "success") {
+      const redirectTo = searchParams.get("redirectTo")
+      if (redirectTo) {
+        const segments = pathname.split("/").filter(Boolean)
+        const locale = segments[0] || "vi"
+        const countryCode = segments[1] || "vn"
+        const targetPath = redirectTo.startsWith(`/${locale}/${countryCode}`)
+          ? redirectTo
+          : `/${locale}/${countryCode}${redirectTo.startsWith("/") ? redirectTo : `/${redirectTo}`}`
+        window.location.href = targetPath
+      }
+    }
+  }, [message, searchParams, pathname])
 
   return (
     <div

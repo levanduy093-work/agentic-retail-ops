@@ -26,6 +26,7 @@ type LoadedDoc = {
     chunk_index: number
     citation_locator: string
     content: string
+    document_id: string
     id: string
   }>
   doc: {

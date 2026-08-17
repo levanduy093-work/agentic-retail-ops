@@ -1,0 +1,197 @@
+import type { ExecArgs } from "@medusajs/framework/types"
+import {
+  ContainerRegistrationKeys,
+  MedusaError,
+  Modules,
+} from "@medusajs/framework/utils"
+import {
+  createShippingOptionsWorkflow,
+  updateShippingOptionsWorkflow,
+} from "@medusajs/medusa/core-flows"
+
+const GHN_PROVIDER_ID = "ghn_ghn"
+
+export default async function bootstrapShippingHub({ container }: ExecArgs) {
+  const logger = container.resolve(ContainerRegistrationKeys.LOGGER)
+  const link = container.resolve(ContainerRegistrationKeys.LINK)
+  const query = container.resolve(ContainerRegistrationKeys.QUERY)
+
+  const { data: fulfillmentSets } = await query.graph({
+    entity: "fulfillment_set",
+    fields: [
+      "id",
+      "name",
+      "service_zones.id",
+      "service_zones.geo_zones.country_code",
+    ],
+  })
+  const vietnamFulfillmentSet = fulfillmentSets.find((set) => {
+    return set.service_zones?.some((zone) => {
+      return zone.geo_zones?.some((geoZone) => geoZone.country_code === "vn")
+    })
+  })
+
+  const { data: shippingProfiles } = await query.graph({
+    entity: "shipping_profile",
+    fields: ["id"],
+  })
+  const shippingProfile = shippingProfiles[0]
+  if (!shippingProfile) {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      "A shipping profile is required before enabling carriers."
+    )
+  }
+
+  const { data: stockLocations } = await query.graph({
+    entity: "stock_location",
+    fields: ["id", "name"],
+  })
+  const vietnamWarehouse =
+    stockLocations.find((location) => {
+      return /kho.*việt nam|vietnam.*warehouse/i.test(location.name)
+    }) ?? (stockLocations.length === 1 ? stockLocations[0] : undefined)
+  if (!vietnamWarehouse) {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      "The Vietnam Warehouse stock location is required."
+    )
+  }
+
+  const fulfillmentModuleService = container.resolve(Modules.FULFILLMENT)
+  const fulfillmentSet =
+    vietnamFulfillmentSet ??
+    (await fulfillmentModuleService.createFulfillmentSets({
+      name: "Giao hàng nội địa Việt Nam",
+      type: "shipping",
+      service_zones: [
+        {
+          name: "Việt Nam",
+          geo_zones: [{ country_code: "vn", type: "country" }],
+        },
+      ],
+    }))
+
+  const vietnamServiceZone = fulfillmentSet.service_zones?.find((zone) => {
+    return zone.geo_zones?.some((geoZone) => geoZone.country_code === "vn")
+  })
+  if (!vietnamServiceZone?.id) {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      "The Vietnam service zone could not be configured."
+    )
+  }
+
+  try {
+    await link.create({
+      [Modules.STOCK_LOCATION]: {
+        stock_location_id: vietnamWarehouse.id,
+      },
+      [Modules.FULFILLMENT]: {
+        fulfillment_set_id: fulfillmentSet.id,
+      },
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (!message.toLowerCase().includes("already")) {
+      throw error
+    }
+  }
+
+  try {
+    await link.create({
+      [Modules.STOCK_LOCATION]: {
+        stock_location_id: vietnamWarehouse.id,
+      },
+      [Modules.FULFILLMENT]: {
+        fulfillment_provider_id: GHN_PROVIDER_ID,
+      },
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (!message.toLowerCase().includes("already")) {
+      throw error
+    }
+  }
+
+  const { data: options } = await query.graph({
+    entity: "shipping_option",
+    fields: ["id", "name", "provider_id", "price_type", "data", "type.code"],
+  })
+  const ghnOptions = [
+    {
+      code: "ghn-standard",
+      data: { carrier_code: "GHN", id: "ghn-standard", service_type_id: 2 },
+      description: "GHN tính giá theo địa chỉ và khối lượng thực tế.",
+      name: "GHN Tiêu chuẩn",
+    },
+  ]
+
+  for (const option of ghnOptions) {
+    const existing = options.find(
+      (candidate) => candidate.provider_id === GHN_PROVIDER_ID && candidate.type?.code === option.code
+    )
+    const input = {
+      data: option.data,
+      name: option.name,
+      price_type: "calculated" as const,
+      provider_id: GHN_PROVIDER_ID,
+      rules: [
+        { attribute: "enabled_in_store", operator: "eq" as const, value: "true" },
+        { attribute: "is_return", operator: "eq" as const, value: "false" },
+      ],
+      service_zone_id: vietnamServiceZone.id,
+      shipping_profile_id: shippingProfile.id,
+      type: {
+        code: option.code,
+        description: option.description,
+        label: option.name,
+      },
+    }
+
+    if (existing) {
+      await updateShippingOptionsWorkflow(container).run({
+        input: [{ id: existing.id, ...input }],
+      })
+    } else {
+      await createShippingOptionsWorkflow(container).run({ input: [input] })
+    }
+  }
+
+  const manualOptions = options.filter(
+    (option) => option.provider_id === "manual_manual"
+  )
+  const unsupportedGhnOptions = options.filter((option) => {
+    return option.provider_id === GHN_PROVIDER_ID && !ghnOptions.some((supported) => {
+      return supported.code === option.type?.code
+    })
+  })
+  const optionsToDisable = [...manualOptions, ...unsupportedGhnOptions]
+  if (optionsToDisable.length) {
+    await updateShippingOptionsWorkflow(container).run({
+      input: optionsToDisable.map((option) => ({
+        id: option.id,
+        rules: [
+          { attribute: "enabled_in_store", operator: "eq", value: "false" },
+          { attribute: "is_return", operator: "eq", value: "false" },
+        ],
+      })),
+    })
+  }
+
+  logger.info(
+    "[Shipping Hub] GHN calculated options are active; manual storefront options are disabled."
+  )
+  console.log(
+    JSON.stringify(
+      {
+        carrier: "GHN",
+        calculated_options: ghnOptions.map((option) => option.code),
+        disabled_options: optionsToDisable.length,
+        status: "SHIPPING_HUB_BOOTSTRAPPED",
+      },
+      null,
+      2
+    )
+  )
+}

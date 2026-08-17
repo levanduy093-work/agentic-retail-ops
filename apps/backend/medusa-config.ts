@@ -335,6 +335,9 @@ module.exports = defineConfig({
       dependencies: [Modules.CACHING],
     },
     {
+      resolve: "./src/modules/shipping-hub",
+    },
+    {
       resolve: '@medusajs/medusa/auth',
       dependencies: [Modules.CACHE, ContainerRegistrationKeys.LOGGER],
       options: {
@@ -354,6 +357,24 @@ module.exports = defineConfig({
                 },
               ]
             : []),
+        ],
+      },
+    },
+    {
+      resolve: '@medusajs/medusa/fulfillment',
+      options: {
+        providers: [
+          {
+            resolve: './src/modules/ghn-fulfillment',
+            id: 'ghn',
+            options: {
+              api_token: process.env.GHN_API_TOKEN,
+              shop_id: process.env.GHN_SHOP_ID ? Number(process.env.GHN_SHOP_ID) : undefined,
+              client_id: process.env.GHN_CLIENT_ID ? Number(process.env.GHN_CLIENT_ID) : undefined,
+              base_url: process.env.GHN_API_URL,
+              environment: process.env.GHN_ENVIRONMENT || 'sandbox',
+            },
+          },
         ],
       },
     },

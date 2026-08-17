@@ -56,6 +56,9 @@
     "explore": "Khám phá sản phẩm",
     "summary": "Tóm tắt đơn hàng",
     "go_to_checkout": "Tiến hành thanh toán",
+    "sign_in_to_checkout": "Đăng nhập để thanh toán",
+    "auth_required_title": "Yêu cầu đăng nhập tài khoản",
+    "auth_required_desc": "Vui lòng đăng nhập để lưu thông tin địa chỉ và hoàn tất đặt hàng an toàn.",
     "item": "Sản phẩm",
     "price": "Giá",
     "total": "Tổng cộng",
@@ -85,7 +88,13 @@
     "continue_to_payment": "Tiếp tục đến thanh toán",
     "continue_to_review": "Tiếp tục đến xem lại đơn hàng",
     "enter_valid_email": "Vui lòng nhập địa chỉ email hợp lệ.",
-    "enter_promo_code": "Nhập mã khuyến mãi"
+    "enter_promo_code": "Nhập mã khuyến mãi",
+    "ghn_estimated_fee": "Ước tính phí Giao Hàng Nhanh (GHN)",
+    "ghn_calculating": "Đang tính phí vận chuyển từ GHN...",
+    "ghn_standard": "GHN Chuẩn (Standard)",
+    "ghn_fast": "GHN Nhanh (Express)",
+    "ghn_estimated_time": "Thời gian dự kiến",
+    "ghn_fee_notice": "Phí vận chuyển chính thức sẽ được áp dụng ở bước tiếp theo."
   },
   "order": {
     "thank_you": "Cảm ơn bạn!",

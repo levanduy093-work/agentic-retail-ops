@@ -29,8 +29,28 @@ import {
   TelegramWebhookUpdate,
 } from "./admin/agent-operations/validators"
 import { StoreCreateCustomerChatMessage } from "./store/customer-chat/validators"
+import { shippingHubMiddlewares } from "./admin/shipping/middlewares"
+import { getGhnSettings } from "../modules/shipping-hub/ghn-connection"
 
   const routes: MiddlewareRoute[] = [
+    ...shippingHubMiddlewares,
+    {
+      matcher: "/store/carts/:id/shipping-methods",
+      method: "POST",
+      middlewares: [
+        async (req, _res, next) => {
+          try {
+            // Fulfillment providers receive a scoped cradle rather than the
+            // application container. Hydrate the selected carrier from the
+            // encrypted connection before Medusa calculates its live price.
+            await getGhnSettings(req.scope)
+            next()
+          } catch (error) {
+            next(error)
+          }
+        },
+      ],
+    },
     {
       matcher: "/webhooks/agent-operations/telegram/:id",
       method: "POST",

@@ -31,7 +31,7 @@ const CartTemplate = ({
                 {cart && cart.region && (
                   <>
                     <div className="surface-card p-5 small:p-7">
-                      <Summary cart={cart} />
+                      <Summary cart={cart} customer={customer} />
                     </div>
                   </>
                 )}

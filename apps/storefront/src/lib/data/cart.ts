@@ -335,14 +335,24 @@ export async function submitPromotionForm(
 
 // TODO: Pass a POJO instead of a form entity here
 export async function setAddresses(currentState: unknown, formData: FormData) {
+  let redirectUrl = ""
   try {
     if (!formData) {
       throw new Error("No form data found when setting addresses")
     }
-    const cartId = getCartId()
+    const cartId = await getCartId()
     if (!cartId) {
       throw new Error("No existing cart found when setting addresses")
     }
+
+    const ghnProvinceId = formData.get("shipping_address.metadata.ghn_province_id")
+    const ghnDistrictId = formData.get("shipping_address.metadata.ghn_district_id")
+    const ghnWardCode = formData.get("shipping_address.metadata.ghn_ward_code")
+
+    const metadata: Record<string, unknown> = {}
+    if (ghnProvinceId) metadata.ghn_province_id = Number(ghnProvinceId)
+    if (ghnDistrictId) metadata.ghn_district_id = Number(ghnDistrictId)
+    if (ghnWardCode) metadata.ghn_ward_code = String(ghnWardCode)
 
     const data: HttpTypes.StoreUpdateCart = {
       shipping_address: {
@@ -356,6 +366,7 @@ export async function setAddresses(currentState: unknown, formData: FormData) {
         country_code: formData.get("shipping_address.country_code") as string,
         province: formData.get("shipping_address.province") as string,
         phone: formData.get("shipping_address.phone") as string,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       },
       email: formData.get("email") as string,
     }
@@ -377,13 +388,18 @@ export async function setAddresses(currentState: unknown, formData: FormData) {
         phone: formData.get("billing_address.phone") as string,
       }
     await updateCart(data)
+
+    const countryCode =
+      (formData.get("shipping_address.country_code") as string)?.toLowerCase() || "vn"
+    const locale = (await getLocale()) || "vi"
+    redirectUrl = `/${locale}/${countryCode}/checkout?step=delivery`
   } catch (e: unknown) {
     return e instanceof Error ? e.message : String(e)
   }
 
-  redirect(
-    `/${formData.get("shipping_address.country_code")}/checkout?step=delivery`
-  )
+  if (redirectUrl) {
+    redirect(redirectUrl)
+  }
 }
 
 /**

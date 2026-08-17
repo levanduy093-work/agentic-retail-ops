@@ -18,6 +18,7 @@ coverage
 
 # Next.js
 **/.next/
+**/.next-backup-*/
 **/out/
 
 # Production
@@ -38,6 +39,9 @@ yarn-error.log*
 **/.env.development.local
 **/.env.test.local
 **/.env.production.local
+
+# Local carrier credentials
+**/.ghn-settings.json
 
 # Turbo
 .turbo
