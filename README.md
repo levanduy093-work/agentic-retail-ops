@@ -1,145 +1,73 @@
-<p align="center">
-  <img alt="Synapse logo" src="assets/logo.png" width="180">
-</p>
-<h1 align="center">
-  Synapse DTC Starter
-</h1>
+# Synapse DTC Starter & Agentic Retail Ops
 
-<h4 align="center">
-  <a href="https://docs.medusajs.com">Documentation</a>
-</h4>
+Monorepo gồm Medusa backend/Admin, Next.js storefront, PostgreSQL, Redis và
+Qdrant. Cần Node.js 20+, pnpm 10+ và Docker Desktop.
 
-<p align="center">
-  Building blocks for digital commerce powered by Synapse
-</p>
-
-<p align="center">
-  <a href="LICENSE">
-    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="Synapse is released under the MIT license." />
-  </a>
-</p>
-
-# Synapse DTC Starter
-
-> **Note:** Synapse is developed and built on top of the open-source Medusa commerce engine.
-
-A production-ready monorepo starter for direct-to-consumer ecommerce stores powered by Synapse and Next.js. Includes a fully featured storefront with product browsing, cart, checkout, customer accounts, and order management.
-
-## Features
-
-- All of Synapse's commerce features
-- Multi-region support with automatic country detection
-- Product catalog with variant selection
-- Cart with promotion codes
-- Multi-step checkout with shipping and payment
-- Customer accounts with order history and address management
-- Order transfer between accounts
-
-## Getting Started
-
-### Local Installation
-
-> **Prerequisites:**
->
-> - [Node.js](https://nodejs.org/) v20+
-> - [PostgreSQL](https://www.postgresql.org/) v15+
-> - [pnpm](https://pnpm.io/) v10+
-
-1. Clone the repository and install dependencies:
+## Chạy local
 
 ```bash
 git clone https://github.com/levanduy093-work/agentic-retail-ops.git
 cd agentic-retail-ops
 pnpm install
-```
 
-2. Set up environment variables for the backend:
+# PostgreSQL :5432, Redis :6379, Qdrant :6333
+docker compose up -d postgres redis qdrant
 
-```bash
+# Mỗi file local chỉ tạo một lần; không commit các file này.
 cp apps/backend/.env.template apps/backend/.env
-```
-
-3. Set the database URL in `apps/backend/.env`:
-
-```bash
-# Replace with actual database URL, make sure the database exists.
-DATABASE_URL=postgres://postgres:@localhost:5432/synapse-dtc-starter
-```
-
-4. Run migrations:
-
-```bash
-cd apps/backend
-pnpm medusa db:migrate
-```
-
-5. Add admin user:
-
-```bash
-cd apps/backend
-pnpm medusa user -e admin@test.com -p supersecret
-```
-
-6. Start Synapse backend:
-
-```bash
-cd apps/backend
-pnpm dev
-```
-
-7. Open the admin dashboard at `localhost:9000/app` and log in. Retrieve your publishable API key at Settings > Publishable API key.
-
-8. Set up environment variables for the storefront:
-
-```bash
 cp apps/storefront/.env.template apps/storefront/.env.local
+
+cd apps/backend
+pnpm exec medusa db:migrate
+pnpm exec medusa user -e admin@example.com -p 'choose-a-strong-password'
+cd ../..
 ```
 
-9. Update `apps/storefront/.env.local` with your Synapse publishable API key:
+Lấy Publishable API Key trong Admin (`Settings → Publishable API Keys`), rồi
+điền vào `apps/storefront/.env.local`:
 
-```bash
-NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_6c3...
+```env
+NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_your_key_here
 ```
 
-10. Start storefront:
-
-```bash
-cd apps/storefront
-pnpm dev
-```
-
-The storefront runs on `http://localhost:8000`.
-
-You can also run the following command from the root to start both backend and storefront:
+Khởi động cả backend và storefront:
 
 ```bash
 pnpm dev
 ```
 
-## Configuration
+- Storefront: http://localhost:8000
+- Backend API và Admin: http://localhost:9000/app
 
-The storefront is configured via environment variables in `apps/storefront/.env.local`:
+Hoặc chạy riêng `pnpm run backend:dev` hay `pnpm run storefront:dev`.
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY` | Publishable API key from your Synapse backend | — |
-| `NEXT_PUBLIC_MEDUSA_BACKEND_URL` | URL of your Synapse backend | `http://localhost:9000` |
-| `NEXT_PUBLIC_DEFAULT_REGION` | Default region country code | `dk` |
-| `NEXT_PUBLIC_BASE_URL` | Base URL of the storefront | `https://localhost:8000` |
-| `NEXT_PUBLIC_STRIPE_KEY` | Stripe publishable key (optional) | — |
+## Cấu hình môi trường
 
-## Resources
+Hai template có sẵn cấu hình Docker local:
 
-- [Synapse Architecture & Docs](https://docs.medusajs.com)
+- [Backend template](apps/backend/.env.template): database, Redis, Qdrant,
+  CORS, feature flags, Google/Knowledge Hub, Telegram và live shipping status.
+- [Storefront template](apps/storefront/.env.template): URL backend, region,
+  publishable key, Google One Tap và Stripe.
 
-## Agent platform development
+`NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY` là biến bắt buộc cho storefront. Đổi
+`JWT_SECRET`, `COOKIE_SECRET` và `AGENT_CREDENTIAL_ENCRYPTION_KEY` trước khi
+deploy. Chỉ cấu hình `TELEGRAM_*`, `CLOUDFLARE_TUNNEL_TOKEN` và Google OAuth khi
+cần dùng các tích hợp tương ứng.
 
-Trước khi xây hoặc sửa agent, đọc theo thứ tự:
+API key của AI và cấu hình/token hãng vận chuyển được quản lý qua Admin
+(`AI Connections` và `Shipping Hub`) và được lưu mã hóa trong PostgreSQL; không
+đưa chúng vào Git hoặc template.
 
-1. [`AGENTS.md`](./AGENTS.md);
-2. [`docs/session-logs/2026-08-10-agent-platform-foundation-handoff.md`](./docs/session-logs/2026-08-10-agent-platform-foundation-handoff.md);
-3. [`AGENT_CATALOG.md`](./AGENT_CATALOG.md);
-4. [`AGENT_FOUNDATION.md`](./AGENT_FOUNDATION.md).
+## Lệnh thường dùng
 
-Session handoff ghi source map, kiến trúc control plane, lệnh bootstrap/test và
-ranh giới giữa nền đã code với deployment gate còn thiếu.
+```bash
+pnpm run build                         # build toàn bộ workspace
+pnpm run lint                          # lint toàn bộ workspace
+pnpm --dir apps/backend run test:unit  # test unit backend
+pnpm --dir apps/backend run test:integration:http  # test HTTP (cần PostgreSQL)
+pnpm --dir apps/backend run catalog:reseed-test  # seed catalog demo (tùy chọn)
+```
+
+Khi dừng hạ tầng local, dùng `docker compose down`. Dữ liệu PostgreSQL/Redis/
+Qdrant được Docker giữ lại trong volumes.

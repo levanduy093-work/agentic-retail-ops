@@ -2,15 +2,11 @@
 
 import { sdk } from "@lib/config"
 import { HttpTypes } from "@medusajs/types"
-import { getAuthHeaders, getCacheOptions } from "./cookies"
+import { getAuthHeaders } from "./cookies"
 
 export const listCartShippingMethods = async (cartId: string) => {
   const headers = {
     ...(await getAuthHeaders()),
-  }
-
-  const next = {
-    ...(await getCacheOptions("fulfillment")),
   }
 
   return sdk.client
@@ -22,8 +18,7 @@ export const listCartShippingMethods = async (cartId: string) => {
           cart_id: cartId,
         },
         headers,
-        next,
-        cache: "force-cache",
+        cache: "no-store",
       }
     )
     .then(({ shipping_options }) => shipping_options)
@@ -41,14 +36,31 @@ export const calculatePriceForShippingOption = async (
     ...(await getAuthHeaders()),
   }
 
-  const next = {
-    ...(await getCacheOptions("fulfillment")),
-  }
+  const packing = await sdk.client
+    .fetch<{
+      packages: Array<{
+        height: number
+        length: number
+        weight: number
+        width: number
+      }>
+      total_weight: number
+    }>("/store/shipping-packages", {
+      method: "POST",
+      body: { cart_id: cartId },
+      headers,
+      cache: "no-store",
+    })
+    .catch(() => null)
 
-  const body = { cart_id: cartId, data }
-
-  if (data) {
-    body.data = data
+  const body = {
+    cart_id: cartId,
+    data: {
+      cart_id: cartId,
+      ghn_weight: packing?.total_weight || 300,
+      shipping_packages: packing?.packages,
+      ...data,
+    },
   }
 
   return sdk.client
@@ -58,7 +70,7 @@ export const calculatePriceForShippingOption = async (
         method: "POST",
         body,
         headers,
-        next,
+        cache: "no-store",
       }
     )
     .then(({ shipping_option }) => shipping_option)

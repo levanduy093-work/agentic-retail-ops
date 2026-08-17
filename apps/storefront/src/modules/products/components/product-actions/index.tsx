@@ -46,7 +46,19 @@ export default function ProductActions({
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  const [options, setOptions] = useState<Record<string, string | undefined>>({})
+  const [options, setOptions] = useState<Record<string, string | undefined>>(() => {
+    const vId = searchParams.get("v_id")
+    if (vId && product.variants) {
+      const variant = product.variants.find((v) => v.id === vId)
+      if (variant) {
+        return optionsAsKeymap(variant.options) ?? {}
+      }
+    }
+    if (product.variants?.length === 1) {
+      return optionsAsKeymap(product.variants[0].options) ?? {}
+    }
+    return {}
+  })
   const [isAdding, setIsAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
   const countryCode = useParams().countryCode as string
@@ -70,12 +82,19 @@ export default function ProductActions({
     })
   }, [product.variants, options])
 
-  // update the options when a variant is selected
+  // update the options when a variant is selected or deselected
   const setOptionValue = (optionId: string, value: string) => {
-    setOptions((prev) => ({
-      ...prev,
-      [optionId]: value,
-    }))
+    setOptions((prev) => {
+      if (prev[optionId] === value) {
+        const next = { ...prev }
+        delete next[optionId]
+        return next
+      }
+      return {
+        ...prev,
+        [optionId]: value,
+      }
+    })
   }
 
   //check if the selected options produce a valid variant

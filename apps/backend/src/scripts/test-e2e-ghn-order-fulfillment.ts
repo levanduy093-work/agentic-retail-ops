@@ -30,7 +30,7 @@ export default async function testE2EGhnOrderFulfillment({ container }: ExecArgs
     fields: ["id", "currency_code", "countries.iso_2"],
   })
   const vnRegion = regions.find((r) =>
-    r.countries?.some((c: { iso_2: string }) => c.iso_2.toLowerCase() === "vn")
+    r.countries?.some((c: any) => c?.iso_2?.toLowerCase() === "vn")
   ) || regions[0]
 
   if (!vnRegion) {
@@ -187,7 +187,7 @@ export default async function testE2EGhnOrderFulfillment({ container }: ExecArgs
     input: {
       order_id: order.id,
       location_id: location.id,
-      items: orderFull.items.map((i: any) => ({
+      items: (orderFull.items || []).map((i: any) => ({
         id: i.id,
         quantity: Number(i.quantity) > 0 ? Number(i.quantity) : 1,
       })),

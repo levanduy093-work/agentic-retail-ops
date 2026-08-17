@@ -628,6 +628,35 @@
     "promptSaved": "Phiên bản prompt mới đã được đưa vào sử dụng.",
     "promptSaveError": "Không thể lưu prompt. Hãy kiểm tra nội dung và thử lại."
   },
+  "devAccess": {
+    "navigation": "Truy cập & Chia sẻ",
+    "title": "Quản lý Truy cập & Chia sẻ Link",
+    "subtitle": "Bật/tắt chặn truy cập từ ngoài trong lúc phát triển, quản lý mã PIN bảo vệ và tạo link chia sẻ nhanh.",
+    "masterTitle": "Chế độ Bảo vệ Truy cập Ngoài",
+    "masterSubtitle": "Kiểm soát xem người dùng ngoài Internet qua domain public có thể truy cập hệ thống của bạn hay không.",
+    "statusLocked": "Đang chặn truy cập ngoài (An toàn Dev)",
+    "statusUnlocked": "Đang mở truy cập ngoài (Chia sẻ link)",
+    "toggleBlock": "Bật bảo vệ (Chặn ngoài)",
+    "toggleUnblock": "Mở công khai (Cho phép ngoài)",
+    "pinSettingsTitle": "Cài đặt Mã PIN & Tên miền",
+    "pinSettingsSubtitle": "Mã PIN cho phép bạn hoặc người được chia sẻ mở khóa truy cập nhanh trên điện thoại/thiết bị ngoài.",
+    "passcodeLabel": "Mã PIN mở khóa",
+    "domainLabel": "Domain Public (Tunnel)",
+    "messageLabel": "Thông điệp khi bị chặn / đang bảo trì",
+    "saveSettings": "Lưu cấu hình",
+    "settingsSaved": "Đã lưu cài đặt truy cập thành công.",
+    "saveError": "Không thể lưu cấu hình truy cập.",
+    "shareHubTitle": "Bộ công cụ Chia sẻ Link Nhanh",
+    "shareHubSubtitle": "Sao chép link các trang chính của hệ thống kèm theo mã PIN để gửi cho đồng nghiệp/khách hàng test.",
+    "copyLink": "Sao chép Link",
+    "copyLinkWithPin": "Sao chép kèm PIN",
+    "copied": "Đã sao chép vào bộ nhớ tạm!",
+    "storefrontHome": "Trang chủ Cửa hàng",
+    "customerChat": "Chatbot CSKH AI (Khách hàng)",
+    "adminDashboard": "Trang Quản trị Admin",
+    "tunnelTitle": "Lệnh Quản lý Cloudflare Tunnel (Tầng Network)",
+    "tunnelSubtitle": "Nếu muốn ngắt hẳn kết nối mạng Internet ở tầng tunnel, bạn có thể dùng các lệnh terminal sau:"
+  },
   "layout": {
     "customizeLayout": "Tùy chỉnh bố cục"
   }

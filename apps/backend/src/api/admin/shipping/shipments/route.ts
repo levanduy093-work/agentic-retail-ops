@@ -66,32 +66,61 @@ export async function GET(
     const label = fulfillment.labels?.[0]
     const trackingNumber =
       (data.tracking_number as string | undefined) ||
+      (data.ghtk_label_id as string | undefined) ||
       (data.ghn_order_code as string | undefined) ||
       label?.tracking_number ||
       null
+
+    const trackingUrl =
+      (data.tracking_url as string | undefined) ||
+      (data.ghtk_tracking_url as string | undefined) ||
+      (data.ghn_tracking_url as string | undefined) ||
+      label?.tracking_url ||
+      null
+
+    const labelUrl =
+      (data.label_url as string | undefined) ||
+      (data.ghtk_print_url as string | undefined) ||
+      (data.ghn_print_url as string | undefined) ||
+      label?.label_url ||
+      null
+
+    const status =
+      (data.ghtk_current_status as string | undefined) ||
+      (data.ghn_current_status as string | undefined) ||
+      (fulfillment.delivered_at
+        ? "delivered"
+        : fulfillment.shipped_at
+          ? "shipping"
+          : "created")
 
     return {
       carrier_code: carrier?.code ?? fulfillment.provider_id,
       carrier_name: carrier?.name ?? fulfillment.provider_id,
       created_at: fulfillment.created_at,
       delivered_at: fulfillment.delivered_at,
-      fulfillment_id: fulfillment.id,
-      label_url:
-        (data.ghn_print_url as string | undefined) || label?.label_url || null,
-      order_display_id: fulfillment.order?.display_id ?? null,
-      order_id: fulfillment.order?.id ?? null,
       environment:
+        (data.environment as "sandbox" | "production" | undefined) ||
         (data.ghn_environment as "sandbox" | "production" | undefined) ||
         (carrier?.environment === "PRODUCTION" ? "production" : "sandbox"),
+      fulfillment_id: fulfillment.id,
+      label_url: labelUrl,
+      order_display_id: fulfillment.order?.display_id ?? null,
+      order_id: fulfillment.order?.id ?? null,
       service:
+        (data.service_name as string | undefined) ||
         (data.id as string | undefined) ||
-        (data.service_type_id === 1 ? "ghn-fast" : "ghn-standard"),
+        (data.transport === "fly"
+          ? "ghtk-fly"
+          : data.transport === "road"
+            ? "ghtk-road"
+            : data.service_type_id === 1
+              ? "ghn-fast"
+              : "ghn-standard"),
       shipped_at: fulfillment.shipped_at,
-      status: (data.ghn_current_status as string | undefined) ||
-        (fulfillment.delivered_at ? "delivered" : fulfillment.shipped_at ? "shipping" : "created"),
+      status,
       tracking_number: trackingNumber,
-      tracking_url:
-        (data.ghn_tracking_url as string | undefined) || label?.tracking_url || null,
+      tracking_url: trackingUrl,
     }
   })
 

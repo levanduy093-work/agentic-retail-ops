@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "fs"
 import { resolve } from "path"
 import { GhnConfig, GhnEnvironment } from "../ghn-client"
 import { ShippingCarrierRegistry } from "../../shipping-hub/carrier-registry"
+import type { PackagingProfile } from "../../shipping-hub/packing-profile"
 
 export type GhnFullSettings = {
   api_token: string
@@ -22,6 +23,7 @@ export type GhnFullSettings = {
   required_note: "KHONGCHOXEMHANG" | "CHOXEMHANGKHONGTHU" | "CHOTOT"
   payment_type_id: number // 1: Seller pays, 2: Buyer pays
   is_insured: boolean
+  packing_profile?: PackagingProfile
   updated_at?: string
 }
 

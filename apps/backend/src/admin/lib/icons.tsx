@@ -195,3 +195,96 @@ export const InfoIcon = React.forwardRef<SVGSVGElement, IconProps>(
   )
 )
 InfoIcon.displayName = "InfoIcon"
+
+export const LockClosedIcon = React.forwardRef<SVGSVGElement, IconProps>(
+  ({ className = "", size = 15, ...props }, ref) => (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      width={size}
+      height={size}
+      className={`inline-block shrink-0 ${className}`}
+      ref={ref}
+      aria-hidden="true"
+      {...props}
+    >
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  )
+)
+LockClosedIcon.displayName = "LockClosedIcon"
+
+export const LockOpenIcon = React.forwardRef<SVGSVGElement, IconProps>(
+  ({ className = "", size = 15, ...props }, ref) => (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      width={size}
+      height={size}
+      className={`inline-block shrink-0 ${className}`}
+      ref={ref}
+      aria-hidden="true"
+      {...props}
+    >
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+    </svg>
+  )
+)
+LockOpenIcon.displayName = "LockOpenIcon"
+
+export const LinkIcon = React.forwardRef<SVGSVGElement, IconProps>(
+  ({ className = "", size = 15, ...props }, ref) => (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      width={size}
+      height={size}
+      className={`inline-block shrink-0 ${className}`}
+      ref={ref}
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  )
+)
+LinkIcon.displayName = "LinkIcon"
+
+export const ClipboardCopyIcon = React.forwardRef<SVGSVGElement, IconProps>(
+  ({ className = "", size = 15, ...props }, ref) => (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      width={size}
+      height={size}
+      className={`inline-block shrink-0 ${className}`}
+      ref={ref}
+      aria-hidden="true"
+      {...props}
+    >
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  )
+)
+ClipboardCopyIcon.displayName = "ClipboardCopyIcon"
+

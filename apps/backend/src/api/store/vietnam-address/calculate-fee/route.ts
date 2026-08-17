@@ -2,6 +2,7 @@ import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 import { GhnClient } from "../../../../modules/ghn-fulfillment/ghn-client"
 import { getGhnSettings } from "../../../../modules/shipping-hub/ghn-connection"
+import { buildPackingPlan } from "../../../../modules/shipping-hub/packing-profile"
 
 export async function POST(req: MedusaRequest, res: MedusaResponse) {
   const body = req.body as {
@@ -21,13 +22,24 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
   const settings = await getGhnSettings(req.scope)
   const fromDistrictId = settings.sender_district_id || 1442
   const toDistrictId = Number(body.to_district_id)
-  let weight = body.weight || settings.default_weight || 300
+  let packages = [] as ReturnType<typeof buildPackingPlan>
 
   if (body.cart_id) {
     const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
     const { data: carts } = await query.graph({
       entity: "cart",
-      fields: ["id", "items.quantity", "items.weight", "items.variant.weight"],
+      fields: [
+        "id",
+        "items.quantity",
+        "items.weight",
+        "items.length",
+        "items.width",
+        "items.height",
+        "items.variant.weight",
+        "items.variant.length",
+        "items.variant.width",
+        "items.variant.height",
+      ],
       filters: { id: body.cart_id },
     })
     const cart = carts[0] as
@@ -35,18 +47,40 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
           items?: Array<{
             quantity?: number | null
             weight?: number | null
-            variant?: { weight?: number | null } | null
+            height?: number | null
+            length?: number | null
+            width?: number | null
+            variant?: {
+              height?: number | null
+              length?: number | null
+              weight?: number | null
+              width?: number | null
+            } | null
           }>
         }
       | undefined
-    const cartWeight = (cart?.items ?? []).reduce((total, item) => {
-      const itemWeight = item.variant?.weight || item.weight || settings.default_weight
-      return total + itemWeight * (item.quantity || 1)
-    }, 0)
+    packages = buildPackingPlan(
+      (cart?.items || []).map((item) => ({
+        height: item.variant?.height || item.height,
+        length: item.variant?.length || item.length,
+        quantity: item.quantity,
+        weight: item.variant?.weight || item.weight,
+        width: item.variant?.width || item.width,
+      })),
+      settings.packing_profile,
+      settings.default_weight
+    )
+  }
 
-    if (cartWeight > 0) {
-      weight = cartWeight
-    }
+  if (!packages.length) {
+    packages = [{
+      box_code: "DEFAULT",
+      height: settings.default_height,
+      item_count: 1,
+      length: settings.default_length,
+      weight: body.weight || settings.default_weight || 300,
+      width: settings.default_width,
+    }]
   }
 
   try {
@@ -58,25 +92,28 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       shopId: settings.shop_id,
     })
 
-    const standardFee = await client.calculateFee({
-      from_district_id: fromDistrictId,
-      from_ward_code: settings.sender_ward_code,
-      to_district_id: toDistrictId,
-      to_ward_code: body.to_ward_code,
-      weight,
-      length: settings.default_length,
-      width: settings.default_width,
-      height: settings.default_height,
-      service_type_id: 2,
-      insurance_value: body.insurance_value || 0,
-    })
+    const standardFees = await Promise.all(
+      packages.map((parcel) => client.calculateFee({
+        from_district_id: fromDistrictId,
+        from_ward_code: settings.sender_ward_code,
+        to_district_id: toDistrictId,
+        to_ward_code: body.to_ward_code,
+        weight: parcel.weight,
+        length: parcel.length,
+        width: parcel.width,
+        height: parcel.height,
+        service_type_id: 2,
+        insurance_value: body.insurance_value || 0,
+      }))
+    )
 
     res.json({
       success: true,
       from_district_id: fromDistrictId,
       to_district_id: toDistrictId,
-      weight,
-      standard_fee: standardFee.total,
+      packages,
+      weight: packages.reduce((total, parcel) => total + parcel.weight, 0),
+      standard_fee: standardFees.reduce((total, fee) => total + fee.total, 0),
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

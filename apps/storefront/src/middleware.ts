@@ -12,6 +12,38 @@ const regionMapCache = {
   regionMapUpdated: Date.now(),
 }
 
+const devAccessCache = {
+  isLocked: false,
+  lastChecked: 0,
+}
+
+async function checkDevAccessIsLocked(): Promise<boolean> {
+  if (Date.now() - devAccessCache.lastChecked < 10000) {
+    return devAccessCache.isLocked
+  }
+
+  try {
+    if (!BACKEND_URL) return false
+    const res = await fetch(`${BACKEND_URL}/store/dev-access/status`, {
+      method: "GET",
+      headers: {
+        "x-publishable-api-key": PUBLISHABLE_API_KEY || "",
+      },
+      next: { revalidate: 10 },
+    })
+    if (res.ok) {
+      const data = await res.json()
+      devAccessCache.isLocked = Boolean(data?.is_locked)
+      devAccessCache.lastChecked = Date.now()
+      return devAccessCache.isLocked
+    }
+  } catch {
+    // If backend unreachable or error, don't block
+  }
+
+  return devAccessCache.isLocked
+}
+
 async function getRegionMap(cacheId: string) {
   const { regionMap, regionMapUpdated } = regionMapCache
 
@@ -131,8 +163,32 @@ function getLocale(request: NextRequest): string {
  * Middleware to handle region selection and onboarding status.
  */
 export async function middleware(request: NextRequest) {
-  if (request.nextUrl.pathname.includes(".")) {
+  const pathname = request.nextUrl.pathname
+  if (pathname.includes(".") || pathname.includes("/dev-lock")) {
     return NextResponse.next()
+  }
+
+  const host = request.headers.get("host") || ""
+  const isLocal =
+    host.includes("localhost") ||
+    host.includes("127.0.0.1") ||
+    host.endsWith(".local")
+
+  if (!isLocal) {
+    const isUnlockedByCookie =
+      request.cookies.get("synapse_dev_access_pass")?.value === "unlocked"
+
+    if (!isUnlockedByCookie) {
+      const isLocked = await checkDevAccessIsLocked()
+      if (isLocked) {
+        const locale = getLocale(request)
+        const country = DEFAULT_REGION
+        const redirectUrl = `${request.nextUrl.origin}/${locale}/${country}/dev-lock?from=${encodeURIComponent(
+          pathname + (request.nextUrl.search || "")
+        )}`
+        return NextResponse.redirect(redirectUrl, 307)
+      }
+    }
   }
 
   const cacheIdCookie = request.cookies.get("_medusa_cache_id")

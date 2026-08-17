@@ -375,6 +375,16 @@ module.exports = defineConfig({
               environment: process.env.GHN_ENVIRONMENT || 'sandbox',
             },
           },
+          {
+            resolve: './src/modules/ghtk-fulfillment',
+            id: 'ghtk',
+            options: {
+              api_token: process.env.GHTK_API_TOKEN,
+              base_url: process.env.GHTK_API_URL,
+              environment: process.env.GHTK_ENVIRONMENT || 'sandbox',
+              pick_address_id: process.env.GHTK_PICK_ADDRESS_ID,
+            },
+          },
         ],
       },
     },

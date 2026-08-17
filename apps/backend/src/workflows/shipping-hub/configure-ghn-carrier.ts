@@ -11,6 +11,7 @@ import {
   encryptShippingSecret,
 } from "../../modules/shipping-hub/credential-vault"
 import { SHIPPING_HUB_MODULE } from "../../modules/shipping-hub"
+import type { PackagingProfile } from "../../modules/shipping-hub/packing-profile"
 import type ShippingHubModuleService from "../../modules/shipping-hub/service"
 
 export type ConfigureGhnCarrierInput = {
@@ -82,8 +83,13 @@ const configureGhnCarrierStep = createStep(
     const [existing] = (await shippingHub.listShippingCarrierConnections({
       code: "GHN",
     })) as StoredCarrier[]
+    const connections = (await shippingHub.listShippingCarrierConnections()) as StoredCarrier[]
     const priorConfiguration = existing?.configuration ?? {}
+    const sharedPackingProfile = connections.find(
+      (connection) => connection.configuration?.packing_profile
+    )?.configuration?.packing_profile as PackagingProfile | undefined
     const configuration = {
+      ...(sharedPackingProfile ? { packing_profile: sharedPackingProfile } : {}),
       ...priorConfiguration,
       ...Object.fromEntries(
         Object.entries(input).filter(([key, value]) => {

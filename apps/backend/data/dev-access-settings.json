@@ -1,0 +1,9 @@
+{
+  "allowed_ips": [],
+  "access_mode": "passcode",
+  "maintenance_message": "Hệ thống đang trong quá trình phát triển (Dev Mode). Vui lòng nhập mã PIN hoặc liên hệ quản trị viên để mở khóa.",
+  "passcode": "synapse2026",
+  "public_access_enabled": false,
+  "public_domain": "trendhub.sbs",
+  "updated_at": "2026-08-17T18:25:06.743Z"
+}

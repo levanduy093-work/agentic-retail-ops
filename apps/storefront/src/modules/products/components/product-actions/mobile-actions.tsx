@@ -117,7 +117,7 @@ const MobileActions: React.FC<MobileActionsProps> = ({
                   <div className="flex items-center justify-between w-full">
                     <span>
                       {variant
-                        ? Object.values(options).join(" / ")
+                        ? Object.values(options).filter(Boolean).join(" / ")
                         : t("product.select_options")}
                     </span>
                     <ChevronDown />

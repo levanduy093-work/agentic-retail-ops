@@ -14,6 +14,7 @@ import { GhnClient } from "../ghn-client"
 import { GhnSettingsStore } from "./ghn-settings-store"
 import { VietnamAddressService } from "./vietnam-address-service"
 import { getGhnSettings } from "../../shipping-hub/ghn-connection"
+import { buildPackingPlan, type PackedPackage } from "../../shipping-hub/packing-profile"
 
 export type GhnProviderOptions = {
   api_token?: string
@@ -50,7 +51,11 @@ export class GhnFulfillmentProviderService extends AbstractFulfillmentProviderSe
   }
 
   private async getSettings() {
-    return getGhnSettings(this.container_)
+    try {
+      return await getGhnSettings(this.container_)
+    } catch {
+      return GhnSettingsStore.getSettings()
+    }
   }
 
   private async getClient(): Promise<GhnClient> {
@@ -114,8 +119,11 @@ export class GhnFulfillmentProviderService extends AbstractFulfillmentProviderSe
       )
     }
 
-    const shippingAddress = (context as any)?.shipping_address || (context as any)?.cart?.shipping_address
+    const shippingAddress =
+      (context as any)?.shipping_address || (context as any)?.cart?.shipping_address
     const items = (context as any)?.items || (context as any)?.cart?.items || []
+    const requestData = data as Record<string, unknown> | undefined
+    const requestedWeight = Number(requestData?.ghn_weight)
 
     let toDistrictId: number | undefined =
       shippingAddress?.metadata?.ghn_district_id ||
@@ -165,39 +173,55 @@ export class GhnFulfillmentProviderService extends AbstractFulfillmentProviderSe
       )
     }
 
-    // Calculate total weight from items
-    let totalWeight = 0
-    if (Array.isArray(items) && items.length > 0) {
-      for (const item of items) {
-        const itemWeight =
-          (item as any)?.variant?.weight ||
-          (item as any)?.weight ||
-          settings.default_weight
-        const qty = item.quantity || 1
-        totalWeight += itemWeight * qty
-      }
+    const requestedPackages = Array.isArray(requestData?.shipping_packages)
+      ? requestData.shipping_packages as PackedPackage[]
+      : []
+    const packages = requestedPackages.length
+      ? requestedPackages
+      : buildPackingPlan(
+          Array.isArray(items) ? items.map((item: any) => ({
+            height: item.variant?.height || item.height,
+            length: item.variant?.length || item.length,
+            quantity: item.quantity,
+            weight: item.variant?.weight || item.weight,
+            width: item.variant?.width || item.width,
+          })) : [],
+          settings.packing_profile,
+          Number.isFinite(requestedWeight) && requestedWeight > 0
+            ? requestedWeight
+            : settings.default_weight
+        )
+    const fallbackPackage: PackedPackage = {
+      box_code: "DEFAULT",
+      height: settings.default_height,
+      item_count: 1,
+      length: settings.default_length,
+      weight: Number.isFinite(requestedWeight) && requestedWeight > 0
+        ? requestedWeight
+        : settings.default_weight,
+      width: settings.default_width,
     }
-    if (totalWeight <= 0) {
-      totalWeight = settings.default_weight
-    }
+    const packagesToQuote = packages.length ? packages : [fallbackPackage]
 
     const serviceTypeId = 2
 
     try {
-      const feeResponse = await client.calculateFee({
-        from_district_id: settings.sender_district_id,
-        from_ward_code: settings.sender_ward_code,
-        to_district_id: Number(toDistrictId),
-        to_ward_code: toWardCode ? String(toWardCode) : undefined,
-        weight: totalWeight,
-        length: settings.default_length,
-        width: settings.default_width,
-        height: settings.default_height,
-        service_type_id: serviceTypeId,
-      })
+      const feeResponses = await Promise.all(
+        packagesToQuote.map((parcel) => client.calculateFee({
+          from_district_id: settings.sender_district_id,
+          from_ward_code: settings.sender_ward_code,
+          to_district_id: Number(toDistrictId),
+          to_ward_code: toWardCode ? String(toWardCode) : undefined,
+          weight: parcel.weight,
+          length: parcel.length,
+          width: parcel.width,
+          height: parcel.height,
+          service_type_id: serviceTypeId,
+        }))
+      )
 
       return {
-        calculated_amount: feeResponse.total,
+        calculated_amount: feeResponses.reduce((total, response) => total + response.total, 0),
         is_calculated_price_tax_inclusive: true,
       }
     } catch (error) {
@@ -255,6 +279,23 @@ export class GhnFulfillmentProviderService extends AbstractFulfillmentProviderSe
         .filter(Boolean)
         .join(", ") || "Địa chỉ nhận hàng"
 
+    const packagePlan = buildPackingPlan(
+      (items || []).map((item: any) => ({
+        height: item.item?.variant?.height || item.height,
+        length: item.item?.variant?.length || item.length,
+        quantity: item.quantity,
+        weight: item.item?.variant?.weight || item.weight,
+        width: item.item?.variant?.width || item.width,
+      })),
+      settings.packing_profile,
+      settings.default_weight
+    )
+    const fallbackParcel = {
+      height: settings.default_height,
+      length: settings.default_length,
+      weight: settings.default_weight,
+      width: settings.default_width,
+    }
     let totalWeight = 0
     const ghnItems = (items || []).map((item: any) => {
       const w = item.item?.variant?.weight || item.weight || settings.default_weight
@@ -282,63 +323,80 @@ export class GhnFulfillmentProviderService extends AbstractFulfillmentProviderSe
       : `FUL-${fulfillment?.id?.slice(-8) || Date.now()}`
 
     try {
-      const ghnOrder = await client.createShippingOrder({
-        to_name: recipientName,
-        to_phone: recipientPhone,
-        to_address: recipientAddress,
-        to_district_id: Number(toDistrictId),
-        to_ward_code: String(toWardCode),
-        weight: totalWeight,
-        length: settings.default_length,
-        width: settings.default_width,
-        height: settings.default_height,
-        service_type_id: serviceTypeId,
-        payment_type_id: settings.payment_type_id,
-        required_note: settings.required_note,
-        client_order_code: clientOrderCode,
-        content: `Đơn hàng ${clientOrderCode} - Synapse`,
-        items: ghnItems.length > 0 ? ghnItems : [
-          {
-            name: "Gói hàng",
-            quantity: 1,
-            weight: totalWeight,
-          },
-        ],
-      })
+      const parcels = packagePlan.length ? packagePlan : [fallbackParcel]
+      const ghnOrders = [] as Awaited<ReturnType<GhnClient["createShippingOrder"]>>[]
+      try {
+        for (const [index, parcel] of parcels.entries()) {
+          const parcelOrderCode = parcels.length > 1
+            ? `${clientOrderCode}-P${index + 1}`
+            : clientOrderCode
+          const ghnOrder = await client.createShippingOrder({
+            to_name: recipientName,
+            to_phone: recipientPhone,
+            to_address: recipientAddress,
+            to_district_id: Number(toDistrictId),
+            to_ward_code: String(toWardCode),
+            weight: parcel.weight,
+            length: parcel.length,
+            width: parcel.width,
+            height: parcel.height,
+            service_type_id: serviceTypeId,
+            payment_type_id: settings.payment_type_id,
+            required_note: settings.required_note,
+            client_order_code: parcelOrderCode,
+            content: `Đơn hàng ${clientOrderCode} - kiện ${index + 1}/${parcels.length}`,
+            items: index === 0 && ghnItems.length > 0 ? ghnItems : [
+              {
+                name: `Kiện hàng ${index + 1}`,
+                quantity: 1,
+                weight: parcel.weight,
+              },
+            ],
+          })
+          ghnOrders.push(ghnOrder)
+        }
+      } catch (error) {
+        await client.cancelOrder(ghnOrders.map((order) => order.order_code)).catch(() => undefined)
+        throw error
+      }
 
       let printToken = ""
       try {
-        const tokenRes = await client.generatePrintToken([ghnOrder.order_code])
+        const tokenRes = await client.generatePrintToken(
+          ghnOrders.map((order) => order.order_code)
+        )
         printToken = tokenRes.token
       } catch {
         // print token can be generated on-demand later
       }
 
-      const trackingUrl =
-        settings.environment === "production"
-          ? `https://donhang.ghn.vn/?order_code=${ghnOrder.order_code}`
-          : ""
+      const primaryOrder = ghnOrders[0]
+      const trackingUrl = settings.environment === "production"
+        ? `https://donhang.ghn.vn/?order_code=${primaryOrder.order_code}`
+        : ""
       const printUrl = printToken ? client.getPrintUrl(printToken, "A5") : ""
 
       return {
         data: {
           ...((fulfillment as any)?.data || {}),
           ...data,
-          ghn_order_code: ghnOrder.order_code,
-          ghn_total_fee: ghnOrder.total_fee,
-          ghn_expected_delivery: ghnOrder.expected_delivery_time,
+          ghn_order_code: primaryOrder.order_code,
+          ghn_order_codes: ghnOrders.map((order) => order.order_code),
+          ghn_total_fee: ghnOrders.reduce((total, order) => total + order.total_fee, 0),
+          ghn_expected_delivery: primaryOrder.expected_delivery_time,
           ghn_print_token: printToken,
           ghn_print_url: printUrl,
           ghn_environment: settings.environment,
-          tracking_number: ghnOrder.order_code,
+          shipping_packages: packagePlan,
+          tracking_number: primaryOrder.order_code,
         },
-        labels: [
-          {
-            tracking_number: ghnOrder.order_code,
-            tracking_url: trackingUrl,
-            label_url: printUrl,
-          },
-        ],
+        labels: ghnOrders.map((order) => ({
+          tracking_number: order.order_code,
+          tracking_url: settings.environment === "production"
+            ? `https://donhang.ghn.vn/?order_code=${order.order_code}`
+            : "",
+          label_url: printUrl,
+        })),
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -350,15 +408,16 @@ export class GhnFulfillmentProviderService extends AbstractFulfillmentProviderSe
   }
 
   async cancelFulfillment(data: Record<string, unknown>): Promise<any> {
-    const orderCode =
-      (data?.ghn_order_code as string) || (data?.tracking_number as string)
-    if (!orderCode) {
+    const orderCodes = Array.isArray(data?.ghn_order_codes)
+      ? data.ghn_order_codes.filter((code): code is string => typeof code === "string")
+      : [(data?.ghn_order_code as string) || (data?.tracking_number as string)].filter(Boolean)
+    if (!orderCodes.length) {
       return
     }
 
     const client = await this.getClient()
     try {
-      await client.cancelOrder([orderCode])
+      await client.cancelOrder(orderCodes)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       throw new MedusaError(
