@@ -4,6 +4,19 @@ import { sdk } from "@lib/config"
 import { HttpTypes } from "@medusajs/types"
 import { getAuthHeaders } from "./cookies"
 
+export type ShippingPackage = {
+  height: number
+  length: number
+  weight: number
+  width: number
+}
+
+export type ShippingQuote = {
+  option: HttpTypes.StoreCartShippingOption
+  packages: ShippingPackage[]
+  totalWeight: number
+}
+
 export const listCartShippingMethods = async (cartId: string) => {
   const headers = {
     ...(await getAuthHeaders()),
@@ -19,7 +32,7 @@ export const listCartShippingMethods = async (cartId: string) => {
         },
         headers,
         cache: "no-store",
-      }
+      },
     )
     .then(({ shipping_options }) => shipping_options)
     .catch(() => {
@@ -27,23 +40,14 @@ export const listCartShippingMethods = async (cartId: string) => {
     })
 }
 
-export const calculatePriceForShippingOption = async (
-  optionId: string,
-  cartId: string,
-  data?: Record<string, unknown>
-) => {
+export const getShippingPackages = async (cartId: string) => {
   const headers = {
     ...(await getAuthHeaders()),
   }
 
-  const packing = await sdk.client
+  return sdk.client
     .fetch<{
-      packages: Array<{
-        height: number
-        length: number
-        weight: number
-        width: number
-      }>
+      packages: ShippingPackage[]
       total_weight: number
     }>("/store/shipping-packages", {
       method: "POST",
@@ -52,6 +56,18 @@ export const calculatePriceForShippingOption = async (
       cache: "no-store",
     })
     .catch(() => null)
+}
+
+export const calculateShippingQuote = async (
+  optionId: string,
+  cartId: string,
+  data?: Record<string, unknown>,
+): Promise<ShippingQuote | null> => {
+  const headers = {
+    ...(await getAuthHeaders()),
+  }
+
+  const packing = await getShippingPackages(cartId)
 
   const body = {
     cart_id: cartId,
@@ -71,10 +87,23 @@ export const calculatePriceForShippingOption = async (
         body,
         headers,
         cache: "no-store",
-      }
+      },
     )
-    .then(({ shipping_option }) => shipping_option)
+    .then(({ shipping_option }) => ({
+      option: shipping_option,
+      packages: packing?.packages || [],
+      totalWeight: packing?.total_weight || 300,
+    }))
     .catch((_e) => {
       return null
     })
+}
+
+export const calculatePriceForShippingOption = async (
+  optionId: string,
+  cartId: string,
+  data?: Record<string, unknown>,
+) => {
+  const quote = await calculateShippingQuote(optionId, cartId, data)
+  return quote?.option || null
 }

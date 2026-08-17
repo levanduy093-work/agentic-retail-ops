@@ -8,7 +8,7 @@ import Divider from "@modules/common/components/divider"
 import { Heading, Text } from "@modules/common/components/ui"
 import Spinner from "@modules/common/icons/spinner"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useActionState, useEffect } from "react"
+import { useActionState, useCallback, useEffect, useState } from "react"
 import BillingAddress from "../billing_address"
 import ErrorMessage from "../error-message"
 import ShippingAddress from "../shipping-address"
@@ -43,17 +43,26 @@ const Addresses = ({
     SetAddressesState | null,
     FormData
   >(setAddresses, null)
+  const [isAdvancing, setIsAdvancing] = useState(false)
+
+  const moveToDelivery = useCallback(() => {
+    router.push(pathname + "?step=delivery", { scroll: false })
+    requestAnimationFrame(() => {
+      document
+        .querySelector("[data-checkout-step='delivery']")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
+  }, [pathname, router])
 
   useEffect(() => {
     if (result?.success) {
-      router.push(pathname + "?step=delivery", { scroll: false })
-      requestAnimationFrame(() => {
-        document
-          .querySelector("[data-checkout-step='delivery']")
-          ?.scrollIntoView({ behavior: "smooth", block: "start" })
-      })
+      setIsAdvancing(false)
+      if (isOpen) moveToDelivery()
+    } else if (result?.error && isAdvancing) {
+      setIsAdvancing(false)
+      router.replace(pathname + "?step=address", { scroll: false })
     }
-  }, [pathname, result?.success, router])
+  }, [isAdvancing, isOpen, moveToDelivery, pathname, result, router])
 
   return (
     <div className="bg-white">
@@ -78,7 +87,13 @@ const Addresses = ({
         )}
       </div>
       {isOpen ? (
-        <form action={formAction}>
+        <form
+          action={formAction}
+          onSubmit={() => {
+            setIsAdvancing(true)
+            moveToDelivery()
+          }}
+        >
           <div className="pb-8">
             <ShippingAddress
               customer={customer}
@@ -102,85 +117,88 @@ const Addresses = ({
             <SubmitButton className="mt-6" data-testid="submit-address-button">
               {t("checkout.continue_to_shipping")}
             </SubmitButton>
-            <ErrorMessage error={result?.error} data-testid="address-error-message" />
+            <ErrorMessage
+              error={result?.error}
+              data-testid="address-error-message"
+            />
           </div>
         </form>
       ) : (
         <div>
           <div className="text-small-regular">
             {cart && cart.shipping_address ? (
+              <div
+                className={`grid ${
+                  sameAsBilling
+                    ? "grid-cols-1 md:grid-cols-2"
+                    : "grid-cols-1 md:grid-cols-3"
+                } gap-6 w-full`}
+              >
                 <div
-                  className={`grid ${
-                    sameAsBilling
-                      ? "grid-cols-1 md:grid-cols-2"
-                      : "grid-cols-1 md:grid-cols-3"
-                  } gap-6 w-full`}
+                  className="flex flex-col"
+                  data-testid="shipping-address-summary"
                 >
-                  <div
-                    className="flex flex-col"
-                    data-testid="shipping-address-summary"
-                  >
-                    <Text className="txt-medium-plus text-ui-fg-base mb-1 font-medium">
-                      {t("checkout.shipping_address")}
-                    </Text>
-                    <Text className="txt-medium text-ui-fg-subtle">
-                      {cart.shipping_address.first_name}{" "}
-                      {cart.shipping_address.last_name}
-                    </Text>
-                    <Text className="txt-medium text-ui-fg-subtle">
-                      {cart.shipping_address.address_1}{" "}
-                      {cart.shipping_address.address_2}
-                    </Text>
-                    <Text className="txt-medium text-ui-fg-subtle">
-                      {cart.shipping_address.postal_code},{" "}
-                      {cart.shipping_address.city}
-                    </Text>
-                    <Text className="txt-medium text-ui-fg-subtle">
-                      {cart.shipping_address.country_code?.toUpperCase()}
-                    </Text>
-                  </div>
-
-                  <div
-                    className="flex flex-col"
-                    data-testid="shipping-contact-summary"
-                  >
-                    <Text className="txt-medium-plus text-ui-fg-base mb-1 font-medium">
-                      {t("order.contact")}
-                    </Text>
-                    <Text className="txt-medium text-ui-fg-subtle">
-                      {cart.shipping_address.phone}
-                    </Text>
-                    <Text className="txt-medium text-ui-fg-subtle">
-                      {cart.email}
-                    </Text>
-                  </div>
-
-                  {!sameAsBilling && (
-                    <div
-                      className="flex flex-col"
-                      data-testid="billing-address-summary"
-                    >
-                      <Text className="txt-medium-plus text-ui-fg-base mb-1 font-medium">
-                        {t("checkout.billing_address")}
-                      </Text>
-                      <Text className="txt-medium text-ui-fg-subtle">
-                        {cart.billing_address?.first_name}{" "}
-                        {cart.billing_address?.last_name}
-                      </Text>
-                      <Text className="txt-medium text-ui-fg-subtle">
-                        {cart.billing_address?.address_1}{" "}
-                        {cart.billing_address?.address_2}
-                      </Text>
-                      <Text className="txt-medium text-ui-fg-subtle">
-                        {cart.billing_address?.postal_code},{" "}
-                        {cart.billing_address?.city}
-                      </Text>
-                      <Text className="txt-medium text-ui-fg-subtle">
-                        {cart.billing_address?.country_code?.toUpperCase()}
-                      </Text>
-                    </div>
-                  )}
+                  <Text className="txt-medium-plus text-ui-fg-base mb-1 font-medium">
+                    {t("checkout.shipping_address")}
+                  </Text>
+                  <Text className="txt-medium text-ui-fg-subtle">
+                    {cart.shipping_address.first_name}{" "}
+                    {cart.shipping_address.last_name}
+                  </Text>
+                  <Text className="txt-medium text-ui-fg-subtle">
+                    {cart.shipping_address.address_1}{" "}
+                    {cart.shipping_address.address_2}
+                  </Text>
+                  <Text className="txt-medium text-ui-fg-subtle">
+                    {cart.shipping_address.postal_code},{" "}
+                    {cart.shipping_address.city}
+                  </Text>
+                  <Text className="txt-medium text-ui-fg-subtle">
+                    {cart.shipping_address.country_code?.toUpperCase()}
+                  </Text>
                 </div>
+
+                <div
+                  className="flex flex-col"
+                  data-testid="shipping-contact-summary"
+                >
+                  <Text className="txt-medium-plus text-ui-fg-base mb-1 font-medium">
+                    {t("order.contact")}
+                  </Text>
+                  <Text className="txt-medium text-ui-fg-subtle">
+                    {cart.shipping_address.phone}
+                  </Text>
+                  <Text className="txt-medium text-ui-fg-subtle">
+                    {cart.email}
+                  </Text>
+                </div>
+
+                {!sameAsBilling && (
+                  <div
+                    className="flex flex-col"
+                    data-testid="billing-address-summary"
+                  >
+                    <Text className="txt-medium-plus text-ui-fg-base mb-1 font-medium">
+                      {t("checkout.billing_address")}
+                    </Text>
+                    <Text className="txt-medium text-ui-fg-subtle">
+                      {cart.billing_address?.first_name}{" "}
+                      {cart.billing_address?.last_name}
+                    </Text>
+                    <Text className="txt-medium text-ui-fg-subtle">
+                      {cart.billing_address?.address_1}{" "}
+                      {cart.billing_address?.address_2}
+                    </Text>
+                    <Text className="txt-medium text-ui-fg-subtle">
+                      {cart.billing_address?.postal_code},{" "}
+                      {cart.billing_address?.city}
+                    </Text>
+                    <Text className="txt-medium text-ui-fg-subtle">
+                      {cart.billing_address?.country_code?.toUpperCase()}
+                    </Text>
+                  </div>
+                )}
+              </div>
             ) : (
               <div>
                 <Spinner />

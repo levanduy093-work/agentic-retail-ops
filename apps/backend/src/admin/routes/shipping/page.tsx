@@ -210,6 +210,18 @@ const ShippingHubPage = () => {
       )
       .map((shipment) => shipment.fulfillment_id)
       .join(",") || ""
+  const pendingGhtkFulfillmentIds =
+    shipmentsQuery.data?.shipments
+      .filter(
+        (shipment) =>
+          shipment.carrier_code === "GHTK" &&
+          Boolean(shipment.tracking_number) &&
+          !["cancel", "delivered", "return"].includes(
+            shipment.status.toLowerCase()
+          )
+      )
+      .map((shipment) => shipment.fulfillment_id)
+      .join(",") || ""
 
   const ghn = carriersQuery.data?.carriers.find(
     (carrier) => carrier.code === "GHN"
@@ -395,6 +407,30 @@ const ShippingHubPage = () => {
     },
   })
 
+  const syncGhtkStatusMutation = useMutation({
+    mutationFn: (fulfillmentId: string) =>
+      sdk.client.fetch<{
+        shipment: {
+          changed: boolean
+          status: string
+          status_name: string
+          tracking_number: string
+        }
+      }>(`/admin/shipping/shipments/${fulfillmentId}/sync-ghtk-status`, {
+        method: "POST",
+      }),
+    onError: (error: Error) =>
+      toast.error("Không thể đồng bộ trạng thái GHTK", {
+        description: error.message,
+      }),
+    onSuccess: ({ shipment }) => {
+      queryClient.invalidateQueries({ queryKey: ["shipping-hub", "shipments"] })
+      toast.success(`GHTK: ${shipment.status_name || shipment.status}`, {
+        description: `Mã vận đơn ${shipment.tracking_number}`,
+      })
+    },
+  })
+
   useEffect(() => {
     const fulfillmentIds = pendingGhnFulfillmentIds
       ? pendingGhnFulfillmentIds.split(",")
@@ -430,6 +466,42 @@ const ShippingHubPage = () => {
       window.clearInterval(interval)
     }
   }, [pendingGhnFulfillmentIds, queryClient])
+
+  useEffect(() => {
+    const fulfillmentIds = pendingGhtkFulfillmentIds
+      ? pendingGhtkFulfillmentIds.split(",")
+      : []
+
+    if (!fulfillmentIds.length) return
+
+    let stopped = false
+    const sync = async () => {
+      try {
+        await Promise.all(
+          fulfillmentIds.map((fulfillmentId) =>
+            sdk.client.fetch(
+              `/admin/shipping/shipments/${fulfillmentId}/sync-ghtk-status`,
+              { method: "POST" }
+            )
+          )
+        )
+        if (!stopped) {
+          queryClient.invalidateQueries({
+            queryKey: ["shipping-hub", "shipments"],
+          })
+        }
+      } catch {
+        // A later polling cycle retries; the visible shipment data is retained.
+      }
+    }
+
+    void sync()
+    const interval = window.setInterval(() => void sync(), 60_000)
+    return () => {
+      stopped = true
+      window.clearInterval(interval)
+    }
+  }, [pendingGhtkFulfillmentIds, queryClient])
 
   const submitGhn = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -681,6 +753,18 @@ const ShippingHubPage = () => {
                             }
                           >
                             Đồng bộ GHN
+                          </Button>
+                        )}
+                        {shipment.carrier_code === "GHTK" && (
+                          <Button
+                            size="small"
+                            variant="transparent"
+                            isLoading={syncGhtkStatusMutation.isPending}
+                            onClick={() =>
+                              syncGhtkStatusMutation.mutate(shipment.fulfillment_id)
+                            }
+                          >
+                            Đồng bộ GHTK
                           </Button>
                         )}
                         {shipment.environment === "production" &&

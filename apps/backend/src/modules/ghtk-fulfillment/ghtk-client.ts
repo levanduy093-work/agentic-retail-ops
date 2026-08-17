@@ -121,7 +121,10 @@ export type GhtkConnectionTestResult = {
   pick_addresses?: GhtkPickAddress[]
 }
 
-const SANDBOX_BASE_URL = "https://dev.ghtk.vn"
+// GHTK's public OpenAPI documentation names this environment "staging".
+// Keep the application-facing value as "sandbox" so it remains consistent
+// with the other fulfillment providers.
+const SANDBOX_BASE_URL = "https://services-staging.ghtklab.com"
 const PRODUCTION_BASE_URL = "https://services.giaohangtietkiem.vn"
 
 export class GhtkClient {

@@ -65,15 +65,21 @@ const VietnamAddressSelect = ({
   const [wards, setWards] = useState<Ward[]>([])
 
   const [selectedProvinceId, setSelectedProvinceId] = useState<number | "">(
-    initialMetadata?.ghn_province_id ? Number(initialMetadata.ghn_province_id) : ""
+    initialMetadata?.ghn_province_id
+      ? Number(initialMetadata.ghn_province_id)
+      : "",
   )
   const [selectedDistrictId, setSelectedDistrictId] = useState<number | "">(
-    initialMetadata?.ghn_district_id ? Number(initialMetadata.ghn_district_id) : ""
+    initialMetadata?.ghn_district_id
+      ? Number(initialMetadata.ghn_district_id)
+      : "",
   )
   const [selectedWardCode, setSelectedWardCode] = useState<string>(
-    initialMetadata?.ghn_ward_code ? String(initialMetadata.ghn_ward_code) : ""
+    initialMetadata?.ghn_ward_code ? String(initialMetadata.ghn_ward_code) : "",
   )
-  const [streetAddress, setStreetAddress] = useState<string>(initialAddress1 || "")
+  const [streetAddress, setStreetAddress] = useState<string>(
+    initialAddress1 || "",
+  )
 
   const [loadingProvinces, setLoadingProvinces] = useState(true)
   const [loadingDistricts, setLoadingDistricts] = useState(false)
@@ -81,7 +87,9 @@ const VietnamAddressSelect = ({
 
   // Live GHN fee estimation state
   const [estimatingFee, setEstimatingFee] = useState(false)
-  const [estimatedFees, setEstimatedFees] = useState<EstimatedGhnFees | null>(null)
+  const [estimatedFees, setEstimatedFees] = useState<EstimatedGhnFees | null>(
+    null,
+  )
   const isMountedRef = useRef(true)
 
   useEffect(() => {
@@ -108,10 +116,7 @@ const VietnamAddressSelect = ({
     } else {
       setSelectedWardCode("")
     }
-    if (initialAddress1) {
-      setStreetAddress(initialAddress1)
-    }
-  }, [initialMetadata, initialAddress1])
+  }, [initialMetadata])
 
   // 1. Fetch Provinces on Mount
   useEffect(() => {
@@ -126,7 +131,7 @@ const VietnamAddressSelect = ({
             const found = res.provinces.find(
               (p) =>
                 p.name.toLowerCase().includes(initialProvince.toLowerCase()) ||
-                initialProvince.toLowerCase().includes(p.name.toLowerCase())
+                initialProvince.toLowerCase().includes(p.name.toLowerCase()),
             )
             if (found) setSelectedProvinceId(found.id)
           }
@@ -152,7 +157,7 @@ const VietnamAddressSelect = ({
     setLoadingDistricts(true)
     sdk.client
       .fetch<{ districts: District[] }>(
-        `/store/vietnam-address/districts?province_id=${selectedProvinceId}`
+        `/store/vietnam-address/districts?province_id=${selectedProvinceId}`,
       )
       .then((res) => {
         if (res?.districts && isMountedRef.current) {
@@ -162,8 +167,8 @@ const VietnamAddressSelect = ({
               (d) =>
                 d.name.toLowerCase().includes(initialCity.toLowerCase()) ||
                 d.extensions?.some((ext) =>
-                  ext.toLowerCase().includes(initialCity.toLowerCase())
-                )
+                  ext.toLowerCase().includes(initialCity.toLowerCase()),
+                ),
             )
             if (found) setSelectedDistrictId(found.id)
           }
@@ -187,7 +192,7 @@ const VietnamAddressSelect = ({
     setLoadingWards(true)
     sdk.client
       .fetch<{ wards: Ward[] }>(
-        `/store/vietnam-address/wards?district_id=${selectedDistrictId}`
+        `/store/vietnam-address/wards?district_id=${selectedDistrictId}`,
       )
       .then((res) => {
         if (res?.wards && isMountedRef.current) {
@@ -239,16 +244,41 @@ const VietnamAddressSelect = ({
   }, [cartId, selectedDistrictId, selectedWardCode])
 
   // Current Names
-  const currentProvince = provinces.find((p) => p.id === Number(selectedProvinceId))
-  const currentDistrict = districts.find((d) => d.id === Number(selectedDistrictId))
+  const currentProvince = provinces.find(
+    (p) => p.id === Number(selectedProvinceId),
+  )
+  const currentDistrict = districts.find(
+    (d) => d.id === Number(selectedDistrictId),
+  )
   const currentWard = wards.find((w) => w.code === selectedWardCode)
+
+  useEffect(() => {
+    if (!initialAddress1) return
+
+    const wardName = wards.find(
+      (ward) => ward.code === String(initialMetadata?.ghn_ward_code || ""),
+    )?.name
+    const repeatedWardSuffix = wardName
+      ? new RegExp(
+          `(?:,\\s*${wardName.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")})+$`,
+          "i",
+        )
+      : null
+
+    setStreetAddress(initialAddress1.replace(repeatedWardSuffix || /$^/, ""))
+  }, [initialAddress1, initialMetadata?.ghn_ward_code, wards])
 
   const handleProvinceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value ? Number(e.target.value) : ""
     setSelectedProvinceId(val)
     setSelectedDistrictId("")
     setSelectedWardCode("")
-    notifyChange(val ? Number(val) : undefined, undefined, undefined, streetAddress)
+    notifyChange(
+      val ? Number(val) : undefined,
+      undefined,
+      undefined,
+      streetAddress,
+    )
   }
 
   const handleDistrictChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -259,7 +289,7 @@ const VietnamAddressSelect = ({
       selectedProvinceId ? Number(selectedProvinceId) : undefined,
       val ? Number(val) : undefined,
       undefined,
-      streetAddress
+      streetAddress,
     )
   }
 
@@ -270,7 +300,7 @@ const VietnamAddressSelect = ({
       selectedProvinceId ? Number(selectedProvinceId) : undefined,
       selectedDistrictId ? Number(selectedDistrictId) : undefined,
       val || undefined,
-      streetAddress
+      streetAddress,
     )
   }
 
@@ -281,7 +311,7 @@ const VietnamAddressSelect = ({
       selectedProvinceId ? Number(selectedProvinceId) : undefined,
       selectedDistrictId ? Number(selectedDistrictId) : undefined,
       selectedWardCode || undefined,
-      val
+      val,
     )
   }
 
@@ -289,7 +319,7 @@ const VietnamAddressSelect = ({
     pId?: number,
     dId?: number,
     wCode?: string,
-    street?: string
+    street?: string,
   ) => {
     const prov = provinces.find((p) => p.id === pId)
     const dist = districts.find((d) => d.id === dId)
@@ -307,10 +337,7 @@ const VietnamAddressSelect = ({
   }
 
   // Combined full address for Medusa address_1
-  const fullAddress1 = [
-    streetAddress,
-    currentWard ? currentWard.name : "",
-  ]
+  const fullAddress1 = [streetAddress, currentWard ? currentWard.name : ""]
     .filter(Boolean)
     .join(", ")
 
@@ -332,11 +359,7 @@ const VietnamAddressSelect = ({
         name="shipping_address.address_1"
         value={fullAddress1 || streetAddress}
       />
-      <input
-        type="hidden"
-        name="shipping_address.postal_code"
-        value="700000"
-      />
+      <input type="hidden" name="shipping_address.postal_code" value="700000" />
       <input
         type="hidden"
         name="shipping_address.metadata.ghn_province_id"
@@ -360,7 +383,11 @@ const VietnamAddressSelect = ({
             Tỉnh / Thành phố <span className="text-rose-500">*</span>
           </label>
           <NativeSelect
-            placeholder={loadingProvinces ? "Đang tải tỉnh thành..." : "Chọn Tỉnh / Thành..."}
+            placeholder={
+              loadingProvinces
+                ? "Đang tải tỉnh thành..."
+                : "Chọn Tỉnh / Thành..."
+            }
             value={selectedProvinceId ? String(selectedProvinceId) : ""}
             onChange={handleProvinceChange}
             required
@@ -383,8 +410,8 @@ const VietnamAddressSelect = ({
               !selectedProvinceId
                 ? "Vui lòng chọn Tỉnh/Thành trước"
                 : loadingDistricts
-                ? "Đang tải quận huyện..."
-                : "Chọn Quận / Huyện..."
+                  ? "Đang tải quận huyện..."
+                  : "Chọn Quận / Huyện..."
             }
             value={selectedDistrictId ? String(selectedDistrictId) : ""}
             onChange={handleDistrictChange}
@@ -409,8 +436,8 @@ const VietnamAddressSelect = ({
               !selectedDistrictId
                 ? "Vui lòng chọn Quận/Huyện trước"
                 : loadingWards
-                ? "Đang tải phường xã..."
-                : "Chọn Phường / Xã..."
+                  ? "Đang tải phường xã..."
+                  : "Chọn Phường / Xã..."
             }
             value={selectedWardCode}
             onChange={handleWardChange}
@@ -454,9 +481,24 @@ const VietnamAddressSelect = ({
             </div>
             {estimatingFee && (
               <span className="text-[11px] font-medium text-emerald-700 animate-pulse flex items-center gap-1.5">
-                <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <svg
+                  className="animate-spin h-3.5 w-3.5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
                 </svg>
                 {t("checkout.ghn_calculating")}
               </span>
@@ -472,12 +514,14 @@ const VietnamAddressSelect = ({
                       {t("checkout.ghn_standard")}
                     </span>
                     <span className="text-xs font-bold text-emerald-800">
-                      {convertToLocale({ amount: estimatedFees.standard, currency_code: "vnd" })}
+                      {convertToLocale({
+                        amount: estimatedFees.standard,
+                        currency_code: "vnd",
+                      })}
                     </span>
                   </div>
                 </div>
               </div>
-
             </div>
           )}
         </div>

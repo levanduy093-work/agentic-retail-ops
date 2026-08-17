@@ -353,6 +353,7 @@ export class GhtkFulfillmentProviderService extends AbstractFulfillmentProviderS
           ghtk_estimated_deliver_time: ghtkOrder.estimated_deliver_time,
           ghtk_estimated_pick_time: ghtkOrder.estimated_pick_time,
           ghtk_fee: ghtkOrder.fee,
+          ghtk_environment: settings.environment,
           ghtk_insurance_fee: ghtkOrder.insurance_fee,
           ghtk_label_id: ghtkOrder.label,
           ghtk_order_code: ghtkOrder.label,

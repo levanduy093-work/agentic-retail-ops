@@ -13,6 +13,7 @@ import {
   setCartId,
 } from "./cookies"
 import { saveCustomerShippingAddress } from "./customer"
+import { calculateShippingQuote } from "./fulfillment"
 import { getRegion } from "./regions"
 
 /**
@@ -69,7 +70,7 @@ export async function getOrSetCart(countryCode: string) {
     const cartResp = await sdk.store.cart.create(
       { region_id: region.id, locale: locale || undefined },
       {},
-      headers
+      headers,
     )
     cart = cartResp.cart
 
@@ -144,7 +145,7 @@ export async function addToCart({
         quantity,
       },
       {},
-      headers
+      headers,
     )
     .then(async () => {
       const cartCacheTag = await getCacheTag("carts")
@@ -219,26 +220,34 @@ export async function deleteLineItem(lineId: string) {
 export async function setShippingMethod({
   cartId,
   shippingMethodId,
+  data,
 }: {
   cartId: string
   shippingMethodId: string
+  data?: Record<string, unknown>
 }) {
   const headers = {
     ...(await getAuthHeaders()),
   }
 
   return sdk.store.cart
-    .addShippingMethod(cartId, { option_id: shippingMethodId }, {}, headers)
-    .then(async () => {
+    .addShippingMethod(
+      cartId,
+      { option_id: shippingMethodId, data },
+      {},
+      headers,
+    )
+    .then(async ({ cart }: { cart: HttpTypes.StoreCart }) => {
       const cartCacheTag = await getCacheTag("carts")
       revalidateTag(cartCacheTag)
+      return cart
     })
     .catch(medusaError)
 }
 
 export async function initiatePaymentSession(
   cart: HttpTypes.StoreCart,
-  data: HttpTypes.StoreInitializePaymentSession
+  data: HttpTypes.StoreInitializePaymentSession,
 ) {
   const headers = {
     ...(await getAuthHeaders()),
@@ -302,7 +311,7 @@ export async function removeDiscount(_code: string) {
 
 export async function removeGiftCard(
   _codeToRemove: string,
-  _giftCards: unknown[]
+  _giftCards: unknown[],
   // giftCards: GiftCard[]
 ) {
   //   const cartId = getCartId()
@@ -322,7 +331,7 @@ export async function removeGiftCard(
 
 export async function submitPromotionForm(
   currentState: unknown,
-  formData: FormData
+  formData: FormData,
 ) {
   const code = formData.get("code") as string
   try {
@@ -340,7 +349,7 @@ export type SetAddressesState = {
 
 export async function setAddresses(
   _currentState: SetAddressesState | null,
-  formData: FormData
+  formData: FormData,
 ): Promise<SetAddressesState> {
   try {
     if (!formData) {
@@ -351,8 +360,12 @@ export async function setAddresses(
       throw new Error("No existing cart found when setting addresses")
     }
 
-    const ghnProvinceId = formData.get("shipping_address.metadata.ghn_province_id")
-    const ghnDistrictId = formData.get("shipping_address.metadata.ghn_district_id")
+    const ghnProvinceId = formData.get(
+      "shipping_address.metadata.ghn_province_id",
+    )
+    const ghnDistrictId = formData.get(
+      "shipping_address.metadata.ghn_district_id",
+    )
     const ghnWardCode = formData.get("shipping_address.metadata.ghn_ward_code")
 
     const metadata: Record<string, unknown> = {}
@@ -393,7 +406,28 @@ export async function setAddresses(
         province: formData.get("billing_address.province") as string,
         phone: formData.get("billing_address.phone") as string,
       }
-    await updateCart(data)
+    const updatedCart = await updateCart(data)
+
+    const selectedShippingOptionId =
+      updatedCart.shipping_methods?.at(-1)?.shipping_option_id
+
+    if (selectedShippingOptionId) {
+      const quote = await calculateShippingQuote(
+        selectedShippingOptionId,
+        cartId,
+      )
+
+      if (quote) {
+        await setShippingMethod({
+          cartId,
+          shippingMethodId: selectedShippingOptionId,
+          data: {
+            ghn_weight: quote.totalWeight,
+            shipping_packages: quote.packages,
+          },
+        })
+      }
+    }
 
     if (formData.get("save_to_customer") === "on") {
       await saveCustomerShippingAddress(data.shipping_address)

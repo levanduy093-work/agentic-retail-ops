@@ -16,7 +16,7 @@ describe("GhtkClient", () => {
   })
 
   it("should initialize with correct sandbox base URL", () => {
-    expect(client.getConfig().baseUrl).toContain("dev.ghtk.vn")
+    expect(client.getConfig().baseUrl).toContain("services-staging.ghtklab.com")
     expect(client.getConfig().apiToken).toBe("test-token-ghtk")
   })
 
