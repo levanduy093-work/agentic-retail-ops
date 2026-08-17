@@ -186,7 +186,7 @@ export const PromptsConfigContent = () => {
         "prompts.resetPromptConfirmDesc",
         "Bạn có chắc muốn khôi phục System Prompt này về bản gốc mặc định của hệ thống?"
       ),
-      heading: t("prompts.resetPromptConfirmHeading", "Khôi phục Prompt mặc định"),
+      title: t("prompts.resetPromptConfirmHeading", "Khôi phục Prompt mặc định"),
     })
     if (ok) {
       resetMutation.mutate(promptKey)
@@ -199,7 +199,7 @@ export const PromptsConfigContent = () => {
         "prompts.resetAllConfirmDesc",
         "Thao tác này sẽ khôi phục toàn bộ System Prompts và cài đặt nhận diện về giá trị mặc định của hệ thống."
       ),
-      heading: t("prompts.resetAllConfirmHeading", "Khôi phục tất cả về mặc định"),
+      title: t("prompts.resetAllConfirmHeading", "Khôi phục tất cả về mặc định"),
     })
     if (ok) {
       resetMutation.mutate("all")

@@ -3,7 +3,6 @@ import {
   CustomerMessageIntentModelOutput,
   CUSTOMER_MESSAGE_INTENT_SYSTEM_PROMPT,
   defaultCustomerMessageIntent,
-  detectCustomerMessageFastIntent,
   resolveCustomerMessageIntent,
 } from "../customer-message-intent"
 
@@ -68,26 +67,6 @@ describe("customer message intent routing", () => {
       "sốp là nhân viên CSKH của Synapse"
     )
     expect(buildCustomerIntentReply("CLARIFY", "en")).toContain("Could you")
-  })
-
-  it("fast-routes obvious retail information questions without model latency", () => {
-    expect(
-      detectCustomerMessageFastIntent(
-        "Mình muốn trả hàng á, quy trình thế nào?"
-      )
-    ).toBe("STORE_QUESTION")
-    expect(
-      detectCustomerMessageFastIntent(
-        "Mình cần bảo hành quần áo đã mua bên sốp á"
-      )
-    ).toBe("STORE_QUESTION")
-    expect(detectCustomerMessageFastIntent("Hủy đơn hàng cho tôi ngay")).toBe(
-      "HUMAN_ACTION"
-    )
-    expect(detectCustomerMessageFastIntent("Viết code Python cho tôi")).toBeNull()
-    expect(detectCustomerMessageFastIntent("Sốp bạn bán về đồ gì?")).toBe(
-      "PRODUCT_DISCOVERY"
-    )
   })
 
   it("keeps tool execution and untrusted-input protections in the router", () => {

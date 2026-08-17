@@ -175,7 +175,6 @@ import {
   CUSTOMER_MESSAGE_INTENT_SYSTEM_PROMPT,
   CUSTOMER_MESSAGE_INTENT_TIMEOUT_MS,
   defaultCustomerMessageIntent,
-  detectCustomerMessageFastIntent,
   isCustomerAddressingShop,
   resolveCustomerMessageIntent,
 } from "./customer-message-intent"
@@ -3675,13 +3674,13 @@ class AgentOperationsModuleService extends MedusaService({
     const memorySummary = buildCustomerConversationContext({
       current_message_at: inbound.occurred_at,
       current_summary: startsNewTopic ? null : conversationMemory?.summary,
-      customer_facts: conversationMemory?.customer_facts as string[] | undefined,
+      customer_facts: readMemoryItems(conversationMemory?.customer_facts),
       last_message_at: conversation.last_message_at,
-      open_questions: conversationMemory?.open_questions as string[] | undefined,
+      open_questions: readMemoryItems(conversationMemory?.open_questions),
       profile_preferences: referencesPriorContext
         ? formatCustomerProfilePreferences(activeProfilePreferences)
         : [],
-      resolved_topics: conversationMemory?.resolved_topics as string[] | undefined,
+      resolved_topics: readMemoryItems(conversationMemory?.resolved_topics),
     })
 
     const explicitAttack = isExplicitPromptAttack(question)

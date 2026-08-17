@@ -15,7 +15,6 @@ import {
   detectKnowledgeQuestionLocale,
   formatChannelKnowledgeAnswer,
 } from "../knowledge-answer"
-import { detectCustomerMessageFastIntent } from "../customer-message-intent"
 import {
   isExplicitPromptAttack,
   buildProfessionalScopeReply,

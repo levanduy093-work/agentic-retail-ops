@@ -107,40 +107,6 @@ export function isCustomerAddressingShop(message: string) {
   return /(?:\bsốp\b|\bshop\b)/iu.test(message.normalize("NFKC"))
 }
 
-export function detectCustomerMessageFastIntent(
-  message: string
-): "HUMAN_ACTION" | "PRODUCT_DISCOVERY" | "STORE_QUESTION" | null {
-  const normalized = message.normalize("NFKC").toLocaleLowerCase()
-  const requestsPrivateDataOrAction =
-    /(hủy|huỷ|đổi địa chỉ|đổi thông tin|sửa đơn|hoàn tiền cho|refund (?:my|this)|cancel (?:my|this)|kiểm tra (?:đơn|đơn hàng|tài khoản)|tra (?:đơn|đơn hàng)|đơn (?:của tôi|của mình)|order (?:status|tracking)|my order)/iu.test(
-      normalized
-    )
-  if (requestsPrivateDataOrAction) return "HUMAN_ACTION"
-
-  const isKnowledgeOrPolicyQuestion =
-    /(bảo hành|đổi trả|trả hàng|hoàn tiền|chính sách|quy trình|điều kiện|thời gian giao|bao lâu|phí ship|phí giao|thanh toán|hóa đơn|vat|tích điểm|thành viên|khiếu nại|bảo mật|giờ mở cửa|giờ làm việc|địa chỉ shop|warranty|return|refund|policy)/iu.test(
-      normalized
-    )
-  if (isKnowledgeOrPolicyQuestion) return "STORE_QUESTION"
-
-  const asksForProducts =
-    /(bán gì|bán về (?:đồ )?gì|bán (?:đồ|sản phẩm) gì|có bán|shop có bán|sốp có bán|shop có gì|sốp có gì|có gì bán|có những mẫu nào|có sản phẩm nào|sản phẩm nào|tìm (?:áo|quần|váy|đầm|giày|dép|túi|mẫu|sản phẩm)|mua (?:áo|quần|váy|đầm|giày|dép|túi|mẫu|sản phẩm)|tư vấn (?:mẫu|áo|quần|váy|đầm|sản phẩm)|gợi ý (?:mẫu|áo|quần|váy|đầm|sản phẩm)|recommend|suggest)/iu.test(
-      normalized
-    )
-  if (asksForProducts) return "PRODUCT_DISCOVERY"
-
-  const asksForInformation =
-    /(quy trình|chính sách|điều kiện|bao lâu|thế nào|như thế nào|có được không|làm sao|how|what|when|can i|do you)/iu.test(
-      normalized
-    )
-  const hasRetailSubject =
-    /(sản phẩm|đơn hàng|giao hàng|giao nhận|vận chuyển|thanh toán|bảo hành|đổi hàng|trả hàng|hoàn tiền|product|order|delivery|shipping|payment|warranty|return|refund)/iu.test(
-      normalized
-    )
-
-  return asksForInformation && hasRetailSubject ? "STORE_QUESTION" : null
-}
-
 export function defaultCustomerMessageIntent(): CustomerMessageIntentResult {
   return {
     confidence: 0,
