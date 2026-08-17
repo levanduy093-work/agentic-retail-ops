@@ -120,7 +120,9 @@ describe("GhnFulfillmentProviderService", () => {
     )
 
     expect(fulfillmentResult.data.ghn_order_code).toBe("GHN_ORD_999")
+    expect(fulfillmentResult.data.ghn_environment).toBe("sandbox")
     expect(fulfillmentResult.data.ghn_print_token).toBe("PRINT_TOKEN_XYZ")
     expect(fulfillmentResult.labels?.[0]?.tracking_number).toBe("GHN_ORD_999")
+    expect(fulfillmentResult.labels?.[0]?.tracking_url).toBe("")
   })
 })

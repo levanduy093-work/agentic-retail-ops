@@ -4,7 +4,6 @@ import { sdk } from "@lib/config"
 import medusaError from "@lib/util/medusa-error"
 import { HttpTypes } from "@medusajs/types"
 import { revalidateTag } from "next/cache"
-import { redirect } from "next/navigation"
 import {
   getAuthHeaders,
   getCacheOptions,
@@ -13,8 +12,8 @@ import {
   removeCartId,
   setCartId,
 } from "./cookies"
+import { saveCustomerShippingAddress } from "./customer"
 import { getRegion } from "./regions"
-import { getLocale } from "./locale-actions"
 
 /**
  * Retrieves a cart by its ID. If no ID is provided, it will use the cart ID from the cookies.
@@ -24,7 +23,7 @@ import { getLocale } from "./locale-actions"
 export async function retrieveCart(cartId?: string, fields?: string) {
   const id = cartId || (await getCartId())
   fields ??=
-    "*items, *region, *items.product, *items.variant, *items.thumbnail, *items.metadata, +items.total, *promotions, +shipping_methods.name"
+    "*items, *region, *items.product, *items.variant, *items.thumbnail, *items.metadata, +items.total, *promotions, +shipping_methods.name, +shipping_address.metadata, +billing_address.metadata"
 
   if (!id) {
     return null
@@ -334,8 +333,15 @@ export async function submitPromotionForm(
 }
 
 // TODO: Pass a POJO instead of a form entity here
-export async function setAddresses(currentState: unknown, formData: FormData) {
-  let redirectUrl = ""
+export type SetAddressesState = {
+  error?: string
+  success?: boolean
+}
+
+export async function setAddresses(
+  _currentState: SetAddressesState | null,
+  formData: FormData
+): Promise<SetAddressesState> {
   try {
     if (!formData) {
       throw new Error("No form data found when setting addresses")
@@ -389,16 +395,13 @@ export async function setAddresses(currentState: unknown, formData: FormData) {
       }
     await updateCart(data)
 
-    const countryCode =
-      (formData.get("shipping_address.country_code") as string)?.toLowerCase() || "vn"
-    const locale = (await getLocale()) || "vi"
-    redirectUrl = `/${locale}/${countryCode}/checkout?step=delivery`
-  } catch (e: unknown) {
-    return e instanceof Error ? e.message : String(e)
-  }
+    if (formData.get("save_to_customer") === "on") {
+      await saveCustomerShippingAddress(data.shipping_address)
+    }
 
-  if (redirectUrl) {
-    redirect(redirectUrl)
+    return { success: true }
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : String(e) }
   }
 }
 

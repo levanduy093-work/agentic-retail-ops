@@ -11,6 +11,27 @@ import { requestAgentActionWorkflow } from "../workflows/agent-operations/reques
 const BATCH_SIZE = 50
 const SUPERVISOR_ID = `agent-supervisor-${os.hostname()}-${process.pid}`
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message
+  }
+
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return "Unknown error"
+  }
+}
+
 export default async function superviseAgentOperationsJob(
   container: MedusaContainer
 ) {
@@ -47,7 +68,7 @@ export default async function superviseAgentOperationsJob(
       })
       expiredApprovals += result.expired ? 1 : 0
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error"
+      const message = getErrorMessage(error)
       logger.error(`Approval ${approval.id} supervision failed: ${message}`)
     }
   }
@@ -63,9 +84,12 @@ export default async function superviseAgentOperationsJob(
   let escalationRequests = 0
   for (const task of overdueTasks) {
     try {
+      const incident = task.incident_id
+        ? await service.retrieveAgentIncident(task.incident_id)
+        : null
       const { result } = await requestAgentActionWorkflow(container).run({
         input: {
-          correlation_id: task.incident_id ?? task.idempotency_key,
+          correlation_id: incident?.correlation_id ?? task.idempotency_key,
           granted_permissions: [TASK_ESCALATE_TOOL.permission],
           idempotency_key: `supervisor:${task.id}:deadline:${new Date(
             task.due_at!
@@ -88,7 +112,7 @@ export default async function superviseAgentOperationsJob(
       })
       escalationRequests += result.duplicate ? 0 : 1
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error"
+      const message = getErrorMessage(error)
       logger.error(`Task ${task.id} supervision failed: ${message}`)
     }
   }

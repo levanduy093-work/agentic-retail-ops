@@ -70,6 +70,8 @@ const Shipping: React.FC<ShippingProps> = ({
   const pathname = usePathname()
 
   const isOpen = searchParams.get("step") === "delivery"
+  const cartShippingMethodId =
+    cart.shipping_methods?.at(-1)?.shipping_option_id || null
 
   const _shippingMethods = availableShippingMethods?.filter(
     (sm) => (sm as unknown as { service_zone?: { fulfillment_set?: { type?: string; location?: { address: HttpTypes.StoreCartAddress } } } }).service_zone?.fulfillment_set?.type !== "pickup"
@@ -139,6 +141,9 @@ const Shipping: React.FC<ShippingProps> = ({
     })
 
     await setShippingMethod({ cartId: cart.id, shippingMethodId: id })
+      .then(() => {
+        router.refresh()
+      })
       .catch((err) => {
         setShippingMethodId(currentId)
 
@@ -153,8 +158,12 @@ const Shipping: React.FC<ShippingProps> = ({
     setError(null)
   }, [isOpen])
 
+  useEffect(() => {
+    setShippingMethodId(cartShippingMethodId)
+  }, [cartShippingMethodId])
+
   return (
-    <div className="bg-white">
+    <div className="bg-white" data-checkout-step="delivery">
       <div className="flex flex-row items-center justify-between mb-6">
         <Heading
           level="h2"
@@ -378,7 +387,7 @@ const Shipping: React.FC<ShippingProps> = ({
               className="mt"
               onClick={handleSubmit}
               isLoading={isLoading}
-              disabled={!cart.shipping_methods?.[0]}
+              disabled={!shippingMethodId || isLoading}
               data-testid="submit-delivery-option-button"
             >
               {t("checkout.continue_to_payment")}

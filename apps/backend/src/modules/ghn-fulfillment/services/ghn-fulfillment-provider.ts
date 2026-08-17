@@ -314,7 +314,10 @@ export class GhnFulfillmentProviderService extends AbstractFulfillmentProviderSe
         // print token can be generated on-demand later
       }
 
-      const trackingUrl = `https://donhang.ghn.vn/?order_code=${ghnOrder.order_code}`
+      const trackingUrl =
+        settings.environment === "production"
+          ? `https://donhang.ghn.vn/?order_code=${ghnOrder.order_code}`
+          : ""
       const printUrl = printToken ? client.getPrintUrl(printToken, "A5") : ""
 
       return {
@@ -326,6 +329,7 @@ export class GhnFulfillmentProviderService extends AbstractFulfillmentProviderSe
           ghn_expected_delivery: ghnOrder.expected_delivery_time,
           ghn_print_token: printToken,
           ghn_print_url: printUrl,
+          ghn_environment: settings.environment,
           tracking_number: ghnOrder.order_code,
         },
         labels: [

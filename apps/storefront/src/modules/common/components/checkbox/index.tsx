@@ -3,35 +3,41 @@ import React from "react"
 
 type CheckboxProps = {
   checked?: boolean
+  defaultChecked?: boolean
   onChange?: () => void
   label: string
   name?: string
+  id?: string
   'data-testid'?: string
 }
 
 const CheckboxWithLabel: React.FC<CheckboxProps> = ({
-  checked = true,
+  checked,
+  defaultChecked,
   onChange,
   label,
   name,
-  'data-testid': dataTestId
+  id,
+  'data-testid': dataTestId,
 }) => {
+  const checkboxId = id || name || "checkbox"
   return (
-    <div className="flex items-center space-x-2 ">
+    <div className="flex items-center space-x-2">
       <Checkbox
-        className="text-base-regular flex items-center gap-x-2"
-        id="checkbox"
+        className="text-base-regular flex items-center gap-x-2 cursor-pointer"
+        id={checkboxId}
         role="checkbox"
         checked={checked}
-        readOnly
-        aria-checked={checked}
+        defaultChecked={defaultChecked}
+        aria-checked={checked ?? defaultChecked}
+        onChange={onChange}
         onClick={onChange}
         name={name}
         data-testid={dataTestId}
       />
       <Label
-        htmlFor="checkbox"
-        className="!transform-none !txt-medium"
+        htmlFor={checkboxId}
+        className="!transform-none !txt-medium cursor-pointer select-none text-sm text-ui-fg-base"
       >
         {label}
       </Label>

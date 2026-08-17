@@ -94,7 +94,8 @@
     "ghn_standard": "GHN Chuẩn (Standard)",
     "ghn_fast": "GHN Nhanh (Express)",
     "ghn_estimated_time": "Thời gian dự kiến",
-    "ghn_fee_notice": "Phí vận chuyển chính thức sẽ được áp dụng ở bước tiếp theo."
+    "ghn_fee_notice": "Phí vận chuyển chính thức sẽ được áp dụng ở bước tiếp theo.",
+    "save_address_to_account": "Lưu địa chỉ này vào sổ địa chỉ của tôi"
   },
   "order": {
     "thank_you": "Cảm ơn bạn!",

@@ -1,4 +1,5 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
+import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 import { GhnClient } from "../../../../modules/ghn-fulfillment/ghn-client"
 import { getGhnSettings } from "../../../../modules/shipping-hub/ghn-connection"
 
@@ -7,6 +8,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
     to_district_id: number
     to_ward_code?: string
     weight?: number
+    cart_id?: string
     service_type_id?: number
     insurance_value?: number
   }
@@ -19,7 +21,33 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
   const settings = await getGhnSettings(req.scope)
   const fromDistrictId = settings.sender_district_id || 1442
   const toDistrictId = Number(body.to_district_id)
-  const weight = body.weight || settings.default_weight || 300
+  let weight = body.weight || settings.default_weight || 300
+
+  if (body.cart_id) {
+    const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
+    const { data: carts } = await query.graph({
+      entity: "cart",
+      fields: ["id", "items.quantity", "items.weight", "items.variant.weight"],
+      filters: { id: body.cart_id },
+    })
+    const cart = carts[0] as
+      | {
+          items?: Array<{
+            quantity?: number | null
+            weight?: number | null
+            variant?: { weight?: number | null } | null
+          }>
+        }
+      | undefined
+    const cartWeight = (cart?.items ?? []).reduce((total, item) => {
+      const itemWeight = item.variant?.weight || item.weight || settings.default_weight
+      return total + itemWeight * (item.quantity || 1)
+    }, 0)
+
+    if (cartWeight > 0) {
+      weight = cartWeight
+    }
+  }
 
   try {
     const client = new GhnClient({

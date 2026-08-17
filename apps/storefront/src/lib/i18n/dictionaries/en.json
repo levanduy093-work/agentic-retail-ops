@@ -111,7 +111,8 @@
     "ghn_standard": "GHN Standard Delivery",
     "ghn_fast": "GHN Express Delivery",
     "ghn_estimated_time": "Estimated Time",
-    "ghn_fee_notice": "Official shipping fee will be applied in the next step."
+    "ghn_fee_notice": "Official shipping fee will be applied in the next step.",
+    "save_address_to_account": "Save this address in my address book"
   },
   "order": {
     "thank_you": "Thank you!",

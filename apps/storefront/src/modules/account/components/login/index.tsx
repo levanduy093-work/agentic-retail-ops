@@ -6,7 +6,7 @@ import ErrorMessage from "@modules/checkout/components/error-message"
 import { SubmitButton } from "@modules/checkout/components/submit-button"
 import Input from "@modules/common/components/input"
 import GoogleSignInButton from "@modules/account/components/google-sign-in-button"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import { useActionState, useEffect } from "react"
 import { useTranslation } from "@lib/i18n/client"
 
@@ -17,7 +17,6 @@ type Props = {
 const Login = ({ setCurrentView }: Props) => {
   const t = useTranslation()
   const [message, formAction] = useActionState(login, null)
-  const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const googleAuthError = searchParams.get("google_auth_error")

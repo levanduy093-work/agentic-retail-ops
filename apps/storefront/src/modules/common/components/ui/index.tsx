@@ -378,18 +378,25 @@ type RadioGroupItemProps = InputHTMLAttributes<HTMLInputElement> & {
 const RadioGroupItem = forwardRef<HTMLInputElement, RadioGroupItemProps>(
   ({ className, label, id, ...props }, ref) => {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 cursor-pointer">
         <input
           ref={ref}
           type="radio"
           id={id}
           className={clsx(
-            "h-4 w-4 border-gray-300 text-gray-900 focus:ring-gray-900",
+            "h-4 w-4 border-gray-300 text-[#174b3d] focus:ring-[#174b3d] accent-[#174b3d] cursor-pointer",
             className
           )}
           {...props}
         />
-        {label && <Label htmlFor={id}>{label}</Label>}
+        {label && (
+          <Label
+            htmlFor={id}
+            className="cursor-pointer text-sm font-normal text-ui-fg-base !transform-none select-none"
+          >
+            {label}
+          </Label>
+        )}
       </div>
     )
   }
@@ -414,12 +421,19 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
           type="checkbox"
           id={id}
           className={clsx(
-            "h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900",
+            "h-4 w-4 rounded border-gray-300 text-[#174b3d] focus:ring-[#174b3d] accent-[#174b3d] cursor-pointer",
             className
           )}
           {...props}
         />
-        {label && <Label htmlFor={id}>{label}</Label>}
+        {label && (
+          <Label
+            htmlFor={id}
+            className="cursor-pointer text-sm font-normal text-ui-fg-base !transform-none select-none"
+          >
+            {label}
+          </Label>
+        )}
       </div>
     )
   }

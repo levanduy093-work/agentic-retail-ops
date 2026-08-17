@@ -34,6 +34,7 @@ type EstimatedGhnFees = {
 }
 
 type VietnamAddressSelectProps = {
+  cartId?: string
   initialProvince?: string
   initialCity?: string
   initialAddress1?: string
@@ -50,6 +51,7 @@ type VietnamAddressSelectProps = {
 }
 
 const VietnamAddressSelect = ({
+  cartId,
   initialProvince,
   initialCity,
   initialAddress1,
@@ -93,12 +95,18 @@ const VietnamAddressSelect = ({
   useEffect(() => {
     if (initialMetadata?.ghn_province_id) {
       setSelectedProvinceId(Number(initialMetadata.ghn_province_id))
+    } else {
+      setSelectedProvinceId("")
     }
     if (initialMetadata?.ghn_district_id) {
       setSelectedDistrictId(Number(initialMetadata.ghn_district_id))
+    } else {
+      setSelectedDistrictId("")
     }
     if (initialMetadata?.ghn_ward_code) {
       setSelectedWardCode(String(initialMetadata.ghn_ward_code))
+    } else {
+      setSelectedWardCode("")
     }
     if (initialAddress1) {
       setStreetAddress(initialAddress1)
@@ -208,6 +216,7 @@ const VietnamAddressSelect = ({
       }>("/store/vietnam-address/calculate-fee", {
         method: "POST",
         body: {
+          cart_id: cartId,
           to_district_id: Number(selectedDistrictId),
           to_ward_code: selectedWardCode || undefined,
         },
@@ -227,7 +236,7 @@ const VietnamAddressSelect = ({
       .finally(() => {
         if (isMountedRef.current) setEstimatingFee(false)
       })
-  }, [selectedDistrictId, selectedWardCode])
+  }, [cartId, selectedDistrictId, selectedWardCode])
 
   // Current Names
   const currentProvince = provinces.find((p) => p.id === Number(selectedProvinceId))
@@ -346,7 +355,7 @@ const VietnamAddressSelect = ({
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Province / City */}
-        <div className="flex flex-col gap-y-1">
+        <div className="flex flex-col gap-y-1.5">
           <label className="text-xs text-ui-fg-subtle font-medium">
             Tỉnh / Thành phố <span className="text-rose-500">*</span>
           </label>
@@ -365,7 +374,7 @@ const VietnamAddressSelect = ({
         </div>
 
         {/* District */}
-        <div className="flex flex-col gap-y-1">
+        <div className="flex flex-col gap-y-1.5">
           <label className="text-xs text-ui-fg-subtle font-medium">
             Quận / Huyện <span className="text-rose-500">*</span>
           </label>
@@ -382,23 +391,16 @@ const VietnamAddressSelect = ({
             disabled={!selectedProvinceId || loadingDistricts}
             required
           >
-            {districts.map((dist) => {
-              const extensionHint =
-                dist.extensions && dist.extensions.length > 0
-                  ? ` (${dist.extensions.slice(0, 2).join(", ")})`
-                  : ""
-              return (
-                <option key={dist.id} value={String(dist.id)}>
-                  {dist.name}
-                  {extensionHint}
-                </option>
-              )
-            })}
+            {districts.map((dist) => (
+              <option key={dist.id} value={String(dist.id)}>
+                {dist.name}
+              </option>
+            ))}
           </NativeSelect>
         </div>
 
         {/* Ward */}
-        <div className="flex flex-col gap-y-1">
+        <div className="flex flex-col gap-y-1.5">
           <label className="text-xs text-ui-fg-subtle font-medium">
             Phường / Xã <span className="text-rose-500">*</span>
           </label>
@@ -425,16 +427,13 @@ const VietnamAddressSelect = ({
       </div>
 
       {/* Street Address */}
-      <div className="flex flex-col gap-y-1">
-        <Input
-          label="Số nhà, tên đường, tòa nhà"
-          name="vietnam_street_address"
-          value={streetAddress}
-          onChange={handleStreetChange}
-          placeholder="Ví dụ: 123 Đường Song Hành"
-          required
-        />
-      </div>
+      <Input
+        label="Số nhà, tên đường, tòa nhà"
+        name="vietnam_street_address"
+        value={streetAddress}
+        onChange={handleStreetChange}
+        required
+      />
 
       {/* Live GHN Fee Estimation Card */}
       {selectedDistrictId ? (

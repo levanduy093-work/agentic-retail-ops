@@ -80,6 +80,9 @@ export async function GET(
         (data.ghn_print_url as string | undefined) || label?.label_url || null,
       order_display_id: fulfillment.order?.display_id ?? null,
       order_id: fulfillment.order?.id ?? null,
+      environment:
+        (data.ghn_environment as "sandbox" | "production" | undefined) ||
+        (carrier?.environment === "PRODUCTION" ? "production" : "sandbox"),
       service:
         (data.id as string | undefined) ||
         (data.service_type_id === 1 ? "ghn-fast" : "ghn-standard"),

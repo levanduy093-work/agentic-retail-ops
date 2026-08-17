@@ -45,6 +45,7 @@ type Shipment = {
   carrier_name: string
   created_at: string
   delivered_at?: string | null
+  environment: "sandbox" | "production"
   fulfillment_id: string
   label_url?: string | null
   order_display_id?: number | null
@@ -155,6 +156,23 @@ const ShippingHubPage = () => {
       toast.success("GHN đã kết nối", { description: result.message })
     },
   })
+  const trackingMutation = useMutation({
+    mutationFn: (fulfillmentId: string) =>
+      sdk.client.fetch<{
+        environment: "sandbox" | "production"
+        status: string
+        status_name?: string
+        tracking_number: string
+      }>(`/admin/shipping/shipments/${fulfillmentId}/tracking`),
+    onError: (error: Error) =>
+      toast.error("Không thể theo dõi vận đơn sandbox", {
+        description: error.message,
+      }),
+    onSuccess: (shipment) =>
+      toast.success(`GHN sandbox: ${shipment.status_name || shipment.status}`, {
+        description: `Mã vận đơn ${shipment.tracking_number}`,
+      }),
+  })
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -227,7 +245,11 @@ const ShippingHubPage = () => {
                     <td className="px-6 py-4">{formatDate(shipment.created_at)}</td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-x-2">
-                        {shipment.tracking_url && <Button asChild size="small" variant="transparent"><a href={shipment.tracking_url} target="_blank" rel="noreferrer">Theo dõi</a></Button>}
+                        {shipment.environment === "sandbox" ? (
+                          <Button size="small" variant="transparent" isLoading={trackingMutation.isPending} onClick={() => trackingMutation.mutate(shipment.fulfillment_id)}>Theo dõi sandbox</Button>
+                        ) : shipment.tracking_url ? (
+                          <Button asChild size="small" variant="transparent"><a href={shipment.tracking_url} target="_blank" rel="noreferrer">Theo dõi</a></Button>
+                        ) : null}
                         {shipment.label_url && <Button asChild size="small" variant="transparent"><a href={shipment.label_url} target="_blank" rel="noreferrer">In nhãn</a></Button>}
                       </div>
                     </td>

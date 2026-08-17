@@ -34,6 +34,9 @@ const ShippingAddress = ({
     "shipping_address.phone": cart?.shipping_address?.phone || "",
     email: cart?.email || "",
   })
+  const [selectedAddressMetadata, setSelectedAddressMetadata] = useState<
+    Record<string, unknown> | undefined
+  >(cart?.shipping_address?.metadata as Record<string, unknown> | undefined)
 
   const countriesInRegion = useMemo(
     () => cart?.region?.countries?.map((c) => c.iso_2),
@@ -54,6 +57,9 @@ const ShippingAddress = ({
     email?: string
   ) => {
     if (address) {
+      setSelectedAddressMetadata(
+        address.metadata as Record<string, unknown> | undefined
+      )
       setFormData((prevState: Record<string, string>) => ({
         ...prevState,
         "shipping_address.first_name": address?.first_name || "",
@@ -154,10 +160,11 @@ const ShippingAddress = ({
         />
         {formData["shipping_address.country_code"] === "vn" ? (
           <VietnamAddressSelect
+            cartId={cart?.id}
             initialProvince={formData["shipping_address.province"]}
             initialCity={formData["shipping_address.city"]}
             initialAddress1={formData["shipping_address.address_1"]}
-            initialMetadata={(cart?.shipping_address?.metadata as Record<string, unknown>) || undefined}
+            initialMetadata={selectedAddressMetadata}
           />
         ) : (
           <>
@@ -199,8 +206,18 @@ const ShippingAddress = ({
           </>
         )}
       </div>
-      <div className="my-8">
+      <div className="flex flex-col gap-y-3.5 my-6">
+        {customer && (
+          <Checkbox
+            id="save-to-customer-address"
+            name="save_to_customer"
+            label={t("checkout.save_address_to_account")}
+            defaultChecked
+            data-testid="save-to-customer-address"
+          />
+        )}
         <Checkbox
+          id="same-as-billing-address"
           label={t("checkout.same_as_shipping")}
           name="same_as_billing"
           checked={checked}
@@ -213,7 +230,6 @@ const ShippingAddress = ({
           label={t("account.email")}
           name="email"
           type="email"
-          title={t("checkout.enter_valid_email")}
           autoComplete="email"
           value={formData.email}
           onChange={handleChange}

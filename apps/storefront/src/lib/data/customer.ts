@@ -59,7 +59,7 @@ export const retrieveCustomer = cache(
       .fetch<{ customer: HttpTypes.StoreCustomer }>(`/store/customers/me`, {
         method: "GET",
         query: {
-          fields: "*addresses",
+          fields: "*addresses,+addresses.metadata",
         },
         headers,
         next,
@@ -455,6 +455,7 @@ export const addCustomerAddress = async (
     province: formData.get("province") as string,
     country_code: formData.get("country_code") as string,
     phone: formData.get("phone") as string,
+    metadata: getShippingMetadata(formData),
     is_default_billing: isDefaultBilling,
     is_default_shipping: isDefaultShipping,
   }
@@ -473,6 +474,83 @@ export const addCustomerAddress = async (
     .catch((err) => {
       return { success: false, error: err.toString() }
     })
+}
+
+const getShippingMetadata = (formData: FormData) => {
+  const ghnProvinceId = formData.get("metadata.ghn_province_id")
+  const ghnDistrictId = formData.get("metadata.ghn_district_id")
+  const ghnWardCode = formData.get("metadata.ghn_ward_code")
+
+  const metadata: Record<string, unknown> = {}
+
+  if (ghnProvinceId) metadata.ghn_province_id = Number(ghnProvinceId)
+  if (ghnDistrictId) metadata.ghn_district_id = Number(ghnDistrictId)
+  if (ghnWardCode) metadata.ghn_ward_code = String(ghnWardCode)
+
+  return Object.keys(metadata).length > 0 ? metadata : undefined
+}
+
+export const saveCustomerShippingAddress = async (
+  address: HttpTypes.StoreCreateCustomerAddress
+) => {
+  const headers = {
+    ...(await getAuthHeaders()),
+  }
+
+  const customer = await sdk.client
+    .fetch<{ customer: HttpTypes.StoreCustomer }>("/store/customers/me", {
+      method: "GET",
+      query: { fields: "*addresses,+addresses.metadata" },
+      headers,
+      cache: "no-store",
+    })
+    .then(({ customer }) => customer)
+    .catch(() => null)
+
+  if (!customer) {
+    return
+  }
+
+  const existingAddress = customer.addresses.find((savedAddress) =>
+    [
+      "first_name",
+      "last_name",
+      "address_1",
+      "address_2",
+      "company",
+      "postal_code",
+      "city",
+      "country_code",
+      "province",
+      "phone",
+    ].every(
+      (field) =>
+        savedAddress[field as keyof HttpTypes.StoreCustomerAddress] ===
+        address[field as keyof HttpTypes.StoreCreateCustomerAddress]
+    )
+  )
+
+  if (existingAddress) {
+    await sdk.store.customer.updateAddress(
+      existingAddress.id,
+      {
+        ...address,
+        is_default_shipping: existingAddress.is_default_shipping,
+        is_default_billing: existingAddress.is_default_billing,
+      },
+      {},
+      headers
+    )
+  } else {
+    await sdk.store.customer.createAddress(
+      { ...address, is_default_shipping: customer.addresses.length === 0 },
+      {},
+      headers
+    )
+  }
+
+  const customerCacheTag = await getCacheTag("customers")
+  revalidateTag(customerCacheTag)
 }
 
 export const deleteCustomerAddress = async (
@@ -515,6 +593,7 @@ export const updateCustomerAddress = async (
     postal_code: formData.get("postal_code") as string,
     province: formData.get("province") as string,
     country_code: formData.get("country_code") as string,
+    metadata: getShippingMetadata(formData),
   } as HttpTypes.StoreUpdateCustomerAddress
 
   const phone = formData.get("phone") as string

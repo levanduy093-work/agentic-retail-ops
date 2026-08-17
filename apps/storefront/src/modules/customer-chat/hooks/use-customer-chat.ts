@@ -94,7 +94,7 @@ export function useCustomerChat(
     }
 
     const backendUrl =
-      process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || "http://localhost:9000"
+      process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || "http://127.0.0.1:9000"
     const publishableKey =
       process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY || ""
     const streamUrl = `${backendUrl}/store/customer-chat/conversations/${conversationId}/stream?publishable_key=${encodeURIComponent(
