@@ -54,7 +54,7 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
             <Text className="text-xs font-semibold uppercase tracking-wider text-ui-fg-muted mb-3">
               {t("checkout.payment_method")}
             </Text>
-            <div className="flex items-center gap-3">
+            <div className="flex h-11 items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white border border-neutral-200/90 text-[#174b3d] shadow-xs">
                 {paymentIcon}
               </div>

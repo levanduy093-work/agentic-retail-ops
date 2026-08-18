@@ -202,7 +202,7 @@ const Payment = ({
                 <Text className="text-xs font-semibold uppercase tracking-wider text-ui-fg-muted mb-3">
                   {t("checkout.payment_method")}
                 </Text>
-                <div className="flex items-center gap-3">
+                <div className="flex h-11 items-center gap-3">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white border border-neutral-200/90 text-[#174b3d] shadow-xs">
                     {paymentInfoMap[selectedPaymentMethod]?.icon || (
                       <CreditCard />
@@ -226,7 +226,7 @@ const Payment = ({
                   {t("checkout.payment_details")}
                 </Text>
                 <div
-                  className="flex items-center gap-2 text-sm text-ui-fg-base font-medium"
+                  className="flex h-11 items-center text-sm text-ui-fg-base font-medium"
                   data-testid="payment-details-summary"
                 >
                   <Text>

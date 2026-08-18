@@ -130,22 +130,30 @@ const Shipping: React.FC<ShippingProps> = ({
     let cancelled = false
 
     if (!isOpen || !_shippingMethods?.length) {
-      setCalculatedPricesMap({})
       setIsLoadingPrices(false)
       return
     }
 
-    setIsLoadingPrices(true)
+    const calculatedMethods = _shippingMethods.filter(
+      (sm) => sm.price_type === "calculated"
+    )
 
-    const promises = _shippingMethods
-      .filter((sm) => sm.price_type === "calculated")
-      .map((sm) => calculateShippingQuote(sm.id, cart.id))
-
-    if (!promises.length) {
-      setCalculatedPricesMap({})
+    if (!calculatedMethods.length) {
       setIsLoadingPrices(false)
       return
     }
+
+    // Only show loading if we don't have prices yet
+    const hasAllPrices = calculatedMethods.every(
+      (sm) => !!calculatedPricesMap[sm.id]
+    )
+    if (!hasAllPrices) {
+      setIsLoadingPrices(true)
+    }
+
+    const promises = calculatedMethods.map((sm) =>
+      calculateShippingQuote(sm.id, cart.id)
+    )
 
     Promise.allSettled(promises).then((res) => {
       if (cancelled) {
@@ -165,7 +173,7 @@ const Shipping: React.FC<ShippingProps> = ({
           }
         })
 
-      setCalculatedPricesMap(pricesMap)
+      setCalculatedPricesMap((prev) => ({ ...prev, ...pricesMap }))
       setIsLoadingPrices(false)
 
       const selectedQuote = cartShippingMethodId
@@ -186,6 +194,19 @@ const Shipping: React.FC<ShippingProps> = ({
       ].join(":")
 
       if (syncedSelectionKeyRef.current === selectionKey) {
+        return
+      }
+
+      const currentMethod = cart.shipping_methods?.find(
+        (sm) => sm.shipping_option_id === cartShippingMethodId
+      )
+
+      if (
+        currentMethod &&
+        currentMethod.amount === selectedQuote.amount &&
+        (currentMethod.data as { ghn_weight?: number } | undefined)?.ghn_weight === selectedQuote.totalWeight
+      ) {
+        syncedSelectionKeyRef.current = selectionKey
         return
       }
 
@@ -221,6 +242,7 @@ const Shipping: React.FC<ShippingProps> = ({
   }, [
     cart.id,
     cartShippingMethodId,
+    cart.shipping_methods,
     cart.shipping_address?.metadata?.ghn_district_id,
     cart.shipping_address?.metadata?.ghn_ward_code,
     isOpen,
@@ -518,14 +540,13 @@ const Shipping: React.FC<ShippingProps> = ({
             />
             <Button
               size="large"
-              className="mt"
+              className="mt-6"
               onClick={handleSubmit}
-              isLoading={isLoading}
+              isLoading={isLoading || isSynchronizingSelection}
               disabled={
                 !shippingMethodId ||
                 !isSelectedShippingQuoteReady ||
                 isLoading ||
-                isLoadingPrices ||
                 isSynchronizingSelection
               }
               data-testid="submit-delivery-option-button"
