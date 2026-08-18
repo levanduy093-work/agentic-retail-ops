@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@modules/common/components/ui"
+import { ExclamationCircleSolid, CheckCircleSolid } from "@medusajs/icons"
 
 type ContactDictionary = {
   contact?: {
@@ -105,14 +106,14 @@ export default function ContactForm({ dict }: ContactFormProps) {
 
   if (submittedTicket) {
     return (
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-6 md:p-8 text-center animate-in fade-in duration-300">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700">
-          ✓
+      <div className="rounded-xl border border-ui-border-base bg-ui-bg-subtle p-6 md:p-8 text-center animate-in fade-in duration-300 shadow-borders-base">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-ui-bg-base border border-ui-border-base text-ui-fg-base shadow-borders-base">
+          <CheckCircleSolid className="text-ui-fg-interactive" />
         </div>
-        <h3 className="text-xl font-bold text-[#174b3d]">
+        <h3 className="text-xl font-bold text-ui-fg-base">
           {dict.contact?.success_title}
         </h3>
-        <p className="mt-3 text-sm text-gray-700 leading-relaxed max-w-md mx-auto">
+        <p className="mt-3 text-sm text-ui-fg-subtle leading-relaxed max-w-md mx-auto">
           {dict.contact?.success_desc?.replace("{ticket}", submittedTicket)}
         </p>
         <div className="mt-6">
@@ -132,8 +133,8 @@ export default function ContactForm({ dict }: ContactFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {errorMessage && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs text-red-700 flex items-center gap-2">
-          <span>⚠️</span>
+        <div className="rounded-lg border border-ui-border-error bg-ui-bg-error p-3.5 text-xs text-ui-fg-error flex items-center gap-2 shadow-borders-base">
+          <ExclamationCircleSolid />
           <span>{errorMessage}</span>
         </div>
       )}
@@ -141,8 +142,8 @@ export default function ContactForm({ dict }: ContactFormProps) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Full Name */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-            {dict.contact?.name_label} <span className="text-red-500">*</span>
+          <label className="block text-xs font-semibold text-ui-fg-base mb-1.5">
+            {dict.contact?.name_label} <span className="text-ui-fg-error">*</span>
           </label>
           <input
             type="text"
@@ -151,14 +152,14 @@ export default function ContactForm({ dict }: ContactFormProps) {
             value={formData.name}
             onChange={handleChange}
             placeholder={dict.contact?.name_placeholder}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#174b3d] focus:outline-none focus:ring-1 focus:ring-[#174b3d] transition"
+            className="w-full rounded-md border border-ui-border-base bg-ui-bg-base px-3 py-2 text-sm text-ui-fg-base placeholder:text-ui-fg-muted focus:outline-none focus:ring-2 focus:ring-ui-fg-interactive focus:ring-offset-2 transition shadow-borders-base"
           />
         </div>
 
         {/* Email */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-            {dict.contact?.email_label} <span className="text-red-500">*</span>
+          <label className="block text-xs font-semibold text-ui-fg-base mb-1.5">
+            {dict.contact?.email_label} <span className="text-ui-fg-error">*</span>
           </label>
           <input
             type="email"
@@ -167,7 +168,7 @@ export default function ContactForm({ dict }: ContactFormProps) {
             value={formData.email}
             onChange={handleChange}
             placeholder={dict.contact?.email_placeholder}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#174b3d] focus:outline-none focus:ring-1 focus:ring-[#174b3d] transition"
+            className="w-full rounded-md border border-ui-border-base bg-ui-bg-base px-3 py-2 text-sm text-ui-fg-base placeholder:text-ui-fg-muted focus:outline-none focus:ring-2 focus:ring-ui-fg-interactive focus:ring-offset-2 transition shadow-borders-base"
           />
         </div>
       </div>
@@ -175,7 +176,7 @@ export default function ContactForm({ dict }: ContactFormProps) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Phone */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+          <label className="block text-xs font-semibold text-ui-fg-base mb-1.5">
             {dict.contact?.phone_label}
           </label>
           <input
@@ -184,13 +185,13 @@ export default function ContactForm({ dict }: ContactFormProps) {
             value={formData.phone}
             onChange={handleChange}
             placeholder={dict.contact?.phone_placeholder}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#174b3d] focus:outline-none focus:ring-1 focus:ring-[#174b3d] transition"
+            className="w-full rounded-md border border-ui-border-base bg-ui-bg-base px-3 py-2 text-sm text-ui-fg-base placeholder:text-ui-fg-muted focus:outline-none focus:ring-2 focus:ring-ui-fg-interactive focus:ring-offset-2 transition shadow-borders-base"
           />
         </div>
 
         {/* Order ID */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+          <label className="block text-xs font-semibold text-ui-fg-base mb-1.5">
             {dict.contact?.order_id_label}
           </label>
           <input
@@ -199,21 +200,21 @@ export default function ContactForm({ dict }: ContactFormProps) {
             value={formData.orderId}
             onChange={handleChange}
             placeholder={dict.contact?.order_id_placeholder}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#174b3d] focus:outline-none focus:ring-1 focus:ring-[#174b3d] transition"
+            className="w-full rounded-md border border-ui-border-base bg-ui-bg-base px-3 py-2 text-sm text-ui-fg-base placeholder:text-ui-fg-muted focus:outline-none focus:ring-2 focus:ring-ui-fg-interactive focus:ring-offset-2 transition shadow-borders-base"
           />
         </div>
       </div>
 
       {/* Topic */}
       <div>
-        <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+        <label className="block text-xs font-semibold text-ui-fg-base mb-1.5">
           {dict.contact?.topic_label}
         </label>
         <select
           name="topic"
           value={formData.topic}
           onChange={handleChange}
-          className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:border-[#174b3d] focus:outline-none focus:ring-1 focus:ring-[#174b3d] transition"
+          className="w-full rounded-md border border-ui-border-base bg-ui-bg-base px-3 py-2 text-sm text-ui-fg-base focus:outline-none focus:ring-2 focus:ring-ui-fg-interactive focus:ring-offset-2 transition shadow-borders-base"
         >
           <option value="">{dict.contact?.topic_select}</option>
           <option value="product">{dict.contact?.topic_product}</option>
@@ -226,8 +227,8 @@ export default function ContactForm({ dict }: ContactFormProps) {
 
       {/* Message */}
       <div>
-        <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-          {dict.contact?.message_label} <span className="text-red-500">*</span>
+        <label className="block text-xs font-semibold text-ui-fg-base mb-1.5">
+          {dict.contact?.message_label} <span className="text-ui-fg-error">*</span>
         </label>
         <textarea
           name="message"
@@ -236,7 +237,7 @@ export default function ContactForm({ dict }: ContactFormProps) {
           value={formData.message}
           onChange={handleChange}
           placeholder={dict.contact?.message_placeholder}
-          className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#174b3d] focus:outline-none focus:ring-1 focus:ring-[#174b3d] transition resize-y"
+          className="w-full rounded-md border border-ui-border-base bg-ui-bg-base px-3 py-2 text-sm text-ui-fg-base placeholder:text-ui-fg-muted focus:outline-none focus:ring-2 focus:ring-ui-fg-interactive focus:ring-offset-2 transition shadow-borders-base resize-y"
         />
       </div>
 

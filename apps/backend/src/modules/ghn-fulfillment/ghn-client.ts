@@ -149,7 +149,7 @@ export type GhnOrderDetailResponse = {
   to_district_id: number
   cod_amount: number
   total_fee: number
-  log: Array<{
+  log?: Array<{
     status: string
     payment_type_id: number
     updated_date: string
@@ -474,4 +474,3 @@ export class GhnClient {
     }
   }
 }
-

@@ -203,8 +203,7 @@ const Shipping: React.FC<ShippingProps> = ({
 
       if (
         currentMethod &&
-        currentMethod.amount === selectedQuote.amount &&
-        (currentMethod.data as { ghn_weight?: number } | undefined)?.ghn_weight === selectedQuote.totalWeight
+        currentMethod.amount === selectedQuote.amount
       ) {
         syncedSelectionKeyRef.current = selectionKey
         return

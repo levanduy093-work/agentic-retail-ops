@@ -100,6 +100,7 @@
     "manual_payment": "Thanh toán khi nhận hàng / Chuyển khoản",
     "credit_card": "Thẻ tín dụng / Ghi nợ",
     "paid_status": "Đã thanh toán",
+    "payment_pending": "Chờ xác nhận thanh toán",
     "discount_code": "Mã giảm giá",
     "add_discount_code": "Thêm mã ưu đãi",
     "apply": "Áp dụng",
@@ -154,7 +155,8 @@
     "complete_setup_admin": "Hoàn tất cài đặt trong trang quản trị",
     "complete_setup_admin_desc": "Bạn có thể hoàn tất cài đặt cửa hàng trong trang quản trị ngay bây giờ.",
     "test_order_created": "Đơn hàng thử nghiệm của bạn đã được tạo thành công! 🎉",
-    "paid_at": "đã thanh toán lúc"
+    "paid_at": "đã thanh toán lúc",
+    "payment_created_at": "đã tạo thanh toán lúc"
   },
   "collection": {
     "view_all": "Xem tất cả"

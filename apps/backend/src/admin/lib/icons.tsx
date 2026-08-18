@@ -33,6 +33,34 @@ export const TruckIcon = React.forwardRef<SVGSVGElement, IconProps>(
 )
 TruckIcon.displayName = "TruckIcon"
 
+export const CreditCardIcon = React.forwardRef<SVGSVGElement, IconProps>(
+  ({ className = "", size = 15, color = "currentColor", ...props }, ref) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 15 15"
+      fill="none"
+      className={className}
+      ref={ref}
+      aria-hidden="true"
+      {...props}
+    >
+      <g
+        stroke={color}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.25}
+      >
+        <rect x="1.5" y="2.5" width="12" height="10" rx="1.5" />
+        <path d="M1.5 5.5h12" />
+        <path d="M3.5 9.5h3" />
+      </g>
+    </svg>
+  )
+)
+CreditCardIcon.displayName = "CreditCardIcon"
+
 export const SpinnerIcon = React.forwardRef<SVGSVGElement, IconProps>(
   ({ className = "", size = 15, color = "currentColor", ...props }, ref) => (
     <svg

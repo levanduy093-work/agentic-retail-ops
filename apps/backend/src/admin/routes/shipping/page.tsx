@@ -129,6 +129,67 @@ function formatDate(value: string | null | undefined, locale: string) {
   }).format(new Date(value));
 }
 
+const shipmentStatusLabels: Record<string, string> = {
+  cancel: "cancelled",
+  created: "created",
+  damage: "damaged",
+  delivered: "delivered",
+  delivering: "delivering",
+  delivery_fail: "deliveryFailed",
+  exception: "exception",
+  lost: "lost",
+  money_collect_delivering: "delivering",
+  money_collect_picking: "picking",
+  picked: "pickedUp",
+  picking: "picking",
+  ready_to_pick: "readyToPick",
+  return: "returning",
+  return_fail: "returnFailed",
+  return_sorting: "returnSorting",
+  return_transporting: "returnTransporting",
+  returned: "returned",
+  returning: "returning",
+  shipping: "shipping",
+  sorting: "sorting",
+  storing: "sorting",
+  transporting: "shipping",
+  waiting_to_return: "waitingToReturn",
+}
+
+function formatShipmentStatus(status: string, t: (key: string) => string) {
+  const key = shipmentStatusLabels[status.toLowerCase()]
+
+  return key
+    ? t(`shippingHub.shipments.statusLabels.${key}`)
+    : t("shippingHub.shipments.statusLabels.updating")
+}
+
+function shipmentStatusColor(status: string, deliveredAt?: string | null) {
+  if (deliveredAt || status.toLowerCase() === "delivered") return "green"
+
+  if (["cancel", "delivery_fail", "exception", "lost", "damage"].includes(status.toLowerCase())) {
+    return "red"
+  }
+
+  if (["return", "returning", "returned", "waiting_to_return"].includes(status.toLowerCase())) {
+    return "purple"
+  }
+
+  return "orange"
+}
+
+function formatShipmentService(service: string, t: (key: string) => string) {
+  if (service === "ghn-standard") {
+    return t("shippingHub.shipments.services.ghnStandard")
+  }
+
+  if (service === "ghn-fast") {
+    return t("shippingHub.shipments.services.ghnFast")
+  }
+
+  return service
+}
+
 const LoadError = ({ onRetry }: { onRetry: () => void }) => {
   const { t } = useTranslation();
 
@@ -327,7 +388,7 @@ const ShippingHubPage = () => {
       queryClient.invalidateQueries({
         queryKey: ["shipping-hub", "shipments"],
       });
-      toast.success(`GHN: ${shipment.status_name || shipment.status}`, {
+      toast.success(`GHN: ${formatShipmentStatus(shipment.status, t)}`, {
         description: `${t("shippingHub.shipments.trackingNumber")}: ${shipment.tracking_number}`,
       });
     },
@@ -671,12 +732,17 @@ const ShippingHubPage = () => {
                       {shipment.tracking_number ||
                         t("shippingHub.shipments.creating")}
                     </td>
-                    <td className="px-6 py-4">{shipment.service}</td>
+                    <td className="px-6 py-4">
+                      {formatShipmentService(shipment.service, t)}
+                    </td>
                     <td className="px-6 py-4">
                       <StatusBadge
-                        color={shipment.delivered_at ? "green" : "orange"}
+                        color={shipmentStatusColor(
+                          shipment.status,
+                          shipment.delivered_at,
+                        )}
                       >
-                        {shipment.status}
+                        {formatShipmentStatus(shipment.status, t)}
                       </StatusBadge>
                     </td>
                     <td className="px-6 py-4">

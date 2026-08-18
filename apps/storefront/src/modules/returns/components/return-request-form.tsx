@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@modules/common/components/ui"
+import { CheckCircleSolid, InformationCircleSolid, ChatBubbleLeftRight, ExclamationCircleSolid, LockClosedSolidMini } from "@medusajs/icons"
 
 type ReturnsDictionary = {
   returns?: {
@@ -114,20 +115,20 @@ export default function ReturnRequestForm({ dict }: ReturnRequestFormProps) {
 
   if (submittedRma) {
     return (
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-6 sm:p-8 text-center animate-in fade-in duration-300">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700">
-          📦
+      <div className="rounded-xl border border-ui-border-base bg-ui-bg-subtle p-6 md:p-8 text-center animate-in fade-in duration-300 shadow-borders-base">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-ui-bg-base border border-ui-border-base text-ui-fg-base shadow-borders-base">
+          <CheckCircleSolid className="text-ui-fg-interactive" />
         </div>
-        <h3 className="text-xl font-bold text-[#174b3d]">
+        <h3 className="text-xl font-bold text-ui-fg-base">
           {dict.returns?.success_title}
         </h3>
-        <p className="mt-3 text-sm text-gray-700 leading-relaxed max-w-lg mx-auto">
+        <p className="mt-3 text-sm text-ui-fg-subtle leading-relaxed max-w-lg mx-auto">
           {dict.returns?.success_desc?.replace("{rmaCode}", submittedRma)}
         </p>
 
-        <div className="mt-5 max-w-md mx-auto rounded-xl border border-emerald-200 bg-white p-3.5 text-xs text-left text-gray-600 space-y-1.5 shadow-sm">
-          <div className="font-semibold text-gray-800">
-            📌 Hướng dẫn bước tiếp theo:
+        <div className="mt-5 max-w-md mx-auto rounded-lg border border-ui-border-base bg-ui-bg-base p-4 text-xs text-left text-ui-fg-subtle space-y-2 shadow-borders-base">
+          <div className="font-semibold text-ui-fg-base">
+            <InformationCircleSolid className="text-ui-fg-subtle inline-block mr-1" /> Hướng dẫn bước tiếp theo:
           </div>
           <div>1. Đóng gói sản phẩm nguyên tem mác kèm phụ kiện ban đầu.</div>
           <div>2. Shipper sẽ liên hệ trước khi đến nhận gói hàng tại địa chỉ của bạn.</div>
@@ -151,9 +152,9 @@ export default function ReturnRequestForm({ dict }: ReturnRequestFormProps) {
               ) as HTMLButtonElement
               if (chatBtn) chatBtn.click()
             }}
-            className="inline-flex items-center gap-1.5 rounded-full bg-[#174b3d] px-5 py-2.5 text-xs font-semibold text-white hover:bg-[#103a2f] transition shadow-sm"
+            className="inline-flex items-center gap-1.5 rounded-md border border-ui-border-base bg-ui-bg-base px-4 py-2 text-xs font-semibold text-ui-fg-base hover:bg-ui-bg-subtle transition shadow-borders-base"
           >
-            <span>💬 Chat với CSKH để hỗ trợ lấy hàng ngay</span>
+            <div className="flex items-center gap-2"><ChatBubbleLeftRight /> <span>Chat với CSKH để hỗ trợ lấy hàng ngay</span></div>
           </button>
         </div>
       </div>
@@ -163,8 +164,8 @@ export default function ReturnRequestForm({ dict }: ReturnRequestFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {errorMessage && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs text-red-700 flex items-center gap-2">
-          <span>⚠️</span>
+        <div className="rounded-lg border border-ui-border-error bg-ui-bg-error p-3.5 text-xs text-ui-fg-error flex items-center gap-2 shadow-borders-base">
+          <ExclamationCircleSolid />
           <span>{errorMessage}</span>
         </div>
       )}
@@ -172,8 +173,8 @@ export default function ReturnRequestForm({ dict }: ReturnRequestFormProps) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Order ID */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-            {dict.returns?.order_id_label} <span className="text-red-500">*</span>
+          <label className="block text-xs font-semibold text-ui-fg-base mb-1.5">
+            {dict.returns?.order_id_label} <span className="text-ui-fg-error">*</span>
           </label>
           <input
             type="text"
@@ -182,14 +183,14 @@ export default function ReturnRequestForm({ dict }: ReturnRequestFormProps) {
             value={formData.orderId}
             onChange={handleChange}
             placeholder={dict.returns?.order_id_placeholder}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#174b3d] focus:outline-none focus:ring-1 focus:ring-[#174b3d] transition"
+            className="w-full rounded-md border border-ui-border-base bg-ui-bg-base px-3 py-2 text-sm text-ui-fg-base placeholder:text-ui-fg-muted focus:outline-none focus:ring-2 focus:ring-ui-fg-interactive focus:ring-offset-2 transition shadow-borders-base"
           />
         </div>
 
         {/* Customer Name */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-            {dict.returns?.customer_name_label} <span className="text-red-500">*</span>
+          <label className="block text-xs font-semibold text-ui-fg-base mb-1.5">
+            {dict.returns?.customer_name_label} <span className="text-ui-fg-error">*</span>
           </label>
           <input
             type="text"
@@ -198,7 +199,7 @@ export default function ReturnRequestForm({ dict }: ReturnRequestFormProps) {
             value={formData.customerName}
             onChange={handleChange}
             placeholder={dict.returns?.customer_name_placeholder}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#174b3d] focus:outline-none focus:ring-1 focus:ring-[#174b3d] transition"
+            className="w-full rounded-md border border-ui-border-base bg-ui-bg-base px-3 py-2 text-sm text-ui-fg-base placeholder:text-ui-fg-muted focus:outline-none focus:ring-2 focus:ring-ui-fg-interactive focus:ring-offset-2 transition shadow-borders-base"
           />
         </div>
       </div>
@@ -206,8 +207,8 @@ export default function ReturnRequestForm({ dict }: ReturnRequestFormProps) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Contact Info (Email or Phone) */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-            {dict.returns?.contact_info_label} <span className="text-red-500">*</span>
+          <label className="block text-xs font-semibold text-ui-fg-base mb-1.5">
+            {dict.returns?.contact_info_label} <span className="text-ui-fg-error">*</span>
           </label>
           <input
             type="text"
@@ -216,21 +217,21 @@ export default function ReturnRequestForm({ dict }: ReturnRequestFormProps) {
             value={formData.contactInfo}
             onChange={handleChange}
             placeholder={dict.returns?.contact_info_placeholder}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#174b3d] focus:outline-none focus:ring-1 focus:ring-[#174b3d] transition"
+            className="w-full rounded-md border border-ui-border-base bg-ui-bg-base px-3 py-2 text-sm text-ui-fg-base placeholder:text-ui-fg-muted focus:outline-none focus:ring-2 focus:ring-ui-fg-interactive focus:ring-offset-2 transition shadow-borders-base"
           />
         </div>
 
         {/* Reason for return */}
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-            {dict.returns?.reason_label} <span className="text-red-500">*</span>
+          <label className="block text-xs font-semibold text-ui-fg-base mb-1.5">
+            {dict.returns?.reason_label} <span className="text-ui-fg-error">*</span>
           </label>
           <select
             name="reason"
             required
             value={formData.reason}
             onChange={handleChange}
-            className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 focus:border-[#174b3d] focus:outline-none focus:ring-1 focus:ring-[#174b3d] transition"
+            className="w-full rounded-md border border-ui-border-base bg-ui-bg-base px-3 py-2 text-sm text-ui-fg-base focus:outline-none focus:ring-2 focus:ring-ui-fg-interactive focus:ring-offset-2 transition shadow-borders-base"
           >
             <option value="">{dict.returns?.reason_select}</option>
             <option value="size">{dict.returns?.reason_size}</option>
@@ -244,7 +245,7 @@ export default function ReturnRequestForm({ dict }: ReturnRequestFormProps) {
 
       {/* Target Item for exchange */}
       <div>
-        <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+        <label className="block text-xs font-semibold text-ui-fg-base mb-1.5">
           {dict.returns?.exchange_target_label}
         </label>
         <input
@@ -253,14 +254,14 @@ export default function ReturnRequestForm({ dict }: ReturnRequestFormProps) {
           value={formData.exchangeTarget}
           onChange={handleChange}
           placeholder={dict.returns?.exchange_target_placeholder}
-          className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#174b3d] focus:outline-none focus:ring-1 focus:ring-[#174b3d] transition"
+          className="w-full rounded-md border border-ui-border-base bg-ui-bg-base px-3 py-2 text-sm text-ui-fg-base placeholder:text-ui-fg-muted focus:outline-none focus:ring-2 focus:ring-ui-fg-interactive focus:ring-offset-2 transition shadow-borders-base"
         />
       </div>
 
       {/* Pickup Address */}
       <div>
-        <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-          {dict.returns?.pickup_address_label} <span className="text-red-500">*</span>
+        <label className="block text-xs font-semibold text-ui-fg-base mb-1.5">
+          {dict.returns?.pickup_address_label} <span className="text-ui-fg-error">*</span>
         </label>
         <input
           type="text"
@@ -269,13 +270,13 @@ export default function ReturnRequestForm({ dict }: ReturnRequestFormProps) {
           value={formData.pickupAddress}
           onChange={handleChange}
           placeholder={dict.returns?.pickup_address_placeholder}
-          className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#174b3d] focus:outline-none focus:ring-1 focus:ring-[#174b3d] transition"
+          className="w-full rounded-md border border-ui-border-base bg-ui-bg-base px-3 py-2 text-sm text-ui-fg-base placeholder:text-ui-fg-muted focus:outline-none focus:ring-2 focus:ring-ui-fg-interactive focus:ring-offset-2 transition shadow-borders-base"
         />
       </div>
 
       {/* Detailed Notes */}
       <div>
-        <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+        <label className="block text-xs font-semibold text-ui-fg-base mb-1.5">
           {dict.returns?.notes_label}
         </label>
         <textarea
@@ -284,7 +285,7 @@ export default function ReturnRequestForm({ dict }: ReturnRequestFormProps) {
           value={formData.notes}
           onChange={handleChange}
           placeholder={dict.returns?.notes_placeholder}
-          className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#174b3d] focus:outline-none focus:ring-1 focus:ring-[#174b3d] transition resize-y"
+          className="w-full rounded-md border border-ui-border-base bg-ui-bg-base px-3 py-2 text-sm text-ui-fg-base placeholder:text-ui-fg-muted focus:outline-none focus:ring-2 focus:ring-ui-fg-interactive focus:ring-offset-2 transition shadow-borders-base resize-y"
         />
       </div>
 
@@ -300,8 +301,8 @@ export default function ReturnRequestForm({ dict }: ReturnRequestFormProps) {
           {isSubmitting ? dict.returns?.submitting : dict.returns?.submit_btn}
         </Button>
 
-        <div className="text-xs text-gray-500 flex items-center gap-1.5">
-          <span>🔒</span>
+        <div className="text-xs text-ui-fg-muted flex items-center gap-1.5">
+          <LockClosedSolidMini />
           <span>Thông tin được bảo mật và xử lý tự động theo quy trình CSKH</span>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { CreditCard } from "@medusajs/icons"
 import Bancontact from "@modules/common/icons/bancontact"
 import Ideal from "@modules/common/icons/ideal"
 import PayPal from "@modules/common/icons/paypal"
+import VietQRIcon from "@modules/common/icons/vietqr"
 import React from "react"
 
 /* Map of payment provider_id to their title and icon. Add in any payment providers you want to use. */
@@ -33,6 +34,10 @@ export const paymentInfoMap: Record<
     title: "Manual Payment",
     icon: <CreditCard />,
   },
+  pp_payos_payos: {
+    title: "VietQR / Ngân hàng",
+    icon: <VietQRIcon />,
+  },
   // Add more payment providers here
 }
 
@@ -48,6 +53,9 @@ export const isPaypal = (providerId?: string) => {
 }
 export const isManual = (providerId?: string) => {
   return providerId?.startsWith("pp_system_default")
+}
+export const isPayOS = (providerId?: string) => {
+  return providerId?.startsWith("pp_payos")
 }
 
 // Add currencies that don't need to be divided by 100

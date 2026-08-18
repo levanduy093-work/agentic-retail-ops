@@ -9,7 +9,10 @@ import {
   MedusaError,
   Modules,
 } from "@medusajs/framework/utils"
-import { GhnClient } from "../../modules/ghn-fulfillment/ghn-client"
+import {
+  GhnClient,
+  GhnOrderDetailResponse,
+} from "../../modules/ghn-fulfillment/ghn-client"
 import { getGhnSettings } from "../../modules/shipping-hub/ghn-connection"
 
 type FulfillmentData = {
@@ -28,6 +31,12 @@ export type SyncGhnFulfillmentStatusResult = {
   status: string
   status_name?: string
   tracking_number: string
+}
+
+export function latestGhnStatusLog(
+  shipment: Pick<GhnOrderDetailResponse, "log">
+) {
+  return Array.isArray(shipment.log) ? shipment.log.at(-1) : undefined
 }
 
 const syncGhnFulfillmentStatusStep = createStep<
@@ -96,7 +105,7 @@ const syncGhnFulfillmentStatusStep = createStep<
     const history = Array.isArray(currentData.ghn_status_history)
       ? currentData.ghn_status_history
       : []
-    const lastLog = shipment.log.at(-1)
+    const lastLog = latestGhnStatusLog(shipment)
     const now = new Date().toISOString()
     const nextHistory = changed
       ? [

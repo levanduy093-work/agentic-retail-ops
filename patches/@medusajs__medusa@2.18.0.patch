@@ -1,0 +1,12 @@
+diff --git a/dist/api/admin/orders/query-config.js b/dist/api/admin/orders/query-config.js
+index c6701caa57b8c6802cf8c4a75f485cd9cee09197..d81fd3f2fa455a18a46a4c13227bb5465925f256 100644
+--- a/dist/api/admin/orders/query-config.js
++++ b/dist/api/admin/orders/query-config.js
+@@ -9,6 +9,7 @@ var Entities;
+ })(Entities || (exports.Entities = Entities = {}));
+ exports.defaultAdminOrderFields = [
+     "id",
++    "currency_code",
+     "display_id",
+     "custom_display_id",
+     "status",

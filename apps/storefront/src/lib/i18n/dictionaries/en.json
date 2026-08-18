@@ -100,6 +100,7 @@
     "manual_payment": "Manual Payment / Bank Transfer",
     "credit_card": "Credit / Debit Card",
     "paid_status": "Paid",
+    "payment_pending": "Payment pending",
     "discount_code": "Discount Code",
     "add_discount_code": "Add Promotion Code",
     "apply": "Apply",
@@ -154,7 +155,8 @@
     "complete_setup_admin": "Complete setup in admin",
     "complete_setup_admin_desc": "You can now complete setting up your store in the admin.",
     "test_order_created": "Your test order was successfully created! 🎉",
-    "paid_at": "paid at"
+    "paid_at": "paid at",
+    "payment_created_at": "payment created at"
   },
   "collection": {
     "view_all": "View all"

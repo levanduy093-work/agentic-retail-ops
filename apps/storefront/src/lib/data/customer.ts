@@ -430,7 +430,7 @@ export async function transferCart() {
   await sdk.client.fetch(`/store/carts/${cartId}/customer`, {
     method: "POST",
     headers,
-    payload: {},
+    body: {},
   })
 
   const cartCacheTag = await getCacheTag("carts")

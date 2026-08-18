@@ -57,10 +57,22 @@ export async function GET(
       "order.display_id",
     ],
     filters: { provider_id: providerIds },
-    pagination: { skip: 0, take: 100 },
+    pagination: {
+      order: { created_at: "DESC" },
+      skip: 0,
+      take: 100,
+    },
   })
 
-  const shipments = (fulfillments as FulfillmentData[]).map((fulfillment) => {
+  // A carrier fulfillment is only an operational shipment after Medusa has
+  // linked it to an order. Failed workflow compensations can leave a canceled
+  // fulfillment record behind without that link; those records are audit
+  // artifacts, not shipments that staff should act on.
+  const linkedFulfillments = (fulfillments as FulfillmentData[]).filter(
+    (fulfillment) => Boolean(fulfillment.order?.id)
+  )
+
+  const shipments = linkedFulfillments.map((fulfillment) => {
     const carrier = carrierByProvider.get(fulfillment.provider_id || "")
     const data = fulfillment.data ?? {}
     const label = fulfillment.labels?.[0]

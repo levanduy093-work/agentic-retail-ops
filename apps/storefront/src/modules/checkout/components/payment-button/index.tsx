@@ -1,6 +1,6 @@
 "use client"
 
-import { isManual, isStripeLike } from "@lib/constants"
+import { isManual, isPayOS, isStripeLike } from "@lib/constants"
 import { placeOrder } from "@lib/data/cart"
 import { HttpTypes } from "@medusajs/types"
 import { Button } from "@modules/common/components/ui"
@@ -8,6 +8,7 @@ import { useElements, useStripe } from "@stripe/react-stripe-js"
 import React, { useState } from "react"
 import ErrorMessage from "../error-message"
 import { useTranslation } from "@lib/i18n/client"
+import PayOSPaymentButton from "./payos-payment-button"
 
 type PaymentButtonProps = {
   cart: HttpTypes.StoreCart
@@ -39,6 +40,14 @@ const PaymentButton: React.FC<PaymentButtonProps> = ({
     case isStripeLike(paymentSession?.provider_id):
       return (
         <StripePaymentButton
+          notReady={notReady}
+          cart={cart}
+          data-testid={dataTestId}
+        />
+      )
+    case isPayOS(paymentSession?.provider_id):
+      return (
+        <PayOSPaymentButton
           notReady={notReady}
           cart={cart}
           data-testid={dataTestId}

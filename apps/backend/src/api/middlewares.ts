@@ -30,10 +30,27 @@ import {
 } from "./admin/agent-operations/validators"
 import { StoreCreateCustomerChatMessage } from "./store/customer-chat/validators"
 import { shippingHubMiddlewares } from "./admin/shipping/middlewares"
+import { paymentHubMiddlewares } from "./admin/payments/providers/middlewares"
 import { getGhnSettings } from "../modules/shipping-hub/ghn-connection"
+import { getPayosSettings } from "../modules/payment-hub/payos-connection"
 
   const routes: MiddlewareRoute[] = [
     ...shippingHubMiddlewares,
+    ...paymentHubMiddlewares,
+    {
+      matcher: "/store/carts/:id/payment-sessions",
+      method: "POST",
+      middlewares: [
+        async (req, _res, next) => {
+          try {
+            await getPayosSettings(req.scope)
+            next()
+          } catch (error) {
+            next(error)
+          }
+        },
+      ],
+    },
     {
       matcher: "/store/carts/:id/shipping-methods",
       method: "POST",

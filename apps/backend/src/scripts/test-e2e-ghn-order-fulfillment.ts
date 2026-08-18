@@ -1,10 +1,13 @@
 import { ExecArgs } from "@medusajs/framework/types"
-import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
+import {
+  ContainerRegistrationKeys,
+  MedusaError,
+  Modules,
+} from "@medusajs/framework/utils"
 import {
   addShippingMethodToCartWorkflow,
   completeCartWorkflow,
   createCartWorkflow,
-  createOrderFulfillmentWorkflow,
   createPaymentCollectionForCartWorkflow,
   createPaymentSessionsWorkflow,
   listShippingOptionsForCartWithPricingWorkflow,
@@ -13,6 +16,7 @@ import { ingestGhnWebhookWorkflow } from "../workflows/shipping-hub/ingest-ghn-w
 import { getGhnSettings } from "../modules/shipping-hub/ghn-connection"
 import type ShippingHubModuleService from "../modules/shipping-hub/service"
 import { SHIPPING_HUB_MODULE } from "../modules/shipping-hub"
+import { ensureGhnOrderFulfillmentWorkflow } from "../workflows/shipping-hub/ensure-ghn-order-fulfillment"
 
 export default async function testE2EGhnOrderFulfillment({ container }: ExecArgs) {
   console.log("\n========================================================")
@@ -160,40 +164,29 @@ export default async function testE2EGhnOrderFulfillment({ container }: ExecArgs
 
   // 6. Create Fulfillment via GHN Provider
   console.log("\n🏭 8. Fulfilling Order with GHN Carrier...")
-  const { data: orderDetails } = await query.graph({
-    entity: "order",
-    fields: [
-      "id",
-      "display_id",
-      "items.id",
-      "items.quantity",
-      "items.title",
-      "items.unit_price",
-      "items.variant_id",
-      "shipping_address.*",
-      "shipping_methods.*",
-    ],
-    filters: { id: order.id },
+  const { result: ensuredFulfillment } =
+    await ensureGhnOrderFulfillmentWorkflow(container).run({
+      input: { order_id: order.id },
+    })
+  if (!ensuredFulfillment.fulfillment_id) {
+    throw new MedusaError(
+      MedusaError.Types.UNEXPECTED_STATE,
+      `GHN fulfillment was not created: ${ensuredFulfillment.reason || "unknown reason"}`
+    )
+  }
+  const { data: fulfillments } = await query.graph({
+    entity: "fulfillment",
+    fields: ["id", "data", "labels.*"],
+    filters: { id: ensuredFulfillment.fulfillment_id },
   })
+  const fulfillmentResult = fulfillments[0]
 
-  const orderFull = orderDetails[0]
-  const { data: stockLocations } = await query.graph({
-    entity: "stock_location",
-    fields: ["id", "name"],
-  })
-  const location = stockLocations[0]
-
-  const { result: fulfillmentResult } = await createOrderFulfillmentWorkflow(container).run({
-    input: {
-      order_id: order.id,
-      location_id: location.id,
-      items: (orderFull.items || []).map((i: any) => ({
-        id: i.id,
-        quantity: Number(i.quantity) > 0 ? Number(i.quantity) : 1,
-      })),
-      labels: [],
-    },
-  })
+  if (!fulfillmentResult) {
+    throw new MedusaError(
+      MedusaError.Types.UNEXPECTED_STATE,
+      "GHN fulfillment was not created for the completed order"
+    )
+  }
 
   console.log(`✓ Fulfillment created: ID: ${fulfillmentResult.id}`)
   const fulfillmentData = (fulfillmentResult as any).data || {}

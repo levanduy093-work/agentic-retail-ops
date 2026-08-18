@@ -218,8 +218,6 @@
     "create": "Create Order",
     "order": "Order",
     "customer": "Customer",
-    "payment": "Payment",
-    "fulfillment": "Fulfillment",
     "shipping": "Shipping"
   },
   "inventory": {
@@ -682,7 +680,33 @@
       "syncGhn": "Sync GHN",
       "syncError": "Could not sync GHN status",
       "track": "Track",
-      "printLabel": "Print label"
+      "printLabel": "Print label",
+      "services": {
+        "ghnFast": "GHN Express",
+        "ghnStandard": "GHN Standard"
+      },
+      "statusLabels": {
+        "cancelled": "Cancelled",
+        "created": "Shipment created",
+        "damaged": "Package damaged",
+        "delivered": "Delivered",
+        "delivering": "Out for delivery",
+        "deliveryFailed": "Delivery unsuccessful",
+        "exception": "Delivery issue",
+        "lost": "Package lost",
+        "pickedUp": "Picked up",
+        "picking": "Awaiting pickup",
+        "readyToPick": "Ready for pickup",
+        "returned": "Returned",
+        "returning": "Returning to sender",
+        "returnFailed": "Return unsuccessful",
+        "returnSorting": "Sorting returned package",
+        "returnTransporting": "Returning to sender",
+        "shipping": "In transit",
+        "sorting": "Sorting",
+        "updating": "Status is being updated",
+        "waitingToReturn": "Awaiting return"
+      }
     },
     "ghn": {
       "title": "Giao Hàng Nhanh setup",
@@ -836,5 +860,32 @@
     "track": "Track shipment",
     "printLabel": "Print label",
     "created": "Created"
+  },
+  "paymentHub": {
+    "navigation": "Payments",
+    "title": "Payment Providers",
+    "description": "Manage VietQR (PayOS) payment gateway configuration",
+    "payosTitle": "PayOS Gateway (VietQR)",
+    "enablePayment": "Enable PayOS Payment",
+    "environment": "Environment",
+    "sandbox": "Sandbox (Test mode)",
+    "production": "Production (Live)",
+    "clientId": "Client ID",
+    "apiKey": "API Key",
+    "checksumKey": "Checksum Key",
+    "testConnection": "Test Connection",
+    "testing": "Testing...",
+    "timeoutTitle": "Payment Timeout",
+    "enableTimeout": "Limit payment duration",
+    "timeoutMinutes": "Expiration (minutes)",
+    "displaySettings": "Display Settings",
+    "displayName": "Display name",
+    "orderPrefix": "Order code prefix",
+    "save": "Save Changes",
+    "saving": "Saving...",
+    "saveSuccess": "Payment configuration saved successfully",
+    "saveError": "Failed to save payment configuration",
+    "verifySuccess": "Connected to PayOS successfully",
+    "verifyError": "PayOS connection test failed"
   }
 }

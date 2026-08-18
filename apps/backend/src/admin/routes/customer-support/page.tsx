@@ -707,7 +707,7 @@ export const CustomerSupportContent = ({
                 {t("supportDesk.subtitle")}
               </Text>
             </div>
-            {import.meta.env.DEV && (
+            {window.location.hostname === "localhost" && (
               <Button
                 size="small"
                 variant="secondary"

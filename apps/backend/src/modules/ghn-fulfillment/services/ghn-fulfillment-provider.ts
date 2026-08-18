@@ -1,5 +1,6 @@
 import {
   AbstractFulfillmentProviderService,
+  ContainerRegistrationKeys,
   MedusaError,
 } from "@medusajs/framework/utils"
 import {
@@ -22,6 +23,71 @@ export type GhnProviderOptions = {
   client_id?: number
   base_url?: string
   environment?: "sandbox" | "production"
+}
+
+type EnrichedFulfillmentItem = Partial<
+  Omit<FulfillmentItemDTO, "fulfillment">
+> & {
+  height?: number | null
+  length?: number | null
+  title?: string | null
+  unit_price?: number | null
+  weight?: number | null
+  width?: number | null
+}
+
+type OrderLineItemDetails = {
+  id: string
+  product_title?: string | null
+  title?: string | null
+  unit_price?: number | null
+  variant?: {
+    height?: number | null
+    length?: number | null
+    weight?: number | null
+    width?: number | null
+  } | null
+  variant_title?: string | null
+}
+
+function persistedShippingPackages(
+  value: unknown
+): PackedPackage[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== "object") {
+      return []
+    }
+
+    const parcel = candidate as Partial<PackedPackage>
+    const height = Number(parcel.height)
+    const length = Number(parcel.length)
+    const weight = Number(parcel.weight)
+    const width = Number(parcel.width)
+
+    if (
+      ![height, length, weight, width].every(
+        (dimension) => Number.isFinite(dimension) && dimension > 0
+      )
+    ) {
+      return []
+    }
+
+    return [{
+      box_code:
+        typeof parcel.box_code === "string" && parcel.box_code.trim()
+          ? parcel.box_code.trim().toUpperCase()
+          : "CUSTOM",
+      height,
+      item_count: Math.max(1, Math.floor(Number(parcel.item_count) || 1)),
+      length,
+      weight,
+      width,
+    }]
+  })
 }
 
 export class GhnFulfillmentProviderService extends AbstractFulfillmentProviderService {
@@ -250,6 +316,55 @@ export class GhnFulfillmentProviderService extends AbstractFulfillmentProviderSe
       )
     }
 
+    let enrichedItems = items as EnrichedFulfillmentItem[]
+    try {
+      const query = this.container_?.resolve?.(ContainerRegistrationKeys.QUERY)
+      if (query && items.length) {
+        const lineItemIds = items
+          .map((item) => item.line_item_id || item.id)
+          .filter((id): id is string => Boolean(id))
+        const { data: lineItems } = await query.graph({
+          entity: "order_line_item",
+          fields: [
+            "id",
+            "title",
+            "product_title",
+            "variant_title",
+            "unit_price",
+            "variant.weight",
+            "variant.width",
+            "variant.length",
+            "variant.height",
+          ],
+          filters: { id: lineItemIds },
+        })
+        const itemsById = new Map(
+          (lineItems as OrderLineItemDetails[]).map((lineItem) => [
+            lineItem.id,
+            lineItem,
+          ])
+        )
+        enrichedItems = (items as EnrichedFulfillmentItem[]).map((item) => {
+          const lineItemId = item.line_item_id || item.id
+          const li = lineItemId ? itemsById.get(lineItemId) : undefined
+          if (!li) return item
+
+          return {
+            ...item,
+            height: li.variant?.height ?? item.height,
+            length: li.variant?.length ?? item.length,
+            title: li.title || li.product_title || item.title,
+            unit_price: li.unit_price ?? item.unit_price,
+            weight: li.variant?.weight ?? item.weight,
+            width: li.variant?.width ?? item.width,
+          }
+        })
+      }
+    } catch {
+      // The core workflow already supplies fulfillment-safe item data. The
+      // lookup only enriches optional GHN dimensions and must not block it.
+    }
+
     const toDistrictId =
       shippingAddress?.metadata?.ghn_district_id ||
       data?.to_district_id
@@ -268,7 +383,7 @@ export class GhnFulfillmentProviderService extends AbstractFulfillmentProviderSe
       [shippingAddress.first_name, shippingAddress.last_name]
         .filter(Boolean)
         .join(" ") || "Khách hàng"
-    const recipientPhone = shippingAddress.phone || "0900000000"
+    const recipientPhone = shippingAddress.phone
     const recipientAddress =
       [
         shippingAddress.address_1,
@@ -277,19 +392,31 @@ export class GhnFulfillmentProviderService extends AbstractFulfillmentProviderSe
         shippingAddress.province,
       ]
         .filter(Boolean)
-        .join(", ") || "Địa chỉ nhận hàng"
+        .join(", ")
 
-    const packagePlan = buildPackingPlan(
-      (items || []).map((item: any) => ({
-        height: item.item?.variant?.height || item.height,
-        length: item.item?.variant?.length || item.length,
-        quantity: item.quantity,
-        weight: item.item?.variant?.weight || item.weight,
-        width: item.item?.variant?.width || item.width,
-      })),
-      settings.packing_profile,
-      settings.default_weight
-    )
+    if (!recipientPhone || !recipientAddress) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "GHN fulfillment requires the recipient phone and delivery address."
+      )
+    }
+
+    // A GHN quote is tied to its package plan. Repacking after checkout can
+    // create a different carrier fee from the one the customer accepted.
+    const selectedPackages = persistedShippingPackages(data.shipping_packages)
+    const packagePlan = selectedPackages.length
+      ? selectedPackages
+      : buildPackingPlan(
+          (enrichedItems || []).map((item: any) => ({
+            height: item.item?.variant?.height || item.height,
+            length: item.item?.variant?.length || item.length,
+            quantity: item.quantity,
+            weight: item.item?.variant?.weight || item.weight,
+            width: item.item?.variant?.width || item.width,
+          })),
+          settings.packing_profile,
+          settings.default_weight
+        )
     const fallbackParcel = {
       height: settings.default_height,
       length: settings.default_length,
@@ -297,7 +424,7 @@ export class GhnFulfillmentProviderService extends AbstractFulfillmentProviderSe
       width: settings.default_width,
     }
     let totalWeight = 0
-    const ghnItems = (items || []).map((item: any) => {
+    const ghnItems = (enrichedItems || []).map((item: any) => {
       const w = item.item?.variant?.weight || item.weight || settings.default_weight
       const qty = item.quantity || 1
       totalWeight += w * qty
@@ -387,6 +514,8 @@ export class GhnFulfillmentProviderService extends AbstractFulfillmentProviderSe
           ghn_print_token: printToken,
           ghn_print_url: printUrl,
           ghn_environment: settings.environment,
+          order_display_id: (order as any)?.display_id,
+          order_id: (order as any)?.id,
           shipping_packages: packagePlan,
           tracking_number: primaryOrder.order_code,
         },

@@ -102,6 +102,7 @@ describe("GhnFulfillmentProviderService", () => {
         } as any,
       ],
       {
+        id: "order_1001",
         display_id: 1001,
         shipping_address: {
           first_name: "Lê",
@@ -121,8 +122,92 @@ describe("GhnFulfillmentProviderService", () => {
 
     expect(fulfillmentResult.data.ghn_order_code).toBe("GHN_ORD_999")
     expect(fulfillmentResult.data.ghn_environment).toBe("sandbox")
+    expect(fulfillmentResult.data.order_id).toBe("order_1001")
+    const createRequest = (global.fetch as jest.Mock).mock.calls[0][1]
+    expect(JSON.parse(createRequest.body).client_order_code).toBe("ORD-1001")
     expect(fulfillmentResult.data.ghn_print_token).toBe("PRINT_TOKEN_XYZ")
     expect(fulfillmentResult.labels?.[0]?.tracking_number).toBe("GHN_ORD_999")
     expect(fulfillmentResult.labels?.[0]?.tracking_url).toBe("")
+  })
+
+  it("uses the package plan from the accepted checkout quote", async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          code: 200,
+          data: {
+            order_code: "GHN_ORD_QUOTED",
+            total_fee: 137500,
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ code: 200, data: { token: "PRINT_TOKEN" } }),
+      }) as any
+
+    await provider.createFulfillment(
+      {
+        shipping_packages: [
+          {
+            box_code: "L",
+            height: 18,
+            item_count: 1,
+            length: 45,
+            weight: 810,
+            width: 35,
+          },
+        ],
+      },
+      [{ title: "Sản phẩm A", quantity: 1, weight: 300 } as any],
+      {
+        display_id: 1002,
+        shipping_address: {
+          address_1: "789 Đường CMT8",
+          first_name: "Lê",
+          last_name: "Duy",
+          phone: "0912345678",
+          metadata: {
+            ghn_district_id: 1442,
+            ghn_ward_code: "20101",
+          },
+        } as any,
+      } as any,
+      { id: "ful_quoted" } as any
+    )
+
+    const createRequest = (global.fetch as jest.Mock).mock.calls[0][1]
+    expect(JSON.parse(createRequest.body)).toMatchObject({
+      height: 18,
+      length: 45,
+      weight: 810,
+      width: 35,
+    })
+  })
+
+  it("rejects incomplete recipient data before calling GHN", async () => {
+    global.fetch = jest.fn() as any
+
+    await expect(
+      provider.createFulfillment(
+        {},
+        [{ title: "Sản phẩm A", quantity: 1 } as any],
+        {
+          display_id: 1002,
+          shipping_address: {
+            address_1: "789 Đường CMT8",
+            metadata: {
+              ghn_district_id: 1442,
+              ghn_ward_code: "20101",
+            },
+          } as any,
+        } as any,
+        { id: "ful_12346" } as any
+      )
+    ).rejects.toThrow(
+      "GHN fulfillment requires the recipient phone and delivery address."
+    )
+    expect(global.fetch).not.toHaveBeenCalled()
   })
 })

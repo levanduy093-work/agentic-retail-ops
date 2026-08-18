@@ -1,6 +1,34 @@
 # Synapse DTC Starter & Agentic Retail Ops
 
-A monorepo featuring a Medusa backend/Admin, Next.js storefront, PostgreSQL, Redis, and Qdrant. Requires Node.js 20+, pnpm 10+, and Docker Desktop.
+An end-to-end Direct-to-Consumer (DTC) retail platform designed to **automate retail operations and enhance customer experience through AI Agents**.
+
+Instead of treating ecommerce and customer support as isolated silos, this platform connects storefront interactions, knowledge management, carrier logistics, and back-office operations into an intelligent, unified system.
+
+---
+
+## What It Does & Core Capabilities
+
+### 🤖 Omnichannel AI Customer Assistant & Sales Advisory
+- **Smart Product Recommendations**: Understands customer preferences and intent to recommend the right products dynamically.
+- **Accurate Policy & FAQ Answering**: Answers inquiries regarding shipping policies, returns, warranties, and FAQs using a dedicated **Knowledge Hub** (RAG retrieval).
+- **Direct Order Lookup**: Allows customers to check order statuses, shipping updates, and history directly within the chat.
+- **Persistent Conversation Memory**: Remembers context, preferences, and previous interactions across chat sessions.
+- **Multi-Channel Engagement**: Operates simultaneously on the **Storefront Live Chat** and **Telegram Bot**.
+
+### ⚡ Automated Operations & Exception Handling
+- **Order Exception Detection**: Automatically detects stalled or anomalous orders, flagging them with SLA-driven alerts before customers complain.
+- **Low Inventory Alerts**: Monitors stock levels and flags products nearing depletion for operational attention.
+- **Automated Knowledge Sync**: Ingests and synchronizes product manuals, operational guidelines, and store policies directly from external sources (e.g. Google Drive).
+
+### 🚚 Integrated Logistics & Carrier Fulfillment
+- **Native Vietnam Carrier Support**: Direct integration with leading carriers including **Giao Hàng Nhanh (GHN)** and **Giao Hàng Tiết Kiệm (GHTK)**.
+- **Automated Shipping & Tracking**: Real-time shipping rate calculation, automated waybill generation, and status synchronization.
+
+### 🛍️ Modern Commerce & Management Experience
+- **High-Performance Storefront**: Fast, mobile-first shopping experience with streamlined checkout and **Google One Tap** authentication.
+- **Unified Admin Dashboard**: Manage products, orders, customers, carrier settings, and configure AI providers & knowledge sources in one place.
+
+---
 
 ## First-time Local Setup
 

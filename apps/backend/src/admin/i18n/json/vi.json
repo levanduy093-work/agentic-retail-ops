@@ -218,8 +218,28 @@
     "create": "Tạo đơn hàng",
     "order": "Đơn hàng",
     "customer": "Khách hàng",
-    "payment": "Thanh toán",
-    "fulfillment": "Hoàn tất đơn",
+    "payment": {
+      "status": {
+        "pending": "Chờ xử lý",
+        "authorized": "Đã xác thực",
+        "captured": "Đã thanh toán",
+        "canceled": "Đã hủy",
+        "requires_action": "Cần xử lý"
+      }
+    },
+    "fulfillment": {
+      "status": {
+        "not_fulfilled": "Chưa giao hàng",
+        "partially_fulfilled": "Giao một phần",
+        "fulfilled": "Đã hoàn tất",
+        "partially_shipped": "Gửi một phần",
+        "shipped": "Đã gửi hàng",
+        "partially_delivered": "Nhận một phần",
+        "delivered": "Đã nhận hàng",
+        "canceled": "Đã hủy",
+        "returned": "Đã trả hàng"
+      }
+    },
     "shipping": "Vận chuyển"
   },
   "inventory": {
@@ -679,7 +699,33 @@
       "syncGhn": "Đồng bộ GHN",
       "syncError": "Không thể đồng bộ trạng thái GHN",
       "track": "Theo dõi",
-      "printLabel": "In nhãn"
+      "printLabel": "In nhãn",
+      "services": {
+        "ghnFast": "GHN Nhanh",
+        "ghnStandard": "GHN Tiêu chuẩn"
+      },
+      "statusLabels": {
+        "cancelled": "Đã hủy",
+        "created": "Đã tạo vận đơn",
+        "damaged": "Hàng bị hư hỏng",
+        "delivered": "Đã giao hàng",
+        "delivering": "Đang giao hàng",
+        "deliveryFailed": "Giao hàng chưa thành công",
+        "exception": "Có sự cố giao hàng",
+        "lost": "Hàng thất lạc",
+        "pickedUp": "Đã lấy hàng",
+        "picking": "Đang lấy hàng",
+        "readyToPick": "Chờ lấy hàng",
+        "returned": "Đã trả hàng",
+        "returning": "Đang trả hàng",
+        "returnFailed": "Trả hàng chưa thành công",
+        "returnSorting": "Đang phân loại hàng hoàn",
+        "returnTransporting": "Đang chuyển hoàn",
+        "shipping": "Đang vận chuyển",
+        "sorting": "Đang phân loại",
+        "updating": "Đang cập nhật trạng thái",
+        "waitingToReturn": "Chờ trả hàng"
+      }
     },
     "ghn": {
       "title": "Cấu hình Giao Hàng Nhanh",
@@ -836,5 +882,32 @@
   },
   "layout": {
     "customizeLayout": "Tùy chỉnh bố cục"
+  },
+  "paymentHub": {
+    "navigation": "Thanh toán",
+    "title": "Cổng thanh toán",
+    "description": "Quản lý cấu hình cổng thanh toán VietQR (PayOS)",
+    "payosTitle": "Cổng PayOS (VietQR)",
+    "enablePayment": "Kích hoạt thanh toán PayOS",
+    "environment": "Môi trường",
+    "sandbox": "Thử nghiệm (Sandbox)",
+    "production": "Chính thức (Production)",
+    "clientId": "Client ID",
+    "apiKey": "API Key",
+    "checksumKey": "Checksum Key",
+    "testConnection": "Kiểm tra kết nối",
+    "testing": "Đang kiểm tra...",
+    "timeoutTitle": "Thời gian thanh toán",
+    "enableTimeout": "Giới hạn thời gian thanh toán",
+    "timeoutMinutes": "Số phút hết hạn",
+    "displaySettings": "Hiển thị",
+    "displayName": "Tên phương thức hiển thị",
+    "orderPrefix": "Tiền tố mã đơn",
+    "save": "Lưu cấu hình",
+    "saving": "Đang lưu...",
+    "saveSuccess": "Đã lưu cấu hình thanh toán thành công",
+    "saveError": "Lưu cấu hình thất bại",
+    "verifySuccess": "Kết nối PayOS thành công",
+    "verifyError": "Kiểm tra kết nối thất bại"
   }
 }

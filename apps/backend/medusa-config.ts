@@ -175,11 +175,11 @@ const bridge = `var SynapseThemeBridge = () => {
     };
 
     const mountInHeader = () => {
-      const customizeButton = document.querySelector('button[aria-label="Customize layout"], button[aria-label="Tùy chỉnh bố cục"]');
+      const customizeButton = document.querySelector('button[aria-label*="customize" i], button[aria-label*="tùy chỉnh" i]');
       const headerActions = customizeButton?.parentElement;
       if (!headerActions || !customizeButton) {
-        container.style.display = "none";
-        languageContainer.style.display = "none";
+        container.style.cssText = "display:inline-flex;position:fixed;top:18px;right:139px;z-index:60";
+        languageContainer.style.cssText = "display:inline-flex;position:fixed;top:18px;right:95px;z-index:60";
         return;
       }
       if (languageContainer.parentElement !== headerActions) {
@@ -188,8 +188,8 @@ const bridge = `var SynapseThemeBridge = () => {
       if (container.parentElement !== headerActions) {
         headerActions.insertBefore(container, customizeButton);
       }
-      container.style.display = "";
-      languageContainer.style.display = "";
+      container.style.cssText = "";
+      languageContainer.style.cssText = "";
     };
 
     let mountFrame;
@@ -251,7 +251,7 @@ module.exports = defineConfig({
         esbuildOptions: {
           plugins: [
             {
-              name: 'synapse-dashboard-theme-bridge',
+              name: 'synapse-dashboard-theme-bridge-v2',
               setup(build) {
                 build.onLoad(
                   {
@@ -277,6 +277,9 @@ module.exports = defineConfig({
       },
       plugins: [
         {
+
+        },,
+        {
           name: 'synapse-admin-title',
           transformIndexHtml(html: string) {
             return html.replace(/<title>.*?<\/title>/i, '<title>Synapse</title>')
@@ -296,7 +299,7 @@ module.exports = defineConfig({
           },
         },
         {
-          name: 'synapse-dashboard-theme-bridge',
+          name: 'synapse-dashboard-theme-bridge-v2',
           enforce: 'pre',
           transform(code: string, id: string) {
             const transformed = injectDashboardThemeBridge(code, id)
@@ -336,6 +339,21 @@ module.exports = defineConfig({
     },
     {
       resolve: "./src/modules/shipping-hub",
+    },
+    {
+      resolve: "./src/modules/payment-hub",
+    },
+    {
+      resolve: '@medusajs/medusa/payment',
+      options: {
+        providers: [
+          {
+            resolve: './src/modules/payos-payment',
+            id: 'payos',
+            options: {},
+          },
+        ],
+      },
     },
     {
       resolve: '@medusajs/medusa/auth',

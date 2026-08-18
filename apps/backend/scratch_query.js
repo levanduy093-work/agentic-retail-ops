@@ -1,0 +1,1 @@
+const { Client } = require('pg'); const client = new Client('postgres://postgres:@localhost:5432/medusa-dtc-starter'); client.connect().then(() => client.query('SELECT id, provider_id, order_id, created_at FROM fulfillment ORDER BY created_at DESC LIMIT 5;')).then(res => { console.table(res.rows); client.end() });

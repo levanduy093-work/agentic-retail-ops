@@ -2,6 +2,15 @@
 
 import { useState } from "react"
 import { Heading, Text } from "@modules/common/components/ui"
+import {
+  ArrowRightMini,
+  ArrowUturnLeft,
+  BuildingsMini,
+  ChatBubbleLeftRight,
+  Envelope,
+  MapPin,
+  Phone,
+} from "@medusajs/icons"
 import LocalizedClientLink from "@modules/common/components/localized-client-link"
 import ContactForm from "../components/contact-form"
 
@@ -53,16 +62,9 @@ type ContactDictionary = {
     success_desc?: string
     send_another?: string
   }
-  footer?: {
-    returns?: string
-  }
-  returns?: {
-    title?: string
-    subtitle?: string
-  }
-  checkout?: {
-    enter_valid_email?: string
-  }
+  footer?: { returns?: string }
+  returns?: { title?: string; subtitle?: string }
+  checkout?: { enter_valid_email?: string }
 }
 
 type ContactTemplateProps = {
@@ -71,256 +73,236 @@ type ContactTemplateProps = {
   countryCode?: string
 }
 
-export default function ContactTemplate({
-  dict,
-  locale: _locale,
-  countryCode: _countryCode,
-}: ContactTemplateProps) {
+export default function ContactTemplate({ dict }: ContactTemplateProps) {
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0)
-
-  const toggleFaq = (index: number) => {
-    setOpenFaqIndex(openFaqIndex === index ? null : index)
-  }
-
-  const faqs = dict.contact?.faqs || []
+  const contact = dict.contact
+  const faqs = contact?.faqs || []
+  const channels = [
+    {
+      icon: Phone,
+      title: contact?.hotline_title,
+      detail: contact?.hotline_number,
+      description: contact?.hotline_desc,
+      action: contact?.hotline_cta,
+      href: `tel:${contact?.hotline_number?.replace(/\s/g, "")}`,
+    },
+    {
+      icon: Envelope,
+      title: contact?.email_title,
+      detail: contact?.email_address,
+      description: contact?.email_desc,
+      action: contact?.email_cta,
+      href: `mailto:${contact?.email_address}`,
+    },
+    {
+      icon: BuildingsMini,
+      title: contact?.store_title,
+      detail: contact?.hours,
+      description: contact?.store_hn,
+      action: dict.footer?.returns || "Đổi trả hàng",
+      href: "/returns",
+    },
+  ]
 
   return (
-    <div className="py-8 small:py-14 min-h-[calc(100vh-64px)] bg-[#f8faf9]">
-      <div className="content-container max-w-6xl mx-auto space-y-12">
-        {/* 1. Header & Hero */}
-        <div className="text-center space-y-4 max-w-3xl mx-auto">
-          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3.5 py-1 text-xs font-semibold text-[#174b3d]">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600" />
-            </span>
-            <span>{dict.contact?.response_sla || "Cam kết phản hồi nhanh"}</span>
+    <main className="min-h-[calc(100vh-64px)] bg-ui-bg-subtle py-8 small:py-12">
+      <div className="content-container mx-auto max-w-6xl space-y-10 sm:space-y-14">
+        <section className="grid overflow-hidden rounded-2xl border border-ui-border-base bg-ui-bg-base shadow-elevation-card-rest lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="p-7 sm:p-10 lg:p-12">
+            <Heading
+              level="h1"
+              className="max-w-2xl text-3xl font-bold tracking-tight text-ui-fg-base sm:text-5xl"
+            >
+              {contact?.title}
+            </Heading>
+            <Text className="mt-5 max-w-xl text-base leading-relaxed text-ui-fg-subtle sm:text-lg">
+              {contact?.subtitle}
+            </Text>
+            <a
+              href="#contact-form"
+              className="mt-7 inline-flex min-h-11 items-center gap-2 rounded-md bg-ui-fg-base px-5 py-3 text-sm font-semibold text-ui-bg-base transition hover:bg-ui-fg-subtle focus:outline-none focus:ring-2 focus:ring-ui-fg-interactive focus:ring-offset-2"
+            >
+              Gửi tin nhắn <ArrowRightMini />
+            </a>
           </div>
-
-          <Heading
-            level="h1"
-            className="text-3xl sm:text-4xl font-bold tracking-tight text-[#12231d]"
-          >
-            {dict.contact?.title}
-          </Heading>
-
-          <Text className="text-base text-gray-600 leading-relaxed">
-            {dict.contact?.subtitle}
-          </Text>
-        </div>
-
-        {/* 2. Omnichannel Support Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {/* AI CSKH */}
-          <div className="rounded-2xl border border-[#d2ded8] bg-white p-6 shadow-sm hover:shadow-md transition duration-200 flex flex-col justify-between">
-            <div className="space-y-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-50 to-indigo-100 text-2xl">
-                🤖
-              </div>
-              <h3 className="text-base font-bold text-gray-900">
-                {dict.contact?.ai_chat_title}
-              </h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                {dict.contact?.ai_chat_desc}
-              </p>
-            </div>
-            <div className="mt-5 pt-3 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => {
-                  const chatBtn = document.querySelector(
+          <div className="bg-ui-fg-base p-7 text-ui-bg-base sm:p-10 lg:p-12">
+            <ChatBubbleLeftRight className="h-7 w-7" />
+            <p className="mt-8 text-xs font-semibold uppercase tracking-[0.16em] text-ui-bg-subtle">
+              Nhanh nhất lúc này
+            </p>
+            <h2 className="mt-2 text-2xl font-bold">
+              {contact?.ai_chat_title}
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-ui-bg-subtle">
+              {contact?.ai_chat_desc}
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                (
+                  document.querySelector(
                     'button[aria-label*="Chat"]'
-                  ) as HTMLButtonElement
-                  if (chatBtn) chatBtn.click()
-                }}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 transition"
-              >
-                <span>{dict.contact?.ai_chat_cta}</span>
-                <span>→</span>
-              </button>
-            </div>
+                  ) as HTMLButtonElement | null
+                )?.click()
+              }
+              className="mt-7 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-ui-bg-base px-4 py-2 text-sm font-semibold text-ui-fg-base transition hover:bg-ui-bg-subtle"
+            >
+              {contact?.ai_chat_cta}
+              <ArrowRightMini />
+            </button>
           </div>
+        </section>
 
-          {/* Hotline */}
-          <div className="rounded-2xl border border-[#d2ded8] bg-white p-6 shadow-sm hover:shadow-md transition duration-200 flex flex-col justify-between">
-            <div className="space-y-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-emerald-50 to-green-100 text-2xl">
-                📞
-              </div>
-              <h3 className="text-base font-bold text-gray-900">
-                {dict.contact?.hotline_title}
-              </h3>
-              <div className="text-lg font-bold text-[#174b3d]">
-                {dict.contact?.hotline_number}
-              </div>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                {dict.contact?.hotline_desc}
-              </p>
-            </div>
-            <div className="mt-5 pt-3 border-t border-gray-100">
-              <a
-                href={`tel:${dict.contact?.hotline_number?.replace(/\s/g, "")}`}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#174b3d] hover:text-[#103a2f] transition"
-              >
-                <span>{dict.contact?.hotline_cta}</span>
-                <span>→</span>
-              </a>
-            </div>
+        <section>
+          <div className="mb-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ui-fg-muted">
+              Chọn cách bạn muốn liên hệ
+            </p>
+            <Heading
+              level="h2"
+              className="mt-2 text-2xl font-bold text-ui-fg-base"
+            >
+              Luôn có người sẵn sàng hỗ trợ
+            </Heading>
           </div>
-
-          {/* Email */}
-          <div className="rounded-2xl border border-[#d2ded8] bg-white p-6 shadow-sm hover:shadow-md transition duration-200 flex flex-col justify-between">
-            <div className="space-y-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-purple-50 to-pink-100 text-2xl">
-                ✉️
-              </div>
-              <h3 className="text-base font-bold text-gray-900">
-                {dict.contact?.email_title}
-              </h3>
-              <div className="text-sm font-semibold text-[#174b3d] break-all">
-                {dict.contact?.email_address}
-              </div>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                {dict.contact?.email_desc}
-              </p>
-            </div>
-            <div className="mt-5 pt-3 border-t border-gray-100">
-              <a
-                href={`mailto:${dict.contact?.email_address}`}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#174b3d] hover:text-[#103a2f] transition"
-              >
-                <span>{dict.contact?.email_cta}</span>
-                <span>→</span>
-              </a>
-            </div>
-          </div>
-
-          {/* Showroom */}
-          <div className="rounded-2xl border border-[#d2ded8] bg-white p-6 shadow-sm hover:shadow-md transition duration-200 flex flex-col justify-between">
-            <div className="space-y-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-50 to-orange-100 text-2xl">
-                🏬
-              </div>
-              <h3 className="text-base font-bold text-gray-900">
-                {dict.contact?.store_title}
-              </h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                {dict.contact?.hours}
-              </p>
-              <p className="text-[11px] text-gray-500 line-clamp-2">
-                {dict.contact?.store_hn}
-              </p>
-            </div>
-            <div className="mt-5 pt-3 border-t border-gray-100">
-              <LocalizedClientLink
-                href="/returns"
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#174b3d] hover:text-[#103a2f] transition"
-              >
-                <span>{dict.footer?.returns || "Đổi trả hàng"}</span>
-                <span>→</span>
-              </LocalizedClientLink>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. Main Two-Column Layout: Form & Showroom Directory */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Contact Form Column */}
-          <div className="lg:col-span-7 rounded-3xl border border-[#d2ded8] bg-white p-6 sm:p-8 shadow-sm">
-            <div className="mb-6 space-y-1">
-              <Heading level="h2" className="text-xl font-bold text-gray-900">
-                {dict.contact?.form_title}
-              </Heading>
-              <Text className="text-xs text-gray-500">
-                {dict.contact?.form_desc}
-              </Text>
-            </div>
-            <ContactForm dict={dict} />
-          </div>
-
-          {/* Showroom & Info Column */}
-          <div className="lg:col-span-5 space-y-6">
-            <div className="rounded-3xl border border-[#d2ded8] bg-white p-6 sm:p-7 shadow-sm space-y-5">
-              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                <span>📍</span>
-                <span>{dict.contact?.store_title}</span>
-              </h3>
-
-              <div className="space-y-4 text-xs text-gray-600 divide-y divide-gray-100">
-                <div className="pt-2 space-y-1">
-                  <div className="font-semibold text-gray-900">
-                    Chi nhánh Hà Nội
-                  </div>
-                  <p>{dict.contact?.store_hn}</p>
-                  <p className="text-[11px] text-emerald-700 font-medium">
-                    {dict.contact?.hours}
+          <div className="grid gap-px overflow-hidden rounded-2xl border border-ui-border-base bg-ui-border-base md:grid-cols-3">
+            {channels.map(
+              ({ icon: Icon, title, detail, description, action, href }) => (
+                <article
+                  key={title}
+                  className="flex min-h-64 flex-col bg-ui-bg-base p-6 sm:p-7"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-ui-bg-subtle text-ui-fg-interactive">
+                    <Icon />
+                  </span>
+                  <h3 className="mt-7 text-base font-bold text-ui-fg-base">
+                    {title}
+                  </h3>
+                  <p className="mt-2 text-lg font-bold text-ui-fg-base">
+                    {detail}
                   </p>
-                </div>
-
-                <div className="pt-4 space-y-1">
-                  <div className="font-semibold text-gray-900">
-                    Chi nhánh TP. Hồ Chí Minh
-                  </div>
-                  <p>{dict.contact?.store_hcm}</p>
-                  <p className="text-[11px] text-emerald-700 font-medium">
-                    {dict.contact?.hours}
+                  <p className="mt-2 text-sm leading-relaxed text-ui-fg-subtle">
+                    {description}
                   </p>
-                </div>
-              </div>
-
-              {/* Returns Quick Card */}
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-2">
-                <div className="text-xs font-bold text-[#174b3d] flex items-center gap-1.5">
-                  <span>🔄</span>
-                  <span>{dict.returns?.title || "Chính sách đổi trả 7 ngày"}</span>
-                </div>
-                <p className="text-xs text-gray-600 leading-relaxed">
-                  {dict.returns?.subtitle ||
-                    "Đổi trả hàng dễ dàng trong vòng 7 ngày kể từ khi nhận sản phẩm."}
-                </p>
-                <div className="pt-1">
-                  <LocalizedClientLink
-                    href="/returns"
-                    className="inline-flex items-center gap-1 text-xs font-bold text-[#174b3d] hover:underline"
+                  <a
+                    href={href}
+                    className="mt-auto inline-flex min-h-11 items-end gap-2 pt-5 text-sm font-semibold text-ui-fg-base hover:text-ui-fg-subtle"
                   >
-                    <span>Xem chính sách & gửi yêu cầu đổi hàng</span>
-                    <span>→</span>
-                  </LocalizedClientLink>
+                    {action}
+                    <ArrowRightMini />
+                  </a>
+                </article>
+              )
+            )}
+          </div>
+        </section>
+
+        <section
+          className="grid items-start gap-6 lg:grid-cols-[1.25fr_0.75fr]"
+          id="contact-form"
+        >
+          <div className="rounded-2xl border border-ui-border-base bg-ui-bg-base p-6 shadow-elevation-card-rest sm:p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ui-fg-muted">
+              Để lại thông tin
+            </p>
+            <Heading
+              level="h2"
+              className="mt-2 text-2xl font-bold text-ui-fg-base"
+            >
+              {contact?.form_title}
+            </Heading>
+            <Text className="mt-2 text-sm leading-relaxed text-ui-fg-subtle">
+              {contact?.form_desc}
+            </Text>
+            <div className="mt-7 border-t border-ui-border-base pt-7">
+              <ContactForm dict={dict} />
+            </div>
+          </div>
+          <aside className="space-y-4 lg:sticky lg:top-6">
+            <div className="rounded-2xl border border-ui-border-base bg-ui-bg-base p-6 shadow-elevation-card-rest">
+              <div className="flex items-center gap-2 text-base font-bold text-ui-fg-base">
+                <MapPin className="text-ui-fg-interactive" />
+                {contact?.store_title}
+              </div>
+              <div className="mt-6 space-y-6 text-sm leading-relaxed text-ui-fg-subtle">
+                <div>
+                  <h3 className="font-bold text-ui-fg-base">
+                    Chi nhánh Hà Nội
+                  </h3>
+                  <p className="mt-1">{contact?.store_hn}</p>
+                  <p className="mt-2 font-medium text-ui-fg-base">
+                    {contact?.hours}
+                  </p>
+                </div>
+                <div className="border-t border-ui-border-base pt-5">
+                  <h3 className="font-bold text-ui-fg-base">
+                    Chi nhánh TP. Hồ Chí Minh
+                  </h3>
+                  <p className="mt-1">{contact?.store_hcm}</p>
+                  <p className="mt-2 font-medium text-ui-fg-base">
+                    {contact?.hours}
+                  </p>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+            <LocalizedClientLink
+              href="/returns"
+              className="block rounded-2xl border border-ui-border-base bg-ui-bg-subtle p-6 shadow-borders-base transition hover:bg-ui-bg-base"
+            >
+              <div className="flex items-center gap-2 text-sm font-bold text-ui-fg-base">
+                <ArrowUturnLeft className="text-ui-fg-interactive" />
+                {dict.returns?.title || "Đổi trả trong 7 ngày"}
+              </div>
+              <p className="mt-3 text-sm leading-relaxed text-ui-fg-subtle">
+                {dict.returns?.subtitle ||
+                  "Gửi yêu cầu đổi trả và theo dõi quy trình rõ ràng."}
+              </p>
+              <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-ui-fg-base">
+                Xem chính sách <ArrowRightMini />
+              </span>
+            </LocalizedClientLink>
+          </aside>
+        </section>
 
-        {/* 4. FAQ Section */}
         {faqs.length > 0 && (
-          <div className="rounded-3xl border border-[#d2ded8] bg-white p-6 sm:p-10 shadow-sm space-y-6">
-            <div className="text-center space-y-1 max-w-xl mx-auto mb-6">
-              <Heading level="h2" className="text-2xl font-bold text-gray-900">
-                {dict.contact?.faq_title}
+          <section className="mx-auto max-w-4xl">
+            <div className="mb-5 text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ui-fg-muted">
+                Có thể bạn đang cần
+              </p>
+              <Heading
+                level="h2"
+                className="mt-2 text-2xl font-bold text-ui-fg-base"
+              >
+                {contact?.faq_title}
               </Heading>
-              <Text className="text-xs text-gray-500">
-                {dict.contact?.faq_subtitle}
-              </Text>
+              {contact?.faq_subtitle && (
+                <Text className="mt-2 text-sm text-ui-fg-subtle">
+                  {contact.faq_subtitle}
+                </Text>
+              )}
             </div>
-
-            <div className="divide-y divide-gray-200 max-w-3xl mx-auto">
-              {faqs.map((faq: { q: string; a: string }, idx: number) => {
-                const isOpen = openFaqIndex === idx
+            <div className="overflow-hidden rounded-2xl border border-ui-border-base bg-ui-bg-base shadow-elevation-card-rest">
+              {faqs.map((faq, index) => {
+                const isOpen = openFaqIndex === index
                 return (
-                  <div key={idx} className="py-4">
+                  <div
+                    key={faq.q}
+                    className="border-b border-ui-border-base last:border-b-0"
+                  >
                     <button
                       type="button"
-                      onClick={() => toggleFaq(idx)}
-                      className="flex w-full items-center justify-between text-left text-sm font-semibold text-gray-900 hover:text-[#174b3d] transition"
+                      onClick={() => setOpenFaqIndex(isOpen ? null : index)}
+                      aria-expanded={isOpen}
+                      className="flex min-h-14 w-full items-center justify-between gap-4 px-5 py-4 text-left text-sm font-semibold text-ui-fg-base hover:bg-ui-bg-subtle sm:px-6"
                     >
                       <span>{faq.q}</span>
-                      <span className="ml-4 text-gray-400 text-base font-normal">
+                      <span className="text-lg font-normal text-ui-fg-muted">
                         {isOpen ? "−" : "+"}
                       </span>
                     </button>
                     {isOpen && (
-                      <div className="mt-2.5 text-xs text-gray-600 leading-relaxed animate-in fade-in duration-200">
+                      <div className="px-5 pb-5 text-sm leading-relaxed text-ui-fg-subtle sm:px-6">
                         {faq.a}
                       </div>
                     )}
@@ -328,9 +310,9 @@ export default function ContactTemplate({
                 )
               })}
             </div>
-          </div>
+          </section>
         )}
       </div>
-    </div>
+    </main>
   )
 }

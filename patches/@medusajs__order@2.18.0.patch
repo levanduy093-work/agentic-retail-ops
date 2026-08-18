@@ -1,0 +1,34 @@
+diff --git a/dist/utils/apply-order-changes.js b/dist/utils/apply-order-changes.js
+index 2ff85f702c9f66994180cd992a62dc9b6d4fbb65..a10301c5ae74670c1baad66f9c92d34bc4341fda 100644
+--- a/dist/utils/apply-order-changes.js
++++ b/dist/utils/apply-order-changes.js
+@@ -117,6 +117,7 @@ async function applyChangesToOrder(orders, actionsMap, options) {
+                     ...(isNewShippingMethod ? shippingMethod_ : shippingMethod_.detail),
+                     version,
+                     shipping_method_id: associatedMethodId,
++                    order_id: order.id,
+                 };
+                 delete sm.id;
+                 if (!hasShippingMethod) {
+diff --git a/dist/utils/base-repository-find.js b/dist/utils/base-repository-find.js
+index a9010f92ceed3adbcea530d626a6a23d2798f35d..343d77da09b31d3125b956dc2f52d202d2532850 100644
+--- a/dist/utils/base-repository-find.js
++++ b/dist/utils/base-repository-find.js
+@@ -131,7 +131,7 @@ function setFindMethods(klass, entity) {
+             config.options.populate.splice(config.options.populate.indexOf("shipping_methods.shipping_method.adjustments"), 1);
+             config.options.populate.push("shipping_methods");
+             config.options.populate.push("shipping_methods.shipping_method");
+-            if (config.options.fields?.some((f) => f.includes("shipping_methods.shipping_method."))) {
++            if (config.options.fields) {
+                 config.options.fields.push(isRelatedEntity
+                     ? "order.shipping_methods.version"
+                     : "shipping_methods.version");
+@@ -218,7 +218,7 @@ function setFindMethods(klass, entity) {
+             config.options.populate.push("shipping_methods");
+             config.options.populate.push("shipping_methods.shipping_method");
+             // make sure version is loaded if adjustments are requested
+-            if (config.options.fields?.some((f) => f.includes("shipping_methods.shipping_method."))) {
++            if (config.options.fields) {
+                 config.options.fields.push(isRelatedEntity
+                     ? "order.shipping_methods.version"
+                     : "shipping_methods.version");

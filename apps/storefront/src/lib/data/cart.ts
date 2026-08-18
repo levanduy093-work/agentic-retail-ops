@@ -374,8 +374,7 @@ export async function setAddresses(
     if (ghnDistrictId) metadata.ghn_district_id = Number(ghnDistrictId)
     if (ghnWardCode) metadata.ghn_ward_code = String(ghnWardCode)
 
-    const data: HttpTypes.StoreUpdateCart = {
-      shipping_address: {
+    const shippingAddress: HttpTypes.StoreCreateCustomerAddress = {
         first_name: formData.get("shipping_address.first_name") as string,
         last_name: formData.get("shipping_address.last_name") as string,
         address_1: formData.get("shipping_address.address_1") as string,
@@ -387,7 +386,9 @@ export async function setAddresses(
         province: formData.get("shipping_address.province") as string,
         phone: formData.get("shipping_address.phone") as string,
         metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-      },
+    }
+    const data: HttpTypes.StoreUpdateCart = {
+      shipping_address: shippingAddress,
       email: formData.get("email") as string,
     }
 
@@ -410,7 +411,7 @@ export async function setAddresses(
     await updateCart(data)
 
     if (formData.get("save_to_customer") === "on") {
-      await saveCustomerShippingAddress(data.shipping_address)
+      await saveCustomerShippingAddress(shippingAddress)
     }
 
     return { success: true }

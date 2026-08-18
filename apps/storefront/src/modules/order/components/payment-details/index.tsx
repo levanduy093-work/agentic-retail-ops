@@ -17,6 +17,7 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
   const t = useTranslation()
   const { locale } = useParams<{ locale?: string }>()
   const payment = order.payment_collections?.[0]?.payments?.[0]
+  const isPaid = order.payment_status === "captured" || Boolean(payment?.captured_at)
   const paymentDate = payment?.created_at
     ? new Intl.DateTimeFormat(locale === "vi" ? "vi-VN" : "en-US", {
         dateStyle: "medium",
@@ -90,9 +91,13 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
                     currency_code: order.currency_code,
                   })}
                 </Text>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200/80">
-                  <CheckCircleSolid className="w-3.5 h-3.5 text-emerald-600" />
-                  {t("checkout.paid_status")}
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium border ${isPaid ? "bg-emerald-50 text-emerald-700 border-emerald-200/80" : "bg-amber-50 text-amber-700 border-amber-200/80"}`}>
+                  {isPaid ? (
+                    <CheckCircleSolid className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <Clock className="w-3.5 h-3.5 text-amber-600" />
+                  )}
+                  {isPaid ? t("checkout.paid_status") : t("checkout.payment_pending")}
                 </span>
               </div>
 
@@ -100,7 +105,7 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
                 <div className="flex items-center gap-1.5 text-xs text-ui-fg-muted">
                   <Clock className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                   <span>
-                    {t("order.paid_at")} {paymentDate}
+                    {isPaid ? t("order.paid_at") : t("order.payment_created_at")} {paymentDate}
                   </span>
                 </div>
               )}

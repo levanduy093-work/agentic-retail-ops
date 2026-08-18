@@ -163,34 +163,36 @@ export async function openGoogleKnowledgePicker(
         if (data.action === "cancel") return resolve(null)
         if (data.action !== "picked") return
         const documents = data.docs ?? []
-        const selections = documents.flatMap((document) => {
-          if (!document.id || !document.mimeType) return []
-          const sourceType = classifyGooglePickerMimeType(document.mimeType)
-          if (!sourceType) {
+        const selections: GooglePickerSelection[] = documents.flatMap<GooglePickerSelection>(
+          (document) => {
+            if (!document.id || !document.mimeType) return []
+            const sourceType = classifyGooglePickerMimeType(document.mimeType)
+            if (!sourceType) {
+              return [
+                {
+                  mime_type: document.mimeType,
+                  name: document.name ?? "Google Drive document",
+                  supported: false as const,
+                },
+              ]
+            }
+            const sourceUrl =
+              sourceType === "GOOGLE_DOC"
+                ? `https://docs.google.com/document/d/${document.id}`
+                : sourceType === "GOOGLE_SHEET"
+                  ? `https://docs.google.com/spreadsheets/d/${document.id}`
+                  : `https://drive.google.com/file/d/${document.id}`
             return [
               {
                 mime_type: document.mimeType,
                 name: document.name ?? "Google Drive document",
-                supported: false as const,
+                source_type: sourceType,
+                source_url: sourceUrl,
+                supported: true as const,
               },
             ]
           }
-          const sourceUrl =
-            sourceType === "GOOGLE_DOC"
-              ? `https://docs.google.com/document/d/${document.id}`
-              : sourceType === "GOOGLE_SHEET"
-                ? `https://docs.google.com/spreadsheets/d/${document.id}`
-                : `https://drive.google.com/file/d/${document.id}`
-          return [
-            {
-              mime_type: document.mimeType,
-              name: document.name ?? "Google Drive document",
-              source_type: sourceType,
-              source_url: sourceUrl,
-              supported: true as const,
-            },
-          ]
-        })
+        )
         resolve(selections.length ? selections : null)
       })
       .build()
