@@ -1,7 +1,7 @@
 "use client"
 
 import { HttpTypes } from "@medusajs/types"
-import { Text } from "@modules/common/components/ui"
+import { Badge, Text } from "@modules/common/components/ui"
 import { useTranslation } from "@lib/i18n/client"
 import { useParams } from "next/navigation"
 
@@ -13,23 +13,60 @@ type OrderDetailsProps = {
 const OrderDetails = ({ order, showStatus }: OrderDetailsProps) => {
   const t = useTranslation()
   const { locale } = useParams<{ locale?: string }>()
+  const isVi = locale === "vi"
+
   const orderDate = new Intl.DateTimeFormat(
-    locale === "vi" ? "vi-VN" : "en-US",
+    isVi ? "vi-VN" : "en-US",
     {
       dateStyle: "medium",
       timeZone: "Asia/Ho_Chi_Minh",
     }
   ).format(new Date(order.created_at))
-  const formatStatus = (str: string) => {
-    const formatted = str.split("_").join(" ")
 
-    return formatted.slice(0, 1).toUpperCase() + formatted.slice(1)
+  const getFulfillmentStatusInfo = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case "fulfilled":
+        return { label: isVi ? "Đã hoàn tất" : "Fulfilled", color: "green" as const }
+      case "not_fulfilled":
+        return { label: isVi ? "Chờ xử lý" : "Not Fulfilled", color: "grey" as const }
+      case "partially_fulfilled":
+        return { label: isVi ? "Đang xử lý một phần" : "Partially Fulfilled", color: "orange" as const }
+      case "shipped":
+        return { label: isVi ? "Đang giao hàng" : "Shipped", color: "blue" as const }
+      case "delivered":
+        return { label: isVi ? "Đã giao hàng" : "Delivered", color: "green" as const }
+      case "canceled":
+        return { label: isVi ? "Đã hủy" : "Canceled", color: "red" as const }
+      default:
+        return { label: status, color: "grey" as const }
+    }
   }
+
+  const getPaymentStatusInfo = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case "captured":
+        return { label: isVi ? "Đã thanh toán" : "Paid", color: "green" as const }
+      case "authorized":
+      case "not_paid":
+      case "awaiting":
+      case "pending":
+        return { label: isVi ? "Chưa thanh toán" : "Pending Payment", color: "orange" as const }
+      case "canceled":
+        return { label: isVi ? "Đã hủy" : "Canceled", color: "red" as const }
+      case "refunded":
+        return { label: isVi ? "Đã hoàn tiền" : "Refunded", color: "grey" as const }
+      default:
+        return { label: status, color: "grey" as const }
+    }
+  }
+
+  const fulfillmentInfo = getFulfillmentStatusInfo(order.fulfillment_status)
+  const paymentInfo = getPaymentStatusInfo(order.payment_status)
 
   return (
     <div>
       <Text>
-        {t("order.confirmation_sent")} {" "}
+        {t("order.confirmation_sent")}{" "}
         <span
           className="text-ui-fg-medium-plus font-semibold"
           data-testid="order-email"
@@ -40,37 +77,35 @@ const OrderDetails = ({ order, showStatus }: OrderDetailsProps) => {
       </Text>
       <Text className="mt-2">
         {t("account.date_placed")}:{" "}
-        <span data-testid="order-date">
-          {orderDate}
-        </span>
+        <span data-testid="order-date">{orderDate}</span>
       </Text>
       <Text className="mt-2 text-ui-fg-interactive">
         {t("account.order_number")}: <span data-testid="order-id">{order.display_id}</span>
       </Text>
 
-      <div className="flex items-center text-compact-small gap-x-4 mt-4">
-        {showStatus && (
-          <>
-            <Text>
-              Order status:{" "}
-              <span className="text-ui-fg-subtle " data-testid="order-status">
-                {formatStatus(order.fulfillment_status)}
-              </span>
-            </Text>
-            <Text>
-              Payment status:{" "}
-              <span
-                className="text-ui-fg-subtle "
-                sata-testid="order-payment-status"
-              >
-                {formatStatus(order.payment_status)}
-              </span>
-            </Text>
-          </>
-        )}
-      </div>
+      {showStatus && (
+        <div className="flex flex-wrap items-center gap-4 mt-4">
+          <div className="flex items-center gap-2">
+            <span className="text-small-regular text-ui-fg-muted">
+              {isVi ? "Trạng thái đơn hàng:" : "Order status:"}
+            </span>
+            <Badge size="small" color={fulfillmentInfo.color} data-testid="order-status">
+              {fulfillmentInfo.label}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-small-regular text-ui-fg-muted">
+              {isVi ? "Trạng thái thanh toán:" : "Payment status:"}
+            </span>
+            <Badge size="small" color={paymentInfo.color} data-testid="order-payment-status">
+              {paymentInfo.label}
+            </Badge>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 export default OrderDetails
+

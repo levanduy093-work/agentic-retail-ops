@@ -6,6 +6,7 @@ import { HttpTypes } from "@medusajs/types"
 import { FetchError } from "@medusajs/js-sdk"
 import { revalidateTag } from "next/cache"
 import { redirect } from "next/navigation"
+import { isSameAddress } from "@lib/util/compare-addresses"
 import { cache } from "react"
 import {
   getAuthHeaders,
@@ -444,17 +445,25 @@ export const addCustomerAddress = async (
   const isDefaultBilling = (currentState.isDefaultBilling as boolean) || false
   const isDefaultShipping = (currentState.isDefaultShipping as boolean) || false
 
+  const phone = (formData.get("phone") as string)?.trim()
+  if (!phone) {
+    return {
+      success: false,
+      error: "Số điện thoại là bắt buộc để liên hệ giao hàng.",
+    }
+  }
+
   const address = {
-    first_name: formData.get("first_name") as string,
-    last_name: formData.get("last_name") as string,
-    company: formData.get("company") as string,
-    address_1: formData.get("address_1") as string,
-    address_2: formData.get("address_2") as string,
-    city: formData.get("city") as string,
-    postal_code: formData.get("postal_code") as string,
-    province: formData.get("province") as string,
-    country_code: formData.get("country_code") as string,
-    phone: formData.get("phone") as string,
+    first_name: (formData.get("first_name") as string)?.trim() || "",
+    last_name: (formData.get("last_name") as string)?.trim() || "",
+    company: (formData.get("company") as string)?.trim() || "",
+    address_1: (formData.get("address_1") as string)?.trim() || "",
+    address_2: (formData.get("address_2") as string)?.trim() || "",
+    city: (formData.get("city") as string)?.trim() || "",
+    postal_code: (formData.get("postal_code") as string)?.trim() || "700000",
+    province: (formData.get("province") as string)?.trim() || "",
+    country_code: (formData.get("country_code") as string)?.trim().toLowerCase() || "vn",
+    phone: phone,
     metadata: getShippingMetadata(formData),
     is_default_billing: isDefaultBilling,
     is_default_shipping: isDefaultShipping,
@@ -462,6 +471,37 @@ export const addCustomerAddress = async (
 
   const headers = {
     ...(await getAuthHeaders()),
+  }
+
+  // Check for duplicate in existing addresses
+  const customer = await sdk.client
+    .fetch<{ customer: HttpTypes.StoreCustomer }>("/store/customers/me", {
+      method: "GET",
+      query: { fields: "*addresses,+addresses.metadata" },
+      headers,
+      cache: "no-store",
+    })
+    .then(({ customer }) => customer)
+    .catch(() => null)
+
+  if (customer?.addresses) {
+    const existing = customer.addresses.find((saved) => isSameAddress(saved, address))
+    if (existing) {
+      // Update existing record rather than creating a duplicate
+      await sdk.store.customer.updateAddress(
+        existing.id,
+        {
+          ...address,
+          is_default_shipping: isDefaultShipping || existing.is_default_shipping,
+          is_default_billing: isDefaultBilling || existing.is_default_billing,
+        },
+        {},
+        headers
+      )
+      const customerCacheTag = await getCacheTag("customers")
+      revalidateTag(customerCacheTag)
+      return { success: true, error: null }
+    }
   }
 
   return sdk.store.customer
@@ -507,34 +547,26 @@ export const saveCustomerShippingAddress = async (
     .then(({ customer }) => customer)
     .catch(() => null)
 
-  if (!customer) {
+  if (!customer || !customer.addresses) {
     return
   }
 
   const existingAddress = customer.addresses.find((savedAddress) =>
-    [
-      "first_name",
-      "last_name",
-      "address_1",
-      "address_2",
-      "company",
-      "postal_code",
-      "city",
-      "country_code",
-      "province",
-      "phone",
-    ].every(
-      (field) =>
-        savedAddress[field as keyof HttpTypes.StoreCustomerAddress] ===
-        address[field as keyof HttpTypes.StoreCreateCustomerAddress]
-    )
+    isSameAddress(savedAddress, address)
   )
 
   if (existingAddress) {
+    // Preserve existing ID and update any newer fields/metadata without creating a duplicate
+    const mergedMetadata = {
+      ...(existingAddress.metadata as Record<string, unknown> || {}),
+      ...(address.metadata as Record<string, unknown> || {}),
+    }
+
     await sdk.store.customer.updateAddress(
       existingAddress.id,
       {
         ...address,
+        metadata: Object.keys(mergedMetadata).length > 0 ? mergedMetadata : undefined,
         is_default_shipping: existingAddress.is_default_shipping,
         is_default_billing: existingAddress.is_default_billing,
       },
@@ -583,24 +615,27 @@ export const updateCustomerAddress = async (
     return { success: false, error: "Address ID is required" }
   }
 
+  const phone = (formData.get("phone") as string)?.trim()
+  if (!phone) {
+    return {
+      success: false,
+      error: "Số điện thoại là bắt buộc để liên hệ giao hàng.",
+    }
+  }
+
   const address = {
-    first_name: formData.get("first_name") as string,
-    last_name: formData.get("last_name") as string,
-    company: formData.get("company") as string,
-    address_1: formData.get("address_1") as string,
-    address_2: formData.get("address_2") as string,
-    city: formData.get("city") as string,
-    postal_code: formData.get("postal_code") as string,
-    province: formData.get("province") as string,
-    country_code: formData.get("country_code") as string,
+    first_name: (formData.get("first_name") as string)?.trim() || "",
+    last_name: (formData.get("last_name") as string)?.trim() || "",
+    company: (formData.get("company") as string)?.trim() || "",
+    address_1: (formData.get("address_1") as string)?.trim() || "",
+    address_2: (formData.get("address_2") as string)?.trim() || "",
+    city: (formData.get("city") as string)?.trim() || "",
+    postal_code: (formData.get("postal_code") as string)?.trim() || "700000",
+    province: (formData.get("province") as string)?.trim() || "",
+    country_code: (formData.get("country_code") as string)?.trim().toLowerCase() || "vn",
+    phone: phone,
     metadata: getShippingMetadata(formData),
   } as HttpTypes.StoreUpdateCustomerAddress
-
-  const phone = formData.get("phone") as string
-
-  if (phone) {
-    address.phone = phone
-  }
 
   const headers = {
     ...(await getAuthHeaders()),
@@ -617,3 +652,4 @@ export const updateCustomerAddress = async (
       return { success: false, error: err.toString() }
     })
 }
+

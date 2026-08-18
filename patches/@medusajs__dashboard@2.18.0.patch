@@ -1,0 +1,92 @@
+diff --git a/dist/app.js b/dist/app.js
+index c954aa5b0d99edecab81c0da09c3dbc5ba2a652c..890e4b91bc3a505980b2f8739fab751536237ae5 100644
+--- a/dist/app.js
++++ b/dist/app.js
+@@ -118741,6 +118741,9 @@ function calculateRequiredFields(apiColumns, visibleColumns) {
+     if (column.render_mode === "select" || column.render_mode === "actions") {
+       return;
+     }
++    if (column.render_mode === "currency" || column.dataType === "currency") {
++      requiredFieldsSet.add("currency_code");
++    }
+     if (column.computed) {
+       column.computed.required_fields?.forEach(
+         (field) => requiredFieldsSet.add(field)
+@@ -122255,7 +122258,7 @@ var init_cell_renderers = __esm({
+       return /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(DisplayIdCell, { displayId: value });
+     };
+     CurrencyRenderer = (value, row, _column, _t) => {
+-      return /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(TotalCell, { currencyCode: row.currency_code || "USD", total: value });
++      return /* @__PURE__ */ (0, import_jsx_runtime75.jsx)(TotalCell, { currencyCode: row.currency_code || "VND", total: value });
+     };
+     NumberRenderer = (value, _row, _column, _t) => {
+       if (isEmpty(value)) {
+diff --git a/dist/chunk-IHA2XWHD.mjs b/dist/chunk-IHA2XWHD.mjs
+index e6e3debe1c3306be5147bc2e8f02d25a100f53f3..948403f0917ce851ec05caabc8beaa8b7dddc75d 100644
+--- a/dist/chunk-IHA2XWHD.mjs
++++ b/dist/chunk-IHA2XWHD.mjs
+@@ -236,7 +236,7 @@ var DisplayIdRenderer = (value, _row, _column, _t) => {
+   return /* @__PURE__ */ jsx(DisplayIdCell, { displayId: value });
+ };
+ var CurrencyRenderer = (value, row, _column, _t) => {
+-  return /* @__PURE__ */ jsx(TotalCell, { currencyCode: row.currency_code || "USD", total: value });
++  return /* @__PURE__ */ jsx(TotalCell, { currencyCode: row.currency_code || "VND", total: value });
+ };
+ var NumberRenderer = (value, _row, _column, _t) => {
+   if (isEmpty(value)) {
+diff --git a/dist/chunk-YBQ5L5LG.mjs b/dist/chunk-YBQ5L5LG.mjs
+index 5485c6aff02119d7e8ec90a0bbdc9496fc912b38..94cc4b8f0f7cef45f51251f6373c845af556a65b 100644
+--- a/dist/chunk-YBQ5L5LG.mjs
++++ b/dist/chunk-YBQ5L5LG.mjs
+@@ -233,6 +233,9 @@ function calculateRequiredFields(apiColumns, visibleColumns) {
+     if (column.render_mode === "select" || column.render_mode === "actions") {
+       return;
+     }
++    if (column.render_mode === "currency" || column.dataType === "currency") {
++      requiredFieldsSet.add("currency_code");
++    }
+     if (column.computed) {
+       column.computed.required_fields?.forEach(
+         (field) => requiredFieldsSet.add(field)
+diff --git a/dist/components.js b/dist/components.js
+index c5e00d8ee8258b0a64c95975948c21402ec98ce5..5e79bd93149d8fe65fca4e005398311b324cc2d0 100644
+--- a/dist/components.js
++++ b/dist/components.js
+@@ -6109,7 +6109,7 @@ var DisplayIdRenderer = (value, _row, _column, _t) => {
+   return /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(DisplayIdCell, { displayId: value });
+ };
+ var CurrencyRenderer = (value, row, _column, _t) => {
+-  return /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(TotalCell, { currencyCode: row.currency_code || "USD", total: value });
++  return /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(TotalCell, { currencyCode: row.currency_code || "VND", total: value });
+ };
+ var NumberRenderer = (value, _row, _column, _t) => {
+   if (isEmpty(value)) {
+diff --git a/dist/lib.js b/dist/lib.js
+index c960e353859487a2d411bf4743075992b6bc9477..e8b384ce8ae24e85c3c469494d678234628f7092 100644
+--- a/dist/lib.js
++++ b/dist/lib.js
+@@ -3348,7 +3348,7 @@ var DisplayIdRenderer = (value, _row, _column, _t) => {
+   return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(DisplayIdCell, { displayId: value });
+ };
+ var CurrencyRenderer = (value, row, _column, _t) => {
+-  return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(TotalCell, { currencyCode: row.currency_code || "USD", total: value });
++  return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(TotalCell, { currencyCode: row.currency_code || "VND", total: value });
+ };
+ var NumberRenderer = (value, _row, _column, _t) => {
+   if (isEmpty(value)) {
+diff --git a/dist/order-list-ZV7EMZ4A.mjs b/dist/order-list-ZV7EMZ4A.mjs
+index 4551773191083ef7bbd4a43dc82af808fa51b457..15bb1433371bc8da2818cf0048acaca3688c6ec0 100644
+--- a/dist/order-list-ZV7EMZ4A.mjs
++++ b/dist/order-list-ZV7EMZ4A.mjs
+@@ -239,9 +239,10 @@ function createOrderTableAdapter() {
+       });
+     },
+     useData: (fields, params) => {
++      const resolvedFields = fields ? (Array.isArray(fields) ? (fields.includes("currency_code") ? fields : [...fields, "currency_code"]) : (fields.includes("currency_code") ? fields : `${fields},currency_code`)) : fields;
+       const { orders, count, isError, error, isLoading } = useOrders(
+         {
+-          fields,
++          fields: resolvedFields,
+           ...params
+         },
+         {

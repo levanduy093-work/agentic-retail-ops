@@ -129,9 +129,16 @@ export class PayosPaymentProviderService extends AbstractPaymentProvider<PayosPr
 
   async authorizePayment(input: AuthorizePaymentInput): Promise<AuthorizePaymentOutput> {
     const status = await this.getPaymentStatus(input)
+    if (status.status === "captured" || status.status === "authorized") {
+      return status
+    }
+
     return {
-      status: status.status,
-      data: input.data || {},
+      status: "authorized",
+      data: {
+        ...(input.data || {}),
+        authorized_at: new Date().toISOString(),
+      },
     }
   }
 

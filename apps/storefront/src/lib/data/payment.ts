@@ -4,6 +4,17 @@ import { sdk } from "@lib/config"
 import { getAuthHeaders, getCacheOptions } from "./cookies"
 import { HttpTypes } from "@medusajs/types"
 
+export type PayosPaymentStatusResponse = {
+  success: boolean
+  orderCode?: number
+  status?: "PENDING" | "PAID" | "CANCELLED" | "EXPIRED"
+  is_paid?: boolean
+  amount?: number
+  amount_paid?: number
+  amount_remaining?: number
+  message?: string
+}
+
 export const listCartPaymentMethods = async (regionId: string) => {
   const headers = {
     ...(await getAuthHeaders()),
@@ -20,8 +31,8 @@ export const listCartPaymentMethods = async (regionId: string) => {
         method: "GET",
         query: { region_id: regionId },
         headers,
-        next,
-        cache: "force-cache",
+        next: { ...next, revalidate: 0 },
+        cache: "no-store",
       }
     )
     .then(({ payment_providers }) =>
@@ -32,4 +43,24 @@ export const listCartPaymentMethods = async (regionId: string) => {
     .catch(() => {
       return null
     })
+}
+
+export const checkPayosPaymentStatus = async (
+  orderCode: number | string
+): Promise<PayosPaymentStatusResponse | null> => {
+  const headers = {
+    ...(await getAuthHeaders()),
+  }
+
+  return sdk.client
+    .fetch<PayosPaymentStatusResponse>(
+      `/store/payos/check-payment/${orderCode}`,
+      {
+        method: "GET",
+        headers,
+        cache: "no-store",
+      }
+    )
+    .then((res) => res)
+    .catch(() => null)
 }

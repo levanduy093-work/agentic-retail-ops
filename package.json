@@ -29,7 +29,8 @@
     },
     "patchedDependencies": {
       "@medusajs/order@2.18.0": "patches/@medusajs__order@2.18.0.patch",
-      "@medusajs/medusa@2.18.0": "patches/@medusajs__medusa@2.18.0.patch"
+      "@medusajs/medusa@2.18.0": "patches/@medusajs__medusa@2.18.0.patch",
+      "@medusajs/dashboard@2.18.0": "patches/@medusajs__dashboard@2.18.0.patch"
     }
   },
   "devDependencies": {

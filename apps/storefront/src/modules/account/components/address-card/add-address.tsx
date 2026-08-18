@@ -132,6 +132,7 @@ const AddAddress = ({
                 label={t("account.phone")}
                 name="phone"
                 autoComplete="phone"
+                required
                 data-testid="phone-input"
               />
             </div>

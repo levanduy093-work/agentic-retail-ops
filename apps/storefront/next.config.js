@@ -15,13 +15,13 @@ const nextConfig = {
   reactStrictMode: true,
   devIndicators: false,
   serverExternalPackages: [
-    "@floating-ui/react",
     "@medusajs/js-sdk",
     "@medusajs/types",
   ],
   transpilePackages: [
     "@medusajs/icons",
     "@medusajs/ui-preset",
+    "@headlessui/react",
   ],
   logging: {
     fetches: {

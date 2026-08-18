@@ -3,12 +3,11 @@ import { Container } from "@modules/common/components/ui"
 import Checkbox from "@modules/common/components/checkbox"
 import Input from "@modules/common/components/input"
 import { mapKeys } from "lodash"
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useState } from "react"
 import AddressSelect from "../address-select"
 import CountrySelect from "../country-select"
 import VietnamAddressSelect from "../vietnam-address-select"
 import { useTranslation } from "@lib/i18n/client"
-
 
 const ShippingAddress = ({
   customer,
@@ -23,79 +22,107 @@ const ShippingAddress = ({
 }) => {
   const t = useTranslation()
   const [formData, setFormData] = useState<Record<string, string>>({
-    "shipping_address.first_name": cart?.shipping_address?.first_name || "",
-    "shipping_address.last_name": cart?.shipping_address?.last_name || "",
+    "shipping_address.first_name": cart?.shipping_address?.first_name || customer?.first_name || "",
+    "shipping_address.last_name": cart?.shipping_address?.last_name || customer?.last_name || "",
     "shipping_address.address_1": cart?.shipping_address?.address_1 || "",
     "shipping_address.company": cart?.shipping_address?.company || "",
-    "shipping_address.postal_code": cart?.shipping_address?.postal_code || "",
+    "shipping_address.postal_code": cart?.shipping_address?.postal_code || "700000",
     "shipping_address.city": cart?.shipping_address?.city || "",
-    "shipping_address.country_code": cart?.shipping_address?.country_code || "",
+    "shipping_address.country_code": cart?.shipping_address?.country_code?.toLowerCase() || "vn",
     "shipping_address.province": cart?.shipping_address?.province || "",
-    "shipping_address.phone": cart?.shipping_address?.phone || "",
-    email: cart?.email || "",
+    "shipping_address.phone": cart?.shipping_address?.phone || customer?.phone || "",
+    email: cart?.email || customer?.email || "",
   })
   const [selectedAddressMetadata, setSelectedAddressMetadata] = useState<
     Record<string, unknown> | undefined
   >(cart?.shipping_address?.metadata as Record<string, unknown> | undefined)
 
   const countriesInRegion = useMemo(
-    () => cart?.region?.countries?.map((c) => c.iso_2),
+    () => cart?.region?.countries?.map((c) => c.iso_2?.toLowerCase()),
     [cart?.region]
   )
 
   // check if customer has saved addresses that are in the current region
   const addressesInRegion = useMemo(
     () =>
-      customer?.addresses.filter(
-        (a) => a.country_code && countriesInRegion?.includes(a.country_code)
-      ),
+      customer?.addresses?.filter(
+        (a) =>
+          a.country_code &&
+          countriesInRegion?.includes(a.country_code?.toLowerCase())
+      ) || [],
     [customer?.addresses, countriesInRegion]
   )
 
-  const setFormAddress = (
-    address?: HttpTypes.StoreCartAddress,
-    email?: string
-  ) => {
-    if (address) {
-      setSelectedAddressMetadata(
-        address.metadata as Record<string, unknown> | undefined
-      )
-      setFormData((prevState: Record<string, string>) => ({
-        ...prevState,
-        "shipping_address.first_name": address?.first_name || "",
-        "shipping_address.last_name": address?.last_name || "",
-        "shipping_address.address_1": address?.address_1 || "",
-        "shipping_address.company": address?.company || "",
-        "shipping_address.postal_code": address?.postal_code || "",
-        "shipping_address.city": address?.city || "",
-        "shipping_address.country_code": address?.country_code || "",
-        "shipping_address.province": address?.province || "",
-        "shipping_address.phone": address?.phone || "",
-      }))
-    }
+  const setFormAddress = useCallback(
+    (address?: HttpTypes.StoreCartAddress, email?: string) => {
+      if (address) {
+        setSelectedAddressMetadata(
+          address.metadata as Record<string, unknown> | undefined
+        )
+        setFormData((prevState: Record<string, string>) => ({
+          ...prevState,
+          "shipping_address.first_name": address.first_name || "",
+          "shipping_address.last_name": address.last_name || "",
+          "shipping_address.address_1": address.address_1 || "",
+          "shipping_address.company": address.company || "",
+          "shipping_address.postal_code": address.postal_code || "700000",
+          "shipping_address.city": address.city || "",
+          "shipping_address.country_code": address.country_code?.toLowerCase() || "vn",
+          "shipping_address.province": address.province || "",
+          "shipping_address.phone": address.phone || "",
+        }))
+      } else {
+        setSelectedAddressMetadata(undefined)
+        setFormData((prevState: Record<string, string>) => ({
+          ...prevState,
+          "shipping_address.first_name": customer?.first_name || "",
+          "shipping_address.last_name": customer?.last_name || "",
+          "shipping_address.address_1": "",
+          "shipping_address.company": "",
+          "shipping_address.postal_code": "700000",
+          "shipping_address.city": "",
+          "shipping_address.country_code": "vn",
+          "shipping_address.province": "",
+          "shipping_address.phone": customer?.phone || "",
+        }))
+      }
 
-    if (email) {
-      setFormData((prevState: Record<string, string>) => ({
-        ...prevState,
-        email: email,
-      }))
-    }
-  }
+      if (email) {
+        setFormData((prevState: Record<string, string>) => ({
+          ...prevState,
+          email: email,
+        }))
+      }
+    },
+    [customer?.first_name, customer?.last_name, customer?.phone]
+  )
 
   useEffect(() => {
-    // Ensure cart is not null and has a shipping_address before setting form data
-    if (cart && cart.shipping_address) {
-      setFormAddress(cart?.shipping_address, cart?.email)
+    // If cart has an existing shipping address, populate it
+    if (cart && cart.shipping_address && cart.shipping_address.address_1) {
+      setFormAddress(cart.shipping_address, cart.email)
+      return
+    }
+
+    // If cart has no shipping address, auto-select default / first saved address
+    if (customer && addressesInRegion && addressesInRegion.length > 0) {
+      const defaultAddr =
+        addressesInRegion.find((a) => a.is_default_shipping) ||
+        addressesInRegion[0]
+      if (defaultAddr) {
+        setFormAddress(defaultAddr as HttpTypes.StoreCartAddress, customer.email || cart?.email)
+        return
+      }
     }
 
     if (cart && !cart.email && customer?.email) {
       setFormAddress(undefined, customer.email)
     }
-  }, [cart]) // Add cart as a dependency
+  }, [cart, customer, addressesInRegion, setFormAddress])
 
   const handleChange = (
     e: React.ChangeEvent<
-      HTMLInputElement | HTMLInputElement | HTMLSelectElement
+      HTMLInputElement | HTMLSelectElement
     >
   ) => {
     setFormData({
@@ -106,13 +133,18 @@ const ShippingAddress = ({
 
   return (
     <>
-      {customer && (addressesInRegion?.length || 0) > 0 && (
-        <Container className="mb-6 flex flex-col gap-y-4 p-5">
-          <p className="text-small-regular">
-            {t("account.hello", { name: customer.first_name || "" })}
-          </p>
+      {customer && (addressesInRegion.length > 0) && (
+        <Container className="mb-6 flex flex-col gap-y-3 p-5 bg-ui-bg-subtle border border-ui-border-base rounded-rounded">
+          <div className="flex justify-between items-center">
+            <span className="text-small-semi text-ui-fg-base font-semibold">
+              {t("checkout.saved_addresses_title")}
+            </span>
+            <span className="text-small-regular text-ui-fg-subtle">
+              {t("account.hello", { name: customer.first_name || "" })}
+            </span>
+          </div>
           <AddressSelect
-            addresses={customer.addresses}
+            addresses={addressesInRegion}
             addressInput={
               mapKeys(formData, (_, key) =>
                 key.replace("shipping_address.", "")
@@ -241,6 +273,7 @@ const ShippingAddress = ({
           autoComplete="tel"
           value={formData["shipping_address.phone"]}
           onChange={handleChange}
+          required
           data-testid="shipping-phone-input"
         />
       </div>
@@ -249,3 +282,4 @@ const ShippingAddress = ({
 }
 
 export default ShippingAddress
+

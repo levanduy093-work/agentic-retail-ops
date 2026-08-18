@@ -134,7 +134,12 @@
     "gift_card": "Thẻ quà tặng",
     "another_step_payment": "Bước thanh toán tiếp theo sẽ xuất hiện",
     "pickup_store": "Cửa hàng",
-    "choose_store_near_you": "Chọn cửa hàng gần bạn"
+    "choose_store_near_you": "Chọn cửa hàng gần bạn",
+    "saved_addresses_title": "Địa chỉ giao hàng đã lưu",
+    "choose_saved_address": "Chọn địa chỉ giao hàng",
+    "new_shipping_address": "+ Nhập địa chỉ mới",
+    "default_badge": "Mặc định",
+    "phone_required_error": "Số điện thoại là bắt buộc để liên hệ giao hàng."
   },
   "order": {
     "thank_you": "Cảm ơn bạn!",
@@ -156,7 +161,11 @@
     "complete_setup_admin_desc": "Bạn có thể hoàn tất cài đặt cửa hàng trong trang quản trị ngay bây giờ.",
     "test_order_created": "Đơn hàng thử nghiệm của bạn đã được tạo thành công! 🎉",
     "paid_at": "đã thanh toán lúc",
-    "payment_created_at": "đã tạo thanh toán lúc"
+    "payment_created_at": "đã tạo thanh toán lúc",
+    "pay_now": "Thanh toán ngay",
+    "continue_payment": "Tiếp tục thanh toán",
+    "unpaid_order_alert": "Đơn hàng này chưa hoàn tất thanh toán. Vui lòng thanh toán để đơn hàng được đóng gói và giao hàng sớm nhất.",
+    "vietqr_payment_title": "Thanh toán VietQR PayOS"
   },
   "collection": {
     "view_all": "Xem tất cả"

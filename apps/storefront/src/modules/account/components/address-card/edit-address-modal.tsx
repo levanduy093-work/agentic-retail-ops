@@ -206,6 +206,7 @@ const EditAddress: React.FC<EditAddressProps> = ({
                 label={t("account.phone")}
                 name="phone"
                 autoComplete="phone"
+                required
                 defaultValue={address.phone || undefined}
                 data-testid="phone-input"
               />

@@ -4,6 +4,7 @@ import {
   StepResponse,
   WorkflowResponse,
 } from "@medusajs/framework/workflows-sdk"
+import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
 import { PAYMENT_HUB_MODULE } from "../../modules/payment-hub"
 import type PaymentHubModuleService from "../../modules/payment-hub/service"
 import {
@@ -106,6 +107,34 @@ export const configurePayosProviderStep = createStep(
     }
 
     PaymentProviderRegistry.remove("PAYOS")
+
+    if (input.is_enabled) {
+      try {
+        const query = container.resolve(ContainerRegistrationKeys.QUERY)
+        const link = container.resolve(ContainerRegistrationKeys.LINK)
+        const { data: regions } = await query.graph({
+          entity: "region",
+          fields: ["id", "payment_providers.*"],
+        })
+        for (const region of regions) {
+          const hasPayos = (region as any).payment_providers?.some(
+            (p: any) => p.id === "pp_payos_payos"
+          )
+          if (!hasPayos) {
+            await link.create({
+              [Modules.REGION]: {
+                region_id: region.id,
+              },
+              [Modules.PAYMENT]: {
+                payment_provider_id: "pp_payos_payos",
+              },
+            })
+          }
+        }
+      } catch {
+        // Fall through
+      }
+    }
 
     const result = {
       code: "PAYOS",

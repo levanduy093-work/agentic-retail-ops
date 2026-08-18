@@ -77,24 +77,21 @@ const VietnamAddressSelect = ({
   const [loadingDistricts, setLoadingDistricts] = useState(false)
   const [loadingWards, setLoadingWards] = useState(false)
 
-  // Sync state if initial props change (e.g. user chooses a different saved address)
+  // Sync province when initial props or provinces list changes
   useEffect(() => {
     if (initialMetadata?.ghn_province_id) {
       setSelectedProvinceId(Number(initialMetadata.ghn_province_id))
-    } else {
+    } else if (initialProvince && provinces.length > 0) {
+      const found = provinces.find(
+        (p) =>
+          p.name.toLowerCase().includes(initialProvince.toLowerCase()) ||
+          initialProvince.toLowerCase().includes(p.name.toLowerCase())
+      )
+      setSelectedProvinceId(found ? found.id : "")
+    } else if (!initialProvince && !initialMetadata) {
       setSelectedProvinceId("")
     }
-    if (initialMetadata?.ghn_district_id) {
-      setSelectedDistrictId(Number(initialMetadata.ghn_district_id))
-    } else {
-      setSelectedDistrictId("")
-    }
-    if (initialMetadata?.ghn_ward_code) {
-      setSelectedWardCode(String(initialMetadata.ghn_ward_code))
-    } else {
-      setSelectedWardCode("")
-    }
-  }, [initialMetadata])
+  }, [initialMetadata, initialProvince, provinces])
 
   // 1. Fetch Provinces on Mount
   useEffect(() => {
@@ -104,20 +101,11 @@ const VietnamAddressSelect = ({
       .then((res) => {
         if (res?.provinces) {
           setProvinces(res.provinces)
-          // If initialProvince was passed by name and no ID was set, match by name
-          if (!selectedProvinceId && initialProvince) {
-            const found = res.provinces.find(
-              (p) =>
-                p.name.toLowerCase().includes(initialProvince.toLowerCase()) ||
-                initialProvince.toLowerCase().includes(p.name.toLowerCase()),
-            )
-            if (found) setSelectedProvinceId(found.id)
-          }
         }
       })
       .catch(() => {})
       .finally(() => setLoadingProvinces(false))
-  }, [initialProvince])
+  }, [])
 
   // 2. Fetch Districts when Province changes
   useEffect(() => {
@@ -132,18 +120,22 @@ const VietnamAddressSelect = ({
     setLoadingDistricts(true)
     sdk.client
       .fetch<{ districts: District[] }>(
-        `/store/vietnam-address/districts?province_id=${selectedProvinceId}`,
+        `/store/vietnam-address/districts?province_id=${selectedProvinceId}`
       )
       .then((res) => {
         if (res?.districts) {
           setDistricts(res.districts)
-          if (!selectedDistrictId && initialCity) {
+          if (initialMetadata?.ghn_district_id) {
+            setSelectedDistrictId(Number(initialMetadata.ghn_district_id))
+          } else if (initialCity) {
             const found = res.districts.find(
               (d) =>
                 d.name.toLowerCase().includes(initialCity.toLowerCase()) ||
+                initialCity.toLowerCase().includes(d.name.toLowerCase()) ||
                 d.extensions?.some((ext) =>
-                  ext.toLowerCase().includes(initialCity.toLowerCase()),
-                ),
+                  ext.toLowerCase().includes(initialCity.toLowerCase()) ||
+                  initialCity.toLowerCase().includes(ext.toLowerCase())
+                )
             )
             if (found) setSelectedDistrictId(found.id)
           }
@@ -151,7 +143,7 @@ const VietnamAddressSelect = ({
       })
       .catch(() => {})
       .finally(() => setLoadingDistricts(false))
-  }, [selectedProvinceId, initialCity])
+  }, [selectedProvinceId, initialCity, initialMetadata?.ghn_district_id])
 
   // 3. Fetch Wards when District changes
   useEffect(() => {
@@ -164,41 +156,53 @@ const VietnamAddressSelect = ({
     setLoadingWards(true)
     sdk.client
       .fetch<{ wards: Ward[] }>(
-        `/store/vietnam-address/wards?district_id=${selectedDistrictId}`,
+        `/store/vietnam-address/wards?district_id=${selectedDistrictId}`
       )
       .then((res) => {
         if (res?.wards) {
           setWards(res.wards)
+          if (initialMetadata?.ghn_ward_code) {
+            setSelectedWardCode(String(initialMetadata.ghn_ward_code))
+          } else if (initialAddress1) {
+            const found = res.wards.find((w) =>
+              initialAddress1.toLowerCase().includes(w.name.toLowerCase())
+            )
+            if (found) setSelectedWardCode(found.code)
+          }
         }
       })
       .catch(() => {})
       .finally(() => setLoadingWards(false))
-  }, [selectedDistrictId])
+  }, [selectedDistrictId, initialAddress1, initialMetadata?.ghn_ward_code])
 
   // Current Names
   const currentProvince = provinces.find(
-    (p) => p.id === Number(selectedProvinceId),
+    (p) => p.id === Number(selectedProvinceId)
   )
   const currentDistrict = districts.find(
-    (d) => d.id === Number(selectedDistrictId),
+    (d) => d.id === Number(selectedDistrictId)
   )
   const currentWard = wards.find((w) => w.code === selectedWardCode)
 
   useEffect(() => {
-    if (!initialAddress1) return
+    if (!initialAddress1) {
+      setStreetAddress("")
+      return
+    }
 
     const wardName = wards.find(
-      (ward) => ward.code === String(initialMetadata?.ghn_ward_code || ""),
+      (ward) => ward.code === String(selectedWardCode || initialMetadata?.ghn_ward_code || "")
     )?.name
     const repeatedWardSuffix = wardName
       ? new RegExp(
           `(?:,\\s*${wardName.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")})+$`,
-          "i",
+          "i"
         )
       : null
 
-    setStreetAddress(initialAddress1.replace(repeatedWardSuffix || /$^/, ""))
-  }, [initialAddress1, initialMetadata?.ghn_ward_code, wards])
+    setStreetAddress(initialAddress1.replace(repeatedWardSuffix || /$^/, "").trim())
+  }, [initialAddress1, initialMetadata?.ghn_ward_code, selectedWardCode, wards])
+
 
   const handleProvinceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value ? Number(e.target.value) : ""

@@ -197,7 +197,17 @@ const Payment = ({
 
         <div className={isOpen ? "hidden" : "block"}>
           {cart && paymentReady && activeSession ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-5 sm:p-6 shadow-xs">
+            <div
+              className={clx(
+                "rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-5 sm:p-6 shadow-xs",
+                {
+                  "grid grid-cols-1 md:grid-cols-2 gap-6":
+                    isStripeLike(selectedPaymentMethod) && cardBrand,
+                  "flex flex-col":
+                    !isStripeLike(selectedPaymentMethod) || !cardBrand,
+                }
+              )}
+            >
               <div className="flex flex-col justify-start">
                 <Text className="text-xs font-semibold uppercase tracking-wider text-ui-fg-muted mb-3">
                   {t("checkout.payment_method")}
@@ -221,21 +231,20 @@ const Payment = ({
                   </Text>
                 </div>
               </div>
-              <div className="flex flex-col justify-start border-t border-neutral-200/70 pt-4 md:border-t-0 md:border-l md:border-neutral-200/80 md:pt-0 md:pl-6">
-                <Text className="text-xs font-semibold uppercase tracking-wider text-ui-fg-muted mb-3">
-                  {t("checkout.payment_details")}
-                </Text>
-                <div
-                  className="flex h-11 items-center text-sm text-ui-fg-base font-medium"
-                  data-testid="payment-details-summary"
-                >
-                  <Text>
-                    {isStripeLike(selectedPaymentMethod) && cardBrand
-                      ? cardBrand
-                      : t("checkout.another_step_payment")}
+
+              {isStripeLike(selectedPaymentMethod) && cardBrand && (
+                <div className="flex flex-col justify-start border-t border-neutral-200/70 pt-4 md:border-t-0 md:border-l md:border-neutral-200/80 md:pt-0 md:pl-6">
+                  <Text className="text-xs font-semibold uppercase tracking-wider text-ui-fg-muted mb-3">
+                    {t("checkout.payment_details")}
                   </Text>
+                  <div
+                    className="flex h-11 items-center text-sm text-ui-fg-base font-medium"
+                    data-testid="payment-details-summary"
+                  >
+                    <Text>{cardBrand}</Text>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           ) : paidByGiftcard ? (
             <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-5 sm:p-6 shadow-xs">

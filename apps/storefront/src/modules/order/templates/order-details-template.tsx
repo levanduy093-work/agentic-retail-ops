@@ -8,6 +8,7 @@ import Items from "@modules/order/components/items"
 import OrderDetails from "@modules/order/components/order-details"
 import OrderSummary from "@modules/order/components/order-summary"
 import ShippingDetails from "@modules/order/components/shipping-details"
+import PaymentDetails from "@modules/order/components/payment-details"
 import React from "react"
 import { useTranslation } from "@lib/i18n/client"
 
@@ -39,6 +40,7 @@ const OrderDetailsTemplate: React.FC<OrderDetailsTemplateProps> = ({
         <Items order={order} />
         <ShippingDetails order={order} />
         <OrderSummary order={order} />
+        <PaymentDetails order={order} />
         <Help />
       </div>
     </div>

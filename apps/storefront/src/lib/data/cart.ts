@@ -361,6 +361,36 @@ export async function setAddresses(
       throw new Error("No existing cart found when setting addresses")
     }
 
+    const phone = (formData.get("shipping_address.phone") as string)?.trim()
+    if (!phone) {
+      return { error: "Số điện thoại là bắt buộc để liên hệ giao hàng." }
+    }
+
+    const firstName = (formData.get("shipping_address.first_name") as string)?.trim()
+    const lastName = (formData.get("shipping_address.last_name") as string)?.trim()
+    const address1 = (formData.get("shipping_address.address_1") as string)?.trim()
+    const countryCode = (
+      (formData.get("shipping_address.country_code") as string)?.trim() || "vn"
+    ).toLowerCase()
+    const email = (formData.get("email") as string)?.trim()
+
+    if (!firstName || !lastName) {
+      return { error: "Vui lòng nhập đầy đủ họ và tên người nhận." }
+    }
+    if (!address1) {
+      return { error: "Vui lòng nhập địa chỉ giao hàng." }
+    }
+    if (!email) {
+      return { error: "Vui lòng nhập địa chỉ email." }
+    }
+
+    const province = (formData.get("shipping_address.province") as string)?.trim() || ""
+    const city = (formData.get("shipping_address.city") as string)?.trim() || ""
+
+    if (countryCode === "vn" && (!province || !city)) {
+      return { error: "Vui lòng chọn Tỉnh/Thành phố và Quận/Huyện giao hàng." }
+    }
+
     const ghnProvinceId = formData.get(
       "shipping_address.metadata.ghn_province_id",
     )
@@ -375,42 +405,57 @@ export async function setAddresses(
     if (ghnWardCode) metadata.ghn_ward_code = String(ghnWardCode)
 
     const shippingAddress: HttpTypes.StoreCreateCustomerAddress = {
-        first_name: formData.get("shipping_address.first_name") as string,
-        last_name: formData.get("shipping_address.last_name") as string,
-        address_1: formData.get("shipping_address.address_1") as string,
-        address_2: "",
-        company: formData.get("shipping_address.company") as string,
-        postal_code: formData.get("shipping_address.postal_code") as string,
-        city: formData.get("shipping_address.city") as string,
-        country_code: formData.get("shipping_address.country_code") as string,
-        province: formData.get("shipping_address.province") as string,
-        phone: formData.get("shipping_address.phone") as string,
-        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+      first_name: firstName,
+      last_name: lastName,
+      address_1: address1,
+      address_2: "",
+      company: (formData.get("shipping_address.company") as string)?.trim() || "",
+      postal_code: (formData.get("shipping_address.postal_code") as string)?.trim() || "700000",
+      city: city,
+      country_code: countryCode,
+      province: province,
+      phone: phone,
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
     }
+
     const data: HttpTypes.StoreUpdateCart = {
       shipping_address: shippingAddress,
-      email: formData.get("email") as string,
+      email: email,
     }
 
     const sameAsBilling = formData.get("same_as_billing")
     if (sameAsBilling === "on") data.billing_address = data.shipping_address
 
-    if (sameAsBilling !== "on")
+    if (sameAsBilling !== "on") {
+      const billingPhone =
+        (formData.get("billing_address.phone") as string)?.trim() || phone
+
       data.billing_address = {
-        first_name: formData.get("billing_address.first_name") as string,
-        last_name: formData.get("billing_address.last_name") as string,
-        address_1: formData.get("billing_address.address_1") as string,
+        first_name:
+          (formData.get("billing_address.first_name") as string)?.trim() || firstName,
+        last_name:
+          (formData.get("billing_address.last_name") as string)?.trim() || lastName,
+        address_1:
+          (formData.get("billing_address.address_1") as string)?.trim() || address1,
         address_2: "",
-        company: formData.get("billing_address.company") as string,
-        postal_code: formData.get("billing_address.postal_code") as string,
-        city: formData.get("billing_address.city") as string,
-        country_code: formData.get("billing_address.country_code") as string,
-        province: formData.get("billing_address.province") as string,
-        phone: formData.get("billing_address.phone") as string,
+        company:
+          (formData.get("billing_address.company") as string)?.trim() || "",
+        postal_code:
+          (formData.get("billing_address.postal_code") as string)?.trim() || "700000",
+        city:
+          (formData.get("billing_address.city") as string)?.trim() || city,
+        country_code:
+          (formData.get("billing_address.country_code") as string)?.trim().toLowerCase() || countryCode,
+        province:
+          (formData.get("billing_address.province") as string)?.trim() || province,
+        phone: billingPhone,
       }
+    }
+
     await updateCart(data)
 
-    if (formData.get("save_to_customer") === "on") {
+    const saveToCustomer = formData.get("save_to_customer")
+    if (saveToCustomer === "on" || saveToCustomer === "true") {
       await saveCustomerShippingAddress(shippingAddress)
     }
 
@@ -419,6 +464,7 @@ export async function setAddresses(
     return { error: e instanceof Error ? e.message : String(e) }
   }
 }
+
 
 /**
  * Places an order for a cart. If no cart ID is provided, it will use the cart ID from the cookies.

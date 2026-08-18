@@ -134,7 +134,12 @@
     "gift_card": "Gift card",
     "another_step_payment": "Another step will appear",
     "pickup_store": "Store",
-    "choose_store_near_you": "Choose a store near you"
+    "choose_store_near_you": "Choose a store near you",
+    "saved_addresses_title": "Saved delivery addresses",
+    "choose_saved_address": "Choose delivery address",
+    "new_shipping_address": "+ Enter a new address",
+    "default_badge": "Default",
+    "phone_required_error": "Phone number is required for delivery contact."
   },
   "order": {
     "thank_you": "Thank you!",
@@ -156,7 +161,11 @@
     "complete_setup_admin_desc": "You can now complete setting up your store in the admin.",
     "test_order_created": "Your test order was successfully created! 🎉",
     "paid_at": "paid at",
-    "payment_created_at": "payment created at"
+    "payment_created_at": "payment created at",
+    "pay_now": "Pay Now",
+    "continue_payment": "Continue Payment",
+    "unpaid_order_alert": "This order has not been paid yet. Please complete payment so we can process and ship your order.",
+    "vietqr_payment_title": "VietQR PayOS Payment"
   },
   "collection": {
     "view_all": "View all"

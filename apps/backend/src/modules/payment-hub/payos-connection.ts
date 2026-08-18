@@ -20,7 +20,7 @@ export type PayosFullSettings = {
 }
 
 type StoredPaymentProvider = {
-  configuration: Record<string, unknown> | null
+  configuration: Record<string, unknown> | string | null
   encrypted_secret: string | null
   encryption_iv: string | null
   encryption_tag: string | null
@@ -39,7 +39,7 @@ const DEFAULT_SETTINGS: PayosFullSettings = {
   client_id: process.env.PAYOS_CLIENT_ID || "",
   api_key: process.env.PAYOS_API_KEY || "",
   checksum_key: process.env.PAYOS_CHECKSUM_KEY || "",
-  environment: (process.env.PAYOS_ENVIRONMENT as PayosEnvironment) || "sandbox",
+  environment: (process.env.PAYOS_ENVIRONMENT as PayosEnvironment) || "production",
   is_enabled: process.env.PAYOS_IS_ENABLED === "true",
   is_timeout_enabled: true,
   timeout_minutes: Number(process.env.PAYOS_TIMEOUT_MINUTES || "15"),
@@ -52,7 +52,9 @@ export async function getPayosSettings(
 ): Promise<PayosFullSettings> {
   const registered = PaymentProviderRegistry.get("PAYOS")
   if (registered) {
-    const config = registered.configuration || {}
+    const config = (typeof registered.configuration === "string" 
+      ? JSON.parse(registered.configuration) 
+      : registered.configuration) || {}
     return {
       client_id: String(config.client_id || DEFAULT_SETTINGS.client_id),
       api_key: registered.secret || DEFAULT_SETTINGS.api_key,
@@ -68,103 +70,123 @@ export async function getPayosSettings(
   }
 
   let paymentHub: PaymentHubModuleService | undefined
+  let pgConnection: any
+
   if (container) {
+    // 1. Try __pg_connection__ first from cradle / container
     try {
-      if (typeof (container as any).resolve === "function") {
-        paymentHub = (container as MedusaContainer).resolve<PaymentHubModuleService>(
-          PAYMENT_HUB_MODULE
-        )
-      }
+      pgConnection = (container as any).__pg_connection__
     } catch {
-      paymentHub = (container as Record<string, unknown>)[
-        PAYMENT_HUB_MODULE
-      ] as PaymentHubModuleService | undefined
+      // not available
+    }
+
+    // 2. Try paymentHub module
+    try {
+      paymentHub = (container as any)[PAYMENT_HUB_MODULE]
+    } catch {
+      // not available
     }
   }
 
-  if (!paymentHub) {
+  let connection: StoredPaymentProvider | undefined
+
+  if (paymentHub) {
+    try {
+      const [conn] = (await paymentHub.listPaymentProviderConnections({
+        code: "PAYOS",
+      })) as StoredPaymentProvider[]
+      connection = conn
+    } catch {
+      // Fall through to pgConnection
+    }
+  }
+
+  if (!connection && pgConnection) {
+    try {
+      const rows = await pgConnection("payment_provider_connection")
+        .where({ code: "PAYOS" })
+        .orderBy("created_at", "desc")
+        .limit(1)
+      connection = rows[0] as StoredPaymentProvider
+    } catch {
+      // Fall through
+    }
+  }
+
+  if (!connection) {
     return { ...DEFAULT_SETTINGS }
   }
 
-  try {
-    const [connection] = (await paymentHub.listPaymentProviderConnections({
-      code: "PAYOS",
-    })) as StoredPaymentProvider[]
+  let apiKey = ""
+  let checksumKey = ""
 
-    if (!connection) {
-      return { ...DEFAULT_SETTINGS }
+  if (
+    connection.encrypted_secret &&
+    connection.encryption_iv &&
+    connection.encryption_tag &&
+    connection.key_version
+  ) {
+    try {
+      apiKey = decryptPaymentSecret({
+        encrypted_secret: connection.encrypted_secret,
+        encryption_iv: connection.encryption_iv,
+        encryption_tag: connection.encryption_tag,
+        key_version: connection.key_version,
+      })
+    } catch {
+      apiKey = ""
     }
-
-    let apiKey = ""
-    let checksumKey = ""
-
-    if (
-      connection.encrypted_secret &&
-      connection.encryption_iv &&
-      connection.encryption_tag &&
-      connection.key_version
-    ) {
-      try {
-        apiKey = decryptPaymentSecret({
-          encrypted_secret: connection.encrypted_secret,
-          encryption_iv: connection.encryption_iv,
-          encryption_tag: connection.encryption_tag,
-          key_version: connection.key_version,
-        })
-      } catch {
-        apiKey = ""
-      }
-    }
-
-    if (
-      connection.encrypted_checksum &&
-      connection.checksum_iv &&
-      connection.checksum_tag &&
-      connection.key_version
-    ) {
-      try {
-        checksumKey = decryptPaymentSecret({
-          encrypted_secret: connection.encrypted_checksum,
-          encryption_iv: connection.checksum_iv,
-          encryption_tag: connection.checksum_tag,
-          key_version: connection.key_version,
-        })
-      } catch {
-        checksumKey = ""
-      }
-    }
-
-    const config = connection.configuration || {}
-    const resolved: PayosFullSettings = {
-      client_id: String(config.client_id || DEFAULT_SETTINGS.client_id),
-      api_key: apiKey || DEFAULT_SETTINGS.api_key,
-      checksum_key: checksumKey || DEFAULT_SETTINGS.checksum_key,
-      environment:
-        connection.environment === "PRODUCTION" ? "production" : "sandbox",
-      is_enabled: connection.is_enabled,
-      is_timeout_enabled: Boolean(config.is_timeout_enabled ?? DEFAULT_SETTINGS.is_timeout_enabled),
-      timeout_minutes: Number(config.timeout_minutes || DEFAULT_SETTINGS.timeout_minutes),
-      display_title: String(config.display_title || DEFAULT_SETTINGS.display_title),
-      order_prefix: String(config.order_prefix || DEFAULT_SETTINGS.order_prefix),
-      updated_at: typeof connection.updated_at === "string" 
-        ? connection.updated_at 
-        : connection.updated_at?.toISOString(),
-    }
-
-    PaymentProviderRegistry.set({
-      code: "PAYOS",
-      name: connection.name || "PayOS VietQR",
-      providerId: connection.provider_id || "payos",
-      environment: resolved.environment,
-      isEnabled: resolved.is_enabled,
-      configuration: config,
-      secret: resolved.api_key,
-      checksum: resolved.checksum_key,
-      updatedAt: resolved.updated_at,
-    })
-
-    return resolved
-  } catch {
-    return { ...DEFAULT_SETTINGS }
   }
+
+  if (
+    connection.encrypted_checksum &&
+    connection.checksum_iv &&
+    connection.checksum_tag &&
+    connection.key_version
+  ) {
+    try {
+      checksumKey = decryptPaymentSecret({
+        encrypted_secret: connection.encrypted_checksum,
+        encryption_iv: connection.checksum_iv,
+        encryption_tag: connection.checksum_tag,
+        key_version: connection.key_version,
+      })
+    } catch {
+      checksumKey = ""
+    }
+  }
+
+  const config = (typeof connection.configuration === "string"
+    ? JSON.parse(connection.configuration)
+    : connection.configuration) || {}
+
+  const resolved: PayosFullSettings = {
+    client_id: String(config.client_id || DEFAULT_SETTINGS.client_id),
+    api_key: apiKey || DEFAULT_SETTINGS.api_key,
+    checksum_key: checksumKey || DEFAULT_SETTINGS.checksum_key,
+    environment:
+      connection.environment === "PRODUCTION" ? "production" : "sandbox",
+    is_enabled: connection.is_enabled,
+    is_timeout_enabled: Boolean(config.is_timeout_enabled ?? DEFAULT_SETTINGS.is_timeout_enabled),
+    timeout_minutes: Number(config.timeout_minutes || DEFAULT_SETTINGS.timeout_minutes),
+    display_title: String(config.display_title || DEFAULT_SETTINGS.display_title),
+    order_prefix: String(config.order_prefix || DEFAULT_SETTINGS.order_prefix),
+    updated_at: typeof connection.updated_at === "string" 
+      ? connection.updated_at 
+      : connection.updated_at?.toISOString(),
+  }
+
+  PaymentProviderRegistry.set({
+    code: "PAYOS",
+    name: connection.name || "PayOS VietQR",
+    providerId: connection.provider_id || "payos",
+    environment: resolved.environment,
+    isEnabled: resolved.is_enabled,
+    configuration: config,
+    secret: resolved.api_key,
+    checksum: resolved.checksum_key,
+    updatedAt: resolved.updated_at,
+  })
+
+  return resolved
 }

@@ -277,9 +277,6 @@ module.exports = defineConfig({
       },
       plugins: [
         {
-
-        },,
-        {
           name: 'synapse-admin-title',
           transformIndexHtml(html: string) {
             return html.replace(/<title>.*?<\/title>/i, '<title>Synapse</title>')
@@ -312,6 +309,7 @@ module.exports = defineConfig({
   },
   projectConfig: {
     databaseUrl: process.env.DATABASE_URL,
+    redisUrl: process.env.REDIS_URL,
     http: {
       storeCors: process.env.STORE_CORS!,
       adminCors: process.env.ADMIN_CORS!,
