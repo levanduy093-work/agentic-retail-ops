@@ -6,13 +6,13 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "pnpm -r dev",
+    "dev": "node scripts/ensure-local-services.mjs && pnpm -r dev",
     "build": "pnpm -r build",
     "start": "turbo start",
     "lint": "turbo lint",
     "test": "turbo test",
     "backend:seed": "turbo seed --filter=@synapse/backend",
-    "backend:dev": "turbo dev --filter=@synapse/backend",
+    "backend:dev": "node scripts/ensure-local-services.mjs && turbo dev --filter=@synapse/backend",
     "agent:configure-telegram": "pnpm --dir apps/backend run agent:configure-telegram",
     "agent:apply-provider-priority": "pnpm --dir apps/backend run agent:apply-provider-priority",
     "agent:backfill-conversation-memory": "pnpm --dir apps/backend run agent:backfill-conversation-memory",

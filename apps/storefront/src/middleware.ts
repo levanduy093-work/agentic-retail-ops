@@ -49,7 +49,7 @@ async function getRegionMap(cacheId: string) {
 
   if (!BACKEND_URL) {
     throw new Error(
-      "Middleware.ts: Error fetching regions. Did you set up regions in your Medusa Admin and define a NEXT_PUBLIC_MEDUSA_BACKEND_URL environment variable."
+      "Middleware.ts: Error fetching regions. Did you set up regions in your Medusa Admin and define a NEXT_PUBLIC_MEDUSA_BACKEND_URL environment variable.",
     )
   }
 
@@ -97,6 +97,20 @@ async function getRegionMap(cacheId: string) {
   return regionMapCache.regionMap
 }
 
+function serviceUnavailableResponse() {
+  return new NextResponse(
+    "The storefront cannot reach its Medusa backend. Verify the backend URL and that the local backend is healthy.",
+    {
+      status: 503,
+      headers: {
+        "Cache-Control": "no-store",
+        "Retry-After": "5",
+        "Content-Type": "text/plain; charset=utf-8",
+      },
+    },
+  )
+}
+
 /**
  * Fetches regions from Medusa and sets the region cookie.
  * @param request
@@ -104,7 +118,7 @@ async function getRegionMap(cacheId: string) {
  */
 async function getCountryCode(
   request: NextRequest,
-  regionMap: Map<string, HttpTypes.StoreRegion | number>
+  regionMap: Map<string, HttpTypes.StoreRegion | number>,
 ) {
   let countryCode
 
@@ -120,7 +134,9 @@ async function getCountryCode(
     : firstSegment
 
   // Cloudflare Workers provides country via request.cf.country
-  const cloudflareCountryCode = (request as { cf?: { country?: string } }).cf?.country?.toLowerCase()
+  const cloudflareCountryCode = (
+    request as { cf?: { country?: string } }
+  ).cf?.country?.toLowerCase()
 
   // Vercel provides x-vercel-ip-country header
   const vercelCountryCode = request.headers
@@ -184,7 +200,7 @@ export async function middleware(request: NextRequest) {
         const locale = getLocale(request)
         const country = DEFAULT_REGION
         const redirectUrl = `${request.nextUrl.origin}/${locale}/${country}/dev-lock?from=${encodeURIComponent(
-          pathname + (request.nextUrl.search || "")
+          pathname + (request.nextUrl.search || ""),
         )}`
         return NextResponse.redirect(redirectUrl, 307)
       }
@@ -194,7 +210,16 @@ export async function middleware(request: NextRequest) {
   const cacheIdCookie = request.cookies.get("_medusa_cache_id")
   const cacheId = cacheIdCookie?.value || crypto.randomUUID()
 
-  const regionMap = await getRegionMap(cacheId)
+  let regionMap: Map<string, HttpTypes.StoreRegion>
+  try {
+    regionMap = await getRegionMap(cacheId)
+  } catch (error) {
+    console.error(
+      "Unable to load Medusa regions in storefront middleware",
+      error,
+    )
+    return serviceUnavailableResponse()
+  }
   const countryCode = await getCountryCode(request, regionMap)
   const locale = getLocale(request)
 
