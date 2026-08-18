@@ -7,6 +7,254 @@
     "successHint": "Get started with Synapse Admin right away.",
     "successAction": "Start Synapse Admin"
   },
+  "general": {
+    "add": "Add",
+    "apply": "Apply",
+    "cancel": "Cancel",
+    "close": "Close",
+    "create": "Create",
+    "delete": "Delete",
+    "edit": "Edit",
+    "export": "Export",
+    "import": "Import",
+    "save": "Save",
+    "search": "Search",
+    "select": "Select",
+    "selected": "Selected",
+    "next": "Next",
+    "prev": "Previous",
+    "results": "results",
+    "pages": "pages",
+    "of": "of",
+    "active": "Active",
+    "inactive": "Inactive",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "draft": "Draft",
+    "published": "Published",
+    "details": "Details",
+    "status": "Status",
+    "success": "Success",
+    "warning": "Warning",
+    "error": "Error",
+    "noRecordsFound": "No records found",
+    "noResultsTitle": "No results",
+    "noResultsMessage": "Try changing the filters or search term.",
+    "noSearchResults": "No search results",
+    "areYouSure": "Are you sure?",
+    "unsavedChangesTitle": "Leave this form?",
+    "unsavedChangesDescription": "Unsaved changes will be lost.",
+    "items_one": "{{count}} item",
+    "items_other": "{{count}} items"
+  },
+  "products": {
+    "domain": "Products",
+    "list": {
+      "noRecordsMessage": "Create your first product to start selling."
+    },
+    "create": {
+      "title": "Create Product",
+      "description": "Create a new product.",
+      "tabs": {
+        "details": "Details",
+        "organize": "Organize",
+        "variants": "Variants",
+        "inventory": "Inventory"
+      },
+      "successToast": "Created product {{title}}."
+    },
+    "edit": {
+      "header": "Edit Product",
+      "description": "Update product information.",
+      "successToast": "Updated product {{title}}."
+    }
+  },
+  "collections": {
+    "domain": "Collections",
+    "subtitle": "Group and manage products by collection.",
+    "createCollection": "Create Collection",
+    "createCollectionHint": "Create a new collection to organize products.",
+    "editCollection": "Edit Collection",
+    "createSuccess": "Created collection.",
+    "deleteWarning": "You are about to delete the collection {{title}}. This action cannot be undone."
+  },
+  "categories": {
+    "domain": "Categories",
+    "subtitle": "Organize products into categories and manage hierarchy.",
+    "create": {
+      "header": "Create Category",
+      "hint": "Create a new category to organize products.",
+      "tabs": {
+        "details": "Details",
+        "organize": "Organize"
+      },
+      "successToast": "Created category {{name}}."
+    },
+    "edit": {
+      "header": "Edit Category",
+      "description": "Update category details.",
+      "successToast": "Updated category."
+    },
+    "organize": {
+      "header": "Organize",
+      "action": "Edit ranking"
+    },
+    "fields": {
+      "visibility": {
+        "label": "Visibility",
+        "internal": "Internal",
+        "public": "Public"
+      },
+      "status": {
+        "label": "Status",
+        "active": "Active",
+        "inactive": "Inactive"
+      },
+      "path": {
+        "label": "Path"
+      },
+      "children": {
+        "label": "Children"
+      }
+    }
+  },
+  "returnReasons": {
+    "domain": "Return Reasons",
+    "subtitle": "Manage reasons for returned items.",
+    "calloutHint": "Manage reasons used to categorize return requests.",
+    "editReason": "Edit Return Reason",
+    "create": {
+      "header": "Add Return Reason",
+      "subtitle": "Define common reasons for returns.",
+      "hint": "Create a new reason to categorize return requests.",
+      "successToast": "Created return reason {{label}}."
+    },
+    "edit": {
+      "header": "Edit Return Reason",
+      "subtitle": "Edit return reason values.",
+      "successToast": "Updated return reason {{label}}."
+    },
+    "delete": {
+      "confirmation": "You are about to delete the return reason \"{{label}}\". This action cannot be undone.",
+      "successToast": "Deleted return reason \"{{label}}\"."
+    },
+    "fields": {
+      "value": {
+        "label": "Value",
+        "placeholder": "wrong_size",
+        "tooltip": "The value must be a unique identifier for the return reason."
+      },
+      "label": {
+        "label": "Label",
+        "placeholder": "Wrong Size"
+      },
+      "description": {
+        "label": "Description",
+        "placeholder": "Customer received the wrong size"
+      }
+    }
+  },
+  "refundReasons": {
+    "domain": "Refund Reasons",
+    "subtitle": "Manage reasons for issuing refunds.",
+    "calloutHint": "Manage reasons used to categorize refund requests.",
+    "editReason": "Edit Refund Reason",
+    "create": {
+      "header": "Add Refund Reason",
+      "subtitle": "Define common reasons for refunds.",
+      "hint": "Create a new reason to categorize refund requests.",
+      "successToast": "Created refund reason {{label}}."
+    },
+    "edit": {
+      "header": "Edit Refund Reason",
+      "subtitle": "Edit refund reason values.",
+      "successToast": "Updated refund reason {{label}}."
+    },
+    "delete": {
+      "confirmation": "You are about to delete the refund reason \"{{label}}\". This action cannot be undone.",
+      "successToast": "Deleted refund reason."
+    },
+    "fields": {
+      "label": {
+        "label": "Label",
+        "placeholder": "Goodwill Support"
+      },
+      "code": {
+        "label": "Code",
+        "placeholder": "goodwill_support"
+      },
+      "description": {
+        "label": "Description",
+        "placeholder": "Customer had a sub-optimal shopping experience"
+      }
+    }
+  },
+  "taxRegions": {
+    "domain": "Tax Regions",
+    "subtitle": "Manage regions and applicable tax rates.",
+    "create": "Create Tax Region",
+    "edit": "Edit Tax Region"
+  },
+  "locations": {
+    "domain": "Locations",
+    "editLocation": "Edit Location",
+    "addSalesChannels": "Add Sales Channels",
+    "noLocationsFound": "No locations found"
+  },
+  "productTypes": {
+    "domain": "Product Types"
+  },
+  "productTags": {
+    "domain": "Product Tags"
+  },
+  "propertyLabels": {
+    "domain": "Property Labels"
+  },
+  "salesChannels": {
+    "domain": "Sales Channels"
+  },
+  "orders": {
+    "domain": "Orders",
+    "create": "Create Order",
+    "order": "Order",
+    "customer": "Customer",
+    "payment": "Payment",
+    "fulfillment": "Fulfillment",
+    "shipping": "Shipping"
+  },
+  "inventory": {
+    "domain": "Inventory",
+    "subtitle": "Manage items in stock.",
+    "available": "Available",
+    "reserved": "Reserved",
+    "locationLevels": "Locations",
+    "manageLocations": "Manage Locations"
+  },
+  "customers": {
+    "domain": "Customers",
+    "create": "Create Customer"
+  },
+  "promotions": {
+    "domain": "Promotions",
+    "createPromotion": "Create Promotion"
+  },
+  "priceLists": {
+    "domain": "Price Lists",
+    "createPriceList": "Create Price List"
+  },
+  "profile": {
+    "domain": "Profile",
+    "fields": {
+      "languageLabel": "Language"
+    },
+    "edit": {
+      "languageHint": "The language used in the admin panel. This does not change the storefront language.",
+      "languagePlaceholder": "Select language"
+    }
+  },
+  "layout": {
+    "customizeLayout": "Customize Layout"
+  },
   "knowledgeHub": {
     "navigation": "Customer support chatbot",
     "title": "Customer support chatbot",
@@ -15,6 +263,7 @@
     "documents": "Store guidance",
     "documentsHint": "The system only uses approved guidance while it is in effect.",
     "loading": "Loading guidance...",
+    "listError": "The guidance list could not be loaded. Saved data was not deleted.",
     "empty": "No guidance yet. Create the first draft to begin.",
     "selectDocument": "Choose guidance on the left to see its content and usage status.",
     "views": {
@@ -97,6 +346,8 @@
       "simpleSubtitle": "The system checks each Google Drive source every 10 minutes. It downloads, embeds, and replaces the active version only when its checksum changes.",
       "connectAction": "Connect a document",
       "loading": "Loading connected sources...",
+      "listError": "The connected-document list could not be loaded. Saved data was not deleted.",
+      "connectorLoadError": "Google connection status could not be loaded. The account cannot be treated as disconnected.",
       "empty": "No document is connected yet. Choose one or more documents to prepare the first draft.",
       "connectionErrorHint": "Processing did not finish. Check Google access, the document format, and the embedding provider configuration.",
       "googleReadyTitle": "Google connection is ready",
@@ -264,6 +515,10 @@
     "requestTransferred": "The request was assigned to a manager.",
     "replyRequired": "Enter the response you plan to give the customer before saving.",
     "loadError": "Customer requests could not be loaded. Please try again.",
+    "loadErrorDesc": "Saved conversation data was not deleted. Please try reloading from server.",
+    "testCustomer": "Test Customer",
+    "conversationLoadError": "This conversation history could not be loaded. Saved data was not deleted.",
+    "retryAction": "Retry",
     "actionError": "The action could not be completed. Please try again.",
     "openSimulator": "Create a test customer message",
     "simulatorTitle": "Test the customer chat flow",
@@ -383,33 +638,203 @@
     "promptSaved": "The new prompt version is now active.",
     "promptSaveError": "The prompt could not be saved. Check its content and try again."
   },
+  "shippingHub": {
+    "navigation": "Shipping",
+    "title": "Shipping hub",
+    "activeCarriers": "Active carriers",
+    "ready": "Ready",
+    "shipmentsCreated": "Shipments created",
+    "checkoutRate": "Checkout rate",
+    "calculatedByCarrier": "Calculated by carrier",
+    "loadFailed": "Could not load",
+    "loadError": "The shipping data could not be loaded. Saved data was not deleted. Retry to check the API connection.",
+    "retry": "Retry",
+    "active": "Active",
+    "notConfigured": "Not configured",
+    "packaging": {
+      "title": "Automatic packaging",
+      "packageSettings": "Package settings",
+      "weight": "Package weight (g)",
+      "maxItems": "Maximum items / package",
+      "maxWeight": "Maximum package weight (g)",
+      "boxDimensions": "Box dimensions",
+      "boxName": "Box {{number}}",
+      "boxLabel": "Box name",
+      "length": "Length",
+      "width": "Width",
+      "height": "Height",
+      "addBox": "Add box",
+      "deleteBox": "Delete",
+      "save": "Save packaging rules",
+      "saved": "Packaging rules saved",
+      "savedDescription": "Checkout and connected carriers will use this profile.",
+      "saveError": "Could not save packaging rules"
+    },
+    "shipments": {
+      "title": "Shipment list",
+      "empty": "There are no carrier fulfillments yet. A shipment will appear here when a Medusa order is fulfilled.",
+      "order": "Order",
+      "trackingNumber": "Tracking number",
+      "service": "Service",
+      "status": "Status",
+      "createdAt": "Created at",
+      "creating": "Creating",
+      "syncGhn": "Sync GHN",
+      "syncError": "Could not sync GHN status",
+      "track": "Track",
+      "printLabel": "Print label"
+    },
+    "ghn": {
+      "title": "Giao Hàng Nhanh setup",
+      "subtitle": "Connect the API token, shop ID, and sender warehouse information.",
+      "environment": "Environment",
+      "tokenPlaceholder": "Enter the GHN-issued API token",
+      "savedTokenPlaceholder": "Saved: {{hint}}. Only enter a value to change the token.",
+      "tokenHint": "The token is encrypted with AES-256-GCM in Shipping Hub.",
+      "senderName": "Sender / shop name",
+      "senderPhone": "Sender phone number",
+      "senderAddress": "Sender warehouse address",
+      "lastVerified": "Last verified: {{date}}",
+      "notVerified": "Connection has not been verified",
+      "testConnection": "Test connection",
+      "save": "Save GHN setup",
+      "saveError": "Could not save GHN setup",
+      "saved": "GHN connection saved",
+      "savedDescription": "The token is stored encrypted in the database.",
+      "testError": "Could not connect to GHN",
+      "testSuccess": "GHN connected"
+    }
+  },
   "devAccess": {
-    "navigation": "Access & Share",
-    "title": "Dev Access & Share Control",
-    "subtitle": "Toggle blocking external access during development, manage dev PIN passcode, and generate quick share links.",
-    "masterTitle": "External Access Protection",
-    "masterSubtitle": "Control whether public internet users accessing via domain can view your development system.",
-    "statusLocked": "External Access Blocked (Dev Safe Mode)",
-    "statusUnlocked": "External Access Allowed (Share Mode)",
-    "toggleBlock": "Enable Protection (Block External)",
-    "toggleUnblock": "Open Public (Allow External)",
-    "pinSettingsTitle": "PIN Passcode & Domain Settings",
-    "pinSettingsSubtitle": "PIN code allows you or invited testers to unlock access instantly on mobile or external devices.",
-    "passcodeLabel": "Unlock PIN Passcode",
-    "domainLabel": "Public Domain (Tunnel)",
-    "messageLabel": "Blocked / Maintenance Message",
-    "saveSettings": "Save Settings",
-    "settingsSaved": "Access settings saved successfully.",
-    "saveError": "Could not save access settings.",
-    "shareHubTitle": "Quick Link Share Hub",
-    "shareHubSubtitle": "Copy URLs to main areas of the system with optional PIN to share with colleagues or testers.",
-    "copyLink": "Copy Link",
-    "copyLinkWithPin": "Copy with PIN",
-    "copied": "Copied to clipboard!",
-    "storefrontHome": "Storefront Home",
-    "customerChat": "AI Customer Chat",
-    "adminDashboard": "Admin Dashboard",
-    "tunnelTitle": "Cloudflare Tunnel Commands (Network Level)",
-    "tunnelSubtitle": "To completely disconnect at the network tunnel level, use these terminal commands:"
+    "navigation": "Storefront Access",
+    "title": "Storefront Access",
+    "public": "Public",
+    "private": "Private",
+    "publicBadge": "Anyone with the link can access",
+    "privateBadge": "Localhost or PIN required only",
+    "publicDesc": "Storefront is currently public.",
+    "privateDesc": "External access requires a PIN; localhost is always allowed.",
+    "switchToPrivate": "Switch to Private",
+    "openPublic": "Open Public",
+    "publicLinkTitle": "Public Link",
+    "publicLinkDesc": "URL is obtained from CUSTOMER_STOREFRONT_BASE_URL. Change domain in deployment/DNS settings, do not enter manually here.",
+    "copy": "Copy",
+    "copySuccess": "Copied storefront link",
+    "noPublicUrl": "CUSTOMER_STOREFRONT_BASE_URL is not configured properly.",
+    "pinTitle": "PIN for Private Mode",
+    "pinDesc": "PIN is only needed for Private mode and will not be displayed again after saving.",
+    "newPin": "New PIN",
+    "keepPinPlaceholder": "Leave blank to keep unchanged",
+    "pinMinPlaceholder": "At least 8 characters",
+    "savePin": "Save PIN",
+    "saveError": "Could not save access settings",
+    "switchedPublic": "Switched to Public",
+    "switchedPrivate": "Switched to Private"
+  },
+  "agentOperations": {
+    "navigation": "Agent Operations",
+    "title": "Agent Operations",
+    "subtitle": "Control plane for governed retail agents",
+    "initializeFoundation": "Initialize foundation",
+    "incidents": "Incidents",
+    "pendingApprovals": "Pending approvals",
+    "openTasks": "Open tasks",
+    "activeScenarios": "Active scenarios",
+    "loadError": "Some control-plane data could not be loaded. Saved records were not deleted.",
+    "loading": "Loading agent control plane...",
+    "retry": "Retry",
+    "tabs": {
+      "readiness": "Readiness",
+      "incidents": "Incidents",
+      "approvals": "Approvals",
+      "tasks": "Tasks",
+      "knowledge": "Knowledge",
+      "evaluation": "Evaluation",
+      "catalog": "Catalog"
+    },
+    "badges": {
+      "codeReady": "CODE READY",
+      "setupRequired": "SETUP REQUIRED",
+      "deploymentReady": "DEPLOYMENT READY",
+      "deploymentGatesOpen": "DEPLOYMENT GATES OPEN",
+      "ready": "READY",
+      "missing": "MISSING"
+    },
+    "empty": {
+      "incidents": "No incidents recorded.",
+      "approvals": "No pending approvals.",
+      "tasks": "No operational tasks.",
+      "knowledge": "No governed knowledge documents.",
+      "evaluation": "No evaluation scenarios. Initialize the foundation first."
+    },
+    "role": "Role: {{role}}",
+    "review": "Review",
+    "decisionReason": "Required decision reason",
+    "decisionReasonAria": "Decision reason",
+    "reject": "Reject",
+    "approve": "Approve",
+    "toasts": {
+      "bootstrapSuccess": "Agent platform foundation initialized",
+      "decisionSuccess": "Approval decision recorded"
+    }
+  },
+  "prompts": {
+    "title": "AI Assistant & System Prompts Configuration",
+    "subtitle": "Customize brand name, assistant role, greeting messages, and all operational System Prompts for Customer Support Chatbot directly from Web GUI.",
+    "loading": "Loading Prompts & Assistant configuration...",
+    "loadError": "Could not load Assistant and Prompts configuration. Saved data was not deleted.",
+    "retry": "Retry",
+    "brandSectionTitle": "1. Brand Information & Greeting Dialogues",
+    "brandSectionSubtitle": "Configure store name, assistant role, and default responses when customers greet or wait for review.",
+    "brandNameLabel": "Store / Brand Name",
+    "brandNamePlaceholder": "e.g. Synapse Store, My Fashion...",
+    "botRoleLabel": "Assistant Role (Persona)",
+    "botRolePlaceholder": "e.g. customer support agent, fashion consultant...",
+    "greetingViLabel": "Greeting Message (Vietnamese)",
+    "greetingViPlaceholder": "Greeting message when customer starts conversation in Vietnamese...",
+    "greetingEnLabel": "Greeting Message (English)",
+    "greetingEnPlaceholder": "Greeting message when customer starts conversation in English...",
+    "clarifyViLabel": "Clarification Prompt (Vietnamese)",
+    "clarifyViPlaceholder": "Question when customer intent is ambiguous in Vietnamese...",
+    "clarifyEnLabel": "Clarification Prompt (English)",
+    "clarifyEnPlaceholder": "Question when customer intent is ambiguous in English...",
+    "reviewAckViLabel": "Pending Review / Unapproved Knowledge Notice (Vietnamese)",
+    "reviewAckViPlaceholder": "Polite response when store guidance is pending review in Vietnamese...",
+    "reviewAckEnLabel": "Pending Review / Unapproved Knowledge Notice (English)",
+    "reviewAckEnPlaceholder": "Polite response when store guidance is pending review in English...",
+    "saveBrandSettings": "Save Brand Settings & Greetings",
+    "promptsSectionTitle": "2. AI & RAG Operational System Prompts",
+    "promptsSectionSubtitle": "All prompts below are passed directly to the AI model (LLM) for intent routing, knowledge retrieval, and sales consultation.",
+    "customized": "Customized",
+    "default": "Default",
+    "restoreOriginal": "Restore original",
+    "maxOutputTokens": "Maximum output tokens (max_tokens)",
+    "systemPromptContent": "System Prompt Content",
+    "systemPromptPlaceholder": "Enter system prompt...",
+    "savePrompt": "Save Prompt",
+    "resetAll": "Restore all to default",
+    "resetPromptConfirmHeading": "Restore Default Prompt",
+    "resetPromptConfirmDesc": "Are you sure you want to restore this System Prompt to the system's original default?",
+    "resetAllConfirmHeading": "Restore All to Default",
+    "resetAllConfirmDesc": "This action will restore all System Prompts and persona settings to the system default values.",
+    "confirmReset": "Restore",
+    "cancel": "Cancel",
+    "saveSettingsSuccess": "Brand settings & greetings saved successfully",
+    "saveSettingsFailed": "Failed to save brand settings",
+    "savePromptSuccess": "System Prompt saved and activated successfully",
+    "savePromptFailed": "Failed to save system prompt",
+    "resetSuccess": "Restored to initial default configuration",
+    "resetFailed": "Failed to restore defaults"
+  },
+  "orderShippingWidget": {
+    "title": "Shipping ({{carrierName}})",
+    "subtitle": "Fulfillment created automatically based on customer's selected carrier at checkout.",
+    "openHub": "Open shipping hub",
+    "trackingNumber": "Tracking number",
+    "noFulfillment": "No carrier fulfillment yet. Use Medusa's default fulfillment action to create shipment, then carrier will generate tracking.",
+    "waitingFulfillment": "Awaiting fulfillment",
+    "track": "Track shipment",
+    "printLabel": "Print label",
+    "created": "Created"
   }
 }

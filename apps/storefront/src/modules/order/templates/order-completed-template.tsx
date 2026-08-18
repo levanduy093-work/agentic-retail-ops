@@ -24,22 +24,22 @@ export default async function OrderCompletedTemplate({
   const isOnboarding = cookies.get("_medusa_onboarding")?.value === "true"
 
   return (
-    <div className="py-6 min-h-[calc(100vh-64px)]">
-      <div className="content-container flex flex-col justify-center items-center gap-y-10 max-w-4xl h-full w-full">
+    <main className="py-8 small:py-12 min-h-[calc(100vh-64px)]">
+      <div className="content-container flex flex-col items-center gap-y-10 max-w-4xl">
         {isOnboarding && <OnboardingCta orderId={order.id} />}
-        <div
-          className="flex flex-col gap-4 max-w-4xl h-full bg-white w-full py-10"
+        <section
+          className="surface-card flex w-full flex-col gap-6 px-5 py-7 xsmall:px-8 small:px-10 small:py-10"
           data-testid="order-complete-container"
         >
           <Heading
             level="h1"
-            className="flex flex-col gap-y-3 text-ui-fg-base text-3xl mb-4"
+            className="flex flex-col gap-y-2 text-ui-fg-base text-2xl-regular small:text-3xl-regular"
           >
             <span>{dictionary.order.thank_you}</span>
             <span>{dictionary.order.order_placed_success}</span>
           </Heading>
           <OrderDetails order={order} />
-          <Heading level="h2" className="flex flex-row text-3xl-regular">
+          <Heading level="h2" className="text-2xl-regular">
             {dictionary.cart.summary}
           </Heading>
           <Items order={order} />
@@ -47,8 +47,8 @@ export default async function OrderCompletedTemplate({
           <ShippingDetails order={order} />
           <PaymentDetails order={order} />
           <Help />
-        </div>
+        </section>
       </div>
-    </div>
+    </main>
   )
 }

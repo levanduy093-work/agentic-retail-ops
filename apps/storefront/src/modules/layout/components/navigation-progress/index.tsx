@@ -3,6 +3,7 @@
 import { STOREFRONT_NAVIGATION_START } from "@lib/util/storefront-navigation"
 import { usePathname, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { useTranslation } from "@lib/i18n/client"
 
 const SHOW_DELAY = 100
 const MINIMUM_VISIBLE_TIME = 280
@@ -18,6 +19,7 @@ function clearTimer(
 }
 
 export default function NavigationProgress() {
+  const t = useTranslation()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [pending, setPending] = useState(false)
@@ -128,7 +130,7 @@ export default function NavigationProgress() {
   return (
     <div
       role="status"
-      aria-label="Đang chuyển trang"
+      aria-label={t("common.page_loading")}
       aria-hidden={!pending}
       className={`fixed inset-0 z-[1000] bg-[#f4f7f5]/90 backdrop-blur-[2px] ${
         pending ? "visible" : "invisible"

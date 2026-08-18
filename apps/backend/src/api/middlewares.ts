@@ -31,7 +31,6 @@ import {
 import { StoreCreateCustomerChatMessage } from "./store/customer-chat/validators"
 import { shippingHubMiddlewares } from "./admin/shipping/middlewares"
 import { getGhnSettings } from "../modules/shipping-hub/ghn-connection"
-import { getGhtkSettings } from "../modules/shipping-hub/ghtk-connection"
 
   const routes: MiddlewareRoute[] = [
     ...shippingHubMiddlewares,
@@ -45,7 +44,6 @@ import { getGhtkSettings } from "../modules/shipping-hub/ghtk-connection"
             // application container. Hydrate the selected carrier from the
             // encrypted connection before Medusa calculates its live price.
             await getGhnSettings(req.scope)
-            await getGhtkSettings(req.scope)
             next()
           } catch (error) {
             next(error)
@@ -413,16 +411,6 @@ import { getGhtkSettings } from "../modules/shipping-hub/ghtk-connection"
       matcher: "/admin/agent-operations/channels",
       method: "GET",
       policies: [{ resource: "agent_platform", operation: "read" }],
-    },
-    {
-      matcher: "/admin/dev-access",
-      method: "GET",
-      policies: [{ resource: "agent_platform", operation: "read" }],
-    },
-    {
-      matcher: "/admin/dev-access",
-      method: "POST",
-      policies: [{ resource: "agent_platform", operation: "configure" }],
     },
 ]
 

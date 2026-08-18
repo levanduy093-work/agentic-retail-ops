@@ -39,7 +39,7 @@ export default async function Footer() {
               <span>Synapse Store</span>
             </LocalizedClientLink>
           </div>
-          <div className="text-small-regular gap-10 md:gap-x-16 grid grid-cols-2 sm:grid-cols-3">
+          <div className="text-small-regular gap-10 md:gap-x-12 grid grid-cols-2 sm:grid-cols-4">
             {productCategories && productCategories?.length > 0 && (
               <div className="flex flex-col gap-y-2">
                 <span className="txt-small-plus txt-ui-fg-base">
@@ -107,14 +107,7 @@ export default async function Footer() {
                 <span className="txt-small-plus txt-ui-fg-base">
                   {dict.footer.collections}
                 </span>
-                <ul
-                  className={clx(
-                    "grid grid-cols-1 gap-2 text-ui-fg-subtle txt-small",
-                    {
-                      "grid-cols-2": (collections?.length || 0) > 3,
-                    }
-                  )}
-                >
+                <ul className="grid grid-cols-1 gap-2 text-ui-fg-subtle txt-small">
                   {collections?.slice(0, 6).map((c) => (
                     <li key={c.id}>
                       <LocalizedClientLink
@@ -130,6 +123,29 @@ export default async function Footer() {
                 </ul>
               </div>
             )}
+            <div className="flex flex-col gap-y-2">
+              <span className="txt-small-plus txt-ui-fg-base">
+                {dict.footer.customer_support}
+              </span>
+              <ul className="grid grid-cols-1 gap-y-2 text-ui-fg-subtle txt-small">
+                <li>
+                  <LocalizedClientLink
+                    href="/contact"
+                    className="hover:text-ui-fg-base"
+                  >
+                    {dict.footer.contact}
+                  </LocalizedClientLink>
+                </li>
+                <li>
+                  <LocalizedClientLink
+                    href="/returns"
+                    className="hover:text-ui-fg-base"
+                  >
+                    {dict.footer.returns}
+                  </LocalizedClientLink>
+                </li>
+              </ul>
+            </div>
             <div className="flex flex-col gap-y-2">
               <span className="txt-small-plus txt-ui-fg-base">{dict.footer.about}</span>
               <ul className="grid grid-cols-1 gap-y-2 text-ui-fg-subtle txt-small">

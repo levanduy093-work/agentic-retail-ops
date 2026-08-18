@@ -58,8 +58,7 @@ const Register = ({ setCurrentView }: Props) => {
           className="w-full mb-4 text-center text-base-regular text-ui-fg-base bg-ui-bg-subtle border border-ui-border-base rounded-rounded p-4"
           data-testid="register-verification-message"
         >
-          We sent a verification link to <strong>{message.email}</strong>.
-          Please check your inbox to verify your email, then sign in.
+          {t("account.verification_email_sent", { email: message.email })}
         </div>
       )}
       <form className="w-full flex flex-col" action={formAction}>
@@ -107,19 +106,19 @@ const Register = ({ setCurrentView }: Props) => {
           data-testid="register-error"
         />
         <span className="text-center text-ui-fg-base text-small-regular mt-6">
-          By creating an account, you agree to Synapse Store&apos;s{" "}
+          {t("account.terms_agreement")}{" "}
           <LocalizedClientLink
             href="/content/privacy-policy"
             className="underline"
           >
-            Privacy Policy
+            {t("account.privacy_policy")}
           </LocalizedClientLink>{" "}
-          and{" "}
+          {t("account.and")}{" "}
           <LocalizedClientLink
             href="/content/terms-of-use"
             className="underline"
           >
-            Terms of Use
+            {t("account.terms_of_use")}
           </LocalizedClientLink>
           .
         </span>

@@ -5,7 +5,6 @@ import {
   WorkflowResponse,
 } from "@medusajs/framework/workflows-sdk"
 import { GhnSettingsStore } from "../../modules/ghn-fulfillment/services/ghn-settings-store"
-import { GhtkSettingsStore } from "../../modules/ghtk-fulfillment/services/ghtk-settings-store"
 import { SHIPPING_HUB_MODULE } from "../../modules/shipping-hub"
 import { normalizePackagingProfile, type PackagingProfile } from "../../modules/shipping-hub/packing-profile"
 import type ShippingHubModuleService from "../../modules/shipping-hub/service"
@@ -42,7 +41,6 @@ const configurePackagingProfileStep = createStep(
       ...GhnSettingsStore.getSettings(),
       packing_profile: profile,
     })
-    GhtkSettingsStore.setRuntimeSettings({ packing_profile: profile })
 
     return new StepResponse(profile)
   }

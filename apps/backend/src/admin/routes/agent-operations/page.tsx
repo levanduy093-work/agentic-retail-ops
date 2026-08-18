@@ -11,6 +11,7 @@ import {
 } from "@medusajs/ui"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ReactNode, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { sdk } from "../../lib/sdk"
 
 type Readiness = {
@@ -102,6 +103,7 @@ const Row = ({
 )
 
 const AgentOperationsPage = () => {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [selectedApproval, setSelectedApproval] = useState<string | null>(null)
   const [decisionReason, setDecisionReason] = useState("")
@@ -164,7 +166,7 @@ const AgentOperationsPage = () => {
       }),
     onError: (error) => toast.error(error.message),
     onSuccess: async () => {
-      toast.success("Agent platform foundation initialized")
+      toast.success(t("agentOperations.toasts.bootstrapSuccess"))
       await queryClient.invalidateQueries({ queryKey: ["agent-platform-readiness"] })
       await queryClient.invalidateQueries({ queryKey: ["agent-evaluation-scenarios"] })
     },
@@ -178,7 +180,7 @@ const AgentOperationsPage = () => {
       }),
     onError: (error) => toast.error(error.message),
     onSuccess: async () => {
-      toast.success("Approval decision recorded")
+      toast.success(t("agentOperations.toasts.decisionSuccess"))
       setDecisionReason("")
       setSelectedApproval(null)
       await queryClient.invalidateQueries({ queryKey: ["agent-approvals"] })
@@ -189,6 +191,9 @@ const AgentOperationsPage = () => {
   const loading = [readiness, incidents, approvals, tasks, knowledge, scenarios, catalog].some(
     (query) => query.isLoading
   )
+  const failedQueries = [readiness, incidents, approvals, tasks, knowledge, scenarios, catalog].filter(
+    (query) => query.isError && !query.data
+  )
   const pendingApprovals = approvals.data?.approvals.filter(
     (approval) => approval.status === "PENDING"
   ) ?? []
@@ -198,9 +203,9 @@ const AgentOperationsPage = () => {
       <Container className="divide-y p-0">
         <div className="flex items-center justify-between px-6 py-4">
           <div>
-            <Heading level="h1">Agent Operations</Heading>
+            <Heading level="h1">{t("agentOperations.title")}</Heading>
             <Text size="small" className="text-ui-fg-subtle">
-              Control plane for governed retail agents
+              {t("agentOperations.subtitle")}
             </Text>
           </div>
           <Button
@@ -209,15 +214,15 @@ const AgentOperationsPage = () => {
             isLoading={bootstrap.isPending}
             onClick={() => bootstrap.mutate()}
           >
-            Initialize foundation
+            {t("agentOperations.initializeFoundation")}
           </Button>
         </div>
         <div className="grid grid-cols-2 gap-px bg-ui-border-base md:grid-cols-4">
           {[
-            ["Incidents", incidents.data?.incidents.length ?? 0],
-            ["Pending approvals", pendingApprovals.length],
-            ["Open tasks", tasks.data?.tasks.filter((task) => !["COMPLETED", "CANCELLED", "DEAD"].includes(task.status)).length ?? 0],
-            ["Active scenarios", scenarios.data?.scenarios.filter((scenario) => scenario.status === "ACTIVE").length ?? 0],
+            [t("agentOperations.incidents"), incidents.data?.incidents.length ?? 0],
+            [t("agentOperations.pendingApprovals"), pendingApprovals.length],
+            [t("agentOperations.openTasks"), tasks.data?.tasks.filter((task) => !["COMPLETED", "CANCELLED", "DEAD"].includes(task.status)).length ?? 0],
+            [t("agentOperations.activeScenarios"), scenarios.data?.scenarios.filter((scenario) => scenario.status === "ACTIVE").length ?? 0],
           ].map(([label, value]) => (
             <div className="bg-ui-bg-base px-6 py-5" key={label}>
               <Text size="small" className="text-ui-fg-subtle">{label}</Text>
@@ -228,29 +233,52 @@ const AgentOperationsPage = () => {
       </Container>
 
       <Container className="p-0">
-        {loading ? (
-          <Empty>Loading agent control plane...</Empty>
+        {failedQueries.length ? (
+          <div className="flex flex-col items-start gap-3 px-6 py-8">
+            <Text className="text-ui-fg-error" size="small">
+              {t("agentOperations.loadError")}
+            </Text>
+            <Button
+              onClick={() => {
+                void Promise.all([
+                  readiness.refetch(),
+                  incidents.refetch(),
+                  approvals.refetch(),
+                  tasks.refetch(),
+                  knowledge.refetch(),
+                  scenarios.refetch(),
+                  catalog.refetch(),
+                ])
+              }}
+              size="small"
+              variant="secondary"
+            >
+              {t("agentOperations.retry")}
+            </Button>
+          </div>
+        ) : loading ? (
+          <Empty>{t("agentOperations.loading")}</Empty>
         ) : (
           <Tabs defaultValue="readiness">
             <Tabs.List className="px-6 pt-2">
-              <Tabs.Trigger value="readiness">Readiness</Tabs.Trigger>
-              <Tabs.Trigger value="incidents">Incidents</Tabs.Trigger>
-              <Tabs.Trigger value="approvals">Approvals</Tabs.Trigger>
-              <Tabs.Trigger value="tasks">Tasks</Tabs.Trigger>
-              <Tabs.Trigger value="knowledge">Knowledge</Tabs.Trigger>
-              <Tabs.Trigger value="evaluation">Evaluation</Tabs.Trigger>
-              <Tabs.Trigger value="catalog">Catalog</Tabs.Trigger>
+              <Tabs.Trigger value="readiness">{t("agentOperations.tabs.readiness")}</Tabs.Trigger>
+              <Tabs.Trigger value="incidents">{t("agentOperations.tabs.incidents")}</Tabs.Trigger>
+              <Tabs.Trigger value="approvals">{t("agentOperations.tabs.approvals")}</Tabs.Trigger>
+              <Tabs.Trigger value="tasks">{t("agentOperations.tabs.tasks")}</Tabs.Trigger>
+              <Tabs.Trigger value="knowledge">{t("agentOperations.tabs.knowledge")}</Tabs.Trigger>
+              <Tabs.Trigger value="evaluation">{t("agentOperations.tabs.evaluation")}</Tabs.Trigger>
+              <Tabs.Trigger value="catalog">{t("agentOperations.tabs.catalog")}</Tabs.Trigger>
             </Tabs.List>
 
             <Tabs.Content value="readiness">
               <div className="px-6 py-5">
                 <div className="mb-4 flex gap-x-2">
-                  <StateBadge value={readiness.data?.code_ready ? "CODE READY" : "SETUP REQUIRED"} />
-                  <StateBadge value={readiness.data?.deployment_ready ? "DEPLOYMENT READY" : "DEPLOYMENT GATES OPEN"} />
+                  <StateBadge value={readiness.data?.code_ready ? t("agentOperations.badges.codeReady") : t("agentOperations.badges.setupRequired")} />
+                  <StateBadge value={readiness.data?.deployment_ready ? t("agentOperations.badges.deploymentReady") : t("agentOperations.badges.deploymentGatesOpen")} />
                 </div>
                 {Object.entries(readiness.data?.checks ?? {}).map(([check, passed]) => (
                   <Row key={check} title={check.replaceAll("_", " ")}>
-                    <StateBadge value={passed ? "READY" : "MISSING"} />
+                    <StateBadge value={passed ? t("agentOperations.badges.ready") : t("agentOperations.badges.missing")} />
                   </Row>
                 ))}
               </div>
@@ -262,7 +290,7 @@ const AgentOperationsPage = () => {
                   <Text size="xsmall" className="text-ui-fg-subtle">{incident.priority}</Text>
                   <StateBadge value={incident.status} />
                 </Row>
-              )) : <Empty>No incidents recorded.</Empty>}
+              )) : <Empty>{t("agentOperations.empty.incidents")}</Empty>}
             </Tabs.Content>
 
             <Tabs.Content value="approvals">
@@ -271,32 +299,34 @@ const AgentOperationsPage = () => {
                   <div className="flex items-center justify-between">
                     <div>
                       <Text size="small" weight="plus">{approval.id}</Text>
-                      <Text size="xsmall" className="text-ui-fg-subtle">Role: {approval.required_role}</Text>
+                      <Text size="xsmall" className="text-ui-fg-subtle">
+                        {t("agentOperations.role", { role: approval.required_role })}
+                      </Text>
                     </div>
                     <Button size="small" variant="secondary" onClick={() => setSelectedApproval(approval.id)}>
-                      Review
+                      {t("agentOperations.review")}
                     </Button>
                   </div>
                   {selectedApproval === approval.id && (
                     <div className="mt-4 flex flex-col gap-y-3">
                       <Textarea
-                        aria-label="Decision reason"
-                        placeholder="Required decision reason"
+                        aria-label={t("agentOperations.decisionReasonAria")}
+                        placeholder={t("agentOperations.decisionReason")}
                         value={decisionReason}
                         onChange={(event) => setDecisionReason(event.target.value)}
                       />
                       <div className="flex justify-end gap-x-2">
                         <Button size="small" variant="danger" disabled={decisionReason.trim().length < 3} onClick={() => decideApproval.mutate({ decision: "REJECTED", id: approval.id })}>
-                          Reject
+                          {t("agentOperations.reject")}
                         </Button>
                         <Button size="small" disabled={decisionReason.trim().length < 3} onClick={() => decideApproval.mutate({ decision: "APPROVED", id: approval.id })}>
-                          Approve
+                          {t("agentOperations.approve")}
                         </Button>
                       </div>
                     </div>
                   )}
                 </div>
-              )) : <Empty>No pending approvals.</Empty>}
+              )) : <Empty>{t("agentOperations.empty.approvals")}</Empty>}
             </Tabs.Content>
 
             <Tabs.Content value="tasks">
@@ -305,7 +335,7 @@ const AgentOperationsPage = () => {
                   <Text size="xsmall" className="text-ui-fg-subtle">{task.priority}</Text>
                   <StateBadge value={task.status} />
                 </Row>
-              )) : <Empty>No operational tasks.</Empty>}
+              )) : <Empty>{t("agentOperations.empty.tasks")}</Empty>}
             </Tabs.Content>
 
             <Tabs.Content value="knowledge">
@@ -314,7 +344,7 @@ const AgentOperationsPage = () => {
                   <Text size="xsmall" className="text-ui-fg-subtle">{document.citation_locator}</Text>
                   <StateBadge value={document.status} />
                 </Row>
-              )) : <Empty>No governed knowledge documents.</Empty>}
+              )) : <Empty>{t("agentOperations.empty.knowledge")}</Empty>}
             </Tabs.Content>
 
             <Tabs.Content value="evaluation">
@@ -323,7 +353,7 @@ const AgentOperationsPage = () => {
                   <Text size="xsmall" className="text-ui-fg-subtle">{scenario.agent_id}</Text>
                   <StateBadge value={scenario.status} />
                 </Row>
-              )) : <Empty>No evaluation scenarios. Initialize the foundation first.</Empty>}
+              )) : <Empty>{t("agentOperations.empty.evaluation")}</Empty>}
             </Tabs.Content>
 
             <Tabs.Content value="catalog">
@@ -344,6 +374,9 @@ const AgentOperationsPage = () => {
   )
 }
 
-export const config = defineRouteConfig({})
+export const config = defineRouteConfig({
+  label: "agentOperations.navigation",
+  translationNs: "translation",
+})
 
 export default AgentOperationsPage

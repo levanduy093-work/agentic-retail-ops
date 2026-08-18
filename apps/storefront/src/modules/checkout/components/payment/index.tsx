@@ -10,15 +10,15 @@ import PaymentContainer, {
 import Divider from "@modules/common/components/divider"
 import {
   Button,
-  Container,
   Heading,
   Text,
   clx,
 } from "@modules/common/components/ui"
 import { HttpTypes } from "@medusajs/types"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useCallback, useEffect, useState } from "react"
+import { useSearchParams } from "next/navigation"
+import { useEffect, useState } from "react"
 import { useTranslation } from "@lib/i18n/client"
+import { setCheckoutStep } from "@modules/checkout/utils/set-checkout-step"
 
 const Payment = ({
   cart,
@@ -41,8 +41,6 @@ const Payment = ({
   )
 
   const searchParams = useSearchParams()
-  const router = useRouter()
-  const pathname = usePathname()
 
   const isOpen = searchParams.get("step") === "payment"
 
@@ -57,26 +55,18 @@ const Payment = ({
   }
 
   const paidByGiftcard = !!(
-    (cart as unknown as Record<string, unknown>)?.gift_cards && ((cart as unknown as Record<string, unknown>)?.gift_cards as unknown[])?.length > 0 && cart?.total === 0
+    (cart as unknown as Record<string, unknown>)?.gift_cards &&
+    ((cart as unknown as Record<string, unknown>)?.gift_cards as unknown[])
+      ?.length > 0 &&
+    cart?.total === 0
   )
 
   const paymentReady =
-    (activeSession && (cart?.shipping_methods?.length ?? 0) !== 0) || paidByGiftcard
-
-  const createQueryString = useCallback(
-    (name: string, value: string) => {
-      const params = new URLSearchParams(searchParams)
-      params.set(name, value)
-
-      return params.toString()
-    },
-    [searchParams]
-  )
+    (activeSession && (cart?.shipping_methods?.length ?? 0) !== 0) ||
+    paidByGiftcard
 
   const handleEdit = () => {
-    router.push(pathname + "?" + createQueryString("step", "payment"), {
-      scroll: false,
-    })
+    setCheckoutStep("payment")
   }
 
   const handleSubmit = async () => {
@@ -95,12 +85,8 @@ const Payment = ({
       }
 
       if (!shouldInputCard) {
-        return router.push(
-          pathname + "?" + createQueryString("step", "review"),
-          {
-            scroll: false,
-          }
-        )
+        setCheckoutStep("review")
+        return
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -182,7 +168,7 @@ const Payment = ({
                 className="txt-medium text-ui-fg-subtle"
                 data-testid="payment-method-summary"
               >
-                Gift card
+                {t("checkout.gift_card")}
               </Text>
             </div>
           )}
@@ -204,57 +190,63 @@ const Payment = ({
             data-testid="submit-payment-button"
           >
             {!activeSession && isStripeLike(selectedPaymentMethod)
-              ? " Enter card details"
+              ? t("checkout.enter_card_details")
               : t("checkout.continue_to_review")}
           </Button>
         </div>
 
         <div className={isOpen ? "hidden" : "block"}>
           {cart && paymentReady && activeSession ? (
-            <div className="flex items-start gap-x-1 w-full">
-              <div className="flex flex-col w-1/3">
-                <Text className="txt-medium-plus text-ui-fg-base mb-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-5 sm:p-6 shadow-xs">
+              <div className="flex flex-col justify-start">
+                <Text className="text-xs font-semibold uppercase tracking-wider text-ui-fg-muted mb-3">
                   {t("checkout.payment_method")}
                 </Text>
-                <Text
-                  className="txt-medium text-ui-fg-subtle"
-                  data-testid="payment-method-summary"
-                >
-                  {paymentInfoMap[activeSession?.provider_id]?.title ||
-                    activeSession?.provider_id}
-                </Text>
-              </div>
-              <div className="flex flex-col w-1/3">
-                <Text className="txt-medium-plus text-ui-fg-base mb-1">
-                  {t("checkout.payment_details")}
-                </Text>
-                <div
-                  className="flex gap-2 txt-medium text-ui-fg-subtle items-center"
-                  data-testid="payment-details-summary"
-                >
-                  <Container className="flex items-center h-7 w-fit p-2 bg-ui-button-neutral-hover">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white border border-neutral-200/90 text-[#174b3d] shadow-xs">
                     {paymentInfoMap[selectedPaymentMethod]?.icon || (
                       <CreditCard />
                     )}
-                  </Container>
+                  </div>
+                  <Text
+                    className="text-sm font-semibold text-ui-fg-base"
+                    data-testid="payment-method-summary"
+                  >
+                    {activeSession?.provider_id === "pp_system_default"
+                      ? t("checkout.manual_payment") || "Manual Payment"
+                      : isStripeLike(activeSession?.provider_id)
+                      ? t("checkout.credit_card") || "Credit card"
+                      : paymentInfoMap[activeSession?.provider_id]?.title ||
+                        activeSession?.provider_id}
+                  </Text>
+                </div>
+              </div>
+              <div className="flex flex-col justify-start border-t border-neutral-200/70 pt-4 md:border-t-0 md:border-l md:border-neutral-200/80 md:pt-0 md:pl-6">
+                <Text className="text-xs font-semibold uppercase tracking-wider text-ui-fg-muted mb-3">
+                  {t("checkout.payment_details")}
+                </Text>
+                <div
+                  className="flex items-center gap-2 text-sm text-ui-fg-base font-medium"
+                  data-testid="payment-details-summary"
+                >
                   <Text>
                     {isStripeLike(selectedPaymentMethod) && cardBrand
                       ? cardBrand
-                      : "Another step will appear"}
+                      : t("checkout.another_step_payment")}
                   </Text>
                 </div>
               </div>
             </div>
           ) : paidByGiftcard ? (
-            <div className="flex flex-col w-1/3">
-              <Text className="txt-medium-plus text-ui-fg-base mb-1">
+            <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/60 p-5 sm:p-6 shadow-xs">
+              <Text className="text-xs font-semibold uppercase tracking-wider text-ui-fg-muted mb-2">
                 {t("checkout.payment_method")}
               </Text>
               <Text
-                className="txt-medium text-ui-fg-subtle"
+                className="text-sm font-semibold text-ui-fg-base"
                 data-testid="payment-method-summary"
               >
-                Gift card
+                {t("checkout.gift_card")}
               </Text>
             </div>
           ) : null}

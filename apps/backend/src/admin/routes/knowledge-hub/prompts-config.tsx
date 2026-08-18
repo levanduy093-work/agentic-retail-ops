@@ -50,7 +50,7 @@ export const PromptsConfigContent = () => {
   const confirm = usePrompt()
   const queryClient = useQueryClient()
 
-  const { data, isLoading } = useQuery({
+  const { data, error, isError, isLoading, refetch } = useQuery({
     queryFn: () =>
       sdk.client.fetch<PromptsConfigResponse>(
         "/admin/agent-operations/ai/prompts"
@@ -209,7 +209,23 @@ export const PromptsConfigContent = () => {
   if (isLoading) {
     return (
       <Container className="p-8">
-        <Text className="text-ui-fg-muted">Đang tải cấu hình Prompts & Trợ lý...</Text>
+        <Text className="text-ui-fg-muted">{t("prompts.loading")}</Text>
+      </Container>
+    )
+  }
+
+  if (isError && !data) {
+    return (
+      <Container className="flex flex-col items-start gap-3 p-8">
+        <Text className="text-ui-fg-error" size="small">
+          {t("prompts.loadError")}
+        </Text>
+        {error instanceof Error && (
+          <Text className="text-ui-fg-subtle" size="small">{error.message}</Text>
+        )}
+        <Button onClick={() => void refetch()} size="small" variant="secondary">
+          {t("prompts.retry")}
+        </Button>
       </Container>
     )
   }
@@ -218,9 +234,9 @@ export const PromptsConfigContent = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <Heading level="h2">Cấu hình Trợ lý AI & System Prompts</Heading>
+          <Heading level="h2">{t("prompts.title")}</Heading>
           <Text className="text-ui-fg-subtle mt-1" size="small">
-            Tùy biến tên thương hiệu, vai trò xưng hô, câu chào mừng và toàn bộ các System Prompt vận hành của Chatbot CSKH trực tiếp từ Web GUI.
+            {t("prompts.subtitle")}
           </Text>
         </div>
         <Button
@@ -229,7 +245,7 @@ export const PromptsConfigContent = () => {
           size="small"
           variant="secondary"
         >
-          Khôi phục tất cả về mặc định
+          {t("prompts.resetAll")}
         </Button>
       </div>
 
@@ -237,9 +253,9 @@ export const PromptsConfigContent = () => {
       <Container className="p-6">
         <div className="mb-4 flex items-center justify-between border-b border-ui-border-base pb-3">
           <div>
-            <Heading level="h3">1. Thông tin Thương hiệu & Lời thoại Phản hồi</Heading>
+            <Heading level="h3">{t("prompts.brandSectionTitle")}</Heading>
             <Text className="text-ui-fg-subtle text-xs mt-0.5">
-              Cấu hình tên cửa hàng, vai trò của trợ lý và các câu phản hồi mặc định khi khách chào hỏi hoặc chờ kiểm tra.
+              {t("prompts.brandSectionSubtitle")}
             </Text>
           </div>
           <Badge color="green">Active</Badge>
@@ -248,7 +264,7 @@ export const PromptsConfigContent = () => {
         <form onSubmit={handleSaveSettings} className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <Label className="mb-1 block font-medium text-xs">Tên Cửa hàng / Thương hiệu</Label>
+              <Label className="mb-1 block font-medium text-xs">{t("prompts.brandNameLabel")}</Label>
               <Input
                 value={settingsForm.brand_name}
                 onChange={(e) =>
@@ -257,11 +273,11 @@ export const PromptsConfigContent = () => {
                     brand_name: e.target.value,
                   }))
                 }
-                placeholder="VD: Synapse, Duy Fashion Store..."
+                placeholder={t("prompts.brandNamePlaceholder")}
               />
             </div>
             <div>
-              <Label className="mb-1 block font-medium text-xs">Vai trò Trợ lý (Xưng hô)</Label>
+              <Label className="mb-1 block font-medium text-xs">{t("prompts.botRoleLabel")}</Label>
               <Input
                 value={settingsForm.bot_role}
                 onChange={(e) =>
@@ -270,14 +286,14 @@ export const PromptsConfigContent = () => {
                     bot_role: e.target.value,
                   }))
                 }
-                placeholder="VD: nhân viên CSKH, chuyên viên tư vấn..."
+                placeholder={t("prompts.botRolePlaceholder")}
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <Label className="mb-1 block font-medium text-xs">Câu chào mừng (Tiếng Việt)</Label>
+              <Label className="mb-1 block font-medium text-xs">{t("prompts.greetingViLabel")}</Label>
               <Textarea
                 rows={2}
                 value={settingsForm.greeting_message_vi}
@@ -287,11 +303,11 @@ export const PromptsConfigContent = () => {
                     greeting_message_vi: e.target.value,
                   }))
                 }
-                placeholder="Câu chào khi khách mở đầu hội thoại..."
+                placeholder={t("prompts.greetingViPlaceholder")}
               />
             </div>
             <div>
-              <Label className="mb-1 block font-medium text-xs">Câu đề nghị làm rõ yêu cầu (Tiếng Việt)</Label>
+              <Label className="mb-1 block font-medium text-xs">{t("prompts.clarifyViLabel")}</Label>
               <Textarea
                 rows={2}
                 value={settingsForm.clarify_message_vi}
@@ -301,14 +317,14 @@ export const PromptsConfigContent = () => {
                     clarify_message_vi: e.target.value,
                   }))
                 }
-                placeholder="Câu hỏi khi chưa rõ ý định..."
+                placeholder={t("prompts.clarifyViPlaceholder")}
               />
             </div>
           </div>
 
           <div>
             <Label className="mb-1 block font-medium text-xs">
-              Câu thông báo khi cần kiểm tra thêm / Chưa có tài liệu đã duyệt (Tiếng Việt)
+              {t("prompts.reviewAckViLabel")}
             </Label>
             <Textarea
               rows={2}
@@ -319,7 +335,7 @@ export const PromptsConfigContent = () => {
                   review_ack_message_vi: e.target.value,
                 }))
               }
-              placeholder="Câu phản hồi lịch sự khi chưa có chính sách duyệt..."
+              placeholder={t("prompts.reviewAckViPlaceholder")}
             />
           </div>
 
@@ -330,7 +346,7 @@ export const PromptsConfigContent = () => {
               size="small"
               type="submit"
             >
-              Lưu Thông tin Thương hiệu & Câu chào
+              {t("prompts.saveBrandSettings")}
             </Button>
           </div>
         </form>
@@ -338,9 +354,9 @@ export const PromptsConfigContent = () => {
 
       {/* Card 2: Managed System Prompts */}
       <div className="space-y-4">
-        <Heading level="h3">2. System Prompts Vận hành AI & RAG</Heading>
+        <Heading level="h3">{t("prompts.promptsSectionTitle")}</Heading>
         <Text className="text-ui-fg-subtle text-xs">
-          Tất cả các prompt dưới đây được chuyển trực tiếp cho mô hình AI (LLM) để định tuyến ý định, tra cứu tri thức và tư vấn bán hàng.
+          {t("prompts.promptsSectionSubtitle")}
         </Text>
 
         {data?.prompts?.map((item) => {
@@ -358,9 +374,9 @@ export const PromptsConfigContent = () => {
                   <div className="flex items-center gap-2">
                     <Heading level="h3">{item.title}</Heading>
                     {isCustomized ? (
-                      <StatusBadge color="orange">Đã tùy chỉnh</StatusBadge>
+                      <StatusBadge color="orange">{t("prompts.customized")}</StatusBadge>
                     ) : (
-                      <StatusBadge color="green">Mặc định</StatusBadge>
+                      <StatusBadge color="green">{t("prompts.default")}</StatusBadge>
                     )}
                   </div>
                   <Text className="text-ui-fg-subtle text-xs mt-1">
@@ -375,7 +391,7 @@ export const PromptsConfigContent = () => {
                       size="small"
                       variant="secondary"
                     >
-                      Khôi phục bản gốc
+                      {t("prompts.restoreOriginal")}
                     </Button>
                   )}
                   <Button
@@ -384,16 +400,16 @@ export const PromptsConfigContent = () => {
                     onClick={() => handleSavePrompt(item.prompt_key)}
                     size="small"
                   >
-                    Lưu Prompt
+                    {t("prompts.savePrompt")}
                   </Button>
                 </div>
               </div>
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs font-medium">System Prompt</Label>
+                  <Label className="text-xs font-medium">{t("prompts.systemPromptContent")}</Label>
                   <div className="flex items-center gap-2">
-                    <Label className="text-xs text-ui-fg-muted">Max Tokens:</Label>
+                    <Label className="text-xs text-ui-fg-muted">{t("prompts.maxOutputTokens")}:</Label>
                     <Input
                       className="w-24 h-7 text-xs"
                       max={8192}
@@ -427,7 +443,7 @@ export const PromptsConfigContent = () => {
                       },
                     }))
                   }
-                  placeholder="Nhập system prompt hướng dẫn cho AI model..."
+                  placeholder={t("prompts.systemPromptPlaceholder")}
                 />
               </div>
             </Container>

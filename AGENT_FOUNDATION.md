@@ -1,125 +1,88 @@
 # Agent Platform Foundation
 
-## 1. Mục đích
+## 1. Purpose
 
-Tài liệu này xác định phần nền phải hoàn thiện trước khi biến các vai trò trong
-[`AGENT_CATALOG.md`](./AGENT_CATALOG.md) thành agent có thể chạy thật.
+This document defines the architectural foundation required before turning the roles listed in [`AGENT_CATALOG.md`](./AGENT_CATALOG.md) into functioning agents.
 
-Mục tiêu không phải tạo ngay 17 tiến trình AI độc lập. Mục tiêu là xây một nền
-vận hành chung để từng năng lực agent có thể:
+The objective is not to immediately launch 17 standalone AI processes. Rather, it is to build a unified operational foundation so that each agent capability can:
 
-- nhận đúng sự kiện nghiệp vụ;
-- đọc dữ liệu có quyền và có nguồn gốc;
-- tạo kết luận hoặc đề xuất có cấu trúc;
-- xin duyệt khi hành động có rủi ro;
-- thực thi qua API/workflow nghiệp vụ được kiểm soát;
-- chống xử lý trùng và kiểm tra lại dữ liệu trước khi ghi;
-- lưu đầy đủ lịch sử để con người kiểm tra, tiếp quản và đánh giá.
+- Ingest the correct business events;
+- Read authorized, provenance-backed data;
+- Produce structured conclusions and recommendations;
+- Request human approval when actions carry risk;
+- Execute mutations exclusively through governed business APIs and workflows;
+- Prevent duplicate processing and revalidate data prior to writes;
+- Maintain a complete audit trail for human review, takeover, and evaluation.
 
-## 2. Hiện trạng cần hiểu đúng
+## 2. Current State Clarifications
 
-### Đã có
+### Existing Capabilities
 
-- Medusa backend là system of record cho catalog, customer, cart, order,
-  payment, fulfillment, inventory, promotion và các cấu hình commerce.
-- Medusa Admin cung cấp giao diện quản trị nghiệp vụ.
-- Next.js storefront cung cấp luồng mua hàng và tài khoản khách hàng.
-- PostgreSQL là cơ sở dữ liệu chính.
-- Backend đã có ví dụ đúng về route gọi workflow trong luồng liên kết Google
-  customer.
-- `AGENT_CATALOG.md` đã liệt kê 17 năng lực agent mục tiêu.
+- Medusa backend is the system of record for catalog, customers, carts, orders, payments, fulfillments, inventory, promotions, and commerce configurations.
+- Medusa Admin provides the business administration UI.
+- Next.js storefront provides the customer shopping and account flows.
+- PostgreSQL is the primary database.
+- Backend has reference examples of route-invoked workflows (e.g., Google customer linking).
+- `AGENT_CATALOG.md` outlines the 17 target agent capabilities.
 
-### Đã bổ sung trong vertical slice đầu tiên
+### Added in Initial Vertical Slice
 
-- Custom module `agent-operations` và migration cho event, incident, run,
-  recommendation, approval, audit và outbox.
-- Contract + validator cho `inventory.low`.
-- State machine, event dedupe, deterministic inventory recommendation và
-  approval decision idempotency.
-- Admin API cho event, incident và approval.
-- Policy declarations tương thích Medusa RBAC cho các resource agent.
-- Unit test và script kiểm chứng module service/database.
-- Scheduled outbox dispatcher có optimistic claim, lease expiry, exponential
-  backoff, dead-letter và message idempotency metadata.
-- Typed tool registry gồm `inventory.get-position@1.0.0`,
-  `inventory.execute-transfer@1.0.0`, `knowledge.search@1.0.0`,
-  `audit.search@1.0.0`, `trace.replay@1.0.0`, `task.create@1.0.0`,
-  `task.assign@1.0.0`, `task.escalate@1.0.0`, `incident.create@1.0.0`,
-  `incident.update@1.0.0`, `approval.request@1.0.0`,
-  `approval.decide@1.0.0`, `knowledge.propose@1.0.0` và
-  `message.send@1.0.0`.
-- `AgentToolDefinition` và executor dùng chung đã kiểm tra schema input/output,
-  version, permission, risk/approval, timeout/retry/idempotency contract và chặn
-  command không đi qua Action Gateway. Ba read tool platform có runtime thật đi
-  qua module service và executor; chín platform/task command đi qua request
-  gateway, policy và worker; coverage hiện là 15/24 tool catalog.
-- Action request/tool-call persistence, Action Gateway workflow và scheduled
-  action worker có lease, retry, dead-letter và idempotency. Action envelope hỗ
-  trợ context incident/recommendation/approval tùy chọn; không có policy ACTIVE
-  phù hợp thì từ chối và không tạo action.
-- Supervisor job chạy mỗi phút: hết hạn approval quá giờ bằng workflow có
-  audit/outbox, đồng thời phát `task.escalate` request idempotent cho task quá
-  deadline; supervisor không tự ghi nghiệp vụ commerce.
-- Inventory Action Gateway đọc `available_quantity` live từ Medusa dưới khóa,
-  kiểm tra lại approval/state/tool contract rồi mới điều chỉnh hai stock level.
-- Safe conflict đưa incident từ `EXECUTING` về `OPTIONS_READY`; mutation thành
-  công có compensation và đi tiếp `MONITORING -> RESOLVED`.
-- Communication Gateway `IN_APP` có conversation/message persistence,
-  notification subscriber và structured `APPROVAL_DECISION` command idempotent.
-- Admin API đọc conversation/message và gửi command; command vẫn đi qua policy,
-  approval workflow và Action Gateway hiện có.
+- Custom module `agent-operations` and migrations for events, incidents, runs, recommendations, approvals, audits, and outbox.
+- Contract and validator for `inventory.low`.
+- State machines, event deduplication, deterministic inventory recommendations, and approval decision idempotency.
+- Admin APIs for events, incidents, and approvals.
+- Medusa RBAC-compatible policy declarations for agent resources.
+- Unit tests and module service/database runtime verification scripts.
+- Scheduled outbox dispatcher with optimistic claiming, lease expiry, exponential backoff, dead-lettering, and message idempotency metadata.
+- Typed tool registry including `inventory.get-position@1.0.0`, `inventory.execute-transfer@1.0.0`, `knowledge.search@1.0.0`, `audit.search@1.0.0`, `trace.replay@1.0.0`, `task.create@1.0.0`, `task.assign@1.0.0`, `task.escalate@1.0.0`, `incident.create@1.0.0`, `incident.update@1.0.0`, `approval.request@1.0.0`, `approval.decide@1.0.0`, `knowledge.propose@1.0.0`, and `message.send@1.0.0`.
+- Shared `AgentToolDefinition` and executor validating input/output schemas, versions, permissions, risk/approval rules, timeout/retry/idempotency contracts, and rejecting commands bypassing the Action Gateway. Three platform read tools have live runtimes via module services and executors; nine platform/task commands route through request gateway, policies, and workers; active coverage is 15/24 catalog tools.
+- Action request/tool-call persistence, Action Gateway workflow, and scheduled action worker with leases, retries, dead-lettering, and idempotency. Action envelopes support optional incident/recommendation/approval contexts; missing an ACTIVE policy causes fail-closed rejection without creating actions.
+- Supervisor job running every minute: expires overdue approvals via workflows with audit/outbox logging, and emits idempotent `task.escalate` requests for past-deadline tasks; supervisor never directly writes commerce records.
+- Inventory Action Gateway reads live `available_quantity` from Medusa under locks, revalidates approval/state/tool contracts, and adjusts both stock levels.
+- Safe conflict handling transitions incidents from `EXECUTING` back to `OPTIONS_READY`; successful mutations include compensation logic and transition `MONITORING -> RESOLVED`.
+- `IN_APP` Communication Gateway with conversation/message persistence, notification subscribers, and structured idempotent `APPROVAL_DECISION` commands.
+- Admin APIs to read conversations/messages and submit commands; commands route through existing policies, approval workflows, and Action Gateway.
 
-### Vẫn chưa có
+### Not Yet Implemented
 
-- Agent planner/supervisor dùng LLM để tự chọn tool; hiện tool được gọi bằng
-  workflow deterministic và worker.
-- Trigger/SLA scheduler tự gọi `task.assign` và `task.escalate` từ
-  `task.created` hoặc `task.overdue`.
-- Bằng chứng multi-process cho production Event Bus, distributed locking và
-  subscriber idempotency/replay tooling.
-- Telegram adapter đã có webhook secret, identity allowlist và delivery
-  receipt/retry nhưng chưa acceptance với bot thật. Mobile/PWA, push,
-  Zalo/Slack/Teams/Messenger vẫn chưa có provider adapter.
-- LLM chuyển câu chat tự do thành structured command có evaluation.
-- Connector ingestion và semantic/vector retrieval cho Knowledge; lifecycle,
-  version, approval và citation cơ bản đã có.
-- UI chi tiết để yêu cầu/chạy task tool và xem timeline gateway trực tiếp.
-- Scenario riêng cho Workforce Coordinator ngoài runtime verification script.
+- Agent planner/supervisor using LLMs to autonomously select tools; tools are currently invoked by deterministic workflows and workers.
+- Trigger/SLA scheduler automatically dispatching `task.assign` and `task.escalate` from `task.created` or `task.overdue`.
+- Multi-process production verification for Event Bus, distributed locking, and subscriber idempotency/replay tooling.
+- Telegram adapter has webhook secrets, identity allowlists, and delivery receipt/retry logic, but lacks end-to-end acceptance testing with a live bot. Mobile/PWA, push notifications, and Zalo/Slack/Teams/Messenger provider adapters remain unbuilt.
+- LLM translation of free-form chat into structured commands with evaluation harnesses.
+- Automated ingestion connectors and vector retrieval for Knowledge; lifecycle, versioning, approvals, and chunk citations are implemented.
+- Detailed UI for requesting/executing task tools and viewing direct gateway timelines.
+- Dedicated scenario for Workforce Coordinator beyond runtime verification scripts.
 
-Vì vậy, bốn capability đầu tiên vẫn ở mức `implemented-static`. Safe-conflict
-đã có bằng chứng database/runtime cục bộ, nhưng happy path chuyển tồn với hai
-stock location thật, RBAC bằng user thật và production Event Bus/locking vẫn là
-gate trước khi gọi `runtime-verified` end-to-end.
+Consequently, the first four capabilities remain at `implemented-static`. Safe conflict handling has local database/runtime proof, but happy-path inventory transfer across two live stock locations, real-user RBAC, and multi-process production Event Bus/locking remain necessary gates before certifying end-to-end `runtime-verified`.
 
-## 3. Ranh giới kiến trúc bắt buộc
+## 3. Mandatory Architectural Boundaries
 
-### 3.1 Medusa vẫn là system of record
+### 3.1 Medusa Remains the System of Record
 
-Medusa sở hữu và quyết định trạng thái cuối của:
+Medusa owns and decides the definitive state for:
 
-- product, variant, price và promotion;
-- customer, cart và order;
-- payment, refund và return;
-- fulfillment, reservation, stock location và sellable inventory.
+- Products, variants, prices, and promotions;
+- Customers, carts, and orders;
+- Payments, refunds, and returns;
+- Fulfillments, reservations, stock locations, and sellable inventory.
 
-Agent không được ghi trực tiếp vào bảng Medusa và không được tự tính lại các
-giá trị mà Medusa phải quyết định như tồn khả dụng, tổng tiền, điều kiện refund
-hoặc eligibility của promotion.
+Agents must not write directly to core Medusa database tables and must not recalculate values governed by Medusa (e.g., available inventory, total pricing, refund conditions, or promotion eligibility).
 
-### 3.2 Agent Operations sở hữu trạng thái điều phối
+### 3.2 Agent Operations Owns Orchestration State
 
-Phần Agent Operations sở hữu:
+The Agent Operations module owns:
 
-- canonical event và event inbox;
-- incident/case;
-- agent run và từng bước thực thi;
-- evidence, recommendation và confidence;
-- approval, rejection, expiry và escalation;
-- action request, tool call và execution result;
-- task của con người;
-- audit trail và evaluation result.
+- Canonical events and event inboxes;
+- Incidents and cases;
+- Agent runs and execution steps;
+- Evidence, recommendations, and confidence scores;
+- Approvals, rejections, expirations, and escalations;
+- Action requests, tool calls, and execution results;
+- Human tasks;
+- Audit trails and evaluation results.
 
-### 3.3 Mọi mutation phải đi qua một đường duy nhất
+### 3.3 All Mutations Must Follow a Single Route
 
 ```text
 Agent
@@ -128,47 +91,45 @@ Agent
   -> Authentication / Authorization
   -> Policy / Risk / Approval Check
   -> Idempotency / State Revalidation
-  -> Medusa Workflow hoặc Application Service
+  -> Medusa Workflow or Application Service
   -> Transaction + Outbox
   -> Domain Event + Audit
 ```
 
-Worker, LLM, Admin UI và connector bên ngoài đều không được đi tắt qua ranh giới
-này.
+Workers, LLMs, Admin UI, and external connectors are strictly prohibited from bypassing this boundary.
 
-### 3.4 Deterministic rules có quyền quyết định cuối
+### 3.4 Deterministic Rules Hold Final Authority
 
-LLM có thể phân loại, tóm tắt và đề xuất. Code deterministic phải quyết định:
+LLMs may classify, summarize, and recommend. Deterministic code must enforce:
 
-- quyền truy cập;
-- risk level và yêu cầu phê duyệt;
-- số tiền, tồn kho và ngưỡng;
-- điều kiện hợp lệ của refund/return/promotion;
-- idempotency;
-- kiểm tra state mới nhất trước mutation;
-- hành động nào được phép thực thi.
+- Access permissions;
+- Risk levels and approval requirements;
+- Monetary amounts, inventory quantities, and thresholds;
+- Validity criteria for refunds, returns, and promotions;
+- Idempotency;
+- Pre-mutation state verification;
+- Authorized execution scopes.
 
-## 4. Những nền tảng phải bổ sung
+## 4. Required Platform Foundations
 
-### 4.1 Chuẩn hóa domain và ownership
+### 4.1 Domain and Ownership Standardization
 
-Tạo bảng ownership cho từng entity và command trước khi code agent đầu tiên.
-Mỗi dòng phải xác định:
+Establish an ownership matrix for every entity and command prior to implementing new agents. Each entry must declare:
 
-- system of record;
-- API đọc;
-- command được phép;
-- workflow thực thi;
-- role có quyền;
-- risk level;
-- yêu cầu approval;
-- audit fields bắt buộc.
+- System of record;
+- Read API;
+- Permitted commands;
+- Executing workflow;
+- Authorized roles;
+- Risk level;
+- Approval requirement;
+- Mandatory audit fields.
 
-Không cho phép hai module cùng sở hữu inventory, order hoặc payment state.
+No two modules may share concurrent ownership of inventory, order, or payment state.
 
-### 4.2 Canonical event contract
+### 4.2 Canonical Event Contract
 
-Mọi sự kiện đưa vào Agent Operations phải có envelope thống nhất:
+All events ingested into Agent Operations must follow a unified envelope:
 
 ```ts
 type CanonicalEvent<TPayload> = {
@@ -187,31 +148,30 @@ type CanonicalEvent<TPayload> = {
 }
 ```
 
-Yêu cầu:
+Requirements:
 
-- event bất biến sau khi ghi;
-- unique theo nguồn và ID sự kiện nguồn;
-- consumer dedupe trước khi tạo workflow run;
-- có version và migration strategy;
-- payload được validate bằng schema;
-- dữ liệu nhạy cảm không được đưa tùy tiện vào payload/log.
+- Events are immutable upon persistence;
+- Unique by source and source event ID;
+- Consumer deduplication prior to triggering workflow runs;
+- Explicit schema versions and migration strategies;
+- Payloads validated against strict schemas;
+- Sensitive data excluded from raw payloads and logs.
 
-Các event đầu tiên nên bám vào domain hiện có:
+Initial standard domain events:
 
-- `order.placed`;
-- `order.fulfillment_at_risk`;
-- `inventory.low`;
-- `inventory.reservation_changed`;
-- `payment.failed`;
-- `return.requested`;
-- `approval.decided`;
-- `action.executed`;
-- `action.failed`.
+- `order.placed`
+- `order.fulfillment_at_risk`
+- `inventory.low`
+- `inventory.reservation_changed`
+- `payment.failed`
+- `return.requested`
+- `approval.decided`
+- `action.executed`
+- `action.failed`
 
-### 4.3 Agent state và state machine
+### 4.3 Agent State and State Machine
 
-Không lưu trạng thái agent chỉ trong memory của process. Một run tối thiểu cần
-các trạng thái:
+Agent state must not reside solely in transient process memory. Each run must follow standard state transitions:
 
 ```text
 RECEIVED
@@ -223,39 +183,33 @@ RECEIVED
   -> RESOLVED
 ```
 
-Các nhánh kết thúc khác:
+Terminal branches:
 
 ```text
 REJECTED | CANCELLED | FAILED | ESCALATED
 ```
 
-Mỗi transition phải lưu actor, thời gian, reason, input reference,
-correlation ID và previous state. Transition không hợp lệ phải bị từ chối.
+Every transition must log actor, timestamp, reason, input references, correlation ID, and previous state. Invalid transitions must be rejected.
 
 ### 4.4 Typed Tool Registry
 
-Mỗi tool phải có:
+Every tool definition must declare:
 
-- tên và version;
-- mục đích nghiệp vụ;
-- input/output schema;
-- read hoặc command classification;
-- required permission;
-- risk level;
-- approval rule;
-- timeout, retry và idempotency behavior;
-- error taxonomy;
-- audit fields;
-- test contract.
+- Name and version;
+- Business purpose;
+- Input and output schemas;
+- Classification as read or command;
+- Required permissions;
+- Risk level;
+- Approval rules;
+- Timeout, retry, and idempotency behavior;
+- Error taxonomy;
+- Audit fields;
+- Test contracts.
 
-Source hiện thực hóa contract này nằm ở `tool-contract.ts`; mọi lời gọi dùng
-`tool-executor.ts`. API coverage phải phân biệt tool đã đăng ký chạy thật với
-tên tool mới được khai báo trong catalog. Read tool platform dùng
-`read-tool-runtime.ts`; knowledge search chỉ lấy tài liệu `APPROVED` còn hiệu
-lực, audit search bắt buộc có filter, và trace replay hợp nhất
-event/run/action/tool-call/audit/outbox theo thời gian.
+Implemented in `tool-contract.ts` and executed via `tool-executor.ts`. API coverage metrics must distinguish between active registered tools and catalog declarations. Platform read tools use `read-tool-runtime.ts`; knowledge search retrieves only valid `APPROVED` documents, audit search mandates query filters, and trace replay chronologically collates events, runs, actions, tool calls, audits, and outbox logs.
 
-Ví dụ nhóm tool đầu tiên:
+Initial core tool groups:
 
 ```text
 order.get
@@ -270,136 +224,125 @@ task.create
 notification.create-draft
 ```
 
-Tên `execute-*` không có nghĩa agent được tự thực thi. Action Gateway vẫn phải
-kiểm tra policy, approval và state mới nhất.
+The name `execute-*` does not grant autonomous execution; the Action Gateway must independently verify policies, approvals, and fresh state.
 
-### 4.5 Policy và Approval
+### 4.5 Policy and Approval
 
-Tạo policy matrix theo `action type x risk x actor x amount/quantity`.
+Construct a policy matrix mapping `action type x risk x actor x amount/quantity`.
 
-Mức rủi ro đề xuất:
+Standard risk levels:
 
-- `READ_ONLY`: chỉ đọc và phân tích;
-- `LOW`: có thể tự động nếu policy cho phép;
-- `MEDIUM`: có thể yêu cầu xác nhận hoặc sampling review;
-- `HIGH`: luôn cần người có đúng role phê duyệt;
-- `PROHIBITED`: agent không được gọi.
+- `READ_ONLY`: Read-only queries and analysis;
+- `LOW`: Fully automatable if permitted by policy;
+- `MEDIUM`: May require confirmation or sampling review;
+- `HIGH`: Mandatory approval by designated role;
+- `PROHIBITED`: Disallowed for agent invocation.
 
-Approval record tối thiểu gồm:
+Approval records must include:
 
-- request ID và action proposal bất biến;
-- requester/agent run;
-- risk level và policy version;
-- approver role;
-- trạng thái pending/approved/rejected/expired/cancelled;
-- decision actor, reason và timestamp;
-- expiry time;
-- snapshot/reference của evidence;
-- execution status và result reference.
+- Request ID and immutable action proposal;
+- Requester identity and agent run ID;
+- Risk level and policy version;
+- Required approver role;
+- Status (`pending`, `approved`, `rejected`, `expired`, `cancelled`);
+- Decision actor, reason, and timestamp;
+- Expiration time;
+- Evidence snapshot/reference;
+- Execution status and result reference.
 
-Approval chỉ cấp quyền thử thực thi. Worker vẫn phải revalidate inventory,
-order, price, SLA hoặc payment state ngay trước mutation. State đã đổi phải trả
-conflict an toàn, không cố thực thi theo approval cũ.
+Approvals only grant permission to attempt execution. Workers must revalidate inventory, orders, prices, SLAs, or payment states immediately prior to mutation. If state has changed, a safe conflict must be returned without applying outdated approvals.
 
-### 4.6 Idempotency, transaction và outbox
+### 4.6 Idempotency, Transactions, and Outbox
 
-Mọi command có side effect phải nhận idempotency key. Cùng key và cùng input chỉ
-được tạo một kết quả nghiệp vụ; cùng key nhưng input khác phải bị từ chối.
+Every mutation command must carry an idempotency key. Matching keys with identical inputs must produce a single business result; matching keys with conflicting inputs must be rejected.
 
-Trong cùng transaction cần ghi:
+Within a single transaction, atomically persist:
 
-1. thay đổi domain;
-2. execution result;
-3. audit record;
-4. outbox event.
+1. Domain state changes;
+2. Execution result;
+3. Audit record;
+4. Outbox event.
 
-Outbox worker cần có:
+Outbox workers must track:
 
-- status;
-- attempt count;
-- available time;
-- lock owner và lock expiry;
-- last error;
-- dead-letter/escalation policy.
+- Delivery status;
+- Attempt count;
+- Availability timestamp;
+- Lock owner and lock expiry;
+- Last error details;
+- Dead-letter and escalation policies.
 
-Retry không được tạo thêm refund, stock movement, notification hoặc task.
+Retries must never create duplicate refunds, stock transfers, notifications, or tasks.
 
-### 4.7 Audit và observability
+### 4.7 Audit and Observability
 
-Audit là append-only và tối thiểu phải trả lời được:
+Audit logs must be append-only and answer:
 
-- ai hoặc agent nào đã làm gì;
-- dùng tool/version/model/prompt nào;
-- dựa trên dữ liệu và tài liệu nào;
-- policy nào đã áp dụng;
-- ai phê duyệt;
-- input/output đã được redaction như thế nào;
-- mutation cuối cùng thành công hay thất bại;
-- correlation ID để lần theo toàn bộ luồng.
+- Who or which agent performed the action;
+- Which tool, version, model, and prompt were used;
+- What underlying data and documents were referenced;
+- Which policy was evaluated;
+- Who approved the action;
+- How inputs and outputs were redacted;
+- Final mutation outcome (success or failure);
+- Correlation IDs to trace the full flow.
 
-Metrics nền:
+Core operational metrics:
 
-- event-to-case latency;
-- time-to-recommendation;
-- approval waiting time;
-- execution success/conflict rate;
-- duplicate suppression count;
-- tool error/retry rate;
-- human override rate;
-- false positive/false negative theo scenario;
-- cost và token usage khi LLM được bật.
+- Event-to-case latency;
+- Time-to-recommendation;
+- Approval wait time;
+- Execution success and conflict rates;
+- Duplicate suppression counts;
+- Tool error and retry rates;
+- Human override rates;
+- False positive/negative rates per scenario;
+- Token usage and cost tracking for LLMs.
 
 ### 4.8 Human Operations UI
 
-Tận dụng Medusa Admin trước khi cân nhắc một console riêng. Các màn hình đầu
-tiên:
+Leverage Medusa Admin before building separate consoles. Initial screens:
 
-- `Incident Queue`: danh sách case, mức độ ưu tiên, SLA và owner;
-- `Incident Detail`: timeline, evidence, recommendation và task;
-- `Approval Inbox`: approve/reject cùng reason và impact preview;
-- `Agent Trace`: event, tool calls, model output, policy và execution result;
-- `Task Board`: việc cần con người xử lý và escalation.
+- `Incident Queue`: Case list, priorities, SLAs, and owners;
+- `Incident Detail`: Timelines, evidence, recommendations, and tasks;
+- `Approval Inbox`: Approve/reject flows with mandatory reasons and impact previews;
+- `Agent Trace`: Events, tool calls, model outputs, policies, and execution results;
+- `Task Board`: Human action items and escalations.
 
-UI không được coi thao tác click là nguồn sự thật duy nhất. Mọi decision phải đi
-qua Admin API/workflow và được ghi audit.
+UI clicks are not treated as the sole source of truth; all decisions route through Admin APIs and workflows with audit logging.
 
-### 4.9 Knowledge foundation
+### 4.9 Knowledge Foundation
 
-Chỉ xây RAG sau khi tool/policy/approval chạy ổn định. Knowledge item cần:
+Deploy RAG only after tool, policy, and approval layers are stable. Knowledge records must include:
 
-- document ID, version và owner;
-- status `DRAFT | APPROVED | RETIRED`;
-- effective/expiry time;
-- scope/tenant/locale;
-- nguồn gốc và checksum;
-- citation locator;
-- access policy.
+- Document ID, version, and owner;
+- Status (`DRAFT`, `APPROVED`, `RETIRED`);
+- Effective and expiration timestamps;
+- Scope, tenant, and locale;
+- Source provenance and checksums;
+- Citation locator;
+- Access policies.
 
-Agent chỉ được dùng tài liệu `APPROVED` còn hiệu lực cho quyết định nghiệp vụ.
-Không tìm được bằng chứng phải hỏi hoặc escalation, không được đoán.
+Agents may only reference valid, `APPROVED` documents for business decisions. Missing evidence must trigger questions or escalations, never assumptions.
 
-Baseline hiện đã có `agent_knowledge_chunk`: tài liệu mới được chia đoạn ổn
-định khi tạo, mỗi đoạn có checksum và citation locator riêng. Tìm kiếm chỉ xét
-đoạn thuộc tài liệu đúng tenant/scope/locale, đã duyệt và còn hiệu lực. Admin có
-Knowledge Hub Việt/Anh để tạo bản nháp, duyệt, ngừng sử dụng và thử truy xuất;
-script reindex dùng để bổ sung đoạn cho tài liệu được tạo trước migration.
+Baseline includes `agent_knowledge_chunk`: documents are segmented into stable chunks upon creation, each with its own checksum and locator. Queries filter by tenant/scope/locale and valid approved status. Admin provides Knowledge Hub (VI/EN) to manage drafts, approvals, deprecations, and test queries; reindex script generates chunks for pre-migration documents.
 
-### 4.10 Security và tenant boundary
+### 4.10 Security and Tenant Boundaries
 
-Trước khi bật agent command cần có:
+Prior to enabling agent commands, ensure:
 
-- service identity riêng cho worker;
-- least-privilege permission cho từng tool;
-- tenant/store/sales-channel/location scope;
-- secret reference thay vì lưu token thô;
-- PII redaction trong prompt, trace và log;
-- rate limit và execution budget;
-- kill switch theo agent, action type và tenant;
-- không cho prompt/user text tạo tên tool hoặc query tùy ý.
+- Dedicated service identities for workers;
+- Least-privilege permissions per tool;
+- Scoping by tenant, store, sales channel, and location;
+- Secret references rather than raw tokens;
+- PII redaction across prompts, traces, and logs;
+- Rate limits and execution budgets;
+- Emergency kill switches by agent, action type, and tenant;
+- Prevention of arbitrary tool names or unbounded queries generated from user prompts.
 
-## 5. Cấu trúc source đề xuất
+## 5. Proposed Source Structure
 
-Giữ modular monolith cho control plane và chỉ tách worker thực thi nền:
+Maintain a modular monolith for the control plane, separating background execution workers:
 
 ```text
 apps/
@@ -434,21 +377,20 @@ packages/
   agent-evaluation/
 ```
 
-Quy tắc dependency:
+Dependency guidelines:
 
-- `agent-domain` chỉ chứa type, rule deterministic và state transition thuần;
-- `agent-contracts` chứa event/tool/API schema, không chứa DB client;
-- backend sở hữu module service, workflow và transaction;
-- worker chỉ gọi typed API/Action Gateway;
-- Admin UI chỉ gọi Admin API;
-- LLM adapter không được import repository hoặc Medusa service để mutation.
+- `agent-domain` contains pure types, deterministic rules, and state transitions;
+- `agent-contracts` contains event/tool/API schemas, without DB clients;
+- backend owns module services, workflows, and database transactions;
+- workers call typed APIs and the Action Gateway exclusively;
+- Admin UI communicates only via Admin APIs;
+- LLM adapters must not import repositories or Medusa services directly for mutations.
 
-Nếu thêm `packages/**`, phải cập nhật `pnpm-workspace.yaml`. Nếu thêm task mới,
-phải khai báo đúng `outputs` trong `turbo.json`.
+Updating `packages/**` requires modifying `pnpm-workspace.yaml`. New tasks must declare proper `outputs` in `turbo.json`.
 
-## 6. Cách nâng cấp `AGENT_CATALOG.md`
+## 6. Upgrading `AGENT_CATALOG.md`
 
-Mỗi dòng mô tả hiện tại phải được mở rộng thành một contract có cùng mẫu:
+Each agent specification must conform to this schema:
 
 ```yaml
 id: inventory-agent
@@ -472,208 +414,158 @@ scenarios: []
 dependencies: []
 ```
 
-Mỗi agent phải trả lời rõ:
+Every agent contract must clarify:
 
-1. Business outcome nào agent chịu trách nhiệm?
-2. Sự kiện hoặc lịch nào kích hoạt?
-3. Agent được đọc entity nào?
-4. Agent được gọi những tool nào?
-5. Hành động nào bị cấm?
-6. Hành động nào cần approval của role nào?
-7. Khi nào agent phải dừng và giao cho con người?
-8. Trạng thái nào được persist?
-9. SLA và metric thành công là gì?
-10. Scenario nào chứng minh agent hoạt động đúng và an toàn?
+1. What business outcome is the agent responsible for?
+2. Which events or schedules trigger it?
+3. Which entities is it permitted to read?
+4. Which tools can it invoke?
+5. What actions are strictly prohibited?
+6. Which actions require approval, and from which roles?
+7. When must the agent halt and hand off to a human?
+8. What state is persisted?
+9. What are its operational SLAs and success metrics?
+10. Which test scenarios validate correct and safe execution?
 
-`status` chỉ được dùng theo các mức:
+Allowed `status` values:
 
-- `planned`: mới có thiết kế;
-- `contracted`: event/tool/policy/scenario đã được duyệt;
-- `implemented-static`: code và test tĩnh đã có;
-- `runtime-verified`: đã chạy qua API/worker/database thật;
-- `production-ready`: đã qua security, load, recovery và operational gate.
+- `planned`: Initial design only;
+- `contracted`: Events, tools, policies, and scenarios approved;
+- `implemented-static`: Code and static unit tests in place;
+- `runtime-verified`: Validated across live APIs, workers, and databases;
+- `production-ready`: Cleared security, load, recovery, and operational gates.
 
-## 7. Thứ tự triển khai agent
+## 7. Agent Implementation Order
 
-Không triển khai 17 agent cùng lúc. Bốn năng lực đầu tiên nên tạo thành một
-vertical slice:
+Do not build all 17 agents simultaneously. Focus first on an integrated vertical slice:
 
-1. **Event Triage** nhận sự kiện và tạo incident.
-2. **Inventory hoặc Order Exception** điều tra và tạo recommendation.
-3. **Policy & Approval** quyết định có cần người duyệt và quản lý decision.
-4. **Audit & Compliance** ghi và kiểm tra trace của toàn bộ luồng.
+1. **Event Triage**: Ingest events and create incidents.
+2. **Inventory or Order Exception**: Investigate and produce recommendations.
+3. **Policy & Approval**: Determine approval requirements and manage decisions.
+4. **Audit & Compliance**: Record and verify end-to-end execution traces.
 
-Sau khi vertical slice này ổn định mới mở rộng theo thứ tự:
+Once stable, expand incrementally:
 
-1. Fulfillment và Returns & Refund;
-2. Catalog Quality và Pricing/Promotion;
-3. Customer Support và Knowledge Curator;
-4. Integration Watchdog và Incident Commander;
-5. Workforce Coordinator, Owner Briefing và Analytics.
+1. Fulfillment and Returns & Refund;
+2. Catalog Quality and Pricing & Promotion;
+3. Customer Support and Knowledge Curator;
+4. Integration Watchdog and Incident Commander;
+5. Workforce Coordinator, Owner Briefing, and Analytics.
 
-Các tên trên là năng lực nghiệp vụ. Chúng có thể dùng chung một supervisor,
-worker, policy engine và Action Gateway; không bắt buộc tương ứng với 17 service
-hay 17 process.
+These names represent business capabilities. They can share a common supervisor, worker, policy engine, and Action Gateway rather than requiring 17 distinct microservices.
 
-## 8. Vertical slice đầu tiên đề xuất
+## 8. Proposed First Vertical Slice
 
-### Scenario: đơn hàng có nguy cơ thiếu tồn kho
+### Scenario: Order at Risk of Inventory Stockout
 
-1. Inventory/order event được ghi vào event inbox.
-2. Event Triage tạo một incident duy nhất dù event bị gửi lại.
-3. Agent đọc order, reservation và availability qua typed read tools.
-4. Rule deterministic tính shortfall và các phương án hợp lệ.
-5. Agent tạo recommendation có evidence và impact.
-6. Policy đánh dấu chuyển tồn kho là hành động rủi ro cao.
-7. Operations Manager approve/reject trong Admin.
-8. Worker nhận `approval.decided`.
-9. Action Gateway kiểm tra permission, idempotency và state mới nhất.
-10. Medusa workflow thực thi hoặc trả conflict an toàn.
-11. Outbox phát kết quả, incident chuyển sang monitoring/resolved.
-12. Toàn bộ event, tool, approval, mutation và lỗi xuất hiện trong Agent Trace.
+1. Inventory/order event arrives in the event inbox.
+2. Event Triage generates a single incident, deduplicating resubmitted events.
+3. Agent reads order, reservation, and stock availability via typed read tools.
+4. Deterministic rules compute shortfall and valid resolution options.
+5. Agent produces recommendations backed by evidence and impact assessments.
+6. Policy classifies inventory transfer as a high-risk action.
+7. Operations Manager reviews and approves/rejects in Admin.
+8. Worker receives `approval.decided`.
+9. Action Gateway verifies permissions, idempotency, and fresh state.
+10. Medusa workflow executes or returns a safe conflict.
+11. Outbox emits execution results; incident transitions to `MONITORING -> RESOLVED`.
+12. All events, tool calls, approvals, mutations, and errors appear in Agent Trace.
 
-Để scenario có ý nghĩa, dữ liệu test phải có ít nhất hai stock location, tồn
-kho lệch nhau, order/reservation thực và expected outcome rõ ràng.
+Test fixtures must include at least two stock locations, asymmetric inventory balances, live order/reservation records, and clear expected outcomes.
 
-## 9. Milestone chuẩn bị nền
+## 9. Foundation Milestones
 
-### M0 — Contract và ownership
+### M0 — Contracts and Ownership
 
-- Chốt entity ownership, event envelope, tool contract và risk matrix.
-- Chọn vertical slice đầu tiên và viết scenario ground truth.
-- Chưa tích hợp LLM.
+- Finalize entity ownership, event envelopes, tool contracts, and risk matrices.
+- Select initial vertical slice and write ground-truth test scenarios.
+- No LLM integration.
 
-### M1 — Persistence và control plane
+### M1 — Persistence and Control Plane
 
-- Tạo migrations/module cho event inbox, incident, run, recommendation,
-  approval, tool call, audit và outbox.
-- Implement state transition và dedupe/idempotency tests.
+- Create migrations and modules for event inboxes, incidents, runs, recommendations, approvals, tool calls, audits, and outbox.
+- Implement state transitions, deduplication, and idempotency tests.
 
-### M2 — Action Gateway và worker
+### M2 — Action Gateway and Workers
 
-- Implement read tools, approval flow và một command tool.
-- Worker có lease, retry, dead-letter và safe conflict.
-- Chạy end-to-end bằng rule deterministic.
+- Implement read tools, approval flows, and an initial command tool.
+- Worker with leases, retries, dead-lettering, and safe conflict handling.
+- Run end-to-end tests using deterministic rules.
 
-### M3 — Human console
+### M3 — Human Operations Console
 
-- Incident Queue, Incident Detail, Approval Inbox và Agent Trace trong Admin.
-- Role/permission và audit decision hoạt động bằng tài khoản thật.
+- Deploy Incident Queue, Incident Detail, Approval Inbox, and Agent Trace in Admin.
+- Enforce roles, permissions, and audit logging with real user accounts.
 
-### M4 — LLM trong giới hạn
+### M4 — Governed LLM Integration
 
-- LLM chỉ sinh structured recommendation theo schema.
-- Bổ sung prompt/version tracking, redaction, budget và evaluation.
-- So sánh deterministic-only với LLM-assisted trên cùng scenario.
+- Restrict LLMs to structured schema-compliant recommendations.
+- Add prompt version tracking, PII redaction, token budgets, and evaluation harnesses.
+- Benchmark deterministic-only vs. LLM-assisted outcomes on identical scenarios.
 
-### M5 — Mở rộng catalog agent
+### M5 — Agent Catalog Expansion
 
-- Chỉ chuyển agent tiếp theo sang `contracted` khi event, tool, policy,
-  scenario và human owner đã sẵn sàng.
-- Integration Hub và connector bên ngoài là capability bổ sung, không thay thế
-  commerce core.
+- Promote subsequent agents to `contracted` only when events, tools, policies, scenarios, and human owners are ready.
+- Treat external connectors as supplementary capabilities without compromising core commerce logic.
 
-## 10. Definition of Ready cho một agent
+## 10. Definition of Ready for an Agent
 
-Một agent chỉ được bắt đầu code khi có đủ:
+An agent may only begin implementation when it has:
 
-- business owner;
-- mission và out-of-scope;
-- trigger/event schema;
-- entity ownership;
-- typed read/command tools;
-- risk và approval matrix;
-- state machine;
-- human handoff/escalation;
-- scenario gồm initial state, event, expected actions và forbidden actions;
-- success, safety và latency metrics.
+- A designated business owner;
+- Explicit mission and out-of-scope boundaries;
+- Trigger and event schemas;
+- Entity ownership mappings;
+- Typed read and command tool specifications;
+- Risk and approval matrices;
+- State machine definition;
+- Human handoff and escalation triggers;
+- Test scenarios defining initial state, triggers, expected actions, and forbidden actions;
+- Defined success, safety, and latency metrics.
 
-## 11. Definition of Done cho một agent
+## 11. Definition of Done for an Agent
 
-Một agent chỉ được gọi là runtime verified khi:
+An agent is certified runtime verified only when:
 
-- duplicate event không tạo run/action thứ hai;
-- invalid transition bị từ chối;
-- unauthorized tool call bị từ chối;
-- high-risk action không thể chạy thiếu approval;
-- approval hết hạn hoặc state thay đổi tạo safe conflict;
-- retry không tạo side effect trùng;
-- audit truy được event đến mutation cuối;
-- con người có thể reject, cancel, retry và takeover;
-- scenario happy path và failure paths chạy qua API, worker và database thật;
-- không có secret/PII không cần thiết trong prompt hoặc log.
+- Duplicate events do not create redundant runs or actions;
+- Invalid state transitions are rejected;
+- Unauthorized tool calls are blocked;
+- High-risk actions cannot execute without valid approval;
+- Expired approvals or mutated state trigger safe conflicts;
+- Retries produce zero duplicate side effects;
+- Audit logs trace from initial trigger to final mutation;
+- Humans can reject, cancel, retry, or take over cases;
+- Happy and failure paths execute successfully across real APIs, workers, and databases;
+- No sensitive credentials or PII appear in prompts or logs.
 
-## 12. Việc cần làm ngay
+## 12. Immediate Priorities
 
-Nền dùng chung đã đạt `implemented-static` và phần persistence/bootstrap đạt
-`runtime-verified` trên PostgreSQL local. Vì vậy việc tiếp theo chuyển sang xây
-vertical slice của từng agent, không tiếp tục dựng infrastructure chung chung:
+The shared platform foundation is `implemented-static` and persistence/bootstrap is `runtime-verified` on local PostgreSQL. Focus shifts to building individual agent vertical slices:
 
-1. Gán role `operations_manager` cho tài khoản vận hành production; HTTP verifier
-   bằng User record tạm đã xác nhận allow 201, deny 403 và unauthenticated 401.
-2. Chạy happy path chuyển tồn với hai stock location thật và kiểm thử hai action
-   cạnh tranh trên cùng inventory item bằng Redis locking.
-3. Chuẩn hóa nơi checkout/OMS ghi `agent_payment_due_at` và
-   `agent_fulfillment_due_at`; detector SLA 5 phút đã chạy thật và không ghi
-   thẳng bảng order.
-4. Xây Customer Support Agent bằng approved knowledge, citation và KNOW-001;
-   đầu ra chỉ là draft chờ người duyệt.
-5. Chọn secret manager/model provider và adapter mobile/chat sau khi có benchmark
-   và security gate; không đặt khóa bí mật trong database hoặc Admin client.
+1. Assign `operations_manager` role to production accounts; HTTP verification with temporary users confirmed 201 allow, 403 deny, and 401 unauthenticated.
+2. Run happy-path inventory transfers with two real stock locations and verify competing actions on the same item under Redis locking.
+3. Standardize where checkout/OMS sets `agent_payment_due_at` and `agent_fulfillment_due_at`; the 5-minute SLA detector runs live without writing directly to order tables.
+4. Build Customer Support Agent using approved knowledge, citations, and `KNOW-001`; outputs remain draft responses awaiting human approval.
+5. Select secret managers, model providers, and mobile/chat adapters following benchmark and security reviews; never store secrets in database tables or Admin clients.
 
-## 13. Baseline nền tảng đã code ngày 2026-08-10
+## 13. Platform Baseline Code as of 2026-08-10
 
-- 17 agent được đăng ký trong catalog TypeScript đọc được bằng máy.
-- 21 RBAC policy được Medusa đồng bộ từ `definePolicies` và gắn vào role
-  `operations_manager` bằng bootstrap idempotent.
-- Có persistence và workflow cho task, policy definition, knowledge, prompt,
-  model run, evaluation, channel connection và delivery.
-- Có deterministic policy engine, task state machine, knowledge eligibility,
-  citation checksum, model redaction/budget/schema gate và assertion evaluator.
-- Typed registry có 15/24 tool. Sáu platform command
-  `incident.create/update`, `approval.request/decide`, `knowledge.propose` và
-  `message.send` đã được nối vào Action Gateway cùng ba task command.
-- Action request lưu snapshot `authorized_roles`; executor kiểm tra permission
-  và required role tại cả lúc yêu cầu lẫn lúc thực thi.
-- Migration `Migration20260810132610` đã chạy trên PostgreSQL local; runtime
-  xác nhận `knowledge.propose` qua gateway là `SUCCEEDED`, ba task command vẫn
-  chạy đúng, stale state trả `CONFLICT`, request thiếu policy không tạo action.
-  Unit test hiện đạt 77/77. Order Exception runtime verifier đã tự tạo order thử
-  qua workflow Medusa và xác nhận live read, HTTP/RBAC, Action Gateway, task,
-  audit/outbox, chống trùng và không thay đổi order. Agent này đạt
-  `runtime-verified`; detector/SLA 5 phút đã xác nhận first-create/second-dedupe,
-  còn production cursor/index và concurrency nhiều worker.
-- Có Admin Operations Console và readiness API phân biệt `code_ready` với
-  `deployment_ready`.
-- Redis Event Bus, Workflow Engine và distributed locking đã kết nối runtime khi
-  bật cờ; local mặc định vẫn an toàn với in-memory.
-- OpenAI Responses adapter đã có structured output, timeout, redaction,
-  idempotent model-run ledger và deterministic fallback; provider vẫn disabled
-  nếu chưa cấu hình key/model. External delivery provider thật vẫn disabled.
-  Đây là chủ ý an toàn, không phải bằng chứng runtime production.
+- 17 agents registered in machine-readable TypeScript catalog.
+- 21 RBAC policies synced by Medusa from `definePolicies` and assigned to `operations_manager` role via idempotent bootstrap.
+- Persistence and workflows for tasks, policy definitions, knowledge, prompts, model runs, evaluations, channel connections, and deliveries.
+- Deterministic policy engine, task state machine, knowledge eligibility rules, citation checksum verification, model redaction/budget/schema gates, and assertion evaluators.
+- Active registry with 15/24 tools. Six platform commands (`incident.create/update`, `approval.request/decide`, `knowledge.propose`, `message.send`) and three task commands connected to Action Gateway.
+- Action requests record `authorized_roles` snapshots; executor enforces permissions and required roles during request and execution.
+- Migration `Migration20260810132610` executed on local PostgreSQL; runtime verified `knowledge.propose` through gateway succeeds, task commands operate correctly, stale state returns `CONFLICT`, and requests lacking policies create no actions. Unit tests at 77/77. Order Exception runtime verifier created test orders via Medusa workflows, validating live reads, HTTP/RBAC, Action Gateway, tasks, audit/outbox, deduplication, and zero order mutations. This agent is certified `runtime-verified`; the 5-minute SLA detector confirmed first-create/second-dedupe, with production cursor/indexing remaining.
+- Admin Operations Console and readiness APIs distinguish `code_ready` from `deployment_ready`.
+- Redis Event Bus, Workflow Engine, and distributed locking connect at runtime when enabled; local development defaults safely to in-memory.
+- OpenAI Responses adapter features structured outputs, timeouts, redactions, idempotent model-run ledgers, and deterministic fallbacks; providers remain disabled until keys/models are configured. Live external delivery providers remain disabled by design.
 
-## 14. Knowledge Source Connector ngày 2026-08-11
+## 14. Knowledge Source Connector as of 2026-08-11
 
-- Có model nguồn knowledge, API Admin, workflow kết nối/đồng bộ và giao diện
-  Việt/Anh trong Knowledge Hub.
-- Nguồn knowledge hiện chỉ đi qua Google OAuth và Google Picker: người dùng chủ
-  động chọn Google Docs, Google Sheets hoặc tệp TXT/Markdown/CSV trên Drive.
-  Connector tải văn bản tùy ý từ website và cấu hình allowlist liên quan đã bị
-  gỡ để giảm bề mặt tấn công và tránh thao tác kỹ thuật cho chủ shop.
-- Mỗi lần nội dung thay đổi tạo một knowledge document `DRAFT`; quản lý vẫn phải
-  duyệt thì agent mới tìm thấy. Checksum ngăn bản nháp trùng khi nguồn không đổi.
-- Migration `Migration20260811060537` và runtime verifier đã chạy thành công
-  trên PostgreSQL local. Migration `Migration20260811064334` mở rộng nguồn cho
-  Google Docs, Google Sheets và tệp TXT/Markdown/CSV trên Drive. Migration
-  `Migration20260811122426` đã chạy và loại kiểu nguồn website cũ khỏi schema
-  hiện hành. Hai knowledge document verifier liên quan vẫn ở trạng thái
-  `RETIRED`, nên agent không thể tìm hoặc sử dụng chúng.
-- Google adapter đã chuyển sang connector OAuth theo từng shop. Chủ shop bấm
-  kết nối, đăng nhập Google và chọn tệp qua Google Picker; quyền `drive.file`
-  chỉ cho phép đọc những tệp được chọn. Refresh token được mã hóa AES-256-GCM
-  trong `agent_connector_credential`, callback kiểm tra state ký số, nonce và
-  thời hạn; kết nối/ngắt kết nối có workflow và audit.
-- Migration `Migration20260811080525` đã chạy; build, lint và 128 unit test đạt.
-  Acceptance Google thật vẫn `RUNTIME-PENDING` đến khi bên triển khai cấu hình
-  OAuth Client, Picker API key và project number. Chưa có Notion/PDF, lịch đồng
-  bộ nền hoặc review diff.
+- Knowledge source models, Admin APIs, connection/sync workflows, and VI/EN Knowledge Hub UI.
+- Knowledge sources restricted to Google OAuth and Google Picker: users explicitly select Google Docs, Google Sheets, or TXT/Markdown/CSV files from Google Drive. Arbitrary website scraping and related allowlists were removed to minimize attack surfaces and avoid operational complexity.
+- Content changes generate `DRAFT` knowledge documents; managers must approve before agents can discover them. Checksums prevent duplicate drafts when source content is unchanged.
+- Migration `Migration20260811060537` and runtime verifiers executed on local PostgreSQL. Migration `Migration20260811064334` expanded support for Google Docs, Sheets, and TXT/Markdown/CSV files on Drive. Migration `Migration20260811122426` removed legacy website source types from active schemas. Two related verifier documents remain `RETIRED`, preventing agent access.
+- Google adapter uses per-store OAuth connectors. Store owners connect, authenticate with Google, and select files via Google Picker; `drive.file` scope restricts access strictly to chosen files. Refresh tokens are AES-256-GCM encrypted in `agent_connector_credential`, callbacks verify signed state/nonce/expiration, and connect/disconnect flows are audited.
+- Migration `Migration20260811080525` executed; build, lint, and 128 unit tests pass. Live Google API acceptance remains `RUNTIME-PENDING` pending production OAuth client, Picker API key, and project configuration. Notion/PDF, background sync schedules, and diff reviews remain future work.

@@ -30,7 +30,9 @@ const StoreTemplate = async ({
       <div className="content-container pt-6 small:pt-10">
         <div className="liquid-glass-web-approx rounded-[26px] px-6 py-12 small:px-12 small:py-16">
           <h1 className="mb-3 max-w-2xl text-4xl font-semibold tracking-[-0.06em] text-[#12231d] small:text-5xl" data-testid="store-page-title">
-            {query ? `Results for “${query}”` : dict.store.title}
+            {query
+              ? dict.store.results_for?.replace("{query}", query) || `Results for “${query}”`
+              : dict.store.title}
           </h1>
           <p className="max-w-xl text-base leading-7 text-[#5e7068]">
             {dict.store.subtitle}

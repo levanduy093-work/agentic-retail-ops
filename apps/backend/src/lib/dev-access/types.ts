@@ -1,20 +1,16 @@
-export type DevAccessMode = "public" | "passcode" | "maintenance"
-
 export type DevAccessSettings = {
+  passcode_hash: string
   public_access_enabled: boolean
-  access_mode: DevAccessMode
-  passcode: string
-  public_domain: string
-  maintenance_message: string
-  allowed_ips: string[]
   updated_at: string
 }
 
 export type UpdateDevAccessInput = {
-  public_access_enabled?: boolean
-  access_mode?: DevAccessMode
   passcode?: string
-  public_domain?: string
-  maintenance_message?: string
-  allowed_ips?: string[]
+  public_access_enabled?: boolean
+}
+
+export type PublicDevAccessSettings = {
+  has_passcode: boolean
+  public_access_enabled: boolean
+  updated_at: string
 }

@@ -1,468 +1,257 @@
 # Agent Catalog
 
-## Cách đọc trạng thái
+## Status Definitions
 
-- `planned`: mới xác định năng lực mục tiêu.
-- `contracted`: đã chốt trigger, tool, policy và scenario.
-- `implemented-static`: đã có code và test tĩnh, chưa đủ bằng chứng end-to-end.
-- `runtime-verified`: đã chạy qua API, worker và database thật.
-- `production-ready`: đã qua security, recovery, load và operational gate.
+- `planned`: Target capabilities defined only.
+- `contracted`: Triggers, tools, policies, and scenarios finalized.
+- `implemented-static`: Code and static tests exist, but end-to-end runtime evidence is incomplete.
+- `runtime-verified`: Verified through real APIs, workers, and live databases.
+- `production-ready`: Passed security, recovery, load, and operational gates.
 
-Không suy diễn `database-verified` thành `runtime-verified`. Worker thực thi,
-revalidation trên dữ liệu Medusa mới nhất, RBAC bằng tài khoản thật và Admin UI
-vẫn là các gate riêng.
+Do not infer `database-verified` as `runtime-verified`. Worker execution, revalidation against the latest Medusa data, real-account RBAC, and Admin UI remain separate gates.
 
-## Hiện trạng triển khai
+## Implementation Status
 
-| Agent capability | Trạng thái | Phạm vi đã có | Gate còn thiếu |
+| Agent Capability | Status | Implemented Scope | Remaining Gates |
 | --- | --- | --- | --- |
-| Policy & Approval Agent | `implemented-static` | Policy HIGH cho đề xuất chuyển tồn; `approval.request/decide` đã có typed contract, role gate và Action Gateway; approval có expiry, reason, actor; RBAC module, 21 policy và role Operations Manager đã bootstrap idempotent | Gán role cho tài khoản thật và kiểm thử allow/deny qua HTTP |
-| Event Triage Agent | `implemented-static` | Nhận `inventory.low`; validate envelope; unique theo `source + event_id`; tạo một incident cho event; duplicate trả lại record cũ | Subscriber/connector thật, retry/concurrency test, dead-letter và nhiều event type |
-| Inventory Agent | `implemented-static` | Rule deterministic, typed read/command tools, Action Gateway revalidate và safe conflict; runtime verifier dùng ba stock location và inventory item thật của Medusa, chạy hai action cạnh tranh dưới Redis lock cho kết quả một `SUCCEEDED`, một `CONFLICT` và không oversell | Lặp lại contention bằng nhiều process/worker, thêm reservation interaction và chạy trên location vận hành thật |
-| Audit & Compliance Agent | `implemented-static` | Audit/outbox/tool trace, lease, retry/backoff, dead-letter; Redis Event Bus, Workflow Engine và locking đã kết nối runtime | Subscriber idempotency mở rộng, append-only enforcement, trace/replay detail và retention |
-| Order Exception Agent | `runtime-verified` | Checkout `order.placed` và luồng API/OMS tự gán SLA UTC; `order.read` lấy live status; detector quét phân trang mỗi 5 phút và khóa từng order bằng Redis; HTTP/RBAC đã xác nhận; hai worker cạnh tranh vẫn chỉ tạo một event/incident/action | Hiệu chỉnh SLA theo vận hành thật và SLA table/index hoặc durable cursor cho volume lớn |
-| Fulfillment Agent | `contracted` | Có trigger fulfillment, read/task tool và foundation dependency | SLA contract, workflow và connector vận chuyển thật |
-| Customer Support Agent | `runtime-verified` | API/worker/PostgreSQL đã xác nhận `support.requested` đọc live order, chặn sai chủ sở hữu trước knowledge/model call, gọi Gemini thật, dùng knowledge `APPROVED`, tạo draft có citation và task; browser nhân viên đã xác nhận nhận/sửa/lưu, trả hàng đợi, chuyển quản lý và VI/EN; simulator `IN_APP` đã xác nhận khách hỏi và nhân viên bấm gửi bản đã duyệt, có chống gửi trùng | Customer channel/identity mapping, consent, webhook signature, delivery receipt và adapter gửi khách thật |
-| Knowledge Curator Agent | `implemented-static` | Kho hướng dẫn có Google OAuth/Picker connector, tài liệu bất biến theo phiên bản, chunk/checksum/citation, vòng đời duyệt/ngừng dùng và Admin UI Việt/Anh. LangChain.js + Qdrant đã chạy với Gemini `gemini-embedding-001`; live verifier chứng minh lexical không tìm thấy fixture nhưng semantic và hybrid đều tìm đúng, rồi retire/xóa vector | Benchmark VI/EN, phát hiện nội dung thiếu/trùng/xung đột và agent đề xuất bản cập nhật; quản lý vẫn là người duyệt cuối |
-| Returns & Refund Agent | `contracted` | Có policy/approval, task, audit và evaluation foundation | Ownership, evidence contract và Medusa workflow riêng |
-| Payment & Fraud Watcher | `contracted` | Có event/incident/task/escalation và `PROHIBITED` policy primitive | Payment mapping, fraud rules và prohibited-action scenarios |
-| Catalog Quality Agent | `contracted` | Có task, evaluation và typed-tool contract | Catalog rules, scanner và remediation tools riêng |
-| Pricing & Promotion Analyst | `contracted` | Có model run, prompt version, evaluation và approval foundation | Metrics dataset, margin rules và pricing ownership |
-| Workforce Coordinator Agent | `implemented-static` | `task.create`, `task.assign`, `task.escalate` chạy qua Action Gateway, policy ACTIVE, lease, typed executor, tool-call/audit/outbox; PostgreSQL runtime đã xác nhận success và safe conflict | Trigger `task.created/task.overdue`, roster/shift thật, SLA scheduler, HTTP/RBAC user thật và multi-worker contention |
-| Integration Watchdog Agent | `contracted` | Có event/incident/task/outbox/channel foundation | Connector telemetry, health adapter và recovery playbook |
-| Incident Commander Agent | `contracted` | Có incident, task, channel, audit và policy foundation | Severity/SLA workflow, checklist và war-room adapter |
-| Owner Briefing Agent | `contracted` | Có read model, knowledge citation, channel và prompt contract | Metrics composition, scheduler và mobile delivery adapter |
-| Analytics Agent | `contracted` | Có governed prompt/model-run/evaluation contract | Semantic metrics layer, query tool và benchmark dataset |
+| Policy & Approval Agent | `implemented-static` | HIGH policy for inventory transfer proposals; `approval.request/decide` with typed contract, role gates, and Action Gateway; approvals include expiry, reason, and actor; RBAC module, 21 policies, and Operations Manager role bootstrapped idempotently | Assign role to real accounts and verify allow/deny via HTTP |
+| Event Triage Agent | `implemented-static` | Ingests `inventory.low`; validates envelope; unique by `source + event_id`; creates one incident per event; duplicate returns existing record | Real subscribers/connectors, retry/concurrency testing, dead-lettering, and additional event types |
+| Inventory Agent | `implemented-static` | Deterministic rules, typed read/command tools, Action Gateway revalidation, and safe conflict handling; runtime verifier used three real Medusa stock locations and inventory items, running two competing actions under Redis lock resulting in one `SUCCEEDED`, one `CONFLICT`, and zero overselling | Multi-process/worker contention testing, reservation interaction, and verification on production stock locations |
+| Audit & Compliance Agent | `implemented-static` | Audit/outbox/tool tracing, leases, retry/backoff, dead-lettering; Redis Event Bus, Workflow Engine, and distributed locking connected at runtime | Extended subscriber idempotency, append-only enforcement, trace/replay details, and retention policies |
+| Order Exception Agent | `runtime-verified` | Checkout `order.placed` and API/OMS flows automatically assign UTC SLAs; `order.read` retrieves live status; detector scans paginated orders every 5 minutes and locks each order via Redis; HTTP/RBAC verified; two competing workers still produce only one event/incident/action | Fine-tune operational SLAs and introduce an indexed SLA table or durable cursor for high volumes |
+| Fulfillment Agent | `contracted` | Has fulfillment trigger, read/task tools, and foundation dependencies | SLA contract, fulfillment workflow, and real shipping carrier connectors |
+| Customer Support Agent | `runtime-verified` | API/worker/PostgreSQL verified `support.requested` reads live orders, enforces ownership check before knowledge/model calls, invokes real Gemini, uses `APPROVED` knowledge, and creates draft responses with citations and tasks; staff browser verified claiming/editing/saving, returning to queue, escalating to management, and VI/EN switching; `IN_APP` simulator verified customer inquiries and staff sending approved responses with deduplication protection | Customer channel/identity mapping, consent management, webhook signatures, delivery receipts, and live customer outbound adapters |
+| Knowledge Curator Agent | `implemented-static` | Knowledge repository with Google OAuth/Picker connector, versioned immutable documents, chunk/checksum/citation tracking, approval/retire lifecycle, and VI/EN Admin UI. LangChain.js + Qdrant running with Gemini `gemini-embedding-001`; live verifier demonstrated lexical search returns 0 results for fixture while semantic and hybrid find the exact match, followed by retiring/deleting vectors | VI/EN benchmarking, detection of missing/duplicate/conflicting content, and agent-proposed updates; human managers remain the final approvers |
+| Returns & Refund Agent | `contracted` | Has policy/approval, task, audit, and evaluation foundation | Ownership models, evidence contracts, and dedicated Medusa workflows |
+| Payment & Fraud Watcher | `contracted` | Has event/incident/task/escalation and `PROHIBITED` policy primitives | Payment provider mapping, fraud detection rules, and prohibited-action scenarios |
+| Catalog Quality Agent | `contracted` | Has task, evaluation, and typed-tool contracts | Catalog rules, background scanner, and dedicated remediation tools |
+| Pricing & Promotion Analyst | `contracted` | Has model run, prompt versioning, evaluation, and approval foundation | Metrics dataset, margin rules, and pricing ownership models |
+| Workforce Coordinator Agent | `implemented-static` | `task.create`, `task.assign`, `task.escalate` run via Action Gateway, ACTIVE policies, leases, typed executors, tool-call/audit/outbox; PostgreSQL runtime verified success and safe conflict handling | `task.created/task.overdue` triggers, real shift rosters, SLA scheduler, real user HTTP/RBAC, and multi-worker contention |
+| Integration Watchdog Agent | `contracted` | Has event/incident/task/outbox/channel foundation | Connector telemetry, health adapters, and automated recovery playbooks |
+| Incident Commander Agent | `contracted` | Has incident, task, channel, audit, and policy foundation | Severity/SLA workflows, response checklists, and war-room adapters |
+| Owner Briefing Agent | `contracted` | Has read models, knowledge citations, channels, and prompt contracts | Metrics aggregation, briefing scheduler, and mobile delivery adapters |
+| Analytics Agent | `contracted` | Has governed prompt/model-run/evaluation contracts | Semantic metrics layer, query tools, and benchmark datasets |
 
-Communication Gateway là platform capability dùng chung, không tính thêm thành
-agent thứ 18. `IN_APP` đã chạy trong Admin; Telegram đã có adapter gửi, webhook
-nhận, allowlist identity, secret verification, delivery lease/retry/dead-letter
-và runtime verifier với Telegram API giả lập. Kết nối bot thật vẫn
-`RUNTIME-PENDING` cho tới khi có bot token và public HTTPS URL. Các provider
-mobile/push/Zalo/Slack/Teams vẫn chưa triển khai.
+Communication Gateway is a shared platform capability, not counted as an 18th agent. `IN_APP` is active in Admin; Telegram has outbound sending adapter, inbound webhook, identity allowlisting, secret token verification, delivery lease/retry/dead-lettering, and a runtime verifier with a mock Telegram API. Live bot connection remains `RUNTIME-PENDING` pending a bot token and a public HTTPS URL. Mobile/push/Zalo/Slack/Teams providers are not yet implemented.
 
-## Nền tảng dùng chung đã hoàn thiện để bắt đầu xây agent
+## Completed Platform Foundation for Agent Development
 
-- Catalog registry đọc được bằng máy đủ 17 agent: ID/version, mission, trigger, tool,
-  risk ceiling và foundation dependency.
-- Tool runtime dùng `AgentToolDefinition` chung cho schema input/output,
-  permission, risk, approval, timeout, retry, idempotency, error và audit fields.
-  Executor kiểm tra registry/version/schema/permission và từ chối command không
-  có Action Gateway authority và kiểm tra cả permission lẫn required role.
-  Registry chạy thật hiện có 16/24 tool catalog; ngoài inventory, order read,
-  response draft, platform read và task đã có `incident.create/update`,
-  `approval.request/decide`, `knowledge.propose`, `message.send`; coverage API
-  công khai đúng 8 tool còn
-  thiếu.
-- Task orchestration có idempotency, assignee, deadline, priority, state machine
-  và audit; create/assign/escalate đi qua Action Gateway tổng quát, policy
-  ACTIVE, lease và Medusa workflow. Supervisor mỗi phút chủ động tạo escalation
-  request cho task quá hạn. Escalation lưu reason, actor và thời điểm.
-- Policy definition có version, hiệu lực và điều kiện deterministic `eq`, `gte`,
-  `lte`, `in`; RBAC policy được đăng ký bằng `definePolicies`.
-- Bootstrap tạo role tối thiểu `customer_support_staff` với đúng quyền đọc
-  order/customer, đọc/cập nhật support task và tạo/thực thi yêu cầu chuyển quản
-  lý. Script onboarding thay role `Super Admin` do Medusa CLI gán mặc định bằng
-  role nhân viên này.
-- Knowledge có lifecycle `DRAFT -> APPROVED -> RETIRED`, checksum, citation,
-  owner, locale, scope, hiệu lực và expiry. Nội dung được chia thành các đoạn
-  tìm kiếm ổn định; mỗi đoạn có checksum và locator riêng. Agent chỉ được dùng
-  đoạn thuộc bản approved còn hiệu lực.
-- Semantic RAG dùng LangChain.js và Qdrant mã nguồn mở. Qdrant chỉ là derived
-  vector index; PostgreSQL vẫn là nguồn sự thật. Approval tự upsert chunks,
-  retire tự xóa vectors; truy vấn semantic được lọc tenant/scope/locale rồi
-  kiểm tra lại chunk thuộc tài liệu approved còn hiệu lực. Khi Qdrant hoặc
-  embedding provider lỗi/chưa bật, `knowledge.search` tự rơi về lexical search.
-- OpenAI và Gemini có thể làm embedding hoặc soạn câu trả lời; DeepSeek được
-  hỗ trợ cho suy luận và soạn câu trả lời vì API chính thức chưa cung cấp
-  embedding. Chủ cửa hàng kết nối provider từ Admin; API key được mã hóa trong
-  PostgreSQL, không trả về browser. Workflow tự reindex knowledge khi đổi
-  embedding provider/model và Qdrant dùng collection tách biệt theo
-  provider/model.
-- Model Gateway có adapter contract, redaction, token budget và structured
-  output bắt buộc. OpenAI Responses adapter dùng JSON Schema strict, timeout,
-  `store=false`, input tối thiểu và model-run ledger; Gemini adapter dùng JSON
-  Schema; DeepSeek adapter dùng Chat Completions JSON mode và khóa server-side
-  tương tự. Prompt Customer Support là cấu hình có
-  phiên bản trong PostgreSQL, hiển thị và tùy chỉnh từ Admin, có prompt mặc định
-  để khôi phục; model run ghi đúng prompt key/version đã dùng. Thiếu
-  provider/key/model thì Customer Support giữ draft deterministic thay vì làm
-  hỏng hàng đợi.
-- Evaluation harness lưu scenario/run, expected/forbidden assertions và score.
-  Baseline đã seed `SHIP-001`, `KNOW-001` và `ORDER-001`.
-- Channel registry và delivery ledger hỗ trợ `IN_APP`, web push, Telegram, Zalo,
-  Slack, Teams. Telegram chỉ lưu `env:...` secret reference; adapter xử lý
-  `sendMessage`, receipt, retry và webhook `secret_token`, không ghi bot token
-  vào database.
-- Medusa Admin có trang `Agent Operations` xem readiness, incident, approval,
-  task, knowledge, evaluation và catalog; quyết định approval bắt buộc có reason.
-- Medusa Admin có trang `Knowledge Hub / Kho hướng dẫn của cửa hàng` để quản lý
-  tạo bản nháp, duyệt, ngừng sử dụng, xem từng đoạn và thử câu hỏi bằng tiếng
-  Việt hoặc tiếng Anh. Câu chữ giải thích rõ khi nào agent được phép sử dụng.
-- Medusa Admin có route nghiệp vụ `Customer Support / Hỗ trợ khách hàng` tách
-  khỏi control plane kỹ thuật. Nhân viên chỉ thấy câu hỏi, khách, trạng thái đơn,
-  bản nháp, nguồn tham khảo và các nút nhận việc/hoàn tất/chuyển quản lý. Toàn bộ
-  nội dung màn hình có resource tiếng Việt và tiếng Anh.
-- Có production switch cho Redis Event Bus, Workflow Engine và distributed
-  locking; local vẫn dùng in-memory khi cờ môi trường chưa bật.
+- Machine-readable catalog registry covering all 17 agents: ID/version, mission, triggers, tools, risk ceiling, and foundation dependencies.
+- Unified `AgentToolDefinition` tool runtime for input/output schema, permissions, risk, approvals, timeout, retry, idempotency, error handling, and audit fields. Executor verifies registry/version/schema/permission, rejects commands bypassing Action Gateway authority, and enforces both permissions and required roles. The active registry currently includes 16/24 catalog tools; beyond inventory, order read, response draft, platform read, and task tools, it includes `incident.create/update`, `approval.request/decide`, `knowledge.propose`, and `message.send`; public API coverage currently misses exactly 8 tools.
+- Task orchestration with idempotency, assignees, deadlines, priorities, state machines, and audit logging; create/assign/escalate operations route through the generalized Action Gateway, ACTIVE policies, leases, and Medusa workflows. Supervisor actively creates escalation requests every minute for overdue tasks. Escalations record reason, actor, and timestamp.
+- Policy definitions with versions, validity periods, and deterministic conditions (`eq`, `gte`, `lte`, `in`); RBAC policies registered via `definePolicies`.
+- Minimal bootstrap role `customer_support_staff` with strict permissions: read orders/customers, read/update support tasks, and create/execute escalation requests. Onboarding script replaces the default `Super Admin` role assigned by Medusa CLI with this staff role.
+- Knowledge lifecycle `DRAFT -> APPROVED -> RETIRED`, with checksums, citations, ownership, locale, scope, effective dates, and expiry. Content is segmented into stable search chunks; each chunk has its own checksum and locator. Agents can only use chunks from valid, approved documents.
+- Semantic RAG using LangChain.js and open-source Qdrant. Qdrant serves purely as a derived vector index; PostgreSQL remains the source of truth. Approval automatically upserts chunks, retire automatically deletes vectors; semantic queries are filtered by tenant/scope/locale and re-verified against approved documents. When Qdrant or embedding providers fail or are disabled, `knowledge.search` automatically falls back to lexical search.
+- OpenAI and Gemini can be used for embeddings or response drafting; DeepSeek is supported for reasoning and response generation (as official APIs do not offer embeddings). Store owners connect providers via Admin; API keys are encrypted in PostgreSQL and never returned to the browser. Workflows automatically reindex knowledge when changing embedding provider/model, and Qdrant maintains isolated collections per provider/model.
+- Model Gateway with adapter contracts, redaction, token budgets, and mandatory structured outputs. OpenAI Responses adapter uses strict JSON Schema, timeouts, `store=false`, minimal input, and model-run ledgers; Gemini adapter uses JSON Schema; DeepSeek adapter uses Chat Completions JSON mode with similar server-side safeguards. Customer Support prompts are versioned configurations in PostgreSQL, visible and customizable via Admin with default fallback prompts; model runs record the exact prompt key/version used. If provider/key/model is missing, Customer Support keeps deterministic drafts instead of failing the queue.
+- Evaluation harness recording scenarios/runs, expected/forbidden assertions, and scores. Baseline has seeded `SHIP-001`, `KNOW-001`, and `ORDER-001`.
+- Channel registry and delivery ledger supporting `IN_APP`, web push, Telegram, Zalo, Slack, and Teams. Telegram stores only `env:...` secret references; adapter handles `sendMessage`, receipts, retries, and webhook `secret_token` without persisting bot tokens in the database.
+- Medusa Admin `Agent Operations` page for viewing readiness, incidents, approvals, tasks, knowledge, evaluations, and catalog; approval decisions require a reason.
+- Medusa Admin `Knowledge Hub` page for managing drafts, approvals, deprecations, viewing chunks, and testing queries in Vietnamese or English. Clear explanations specify when agents are permitted to use content.
+- Medusa Admin `Customer Support` operational route separated from technical control planes. Staff see only customer inquiries, customer details, order statuses, draft responses, reference sources, and action buttons for claim/complete/escalate. All UI text supports Vietnamese and English.
+- Production toggles for Redis Event Bus, Workflow Engine, and distributed locking; local development defaults safely to in-memory when environment flags are unset.
 
-## Vertical slice đã code
+## Implemented Vertical Slices
 
 ### Event Triage Agent
 
 - ID/version: `event-triage-agent@0.1.0`.
-- Trigger hiện hỗ trợ: `inventory.low` version 1.
-- Input bắt buộc: event envelope, inventory item, location, available/required
-  quantity và snapshot các kho thay thế.
-- Output: một `agent_event` và tối đa một `agent_incident` cho mỗi
-  `source + event_id`.
-- Trạng thái: `RECEIVED -> INVESTIGATING` trước khi chuyển cho rule inventory.
-- Cấm: ghi bảng inventory/order của Medusa hoặc bỏ qua schema validation.
+- Currently supported trigger: `inventory.low` version 1.
+- Required input: event envelope, inventory item, location, available/required quantity, and snapshot of alternative locations.
+- Output: one `agent_event` and at most one `agent_incident` per `source + event_id`.
+- State flow: `RECEIVED -> INVESTIGATING` before handing off to inventory rules.
+- Prohibited: direct writes to Medusa inventory/order tables or bypassing schema validation.
 
 ### Inventory Agent
 
 - ID/version: `inventory-agent@0.1.0`.
-- Rule hiện tại: tính `shortfall = max(required - available, 0)`.
-- Nếu đủ tồn: tạo `NO_ACTION`, risk `READ_ONLY`, incident `RESOLVED`.
-- Nếu một kho thay thế đủ shortfall: chọn kho có available quantity lớn nhất,
-  tạo `INVENTORY_TRANSFER`, risk `HIGH`, chờ approval.
-- Nếu không kho nào đủ: tạo `ESCALATE`, risk `MEDIUM`, không mutation.
-- Typed tool `inventory.get-position@1.0.0` đọc tồn live từ Inventory Module.
-- Command `inventory.execute-transfer@1.0.0` chỉ chạy qua Action Gateway sau
-  approval; source/target được điều chỉnh trong cùng lời gọi Inventory Module.
-- Cả read và command đều chạy qua executor dùng chung; command contract cung
-  cấp timeout/retry/idempotency và không thể gọi ở chế độ `DIRECT`.
-- Cấm: coi snapshot trong event là quyền thực thi hoặc bỏ qua revalidation.
+- Current rule: calculates `shortfall = max(required - available, 0)`.
+- If inventory is sufficient: produces `NO_ACTION`, risk `READ_ONLY`, incident `RESOLVED`.
+- If an alternative warehouse covers shortfall: selects location with highest available quantity, produces `INVENTORY_TRANSFER`, risk `HIGH`, awaits approval.
+- If no warehouse covers shortfall: produces `ESCALATE`, risk `MEDIUM`, no mutation.
+- Typed tool `inventory.get-position@1.0.0` reads live inventory from Inventory Module.
+- Command `inventory.execute-transfer@1.0.0` executes only via Action Gateway after approval; source/target are adjusted within the same Inventory Module call.
+- Both read and command tools run through the shared executor; command contract provides timeout/retry/idempotency and cannot be invoked in `DIRECT` mode.
+- Prohibited: treating event snapshots as execution authority or skipping revalidation.
 
 ### Order Exception Agent
 
 - ID/version: `order-exception-agent@0.1.0`.
-- Trigger: `order.exception@1` với ba loại `PAYMENT_STUCK`,
-  `FULFILLMENT_OVERDUE`, `MANUAL_REVIEW`.
-- `order.read@1.0.0` gọi `getOrderDetailWorkflow` của Medusa và lấy trạng thái
-  order/payment/fulfillment mới nhất trước khi quyết định.
-- Luật deterministic đóng incident `RESOLVED` nếu tín hiệu đã cũ; nếu vẫn còn
-  hiệu lực thì tạo recommendation và request `task.create` qua Action Gateway.
-- Task chỉ yêu cầu người vận hành điều tra; contract cấm tự hủy đơn, capture hay
-  hoàn tiền và cấm thay đổi fulfillment.
-- Event, action và task đều có idempotency; recommendation lưu live order
-  version làm bằng chứng; audit/outbox ghi lại quyết định.
-- `ORDER-001` kiểm tra có live read và task, đồng thời cấm order/refund mutation.
-- Job `detect-order-exceptions` chạy mỗi 5 phút và chỉ xét order có metadata
-  `agent_payment_due_at` hoặc `agent_fulfillment_due_at`; không tự suy diễn SLA.
-- Hook `createOrderWorkflow.orderCreated` phủ luồng API/OMS; subscriber
-  `order.placed` gọi workflow idempotent để phủ checkout Medusa. Draft order bị
-  bỏ qua, hàng không cần giao không nhận fulfillment SLA.
-- Chính sách mặc định là 120 phút cho payment và 2.880 phút cho fulfillment;
-  deadline OMS hợp lệ được giữ nguyên, deadline sai được thay bằng mặc định.
-  Payment `authorized` không bị báo nhầm là payment stuck.
-- Mỗi lượt quét đọc tối đa 5 trang x 100 order theo mặc định; cả page size và
-  số trang đều cấu hình được nhưng có giới hạn cứng để bảo vệ database.
-- Payment quá hạn được ưu tiên trước fulfillment; event ID ghép từ order, loại
-  ngoại lệ và SLA due time nên quét lại không tạo incident/action/task trùng.
-- Mỗi order lỗi được cô lập; detector re-read qua typed tool rồi ingestion
-  workflow lại revalidate trước khi tạo task. Toàn bộ đoạn xử lý một order nằm
-  trong distributed lock `agent-order-sla:<order_id>`.
+- Trigger: `order.exception@1` with three types: `PAYMENT_STUCK`, `FULFILLMENT_OVERDUE`, `MANUAL_REVIEW`.
+- `order.read@1.0.0` calls Medusa `getOrderDetailWorkflow` and fetches the latest order/payment/fulfillment status before deciding.
+- Deterministic rules close incident as `RESOLVED` if signal is stale; if still valid, produces recommendation and requests `task.create` via Action Gateway.
+- Task only requests operator investigation; contract prohibits auto-canceling orders, capturing funds, issuing refunds, or modifying fulfillments.
+- Events, actions, and tasks are idempotent; recommendation records live order version as evidence; audit/outbox logs the decision.
+- `ORDER-001` verifies live read and task creation while prohibiting order/refund mutations.
+- `detect-order-exceptions` job runs every 5 minutes and only processes orders with metadata `agent_payment_due_at` or `agent_fulfillment_due_at`; does not infer SLAs.
+- Hook `createOrderWorkflow.orderCreated` covers API/OMS flows; subscriber `order.placed` calls idempotent workflow to cover Medusa checkout. Draft orders are skipped; items not requiring shipping do not receive fulfillment SLAs.
+- Default policy: 120 minutes for payment and 2,880 minutes for fulfillment; valid OMS deadlines are preserved, invalid deadlines are replaced by defaults. Payment status `authorized` is not falsely flagged as payment stuck.
+- Each scan batch reads up to 5 pages x 100 orders by default; page size and total pages are configurable with hard limits to protect the database.
+- Overdue payments take precedence over fulfillment; event IDs are constructed from order ID, exception type, and SLA due time, preventing duplicate incidents/actions/tasks on re-scan.
+- Each failing order is isolated; detector re-reads via typed tool, and ingestion workflow revalidates before creating tasks. Processing for an order runs under distributed lock `agent-order-sla:<order_id>`.
 
 ### Customer Support Agent
 
 - ID/version: `customer-support-agent@0.1.0`.
-- Trigger đầu tiên: `support.requested@1`, hiện chỉ hỗ trợ câu hỏi
-  `ORDER_STATUS` bằng tiếng Việt hoặc tiếng Anh.
-- `order.read@1.0.0` lấy trạng thái order/payment/fulfillment trực tiếp từ
-  Medusa. Customer ID trong request phải đúng chủ sở hữu của order, nếu không
-  workflow fail-closed trước khi ghi event hay incident.
-- `knowledge.search@1.0.0` chỉ lấy từng đoạn thuộc tài liệu scope
-  `customer_support` đang `APPROVED`, còn hiệu lực và đúng locale; citation giữ
-  document, chunk, locator, checksum và version để nhân viên kiểm tra đúng đoạn.
-- `response.draft@1.0.0` tạo câu trả lời deterministic từ live order và
-  knowledge. Khi model provider được bật, model chỉ được viết lại phần `body`
-  từ live order và approved excerpts; citation/grounding/review flag do code
-  gắn cố định. Nếu model lỗi hoặc thiếu knowledge, luồng deterministic tiếp tục.
-- Mọi bản nháp đều có `requires_human_review=true`. Agent tạo recommendation
-  `REVIEW_SUPPORT_RESPONSE` và request `task.create` qua Action Gateway với loại
-  `SUPPORT_RESPONSE_REVIEW`.
-- Luồng tiếp nhận chuẩn vẫn chỉ tạo bản nháp và task, không tự gửi khách. Chế độ
-  thử nội bộ có thể tạo conversation `IN_APP`; chỉ nhân viên đã nhận task, hoàn
-  tất kiểm tra và bấm xác nhận mới tạo action `message.send` qua Action Gateway.
-  Action có idempotency key nên bấm lại không tạo tin thứ hai.
-- Simulator được bảo vệ bằng đăng nhập Admin và quyền RBAC riêng
-  `agent_support_simulator:create`; không còn công tắc môi trường riêng. Tin
-  nhắn chỉ nằm trong database nội bộ, không gọi email, Telegram, Zalo hay khách
-  thật.
-- Route Admin `customer-support` dùng SDK session và query cache; nhân viên có
-  thể nhận task, sửa draft, hoàn tất với `message_sent=false`, hoặc chuyển quản
-  lý qua `task.escalate` trong Action Gateway. Màn hình không hiển thị event ID,
-  correlation ID, tool call, model run hay JSON kỹ thuật.
-- Nhân viên đang soạn có thể chọn “Trả lại cho nhân viên khác”. Workflow khóa
-  theo task, chỉ chấp nhận đúng user đang phụ trách, xóa assignee và đưa task về
-  `TODO`; mọi lần trả lại đều có audit. UI xác nhận trước và cảnh báo nội dung
-  chưa lưu sẽ bị bỏ.
+- Initial trigger: `support.requested@1`, currently supporting `ORDER_STATUS` inquiries in Vietnamese or English.
+- `order.read@1.0.0` fetches order/payment/fulfillment status directly from Medusa. Customer ID in request must match the order owner, or the workflow fails closed before logging events or incidents.
+- `knowledge.search@1.0.0` only retrieves chunks from approved, valid `customer_support` documents matching locale; citation retains document, chunk, locator, checksum, and version for staff verification.
+- `response.draft@1.0.0` generates deterministic draft responses from live order and knowledge. When model provider is enabled, the model only rewrites the `body` from live order data and approved excerpts; citation/grounding/review flags are fixed by code. If the model fails or knowledge is missing, deterministic fallback continues.
+- All drafts have `requires_human_review=true`. Agent creates recommendation `REVIEW_SUPPORT_RESPONSE` and requests `task.create` via Action Gateway with type `SUPPORT_RESPONSE_REVIEW`.
+- Standard ingestion workflow only creates drafts and tasks, never sending messages automatically. Internal testing mode can create `IN_APP` conversations; only staff who claimed the task, verified content, and confirmed sending can trigger `message.send` via Action Gateway. Actions carry idempotency keys preventing duplicate sends.
+- Simulator is protected by Admin login and dedicated RBAC permission `agent_support_simulator:create`; separate environment flags are removed. Messages remain strictly in the internal database without invoking email, Telegram, Zalo, or live customer channels.
+- Admin route `customer-support` uses SDK session and query cache; staff can claim tasks, edit drafts, complete with `message_sent=false`, or escalate to management via `task.escalate` in Action Gateway. The screen hides technical event IDs, correlation IDs, tool calls, model runs, and raw JSON.
+- Staff currently drafting can choose "Return to queue for another agent". Workflow locks by task, verifies active assignee, unassigns, and returns task to `TODO`; all returns are audited. UI requires confirmation and warns unsaved edits will be discarded.
 
 ### Policy & Approval Agent
 
 - ID/version: `policy-approval-agent@0.1.0`.
-- Policy hiện tại: `inventory.transfer.requires-operations-manager@1.0.0`.
-- Approval mặc định hết hạn sau 24 giờ.
-- `APPROVED` chuyển incident từ `AWAITING_APPROVAL` sang `EXECUTING` và ghi
-  `approval.decided` vào audit/outbox.
-- `REJECTED` chuyển incident sang `REJECTED`.
-- Approval hết hạn chuyển sang `EXPIRED` và escalation.
-- Cùng decision gửi lại trả duplicate; decision khác với quyết định đã chốt bị
-  từ chối conflict.
-- `APPROVED` tạo đúng một `agent_action_request`; action worker claim bằng lease.
-- Action Gateway kiểm tra approval còn hiệu lực, recommendation, incident state
-  và tool version ngay trước command.
-- Stale/missing inventory trả `CONFLICT`, ghi trace và đưa incident về
-  `OPTIONS_READY`; không tạo mutation một phần.
+- Current policy: `inventory.transfer.requires-operations-manager@1.0.0`.
+- Approvals expire after 24 hours by default.
+- `APPROVED` transitions incident from `AWAITING_APPROVAL` to `EXECUTING` and logs `approval.decided` to audit/outbox.
+- `REJECTED` transitions incident to `REJECTED`.
+- Expired approvals transition to `EXPIRED` and trigger escalation.
+- Resubmitting identical decisions returns duplicate; conflicting decisions on finalized approvals are rejected.
+- `APPROVED` creates exactly one `agent_action_request`; action worker claims via lease.
+- Action Gateway verifies approval validity, recommendation, incident state, and tool version immediately prior to executing commands.
+- Stale or missing inventory returns `CONFLICT`, logs trace, and reverts incident to `OPTIONS_READY`; no partial mutations are created.
 
 ### Audit & Compliance Agent
 
 - ID/version: `audit-compliance-agent@0.1.0`.
-- Audit ghi recommendation, approval decision và action outcome.
-- Tool trace ghi riêng read tool và command tool với input/output/error.
-- Outbox ghi `agent.approval.requested`, `approval.decided`,
-  `agent.action.requested` và action outcome với idempotency key duy nhất.
-- Scheduled dispatcher chạy mỗi phút, claim tối đa 25 event theo lease.
-- Delivery thành công chuyển sang `DELIVERED`; lỗi dùng exponential backoff và
-  quá 5 attempt chuyển `DEAD`.
-- Message phát ra mang `agent_outbox.event_id` và `idempotency_key` để consumer
-  chống xử lý trùng.
-- `DELIVERED` hiện chỉ chứng minh Medusa Event Bus đã nhận message, không chứng
-  minh subscriber hoặc mutation commerce đã hoàn tất.
+- Audit logs recommendations, approval decisions, and action outcomes.
+- Tool trace separately records read tools and command tools with inputs/outputs/errors.
+- Outbox logs `agent.approval.requested`, `approval.decided`, `agent.action.requested`, and action outcomes with unique idempotency keys.
+- Scheduled dispatcher runs every minute, claiming up to 25 events via lease.
+- Successful delivery transitions to `DELIVERED`; failures use exponential backoff, transitioning to `DEAD` after 5 attempts.
+- Emitted messages carry `agent_outbox.event_id` and `idempotency_key` to prevent duplicate consumer processing.
+- `DELIVERED` status confirms Medusa Event Bus receipt, but does not certify completion of downstream subscribers or commerce mutations.
 
 ### Communication Gateway
 
-- `IN_APP` phục vụ Admin; Telegram tạo conversation `OPERATOR_CHAT` riêng theo
-  connection và `chat_id` đã được ánh xạ tới Medusa user.
-- Subscriber `agent.approval.requested` tạo notification idempotent từ outbox.
-- Admin command hiện hỗ trợ `APPROVAL_DECISION` với `client_message_id` chống
-  xử lý trùng.
-- Conversation topic phải khớp `approval_id`; message sai topic bị từ chối.
-- Command gọi lại approval workflow hiện có; không tạo mutation commerce hoặc
-  ghi bảng nghiệp vụ trực tiếp.
-- Kết quả command được ghi thành outbound `COMMAND_RESULT` và audit event.
-- Telegram webhook chỉ nhận private text, kiểm tra
-  `X-Telegram-Bot-Api-Secret-Token`, bỏ qua chat ngoài allowlist và suppress
-  update trùng. Nội dung tự do hiện được lưu để xử lý, chưa tự biến thành lệnh.
-- Outbound Telegram chỉ được tạo bởi `message.send` qua Action Gateway. Worker
-  claim delivery bằng lease, gọi Bot API, lưu external message ID; lỗi retry
-  exponential và quá giới hạn chuyển `DEAD`.
-- Script `agent:configure-telegram` gọi `getMe`, đăng ký `setWebhook`, sau đó mới
-  bật connection. Nếu Telegram từ chối, connection giữ `DISABLED`.
-- Chưa có diễn giải chat tự do bằng LLM, push notification hoặc adapter
-  Zalo/Slack/Teams/Messenger.
+- `IN_APP` serves Admin; Telegram creates dedicated `OPERATOR_CHAT` conversations per connection and `chat_id` mapped to Medusa users.
+- Subscriber `agent.approval.requested` creates idempotent notifications from outbox.
+- Admin commands currently support `APPROVAL_DECISION` with `client_message_id` deduplication.
+- Conversation topic must match `approval_id`; mismatched topics are rejected.
+- Commands invoke existing approval workflows; no direct commerce mutations or business table writes.
+- Command results are recorded as outbound `COMMAND_RESULT` and audit events.
+- Telegram webhook accepts only private text, verifies `X-Telegram-Bot-Api-Secret-Token`, ignores non-allowlisted chats, and suppresses duplicate updates. Free-form text is stored for processing without auto-executing commands.
+- Outbound Telegram messages are created strictly by `message.send` via Action Gateway. Worker claims delivery by lease, calls Bot API, and stores external message ID; retry uses exponential backoff, moving to `DEAD` upon exceeding retry limits.
+- Script `agent:configure-telegram` calls `getMe`, registers `setWebhook`, and enables the connection only upon success. If Telegram rejects, connection remains `DISABLED`.
+- Free-form LLM chat interpretation, push notifications, and Zalo/Slack/Teams/Messenger adapters are not yet implemented.
 
-## API và persistence đã có
+## Available APIs and Persistence
 
 Admin API:
 
-- `POST /admin/agent-operations/events`;
-- `POST /admin/agent-operations/order-exceptions`;
-- `POST /admin/agent-operations/support-requests`;
-- `GET /admin/agent-operations/incidents`;
-- `GET /admin/agent-operations/incidents/:id`;
-- `GET /admin/agent-operations/approvals`;
-- `POST /admin/agent-operations/approvals/:id/decision`.
-- `GET /admin/agent-operations/actions`;
-- `POST /admin/agent-operations/actions/requests` tạo command qua Action Gateway;
-- `GET /admin/agent-operations/actions/:id`;
-- `POST /admin/agent-operations/actions/:id/execute`;
-- `GET /admin/agent-operations/tools` trả metadata serializable và coverage
-  catalog/registry.
-- `GET /admin/agent-operations/conversations`;
-- `GET /admin/agent-operations/conversations/:id`;
-- `POST /admin/agent-operations/conversations/:id/messages`.
-- `GET /admin/agent-operations/catalog`;
-- `GET /admin/agent-operations/platform/readiness`;
-- `POST /admin/agent-operations/platform/bootstrap`;
-- `GET|POST /admin/agent-operations/tasks`;
-- `POST /admin/agent-operations/tasks/:id/transition`;
-- `GET|POST /admin/agent-operations/knowledge`;
-- `GET /admin/agent-operations/knowledge/:id` trả tài liệu và các đoạn;
-- `POST /admin/agent-operations/knowledge/search` thử tìm nguồn đã duyệt;
-- `POST /admin/agent-operations/knowledge/:id/approve`;
-- `POST /admin/agent-operations/knowledge/:id/retire`;
-- `GET /admin/agent-operations/evaluations/scenarios`;
-- `GET|POST /admin/agent-operations/evaluations/runs`;
-- read API cho policies, prompts, model runs và channel connections.
+- `POST /admin/agent-operations/events`
+- `POST /admin/agent-operations/order-exceptions`
+- `POST /admin/agent-operations/support-requests`
+- `GET /admin/agent-operations/incidents`
+- `GET /admin/agent-operations/incidents/:id`
+- `GET /admin/agent-operations/approvals`
+- `POST /admin/agent-operations/approvals/:id/decision`
+- `GET /admin/agent-operations/actions`
+- `POST /admin/agent-operations/actions/requests` (creates commands via Action Gateway)
+- `GET /admin/agent-operations/actions/:id`
+- `POST /admin/agent-operations/actions/:id/execute`
+- `GET /admin/agent-operations/tools` (returns serializable metadata and catalog/registry coverage)
+- `GET /admin/agent-operations/conversations`
+- `GET /admin/agent-operations/conversations/:id`
+- `POST /admin/agent-operations/conversations/:id/messages`
+- `GET /admin/agent-operations/catalog`
+- `GET /admin/agent-operations/platform/readiness`
+- `POST /admin/agent-operations/platform/bootstrap`
+- `GET|POST /admin/agent-operations/tasks`
+- `POST /admin/agent-operations/tasks/:id/transition`
+- `GET|POST /admin/agent-operations/knowledge`
+- `GET /admin/agent-operations/knowledge/:id` (returns document and chunks)
+- `POST /admin/agent-operations/knowledge/search` (tests querying approved sources)
+- `POST /admin/agent-operations/knowledge/:id/approve`
+- `POST /admin/agent-operations/knowledge/:id/retire`
+- `GET /admin/agent-operations/evaluations/scenarios`
+- `GET|POST /admin/agent-operations/evaluations/runs`
+- Read APIs for policies, prompts, model runs, and channel connections.
 
 Persistence:
 
-- `agent_event`;
-- `agent_incident`;
-- `agent_run`;
-- `agent_recommendation`;
-- `agent_approval`;
-- `agent_audit_event`;
-- `agent_outbox_event`.
-- `agent_action_request`;
-- `agent_tool_call`.
-- `agent_conversation`;
-- `agent_message`.
-- `agent_task`;
-- `agent_policy_definition`;
-- `agent_knowledge_document`;
-- `agent_knowledge_chunk`;
-- `agent_prompt_template`;
-- `agent_model_run`;
-- `agent_evaluation_scenario`;
-- `agent_evaluation_run`;
-- `agent_channel_connection`;
-- `agent_delivery`.
+- `agent_event`
+- `agent_incident`
+- `agent_run`
+- `agent_recommendation`
+- `agent_approval`
+- `agent_audit_event`
+- `agent_outbox_event`
+- `agent_action_request`
+- `agent_tool_call`
+- `agent_conversation`
+- `agent_message`
+- `agent_task`
+- `agent_policy_definition`
+- `agent_knowledge_document`
+- `agent_knowledge_chunk`
+- `agent_prompt_template`
+- `agent_model_run`
+- `agent_evaluation_scenario`
+- `agent_evaluation_run`
+- `agent_channel_connection`
+- `agent_delivery`
 
-## Bằng chứng hiện tại
+## Current Evidence
 
-Ngày kiểm chứng: 2026-08-11.
+Verification Date: 2026-08-11.
 
-- Migration `Migration20260809174339` chạy thành công trên PostgreSQL local.
-- Migration `Migration20260809180247` bổ sung lease expiry và chạy thành công.
-- Migration `Migration20260809190225` tạo action request/tool call và chạy
-  thành công trên PostgreSQL local.
-- Migration `Migration20260809194213` tạo conversation/message và chạy thành
-  công trên PostgreSQL local.
-- Migration `Migration20260810073306` tổng quát hóa action context và bổ sung
-  task escalation; migration chạy thành công, có backfill action inventory cũ.
-- Migration `Migration20260810132610` lưu snapshot role được ủy quyền trên
-  action request và đã chạy thành công trên PostgreSQL local.
-- 134/134 unit test pass cho analyzer, detector, response draft, state machines, validators, tool contract,
-  executor, registry coverage, tools, policy,
-  knowledge, model boundary, evaluation, action/outbox và communication.
-- ESLint mục tiêu của toàn bộ source agent pass.
-- Kịch bản Medusa runtime qua module service/database xác nhận: duplicate event
-  bị suppress; duplicate approval decision chỉ dùng một action request;
-  Action Gateway đọc inventory live và missing level tạo safe conflict;
-  incident trở lại `OPTIONS_READY`; có 2 tool call, 5 audit event và 4 outbox
-  event.
-- Runtime communication scenario xác nhận Event Bus gọi đúng subscriber;
-  notification xuất hiện trong conversation; Admin command tạo approval/action;
-  gửi lại cùng `client_message_id` không tạo message/action thứ hai; conversation
-  có đúng chuỗi `NOTIFICATION -> COMMAND -> COMMAND_RESULT`.
-- Runtime outbox scenario xác nhận hai message đạt `DELIVERED`, expired lease
-  được reclaim, competing worker không claim được active lease và exhausted
-  attempt chuyển `DEAD`.
-- Request không xác thực tới event Admin API trả `401 Unauthorized`.
-- TypeScript, Medusa lint và full workspace build đều pass.
-- Bootstrap PostgreSQL đã seed `ORDER-001`. Runtime verifier tạo order kiểm thử
-  bằng workflow Medusa và chạy thành công event → live read → recommendation →
-  Action Gateway → task trên PostgreSQL; event trùng bị suppress và order giữ
-  nguyên status/version/canceled state.
-- HTTP/RBAC verifier dùng hai User record tạm và JWT ngắn hạn: user có
-  `operations_manager` nhận 201 rồi execute action nhận 202/`SUCCEEDED`; user
-  không role nhận 403; request không đăng nhập nhận 401; hai nhánh bị chặn tạo
-  0 event và user tạm được xóa trong `finally`.
-- RBAC được bật mặc định trong `medusa-config.ts`; `.env.template` cũng khai báo
-  `MEDUSA_FF_RBAC=true`, tránh route có policy nhưng vô tình chạy không enforce.
-- Detector runtime tạo một order có payment SLA quá hạn: lần quét đầu tạo đúng
-  một incident/action/task, lần quét hai trả duplicate, không có lỗi và order
-  giữ nguyên status/version/canceled state.
-- Redis race verifier chạy hai tiến trình Medusa đồng thời trên cùng tập order;
-  cả hai kết nối `locking-redis`, không có scan error và order mục tiêu chỉ có
-  đúng một event, một incident, một action request.
-- SLA assignment verifier xác nhận cả hook tạo order và event checkout đều ghi
-  policy `order-sla-default@1.0.0`; deadline tự sinh đi qua detector rồi tạo task
-  `ORDER_PAYMENT_REVIEW`, action `SUCCEEDED` và không mutation order.
-- Customer Support verifier tạo customer/order/knowledge thật, duyệt knowledge,
-  rồi chạy `support.requested -> order.read -> knowledge.search ->
-  response.draft -> task.create`. Kết quả có đúng 1 event, incident,
-  recommendation, action, task và tool call; event trùng bị suppress; customer
-  không sở hữu order bị từ chối trước model boundary, tạo 0 event và 0 model
-  run; order không đổi; có 0
-  conversation và 0 `message.send` action.
-- Migration `Migration20260811052521` tạo bảng `agent_knowledge_chunk` đã chạy
-  thành công. Script reindex đã chuyển 14 tài liệu cũ thành 14 đoạn có nguồn.
-- Knowledge Hub verifier đã xác nhận trên PostgreSQL: bản nháp không xuất hiện
-  khi tìm, bản đã duyệt trả đúng locator `#chunk-*` và checksum, bản ngừng sử
-  dụng lập tức bị loại khỏi kết quả. Customer Support verifier chạy lại thành
-  công với tìm kiếm theo đoạn, draft grounded và vẫn bắt buộc người duyệt.
-- OpenAI Responses adapter có unit test kiểm tra JSON Schema strict,
-  `store=false`, parse structured output và không đưa credential vào payload.
-  API key, provider và model chỉ được lấy từ credential vault do quản lý cấu
-  hình trong Admin; không còn fallback bí mật qua `.env`. Live model path chỉ
-  được xác nhận sau khi kết nối provider thật và chạy kiểm thử nghiệp vụ.
-- Knowledge Source Connector hiện chỉ nhận tài liệu người dùng chủ động chọn từ
-  Google Drive. Google Docs, Google Sheets và tệp TXT/Markdown/CSV được nhận
-  diện tự động; nội dung thay đổi chỉ tạo `DRAFT`, không tự xuất bản cho agent.
-- Connector tải văn bản tùy ý từ website đã được gỡ khỏi API, workflow, Admin
-  và cấu hình triển khai. Migration `Migration20260811122426` loại kiểu nguồn
-  cũ nhưng giữ nguyên những knowledge document đã được tạo trước đó.
-- Google knowledge adapter đã hỗ trợ Google Docs, Google Sheets và tệp
-  TXT/Markdown/CSV bằng OAuth connector và Google Picker. Chủ shop đăng nhập rồi
-  chọn từng tệp; quyền `drive.file` không mở toàn bộ Drive. Refresh token được
-  mã hóa, callback chống CSRF bằng state/nonce có hạn dùng, disconnect cố thu hồi
-  quyền và xóa credential. Migration `Migration20260811080525` đã chạy; gọi
-  Google thật vẫn `RUNTIME-PENDING` đến khi có OAuth app production.
-- LangChain.js `QdrantVectorStore` và Qdrant `1.19.0` đã được tích hợp. Runtime
-  verifier đã upsert hai chunks, chứng minh metadata filter cô lập tenant và
-  xóa vector khi tài liệu ngừng dùng. Live verifier gọi Gemini
-  `gemini-embedding-001`, index 17 tài liệu/17 chunks và chứng minh fixture có
-  lexical result bằng 0 nhưng semantic và hybrid result đều bằng 1; fixture sau
-  đó được retire và vector được xóa.
-- Customer Support live verifier gọi Gemini `gemini-3.5-flash-lite`, trả draft
-  structured có hai citation và bắt buộc human review. Nhánh sai ownership tạo
-  0 model run, nên dữ liệu order không vượt qua authorization gate.
-- Inventory contention verifier tạo ba location và một inventory item bằng
-  workflow Medusa, duyệt hai action cùng đòi chuyển 10 từ nguồn có 15, rồi chạy
-  đồng thời dưới Redis lock. Kết quả một `SUCCEEDED`, một `CONFLICT`, nguồn còn
-  5 và hai đích là 0/10; toàn bộ fixture được cleanup bằng workflow chính thức.
-- Customer Support staff-flow verifier dùng hai User record tạm và JWT ngắn
-  hạn: user có role nhận 201, user thiếu role nhận 403, request chưa đăng nhập
-  nhận 401; hai nhánh bị chặn tạo 0 event. Worker tạo task thật; nhân viên nhận
-  `TODO -> CLAIMED -> IN_PROGRESS -> COMPLETED`, lưu bản trả lời đã duyệt với
-  `message_sent=false`; nhánh `task.escalate` chuyển việc cho team
-  `operations_manager` với priority HIGH. Verifier giữ lại một customer, một
-  order và hai task TODO Việt/Anh làm dữ liệu demo, nhưng tự xóa user tạm.
-- Customer Support UI lint/build thành công bằng Medusa Admin; cả `vi` và `en`
-  resource được compile. Browser bằng tài khoản `customer_support_staff` thật
-  đã xác nhận nhận task, sửa/lưu câu trả lời, trả lại hàng đợi, chuyển quản lý
-  và đổi VI/EN. Lần kiểm thử này phát hiện UI dùng nhầm `incident_id` làm
-  `correlation_id`; API task đã trả correlation thật và Action Gateway chuyển
-  quản lý thành công sau khi sửa.
-- Support simulator verifier chạy API thật với đúng role
-  `customer_support_staff`: tạo một tin khách `INBOUND`, hoàn thành task rồi
-  xác nhận một tin `OUTBOUND`. Gửi khi chưa duyệt và gửi bằng nhân viên khác đều
-  bị chặn; gọi lại cùng yêu cầu không tạo tin/action thứ hai. Kết quả chỉ lưu ở
-  kênh `IN_APP`, chưa có external delivery.
-- Migration `Migration20260809200756` tạo 9 bảng nền mới; migration RBAC chính
-  thức của Medusa cũng chạy thành công.
-- Bootstrap có tính idempotent; role `operations_manager` có đúng 21
-  policy active do Medusa tự đồng bộ từ `definePolicies`.
-- Runtime platform xác nhận task `TODO -> CLAIMED -> IN_PROGRESS -> COMPLETED`,
-  knowledge `DRAFT -> APPROVED`, `SHIP-001` đạt `PASSED` và evaluation trùng bị
-  suppress.
-- Runtime task gateway xác nhận request trùng bị suppress; không có policy thì
-  fail-closed và không ghi action; create/assign/escalate đều `SUCCEEDED`; stale
-  expected state trả `CONFLICT`; mỗi action có đúng một tool call.
-- Runtime platform xác nhận `knowledge.propose` tạo đúng tài liệu `DRAFT` qua
-  Action Gateway rồi mới được workflow người dùng duyệt thành `APPROVED`.
-- Supervisor định kỳ hết hạn approval quá giờ thành `EXPIRED`, đưa incident đang
-  chờ sang `ESCALATED`, và tạo task escalation qua Action Gateway; từng record
-  lỗi được cô lập để không chặn cả batch.
-- Redis container healthy; Event Bus Redis, Workflow Engine Redis và Locking
-  Redis đều kết nối thành công khi bật production switch.
-- Production server trên cổng kiểm thử phục vụ `/app` với HTTP 200; catalog API
-  không có session trả đúng HTTP 401.
+- Migration `Migration20260809174339` executed successfully on local PostgreSQL.
+- Migration `Migration20260809180247` added lease expiry and executed successfully.
+- Migration `Migration20260809190225` created action request/tool call tables and executed successfully on local PostgreSQL.
+- Migration `Migration20260809194213` created conversation/message tables and executed successfully on local PostgreSQL.
+- Migration `Migration20260810073306` generalized action context and added task escalation; executed successfully with backfill for legacy inventory actions.
+- Migration `Migration20260810132610` saved authorized roles snapshot on action requests and executed successfully on local PostgreSQL.
+- 134/134 unit tests pass for analyzer, detector, response draft, state machines, validators, tool contract, executor, registry coverage, tools, policy, knowledge, model boundary, evaluation, action/outbox, and communication.
+- ESLint target for all agent source code passes.
+- Medusa runtime scenario via module service/database verified: duplicate events suppressed; duplicate approval decisions use only one action request; Action Gateway reads live inventory and missing levels create safe conflicts; incidents revert to `OPTIONS_READY`; produces 2 tool calls, 5 audit events, and 4 outbox events.
+- Runtime communication scenario verified Event Bus invokes subscribers correctly; notifications appear in conversations; Admin commands create approvals/actions; resubmissions with identical `client_message_id` do not create duplicate messages/actions; conversation displays sequence `NOTIFICATION -> COMMAND -> COMMAND_RESULT`.
+- Runtime outbox scenario verified two messages reach `DELIVERED`, expired leases are reclaimed, competing workers cannot claim active leases, and exhausted attempts transition to `DEAD`.
+- Unauthenticated requests to Admin event APIs return `401 Unauthorized`.
+- TypeScript check, Medusa lint, and full workspace build all pass.
+- PostgreSQL bootstrap seeded `ORDER-001`. Runtime verifier created test order using Medusa workflows and successfully executed event → live read → recommendation → Action Gateway → task on PostgreSQL; duplicate events suppressed and order retained status/version/canceled state.
+- HTTP/RBAC verifier used two temporary User records and short-lived JWTs: users with `operations_manager` role receive 201 and executing actions receive 202/`SUCCEEDED`; users without role receive 403; unauthenticated requests receive 401; blocked branches create 0 events, and temporary users are cleaned up in `finally`.
+- RBAC is enabled by default in `medusa-config.ts`; `.env.template` declares `MEDUSA_FF_RBAC=true`, preventing routes from running unenforced.
+- Detector runtime created an order with overdue payment SLA: initial scan created exactly one incident/action/task; second scan returned duplicate with zero errors; order retained status/version/canceled state.
+- Redis race verifier ran two concurrent Medusa processes against the same order set; both connected to `locking-redis`, encountered 0 scan errors, and target orders received exactly one event, incident, and action request.
+- SLA assignment verifier confirmed both order creation hooks and checkout events record policy `order-sla-default@1.0.0`; generated deadlines processed by detector create task `ORDER_PAYMENT_REVIEW`, action `SUCCEEDED`, and zero order mutations.
+- Customer Support verifier created real customer/order/knowledge records, approved knowledge, and ran `support.requested -> order.read -> knowledge.search -> response.draft -> task.create`. Result produced exactly 1 event, incident, recommendation, action, task, and tool call; duplicate events suppressed; customers not owning the order were rejected prior to model boundary (producing 0 events and 0 model runs); order unchanged; 0 conversations and 0 `message.send` actions created.
+- Migration `Migration20260811052521` created `agent_knowledge_chunk` table successfully. Reindex script converted 14 existing documents into 14 sourced chunks.
+- Knowledge Hub verifier verified on PostgreSQL: drafts do not appear in searches, approved versions return exact `#chunk-*` locators and checksums, and retired documents are immediately excluded from results. Customer Support verifier re-ran successfully with chunk-based search, grounded drafts, and mandatory human review.
+- OpenAI Responses adapter unit tests verify strict JSON Schema, `store=false`, structured output parsing, and credential protection. API keys, providers, and models are fetched exclusively from credential vault configured by managers in Admin; no secret fallback via `.env`. Live model paths are verified only after connecting real providers and running business acceptance tests.
+- Knowledge Source Connector currently accepts documents explicitly selected by users from Google Drive. Google Docs, Google Sheets, and TXT/Markdown/CSV files are recognized automatically; content changes create `DRAFT` only, never auto-publishing to agents.
+- Website scraping connector was removed from APIs, workflows, Admin, and deployment configs. Migration `Migration20260811122426` removed legacy source types while preserving previously created knowledge documents.
+- Google knowledge adapter supports Google Docs, Google Sheets, and TXT/Markdown/CSV files via OAuth connector and Google Picker. Store owners log in and select individual files; `drive.file` scope restricts access to selected files only. Refresh tokens are encrypted, callbacks protected against CSRF via expiring state/nonce, and disconnection revokes permissions and deletes credentials. Migration `Migration20260811080525` executed; real Google API calls remain `RUNTIME-PENDING` pending production OAuth app setup.
+- LangChain.js `QdrantVectorStore` and Qdrant `1.19.0` integrated. Runtime verifier upserted two chunks, proving metadata filtering isolates tenants and vectors are deleted when documents are retired. Live verifier called Gemini `gemini-embedding-001`, indexed 17 documents/17 chunks, and verified fixture returned 0 lexical results but 1 semantic and hybrid result; fixture was subsequently retired and vectors deleted.
+- Customer Support live verifier called Gemini `gemini-3.5-flash-lite`, returning structured drafts with two citations and mandatory human review. Mismatched ownership branch created 0 model runs, preventing order data from passing the authorization gate.
+- Inventory contention verifier created three locations and one inventory item using Medusa workflows, approved two actions both requesting transfer of 10 units from a source with 15 units, and executed concurrently under Redis lock. Result: one `SUCCEEDED`, one `CONFLICT`, source balance 5 units, and destinations 0/10; all fixtures cleaned up via official workflows.
+- Customer Support staff-flow verifier used two temporary User records and short-lived JWTs: users with required role receive 201, users without role receive 403, unauthenticated requests receive 401; blocked branches create 0 events. Worker created real tasks; staff processed `TODO -> CLAIMED -> IN_PROGRESS -> COMPLETED`, saving approved responses with `message_sent=false`; `task.escalate` branch escalated to `operations_manager` team with HIGH priority. Verifier retained one customer, one order, and two VI/EN TODO tasks for demo data, cleaning up temporary users.
+- Customer Support UI lint/build succeeded with Medusa Admin; compiled both `vi` and `en` resources. Browser tests with real `customer_support_staff` account verified claiming tasks, editing/saving answers, returning to queue, escalating to management, and switching VI/EN. Test revealed UI was incorrectly using `incident_id` as `correlation_id`; task API was updated to return real correlation, and Action Gateway escalation succeeded after the fix.
+- Support simulator verifier executed real APIs with `customer_support_staff` role: created an `INBOUND` customer message, completed the task, and confirmed an `OUTBOUND` message. Sending unapproved drafts or sending from different staff was blocked; duplicate requests did not create duplicate messages/actions. Output persisted strictly to `IN_APP` channel without external delivery.
+- Migration `Migration20260809200756` created 9 new foundation tables; official Medusa RBAC migration executed successfully.
+- Bootstrap is idempotent; `operations_manager` role has exactly 21 active policies synced automatically from `definePolicies`.
+- Runtime platform verified task transition `TODO -> CLAIMED -> IN_PROGRESS -> COMPLETED`, knowledge transition `DRAFT -> APPROVED`, `SHIP-001` status `PASSED`, and duplicate evaluation suppression.
+- Runtime task gateway verified duplicate requests are suppressed; requests without policies fail closed without creating actions; create/assign/escalate operations return `SUCCEEDED`; stale expected states return `CONFLICT`; each action produces exactly one tool call.
+- Runtime platform verified `knowledge.propose` creates `DRAFT` documents via Action Gateway before being approved to `APPROVED` by user workflows.
+- Supervisor periodically transitions expired approvals to `EXPIRED`, moves pending incidents to `ESCALATED`, and creates escalation tasks via Action Gateway; error records are isolated to avoid blocking the entire batch.
+- Redis container healthy; Redis Event Bus, Workflow Engine, and Distributed Locking connect successfully when production switch is enabled.
+- Production server on test port serves `/app` with HTTP 200; catalog API without session correctly returns HTTP 401.
 
-## Gate tiếp theo
+## Next Gates
 
-1. Bổ sung customer channel có identity mapping, consent, delivery receipt và
-   bước nhân viên xác nhận gửi; chưa bật agent tự gửi.
-2. Gán role `operations_manager` cho tài khoản Admin thật và kiểm thử allow/deny
-   trên từng policy qua HTTP.
-3. Chạy inventory contention bằng hai process/worker riêng, bổ sung tương tác
-   reservation và xác nhận lại trên stock location vận hành thật.
-4. Bổ sung trace/replay detail, append-only/retention và subscriber idempotency
-   cho từng connector production.
-5. Cấu hình bot Telegram thật và public HTTPS để chạy acceptance; sau đó thêm UI
-   quản lý connection. Tiếp tục xây push/Zalo/Slack/Teams/Messenger rồi mới
-   thêm hiểu chat tự do bằng LLM.
-6. Benchmark Gemini generation/embedding với bộ `KNOW-001` VI/EN, đặt budget,
-   rate-limit và security review trước production rollout.
-7. Google OAuth/Picker đã kết nối; cần người dùng chọn Docs/Sheets thật để chạy
-   acceptance import. Sau đó thêm lịch đồng bộ, review diff, phát hiện nội
-   dung thiếu/xung đột và retry/dead recovery qua worker. Notion/PDF cần adapter
-   riêng theo cùng connector contract.
-8. Hiệu chỉnh số phút SLA theo vận hành thật; khi vượt giới hạn batch cấu hình,
-   chuyển detector sang SLA table có index hoặc durable cursor.
-9. Sau lát cắt hỗ trợ khách hàng, triển khai Fulfillment Agent từ SLA contract
-   và connector vận chuyển thật; không tạo tool placeholder.
+1. Add customer channels with identity mapping, consent, delivery receipts, and staff confirmation before sending; do not enable autonomous agent sending.
+2. Assign `operations_manager` role to real Admin accounts and test allow/deny policies via HTTP.
+3. Run inventory contention tests using two distinct processes/workers, add reservation interactions, and re-verify against production stock locations.
+4. Add trace/replay details, append-only/retention policies, and subscriber idempotency for each production connector.
+5. Configure real Telegram bot and public HTTPS for acceptance testing; add connection management UI. Build push/Zalo/Slack/Teams/Messenger before introducing free-form LLM chat comprehension.
+6. Benchmark Gemini generation/embedding against VI/EN `KNOW-001` test suite, set budgets, rate limits, and conduct security reviews prior to production rollout.
+7. Google OAuth/Picker connected; requires real users selecting Docs/Sheets for import acceptance. Then add synchronization schedules, diff reviews, gap/conflict detection, and worker-based retry/dead recovery. Notion/PDF require dedicated adapters under the same connector contract.
+8. Calibrate SLA minute thresholds based on real operational data; migrate detector to indexed SLA tables or durable cursors when exceeding configured batch limits.
+9. Following the customer support vertical slice, implement Fulfillment Agent based on SLA contracts and real shipping connectors; avoid placeholder tools.
+

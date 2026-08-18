@@ -7,13 +7,14 @@ import { HttpTypes } from "@medusajs/types"
 import Divider from "@modules/common/components/divider"
 import { Heading, Text } from "@modules/common/components/ui"
 import Spinner from "@modules/common/icons/spinner"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { useActionState, useCallback, useEffect, useState } from "react"
 import BillingAddress from "../billing_address"
 import ErrorMessage from "../error-message"
 import ShippingAddress from "../shipping-address"
 import { SubmitButton } from "../submit-button"
 import { useTranslation } from "@lib/i18n/client"
+import { setCheckoutStep } from "@modules/checkout/utils/set-checkout-step"
 
 const Addresses = ({
   cart,
@@ -24,8 +25,6 @@ const Addresses = ({
 }) => {
   const t = useTranslation()
   const searchParams = useSearchParams()
-  const router = useRouter()
-  const pathname = usePathname()
 
   const isOpen = searchParams.get("step") === "address"
 
@@ -36,7 +35,7 @@ const Addresses = ({
   )
 
   const handleEdit = () => {
-    router.push(pathname + "?step=address")
+    setCheckoutStep("address")
   }
 
   const [result, formAction] = useActionState<
@@ -46,23 +45,27 @@ const Addresses = ({
   const [isAdvancing, setIsAdvancing] = useState(false)
 
   const moveToDelivery = useCallback(() => {
-    router.push(pathname + "?step=delivery", { scroll: false })
+    setCheckoutStep("delivery")
     requestAnimationFrame(() => {
       document
         .querySelector("[data-checkout-step='delivery']")
         ?.scrollIntoView({ behavior: "smooth", block: "start" })
     })
-  }, [pathname, router])
+  }, [])
 
   useEffect(() => {
+    if (!isAdvancing) {
+      return
+    }
+
     if (result?.success) {
       setIsAdvancing(false)
-      if (isOpen) moveToDelivery()
-    } else if (result?.error && isAdvancing) {
+      moveToDelivery()
+    } else if (result?.error) {
       setIsAdvancing(false)
-      router.replace(pathname + "?step=address", { scroll: false })
+      setCheckoutStep("address", { replace: true })
     }
-  }, [isAdvancing, isOpen, moveToDelivery, pathname, result, router])
+  }, [isAdvancing, moveToDelivery, result])
 
   return (
     <div className="bg-white">
@@ -91,7 +94,6 @@ const Addresses = ({
           action={formAction}
           onSubmit={() => {
             setIsAdvancing(true)
-            moveToDelivery()
           }}
         >
           <div className="pb-8">

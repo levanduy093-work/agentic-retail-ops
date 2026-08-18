@@ -1,11 +1,10 @@
 "use client"
 
 import { sdk } from "@lib/config"
-import { useTranslation } from "@lib/i18n/client"
-import { convertToLocale } from "@lib/util/money"
 import Input from "@modules/common/components/input"
 import NativeSelect from "@modules/common/components/native-select"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
+import { useTranslation } from "@lib/i18n/client"
 
 type Province = {
   id: number
@@ -29,12 +28,7 @@ type Ward = {
   extensions: string[]
 }
 
-type EstimatedGhnFees = {
-  standard: number
-}
-
 type VietnamAddressSelectProps = {
-  cartId?: string
   initialProvince?: string
   initialCity?: string
   initialAddress1?: string
@@ -51,7 +45,6 @@ type VietnamAddressSelectProps = {
 }
 
 const VietnamAddressSelect = ({
-  cartId,
   initialProvince,
   initialCity,
   initialAddress1,
@@ -59,7 +52,6 @@ const VietnamAddressSelect = ({
   onChange,
 }: VietnamAddressSelectProps) => {
   const t = useTranslation()
-
   const [provinces, setProvinces] = useState<Province[]>([])
   const [districts, setDistricts] = useState<District[]>([])
   const [wards, setWards] = useState<Ward[]>([])
@@ -84,20 +76,6 @@ const VietnamAddressSelect = ({
   const [loadingProvinces, setLoadingProvinces] = useState(true)
   const [loadingDistricts, setLoadingDistricts] = useState(false)
   const [loadingWards, setLoadingWards] = useState(false)
-
-  // Live GHN fee estimation state
-  const [estimatingFee, setEstimatingFee] = useState(false)
-  const [estimatedFees, setEstimatedFees] = useState<EstimatedGhnFees | null>(
-    null,
-  )
-  const isMountedRef = useRef(true)
-
-  useEffect(() => {
-    isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
-    }
-  }, [])
 
   // Sync state if initial props change (e.g. user chooses a different saved address)
   useEffect(() => {
@@ -124,7 +102,7 @@ const VietnamAddressSelect = ({
     sdk.client
       .fetch<{ provinces: Province[] }>("/store/vietnam-address/provinces")
       .then((res) => {
-        if (res?.provinces && isMountedRef.current) {
+        if (res?.provinces) {
           setProvinces(res.provinces)
           // If initialProvince was passed by name and no ID was set, match by name
           if (!selectedProvinceId && initialProvince) {
@@ -138,9 +116,7 @@ const VietnamAddressSelect = ({
         }
       })
       .catch(() => {})
-      .finally(() => {
-        if (isMountedRef.current) setLoadingProvinces(false)
-      })
+      .finally(() => setLoadingProvinces(false))
   }, [initialProvince])
 
   // 2. Fetch Districts when Province changes
@@ -150,7 +126,6 @@ const VietnamAddressSelect = ({
       setSelectedDistrictId("")
       setWards([])
       setSelectedWardCode("")
-      setEstimatedFees(null)
       return
     }
 
@@ -160,7 +135,7 @@ const VietnamAddressSelect = ({
         `/store/vietnam-address/districts?province_id=${selectedProvinceId}`,
       )
       .then((res) => {
-        if (res?.districts && isMountedRef.current) {
+        if (res?.districts) {
           setDistricts(res.districts)
           if (!selectedDistrictId && initialCity) {
             const found = res.districts.find(
@@ -175,9 +150,7 @@ const VietnamAddressSelect = ({
         }
       })
       .catch(() => {})
-      .finally(() => {
-        if (isMountedRef.current) setLoadingDistricts(false)
-      })
+      .finally(() => setLoadingDistricts(false))
   }, [selectedProvinceId, initialCity])
 
   // 3. Fetch Wards when District changes
@@ -185,7 +158,6 @@ const VietnamAddressSelect = ({
     if (!selectedDistrictId) {
       setWards([])
       setSelectedWardCode("")
-      setEstimatedFees(null)
       return
     }
 
@@ -195,53 +167,13 @@ const VietnamAddressSelect = ({
         `/store/vietnam-address/wards?district_id=${selectedDistrictId}`,
       )
       .then((res) => {
-        if (res?.wards && isMountedRef.current) {
+        if (res?.wards) {
           setWards(res.wards)
         }
       })
       .catch(() => {})
-      .finally(() => {
-        if (isMountedRef.current) setLoadingWards(false)
-      })
+      .finally(() => setLoadingWards(false))
   }, [selectedDistrictId])
-
-  // 4. Live GHN Fee Calculation when District is selected
-  useEffect(() => {
-    if (!selectedDistrictId) {
-      setEstimatedFees(null)
-      return
-    }
-
-    setEstimatingFee(true)
-    // NOTE: SDK handles serialization, pass plain object (never JSON.stringify)
-    sdk.client
-      .fetch<{
-        success: boolean
-        standard_fee: number
-      }>("/store/vietnam-address/calculate-fee", {
-        method: "POST",
-        body: {
-          cart_id: cartId,
-          to_district_id: Number(selectedDistrictId),
-          to_ward_code: selectedWardCode || undefined,
-        },
-      })
-      .then((res) => {
-        if (res?.success && isMountedRef.current) {
-          setEstimatedFees({
-            standard: res.standard_fee,
-          })
-        }
-      })
-      .catch(() => {
-        if (isMountedRef.current) {
-          setEstimatedFees(null)
-        }
-      })
-      .finally(() => {
-        if (isMountedRef.current) setEstimatingFee(false)
-      })
-  }, [cartId, selectedDistrictId, selectedWardCode])
 
   // Current Names
   const currentProvince = provinces.find(
@@ -380,13 +312,13 @@ const VietnamAddressSelect = ({
         {/* Province / City */}
         <div className="flex flex-col gap-y-1.5">
           <label className="text-xs text-ui-fg-subtle font-medium">
-            Tỉnh / Thành phố <span className="text-rose-500">*</span>
+            {t("checkout.province_label")} <span className="text-rose-500">*</span>
           </label>
           <NativeSelect
             placeholder={
               loadingProvinces
-                ? "Đang tải tỉnh thành..."
-                : "Chọn Tỉnh / Thành..."
+                ? t("checkout.loading_provinces")
+                : t("checkout.select_province")
             }
             value={selectedProvinceId ? String(selectedProvinceId) : ""}
             onChange={handleProvinceChange}
@@ -403,15 +335,15 @@ const VietnamAddressSelect = ({
         {/* District */}
         <div className="flex flex-col gap-y-1.5">
           <label className="text-xs text-ui-fg-subtle font-medium">
-            Quận / Huyện <span className="text-rose-500">*</span>
+            {t("checkout.district_label")} <span className="text-rose-500">*</span>
           </label>
           <NativeSelect
             placeholder={
               !selectedProvinceId
-                ? "Vui lòng chọn Tỉnh/Thành trước"
+                ? t("checkout.select_province_first")
                 : loadingDistricts
-                  ? "Đang tải quận huyện..."
-                  : "Chọn Quận / Huyện..."
+                  ? t("checkout.loading_districts")
+                  : t("checkout.select_district")
             }
             value={selectedDistrictId ? String(selectedDistrictId) : ""}
             onChange={handleDistrictChange}
@@ -429,15 +361,15 @@ const VietnamAddressSelect = ({
         {/* Ward */}
         <div className="flex flex-col gap-y-1.5">
           <label className="text-xs text-ui-fg-subtle font-medium">
-            Phường / Xã <span className="text-rose-500">*</span>
+            {t("checkout.ward_label")} <span className="text-rose-500">*</span>
           </label>
           <NativeSelect
             placeholder={
               !selectedDistrictId
-                ? "Vui lòng chọn Quận/Huyện trước"
+                ? t("checkout.select_district_first")
                 : loadingWards
-                  ? "Đang tải phường xã..."
-                  : "Chọn Phường / Xã..."
+                  ? t("checkout.loading_wards")
+                  : t("checkout.select_ward")
             }
             value={selectedWardCode}
             onChange={handleWardChange}
@@ -455,77 +387,13 @@ const VietnamAddressSelect = ({
 
       {/* Street Address */}
       <Input
-        label="Số nhà, tên đường, tòa nhà"
+        label={t("checkout.street_address_label")}
         name="vietnam_street_address"
         value={streetAddress}
         onChange={handleStreetChange}
         required
       />
 
-      {/* Live GHN Fee Estimation Card */}
-      {selectedDistrictId ? (
-        <div className="mt-2 rounded-2xl border border-emerald-900/10 bg-emerald-50/50 p-4 transition-all duration-200">
-          <div className="flex items-center justify-between pb-3 border-b border-emerald-900/10">
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#12231d] text-white text-[10px] font-bold tracking-tight shadow-sm">
-                GHN
-              </span>
-              <div>
-                <span className="text-xs font-semibold text-emerald-950 uppercase tracking-wider">
-                  {t("checkout.ghn_estimated_fee")}
-                </span>
-                <p className="text-[11px] text-emerald-800/80">
-                  {t("checkout.ghn_fee_notice")}
-                </p>
-              </div>
-            </div>
-            {estimatingFee && (
-              <span className="text-[11px] font-medium text-emerald-700 animate-pulse flex items-center gap-1.5">
-                <svg
-                  className="animate-spin h-3.5 w-3.5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                {t("checkout.ghn_calculating")}
-              </span>
-            )}
-          </div>
-
-          {estimatedFees && (
-            <div className="pt-3">
-              <div className="rounded-xl border border-emerald-900/10 bg-white/90 p-3 shadow-xs flex flex-col justify-between hover:border-emerald-700/30 transition-colors">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-[#12231d]">
-                      {t("checkout.ghn_standard")}
-                    </span>
-                    <span className="text-xs font-bold text-emerald-800">
-                      {convertToLocale({
-                        amount: estimatedFees.standard,
-                        currency_code: "vnd",
-                      })}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      ) : null}
     </div>
   )
 }

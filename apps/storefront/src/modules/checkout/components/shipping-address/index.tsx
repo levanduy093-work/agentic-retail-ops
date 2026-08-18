@@ -160,7 +160,6 @@ const ShippingAddress = ({
         />
         {formData["shipping_address.country_code"] === "vn" ? (
           <VietnamAddressSelect
-            cartId={cart?.id}
             initialProvince={formData["shipping_address.province"]}
             initialCity={formData["shipping_address.city"]}
             initialAddress1={formData["shipping_address.address_1"]}

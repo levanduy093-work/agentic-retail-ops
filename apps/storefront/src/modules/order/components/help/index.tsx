@@ -13,10 +13,18 @@ const Help = () => {
       <div className="text-base-regular my-2">
         <ul className="gap-y-2 flex flex-col">
           <li>
-            <LocalizedClientLink href="/contact">{t("order.contact")}</LocalizedClientLink>
+            <LocalizedClientLink
+              href="/contact"
+              className="text-ui-fg-subtle hover:text-ui-fg-base transition-colors"
+            >
+              {t("order.contact")}
+            </LocalizedClientLink>
           </li>
           <li>
-            <LocalizedClientLink href="/contact">
+            <LocalizedClientLink
+              href="/returns"
+              className="text-ui-fg-subtle hover:text-ui-fg-base transition-colors"
+            >
               {t("order.returns_exchanges")}
             </LocalizedClientLink>
           </li>

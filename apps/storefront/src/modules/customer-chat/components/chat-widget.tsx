@@ -4,6 +4,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react"
 import { useCustomerChat, ProductMediaItem } from "../hooks/use-customer-chat"
 import { HttpTypes } from "@medusajs/types"
+import { useTranslation } from "@lib/i18n/client"
 
 type ChatWidgetProps = {
   countryCode?: string
@@ -11,18 +12,12 @@ type ChatWidgetProps = {
   locale?: string
 }
 
-const QUICK_PROMPTS = [
-  "Tư vấn áo khoác đi chơi",
-  "Tìm áo thun size M dưới 300k",
-  "Xem mẫu quần jeans",
-  "Quy trình đổi trả hàng",
-]
-
 export default function CustomerChatWidget({
   countryCode = "vn",
   customer = null,
   locale = "vi",
 }: ChatWidgetProps) {
+  const t = useTranslation()
   const {
     clearChat,
     isLoading,
@@ -32,6 +27,13 @@ export default function CustomerChatWidget({
     sendMessage,
     setIsOpen,
   } = useCustomerChat(customer, locale)
+
+  const quickPrompts = [
+    t("chat.quick_prompts.jackets"),
+    t("chat.quick_prompts.tshirt_m"),
+    t("chat.quick_prompts.jeans"),
+    t("chat.quick_prompts.policy"),
+  ]
 
   const [input, setInput] = useState("")
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -79,13 +81,13 @@ export default function CustomerChatWidget({
                     className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-gray-900 ${
                       isLive ? "bg-green-500" : "bg-gray-400"
                     }`}
-                    title={isLive ? "Realtime Active" : "Connecting"}
+                    title={isLive ? t("chat.realtime_active") : t("chat.connecting")}
                   />
                 )}
               </div>
               <div className="flex flex-col">
                 <span className="text-sm font-semibold tracking-tight">
-                  Synapse AI CSKH
+                  {t("chat.title")}
                 </span>
                 <span className="flex items-center gap-1 text-[11px] text-gray-300">
                   {customer ? (
@@ -96,11 +98,11 @@ export default function CustomerChatWidget({
                         }`}
                       />
                       {customerDisplayName
-                        ? `Chào ${customer.first_name || customerDisplayName}`
-                        : "Trực tuyến"}
+                        ? t("chat.greeting", { name: customer.first_name || customerDisplayName })
+                        : t("chat.online")}
                     </>
                   ) : (
-                    "Yêu cầu đăng nhập"
+                    t("chat.auth_required_badge")
                   )}
                 </span>
               </div>
@@ -111,7 +113,7 @@ export default function CustomerChatWidget({
                 <button
                   type="button"
                   onClick={clearChat}
-                  title="Làm mới đoạn chat"
+                  title={t("chat.clear_chat")}
                   className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-800 hover:text-white"
                 >
                   <svg
@@ -132,7 +134,7 @@ export default function CustomerChatWidget({
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                title="Đóng chat"
+                title={t("chat.close_chat")}
                 className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-800 hover:text-white"
               >
                 <svg
@@ -160,25 +162,24 @@ export default function CustomerChatWidget({
                 🔒
               </div>
               <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-                Đăng nhập để trò chuyện với AI
+                {t("chat.auth_required_title")}
               </h3>
               <p className="mt-2 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-                Vui lòng đăng nhập tài khoản Synapse để bắt đầu trò chuyện, nhận tư
-                vấn thời trang chuẩn size và tự động lưu lịch sử hội thoại.
+                {t("chat.auth_required_desc")}
               </p>
 
               <div className="my-5 w-full rounded-xl border border-gray-100 bg-gray-50/80 p-3 text-left text-[11px] text-gray-600 dark:border-gray-800 dark:bg-gray-950/60 dark:text-gray-300">
                 <div className="flex items-center gap-2 py-1">
                   <span className="text-blue-500">✓</span>
-                  <span>Đồng bộ lịch sử chat xuyên suốt thiết bị</span>
+                  <span>{t("chat.auth_benefit_sync")}</span>
                 </div>
                 <div className="flex items-center gap-2 py-1">
                   <span className="text-blue-500">✓</span>
-                  <span>Tư vấn mẫu quần áo cá nhân hoá theo size</span>
+                  <span>{t("chat.auth_benefit_size")}</span>
                 </div>
                 <div className="flex items-center gap-2 py-1">
                   <span className="text-blue-500">✓</span>
-                  <span>Tra cứu đơn hàng và hỗ trợ đổi trả nhanh chóng</span>
+                  <span>{t("chat.auth_benefit_orders")}</span>
                 </div>
               </div>
 
@@ -186,7 +187,7 @@ export default function CustomerChatWidget({
                 href={`/${locale}/${countryCode}/account`}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-md transition hover:from-blue-700 hover:to-indigo-700 active:scale-98"
               >
-                <span>Đăng nhập / Đăng ký ngay</span>
+                <span>{t("chat.sign_in_register")}</span>
                 <svg
                   className="h-3.5 w-3.5"
                   fill="none"
@@ -213,16 +214,15 @@ export default function CustomerChatWidget({
                       ✨
                     </div>
                     <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                      Xin chào {customer.first_name || "bạn"}!
+                      {t("account.hello", { name: customer.first_name || "" })}!
                     </h4>
                     <p className="mt-1 max-w-[260px] text-xs text-gray-500 dark:text-gray-400">
-                      Mình là trợ lý CSKH Synapse. Mình có thể giúp bạn tìm kiếm
-                      mẫu quần áo, kiểm tra size, giá và tư vấn phối đồ nhé.
+                      {t("chat.welcome_message")}
                     </p>
 
                     {/* Quick Prompts */}
                     <div className="mt-4 flex w-full flex-col gap-1.5">
-                      {QUICK_PROMPTS.map((prompt) => (
+                      {quickPrompts.map((prompt) => (
                         <button
                           key={prompt}
                           type="button"
@@ -264,6 +264,7 @@ export default function CustomerChatWidget({
                                   product={product}
                                   countryCode={countryCode}
                                   locale={locale}
+                                  viewDetailsLabel={t("chat.view_product")}
                                 />
                               ))}
                             </div>
@@ -278,7 +279,7 @@ export default function CustomerChatWidget({
                         <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-blue-600 [animation-delay:-0.15s]" />
                         <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-blue-600" />
                         <span className="ml-1 text-[11px]">
-                          Đang tìm mẫu và trả lời...
+                          {t("chat.typing")}
                         </span>
                       </div>
                     )}
@@ -296,14 +297,14 @@ export default function CustomerChatWidget({
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Nhập câu hỏi hoặc yêu cầu tìm mẫu..."
+                  placeholder={t("chat.input_placeholder")}
                   className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2 text-xs text-gray-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500 dark:border-gray-800 dark:bg-gray-950 dark:text-white"
                 />
                 <button
                   type="submit"
                   disabled={!input.trim() || isLoading}
                   className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white shadow transition hover:bg-blue-700 disabled:opacity-40"
-                  title="Gửi"
+                  title={t("chat.send")}
                 >
                   <svg
                     className="h-4 w-4"
@@ -330,7 +331,7 @@ export default function CustomerChatWidget({
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="group relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-xl transition-all duration-200 hover:scale-105 hover:shadow-blue-500/25 active:scale-95"
-        aria-label="Chat với CSKH Synapse"
+        aria-label={t("chat.button_label")}
       >
         {isOpen ? (
           <svg
@@ -378,10 +379,12 @@ function ProductPreviewCard({
   countryCode,
   locale,
   product,
+  viewDetailsLabel,
 }: {
   countryCode: string
   locale: string
   product: ProductMediaItem
+  viewDetailsLabel: string
 }) {
   const productUrl =
     product.product_url ||
@@ -411,7 +414,7 @@ function ProductPreviewCard({
           rel="noopener noreferrer"
           className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:underline dark:text-blue-400"
         >
-          Xem chi tiết
+          {viewDetailsLabel}
           <svg
             className="h-3 w-3"
             fill="none"

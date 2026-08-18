@@ -9,9 +9,10 @@ import ErrorMessage from "@modules/checkout/components/error-message"
 import Divider from "@modules/common/components/divider"
 import MedusaRadio from "@modules/common/components/radio"
 import { Button, clx, Heading, Text } from "@modules/common/components/ui"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "@lib/i18n/client"
+import { setCheckoutStep } from "@modules/checkout/utils/set-checkout-step"
 
 const PICKUP_OPTION_ON = "__PICKUP_ON"
 const PICKUP_OPTION_OFF = "__PICKUP_OFF"
@@ -60,6 +61,8 @@ const Shipping: React.FC<ShippingProps> = ({
   const t = useTranslation()
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingPrices, setIsLoadingPrices] = useState(true)
+  const [isSynchronizingSelection, setIsSynchronizingSelection] =
+    useState(false)
 
   const [showPickupOptions, setShowPickupOptions] =
     useState<string>(PICKUP_OPTION_OFF)
@@ -70,10 +73,9 @@ const Shipping: React.FC<ShippingProps> = ({
   const [shippingMethodId, setShippingMethodId] = useState<string | null>(
     cart.shipping_methods?.at(-1)?.shipping_option_id || null
   )
+  const syncedSelectionKeyRef = useRef<string | null>(null)
 
   const searchParams = useSearchParams()
-  const router = useRouter()
-  const pathname = usePathname()
 
   const isOpen = searchParams.get("step") === "delivery"
   const cartShippingMethodId =
@@ -116,55 +118,123 @@ const Shipping: React.FC<ShippingProps> = ({
   )
 
   const hasPickupOptions = !!_pickupMethods?.length
+  const selectedShippingOption = _shippingMethods?.find(
+    (option) => option.id === shippingMethodId,
+  )
+  const isSelectedShippingQuoteReady =
+    !selectedShippingOption ||
+    selectedShippingOption.price_type !== "calculated" ||
+    !!calculatedPricesMap[selectedShippingOption.id]
 
   useEffect(() => {
+    let cancelled = false
+
+    if (!isOpen || !_shippingMethods?.length) {
+      setCalculatedPricesMap({})
+      setIsLoadingPrices(false)
+      return
+    }
+
     setIsLoadingPrices(true)
 
-    if (_shippingMethods?.length) {
-      const promises = _shippingMethods
-        .filter((sm) => sm.price_type === "calculated")
-        .map((sm) => calculateShippingQuote(sm.id, cart.id))
+    const promises = _shippingMethods
+      .filter((sm) => sm.price_type === "calculated")
+      .map((sm) => calculateShippingQuote(sm.id, cart.id))
 
-      if (promises.length) {
-        Promise.allSettled(promises).then((res) => {
-          const pricesMap: Record<string, CalculatedShippingQuote> = {}
-          res
-            .filter((r) => r.status === "fulfilled")
-            .forEach((p) => {
-              if (p.value?.option.id) {
-                pricesMap[p.value.option.id] = {
-                  amount: p.value.option.amount ?? 0,
-                  packages: p.value.packages,
-                  totalWeight: p.value.totalWeight,
-                }
-              }
-            })
-
-          setCalculatedPricesMap(pricesMap)
-          setIsLoadingPrices(false)
-        })
-      }
+    if (!promises.length) {
+      setCalculatedPricesMap({})
+      setIsLoadingPrices(false)
+      return
     }
+
+    Promise.allSettled(promises).then((res) => {
+      if (cancelled) {
+        return
+      }
+
+      const pricesMap: Record<string, CalculatedShippingQuote> = {}
+      res
+        .filter((r) => r.status === "fulfilled")
+        .forEach((p) => {
+          if (p.value?.option.id) {
+            pricesMap[p.value.option.id] = {
+              amount: p.value.option.amount ?? 0,
+              packages: p.value.packages,
+              totalWeight: p.value.totalWeight,
+            }
+          }
+        })
+
+      setCalculatedPricesMap(pricesMap)
+      setIsLoadingPrices(false)
+
+      const selectedQuote = cartShippingMethodId
+        ? pricesMap[cartShippingMethodId]
+        : undefined
+
+      if (!selectedQuote || !cartShippingMethodId) {
+        return
+      }
+
+      const selectionKey = [
+        cart.id,
+        cartShippingMethodId,
+        cart.shipping_address?.metadata?.ghn_district_id ?? "",
+        cart.shipping_address?.metadata?.ghn_ward_code ?? "",
+        selectedQuote.amount,
+        selectedQuote.totalWeight,
+      ].join(":")
+
+      if (syncedSelectionKeyRef.current === selectionKey) {
+        return
+      }
+
+      syncedSelectionKeyRef.current = selectionKey
+      setIsSynchronizingSelection(true)
+      setShippingMethod({
+        cartId: cart.id,
+        shippingMethodId: cartShippingMethodId,
+        data: {
+          ghn_weight: selectedQuote.totalWeight,
+          shipping_packages: selectedQuote.packages,
+        },
+      })
+        .catch((err: unknown) => {
+          if (!cancelled) {
+            setError(err instanceof Error ? err.message : String(err))
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsSynchronizingSelection(false)
+          }
+        })
+    })
 
     if (_pickupMethods?.find((m) => m.id === shippingMethodId)) {
       setShowPickupOptions(PICKUP_OPTION_ON)
     }
+
+    return () => {
+      cancelled = true
+    }
   }, [
-    availableShippingMethods,
     cart.id,
+    cartShippingMethodId,
     cart.shipping_address?.metadata?.ghn_district_id,
     cart.shipping_address?.metadata?.ghn_ward_code,
+    isOpen,
     _pickupMethods,
     _shippingMethods,
     shippingMethodId,
   ])
 
   const handleEdit = () => {
-    router.push(pathname + "?step=delivery", { scroll: false })
+    setCheckoutStep("delivery")
   }
 
   const handleSubmit = () => {
-    router.push(pathname + "?step=payment", { scroll: false })
+    setCheckoutStep("payment")
   }
 
   const handleSetShippingMethod = async (
@@ -198,9 +268,6 @@ const Shipping: React.FC<ShippingProps> = ({
           }
         : undefined,
     })
-      .then(() => {
-        router.refresh()
-      })
       .catch((err) => {
         setShippingMethodId(currentId)
 
@@ -370,10 +437,10 @@ const Shipping: React.FC<ShippingProps> = ({
             <div className="grid">
               <div className="flex flex-col">
                 <span className="font-medium txt-medium text-ui-fg-base">
-                  Store
+                  {t("checkout.pickup_store")}
                 </span>
                 <span className="mb-4 text-ui-fg-muted txt-medium">
-                  Choose a store near you
+                  {t("checkout.choose_store_near_you")}
                 </span>
               </div>
               <div data-testid="delivery-options-container">
@@ -454,7 +521,13 @@ const Shipping: React.FC<ShippingProps> = ({
               className="mt"
               onClick={handleSubmit}
               isLoading={isLoading}
-              disabled={!shippingMethodId || isLoading}
+              disabled={
+                !shippingMethodId ||
+                !isSelectedShippingQuoteReady ||
+                isLoading ||
+                isLoadingPrices ||
+                isSynchronizingSelection
+              }
               data-testid="submit-delivery-option-button"
             >
               {t("checkout.continue_to_payment")}

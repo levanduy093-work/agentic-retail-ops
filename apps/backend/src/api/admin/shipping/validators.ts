@@ -48,31 +48,3 @@ export const TestGhnCarrier = ConfigureGhnCarrier.extend({
 })
 
 export type TestGhnCarrier = z.infer<typeof TestGhnCarrier>
-
-export const ConfigureGhtkCarrier = z.object({
-  api_token: z.string().trim().min(1).optional(),
-  base_url: z.string().trim().url().optional(),
-  default_height: z.number().positive().optional(),
-  default_length: z.number().positive().optional(),
-  default_weight: z.number().positive().optional(),
-  default_width: z.number().positive().optional(),
-  environment: z.enum(["sandbox", "production"]).optional(),
-  is_enabled: z.boolean().optional(),
-  is_freeship: z.boolean().optional(),
-  pick_address_id: z.string().trim().optional(),
-  sender_address: z.string().trim().min(3).optional(),
-  sender_district: z.string().trim().min(1).optional(),
-  sender_name: z.string().trim().min(2).optional(),
-  sender_phone: z.string().trim().min(8).optional(),
-  sender_province: z.string().trim().min(1).optional(),
-  sender_ward: z.string().trim().min(1).optional(),
-  transport: z.enum(["road", "fly"]).optional(),
-})
-
-export type ConfigureGhtkCarrier = z.infer<typeof ConfigureGhtkCarrier>
-
-export const TestGhtkCarrier = ConfigureGhtkCarrier.extend({
-  api_token: z.string().trim().min(1).optional(),
-})
-
-export type TestGhtkCarrier = z.infer<typeof TestGhtkCarrier>

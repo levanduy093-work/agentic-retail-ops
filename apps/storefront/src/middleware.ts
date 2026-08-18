@@ -13,13 +13,13 @@ const regionMapCache = {
 }
 
 const devAccessCache = {
-  isLocked: false,
+  isPublic: false,
   lastChecked: 0,
 }
 
-async function checkDevAccessIsLocked(): Promise<boolean> {
+async function checkDevAccessIsPublic(): Promise<boolean> {
   if (Date.now() - devAccessCache.lastChecked < 10000) {
-    return devAccessCache.isLocked
+    return devAccessCache.isPublic
   }
 
   try {
@@ -33,15 +33,30 @@ async function checkDevAccessIsLocked(): Promise<boolean> {
     })
     if (res.ok) {
       const data = await res.json()
-      devAccessCache.isLocked = Boolean(data?.is_locked)
+      devAccessCache.isPublic = Boolean(data?.is_public)
       devAccessCache.lastChecked = Date.now()
-      return devAccessCache.isLocked
+      return devAccessCache.isPublic
     }
   } catch {
     // If backend unreachable or error, don't block
   }
 
-  return devAccessCache.isLocked
+  return devAccessCache.isPublic
+}
+
+async function hasValidDevAccessSession(token: string): Promise<boolean> {
+  if (!BACKEND_URL || !token) return false
+  try {
+    const response = await fetch(`${BACKEND_URL}/store/dev-access/session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-publishable-api-key": PUBLISHABLE_API_KEY || "" },
+      body: JSON.stringify({ session_token: token }),
+      cache: "no-store",
+    })
+    return response.ok && Boolean((await response.json()).valid)
+  } catch {
+    return false
+  }
 }
 
 async function getRegionMap(cacheId: string) {
@@ -180,6 +195,7 @@ function getLocale(request: NextRequest): string {
  */
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
+  let consumeDevAccessSession = false
   if (pathname.includes(".") || pathname.includes("/dev-lock")) {
     return NextResponse.next()
   }
@@ -191,12 +207,12 @@ export async function middleware(request: NextRequest) {
     host.endsWith(".local")
 
   if (!isLocal) {
-    const isUnlockedByCookie =
-      request.cookies.get("synapse_dev_access_pass")?.value === "unlocked"
-
-    if (!isUnlockedByCookie) {
-      const isLocked = await checkDevAccessIsLocked()
-      if (isLocked) {
+    const isPublic = await checkDevAccessIsPublic()
+    if (!isPublic) {
+      const hasSession = await hasValidDevAccessSession(
+        request.cookies.get("synapse_dev_access_session")?.value || ""
+      )
+      if (!hasSession) {
         const locale = getLocale(request)
         const country = DEFAULT_REGION
         const redirectUrl = `${request.nextUrl.origin}/${locale}/${country}/dev-lock?from=${encodeURIComponent(
@@ -204,6 +220,7 @@ export async function middleware(request: NextRequest) {
         )}`
         return NextResponse.redirect(redirectUrl, 307)
       }
+      consumeDevAccessSession = true
     }
   }
 
@@ -254,6 +271,10 @@ export async function middleware(request: NextRequest) {
         sameSite: "strict",
         secure: request.nextUrl.protocol === "https:",
       })
+    }
+
+    if (consumeDevAccessSession) {
+      response.cookies.delete("synapse_dev_access_session")
     }
 
     return response

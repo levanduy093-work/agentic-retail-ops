@@ -783,6 +783,20 @@ const KnowledgeHubPage = () => {
                   {t("knowledgeHub.loading")}
                 </Text>
               )}
+              {documents.isError && !documents.data && (
+                <div className="flex flex-col items-start gap-3 px-6 py-6">
+                  <Text className="text-ui-fg-error" size="small">
+                    {t("knowledgeHub.listError")}
+                  </Text>
+                  <Button
+                    onClick={() => void documents.refetch()}
+                    size="small"
+                    variant="secondary"
+                  >
+                    {t("knowledgeHub.retryAction")}
+                  </Button>
+                </div>
+              )}
               {filteredDocuments.map((document) => (
                 <button
                   className={`w-full border-b px-6 py-4 text-left transition-colors hover:bg-ui-bg-subtle-hover ${
@@ -810,7 +824,7 @@ const KnowledgeHubPage = () => {
                   </Text>
                 </button>
               ))}
-              {!documents.isLoading && !filteredDocuments.length && (
+              {!documents.isLoading && !documents.isError && !filteredDocuments.length && (
                 <Text className="px-6 py-8 text-ui-fg-subtle" size="small">
                   {t("knowledgeHub.emptyStatus.approved")}
                 </Text>
@@ -1026,6 +1040,20 @@ const KnowledgeHubPage = () => {
                 </Button>
               </div>
             </div>
+            {googleConnector.isError && !googleConnector.data && (
+              <div className="flex flex-wrap items-center gap-3 border-t px-6 py-4">
+                <Text className="text-ui-fg-error" size="small">
+                  {t("knowledgeHub.sources.connectorLoadError")}
+                </Text>
+                <Button
+                  onClick={() => void googleConnector.refetch()}
+                  size="small"
+                  variant="secondary"
+                >
+                  {t("knowledgeHub.retryAction")}
+                </Button>
+              </div>
+            )}
           </Container>
           <Container className="p-0">
             <div className="border-b px-6 py-4">
@@ -1044,6 +1072,19 @@ const KnowledgeHubPage = () => {
               <Text className="px-6 py-8 text-ui-fg-subtle" size="small">
                 {t("knowledgeHub.sources.loading")}
               </Text>
+            ) : sources.isError && !sources.data ? (
+              <div className="flex flex-col items-start gap-3 px-6 py-8">
+                <Text className="text-ui-fg-error" size="small">
+                  {t("knowledgeHub.sources.listError")}
+                </Text>
+                <Button
+                  onClick={() => void sources.refetch()}
+                  size="small"
+                  variant="secondary"
+                >
+                  {t("knowledgeHub.retryAction")}
+                </Button>
+              </div>
             ) : !visibleSources.length ? (
               <Text className="px-6 py-8 text-ui-fg-subtle" size="small">
                 {t("knowledgeHub.sources.empty")}

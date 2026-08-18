@@ -66,27 +66,23 @@ export async function GET(
     const label = fulfillment.labels?.[0]
     const trackingNumber =
       (data.tracking_number as string | undefined) ||
-      (data.ghtk_label_id as string | undefined) ||
       (data.ghn_order_code as string | undefined) ||
       label?.tracking_number ||
       null
 
     const trackingUrl =
       (data.tracking_url as string | undefined) ||
-      (data.ghtk_tracking_url as string | undefined) ||
       (data.ghn_tracking_url as string | undefined) ||
       label?.tracking_url ||
       null
 
     const labelUrl =
       (data.label_url as string | undefined) ||
-      (data.ghtk_print_url as string | undefined) ||
       (data.ghn_print_url as string | undefined) ||
       label?.label_url ||
       null
 
     const status =
-      (data.ghtk_current_status as string | undefined) ||
       (data.ghn_current_status as string | undefined) ||
       (fulfillment.delivered_at
         ? "delivered"
@@ -110,13 +106,7 @@ export async function GET(
       service:
         (data.service_name as string | undefined) ||
         (data.id as string | undefined) ||
-        (data.transport === "fly"
-          ? "ghtk-fly"
-          : data.transport === "road"
-            ? "ghtk-road"
-            : data.service_type_id === 1
-              ? "ghn-fast"
-              : "ghn-standard"),
+        (data.service_type_id === 1 ? "ghn-fast" : "ghn-standard"),
       shipped_at: fulfillment.shipped_at,
       status,
       tracking_number: trackingNumber,

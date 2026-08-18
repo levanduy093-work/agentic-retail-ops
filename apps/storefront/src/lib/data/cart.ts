@@ -4,6 +4,8 @@ import { sdk } from "@lib/config"
 import medusaError from "@lib/util/medusa-error"
 import { HttpTypes } from "@medusajs/types"
 import { revalidateTag } from "next/cache"
+import { redirect } from "next/navigation"
+import { getLocale } from "./locale-actions"
 import {
   getAuthHeaders,
   getCacheOptions,
@@ -13,7 +15,6 @@ import {
   setCartId,
 } from "./cookies"
 import { saveCustomerShippingAddress } from "./customer"
-import { calculateShippingQuote } from "./fulfillment"
 import { getRegion } from "./regions"
 
 /**
@@ -406,28 +407,7 @@ export async function setAddresses(
         province: formData.get("billing_address.province") as string,
         phone: formData.get("billing_address.phone") as string,
       }
-    const updatedCart = await updateCart(data)
-
-    const selectedShippingOptionId =
-      updatedCart.shipping_methods?.at(-1)?.shipping_option_id
-
-    if (selectedShippingOptionId) {
-      const quote = await calculateShippingQuote(
-        selectedShippingOptionId,
-        cartId,
-      )
-
-      if (quote) {
-        await setShippingMethod({
-          cartId,
-          shippingMethodId: selectedShippingOptionId,
-          data: {
-            ghn_weight: quote.totalWeight,
-            shipping_packages: quote.packages,
-          },
-        })
-      }
-    }
+    await updateCart(data)
 
     if (formData.get("save_to_customer") === "on") {
       await saveCustomerShippingAddress(data.shipping_address)
@@ -471,9 +451,9 @@ export async function placeOrder(cartId?: string) {
     const orderCacheTag = await getCacheTag("orders")
     revalidateTag(orderCacheTag)
 
-    removeCartId()
+    await removeCartId()
     const locale = (await getLocale()) || "en"
-    redirect(`/${locale}/${countryCode}/order/${cartRes?.order.id}/confirmed`)
+    redirect(`/${locale}/${countryCode || "vn"}/order/${cartRes.order.id}/confirmed`)
   }
 
   return cartRes.cart

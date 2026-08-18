@@ -14,6 +14,13 @@ type PaymentButtonProps = {
   "data-testid": string
 }
 
+const isNextRedirectError = (error: unknown) =>
+  typeof error === "object" &&
+  error !== null &&
+  "digest" in error &&
+  typeof error.digest === "string" &&
+  error.digest.startsWith("NEXT_REDIRECT")
+
 const PaymentButton: React.FC<PaymentButtonProps> = ({
   cart,
   "data-testid": dataTestId,
@@ -60,13 +67,16 @@ const StripePaymentButton = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const onPaymentCompleted = async () => {
-    await placeOrder()
-      .catch((err) => {
-        setErrorMessage(err.message)
-      })
-      .finally(() => {
-        setSubmitting(false)
-      })
+    try {
+      setErrorMessage(null)
+      await placeOrder()
+    } catch (err) {
+      if (isNextRedirectError(err)) {
+        throw err
+      }
+      setErrorMessage(err instanceof Error ? err.message : String(err))
+      setSubmitting(false)
+    }
   }
 
   const stripe = useStripe()
@@ -138,7 +148,7 @@ const StripePaymentButton = ({
   return (
     <>
       <Button
-        disabled={disabled || notReady}
+        disabled={disabled || notReady || submitting}
         onClick={handlePayment}
         size="large"
         isLoading={submitting}
@@ -160,13 +170,16 @@ const ManualTestPaymentButton = ({ notReady }: { notReady: boolean }) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const onPaymentCompleted = async () => {
-    await placeOrder()
-      .catch((err) => {
-        setErrorMessage(err.message)
-      })
-      .finally(() => {
-        setSubmitting(false)
-      })
+    try {
+      setErrorMessage(null)
+      await placeOrder()
+    } catch (err) {
+      if (isNextRedirectError(err)) {
+        throw err
+      }
+      setErrorMessage(err instanceof Error ? err.message : String(err))
+      setSubmitting(false)
+    }
   }
 
   const handlePayment = () => {
@@ -178,7 +191,7 @@ const ManualTestPaymentButton = ({ notReady }: { notReady: boolean }) => {
   return (
     <>
       <Button
-        disabled={notReady}
+        disabled={notReady || submitting}
         isLoading={submitting}
         onClick={handlePayment}
         size="large"

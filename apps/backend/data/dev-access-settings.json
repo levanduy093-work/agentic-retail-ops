@@ -1,9 +1,5 @@
 {
-  "allowed_ips": [],
-  "access_mode": "passcode",
-  "maintenance_message": "Hệ thống đang trong quá trình phát triển (Dev Mode). Vui lòng nhập mã PIN hoặc liên hệ quản trị viên để mở khóa.",
-  "passcode": "synapse2026",
+  "passcode_hash": "scrypt$KG10yGtZ_8GiDwapcBpNTw$KC9ZXxZ6naLWr-dj8AyCbEFl36icZcb4pykJOv0gdK545USdmz0Wpes3VfEqfmS7Qg0rr8xnE56MtUst2Zs3gQ",
   "public_access_enabled": false,
-  "public_domain": "trendhub.sbs",
-  "updated_at": "2026-08-17T18:40:46.956Z"
+  "updated_at": "2026-08-18T05:22:28.852Z"
 }

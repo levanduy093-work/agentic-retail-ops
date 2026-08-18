@@ -10,7 +10,6 @@ import {
 } from "@medusajs/medusa/core-flows"
 
 const GHN_PROVIDER_ID = "ghn_ghn"
-const GHTK_PROVIDER_ID = "ghtk_ghtk"
 
 export default async function bootstrapShippingHub({ container }: ExecArgs) {
   const logger = container.resolve(ContainerRegistrationKeys.LOGGER)
@@ -99,7 +98,7 @@ export default async function bootstrapShippingHub({ container }: ExecArgs) {
     }
   }
 
-  for (const providerId of [GHN_PROVIDER_ID, GHTK_PROVIDER_ID]) {
+  for (const providerId of [GHN_PROVIDER_ID]) {
     try {
       await link.create({
         [Modules.STOCK_LOCATION]: {
@@ -128,20 +127,6 @@ export default async function bootstrapShippingHub({ container }: ExecArgs) {
       description: "GHN tính giá theo địa chỉ và khối lượng thực tế.",
       name: "GHN Tiêu chuẩn",
       provider_id: GHN_PROVIDER_ID,
-    },
-    {
-      code: "ghtk-road",
-      data: { carrier_code: "GHTK", id: "ghtk-road", transport: "road" },
-      description: "GHTK Chuẩn (Đường bộ) tính giá theo địa chỉ và khối lượng thực tế.",
-      name: "GHTK Tiết kiệm (Đường bộ)",
-      provider_id: GHTK_PROVIDER_ID,
-    },
-    {
-      code: "ghtk-fly",
-      data: { carrier_code: "GHTK", id: "ghtk-fly", transport: "fly" },
-      description: "GHTK Nhanh (Đường bay) giao nhanh liên tỉnh.",
-      name: "GHTK Nhanh (Đường bay)",
-      provider_id: GHTK_PROVIDER_ID,
     },
   ]
 
@@ -182,11 +167,8 @@ export default async function bootstrapShippingHub({ container }: ExecArgs) {
     (option) => option.provider_id === "manual_manual"
   )
   const unsupportedOptions = options.filter((option) => {
-    const isOurCarrier =
-      option.provider_id === GHN_PROVIDER_ID ||
-      option.provider_id === GHTK_PROVIDER_ID
     return (
-      isOurCarrier &&
+      option.provider_id === GHN_PROVIDER_ID &&
       !carrierOptions.some((supported) => {
         return (
           supported.provider_id === option.provider_id &&
@@ -214,7 +196,7 @@ export default async function bootstrapShippingHub({ container }: ExecArgs) {
   console.log(
     JSON.stringify(
       {
-        carriers: ["GHN", "GHTK"],
+        carriers: ["GHN"],
         calculated_options: carrierOptions.map((option) => option.code),
         disabled_options: optionsToDisable.length,
         status: "SHIPPING_HUB_BOOTSTRAPPED",
@@ -224,4 +206,3 @@ export default async function bootstrapShippingHub({ container }: ExecArgs) {
     )
   )
 }
-

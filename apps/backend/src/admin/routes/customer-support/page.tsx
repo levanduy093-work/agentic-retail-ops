@@ -135,9 +135,12 @@ const statusColor = (status: string) => {
   return "blue" as const
 }
 
-const customerNameFromConversation = (conversation: {
-  title?: string | null
-}) => {
+const customerNameFromConversation = (
+  conversation: {
+    title?: string | null
+  },
+  t?: (key: any, ...args: any[]) => any,
+) => {
   const title = conversation.title?.trim()
   if (title) {
     const customerName = title.replace(
@@ -148,11 +151,11 @@ const customerNameFromConversation = (conversation: {
     return /^(customer-chat-eval-\d+|qa retained customer-chat evaluation)/i.test(
       customerName,
     )
-      ? "Khách hàng (kiểm thử)"
+      ? (t ? t("supportDesk.testCustomer", "Khách hàng (kiểm thử)") : "Khách hàng (kiểm thử)")
       : customerName
   }
 
-  return "Customer"
+  return t ? t("supportDesk.customer", "Customer") : "Customer"
 }
 
 type CustomerSupportContentProps = {
@@ -624,7 +627,7 @@ export const CustomerSupportContent = ({
         .join(" ") || customer.data.customer.email
     : null
   const customerName = selectedConversation
-    ? (storedCustomerName ?? customerNameFromConversation(selectedConversation))
+    ? (storedCustomerName ?? customerNameFromConversation(selectedConversation, t))
     : "—"
   const customerReference =
     customer.data?.customer?.email ??
@@ -659,6 +662,32 @@ export const CustomerSupportContent = ({
         <Text size="small" leading="compact" className="text-ui-fg-subtle">
           {t("supportDesk.loading")}
         </Text>
+      </Container>
+    )
+  }
+
+  if (
+    (tasks.isError && !tasks.data) ||
+    (conversations.isError && !conversations.data) ||
+    (currentUser.isError && !currentUser.data)
+  ) {
+    return (
+      <Container className="flex min-h-[360px] flex-col items-start justify-center gap-3">
+        <Text className="text-ui-fg-error" size="small" leading="compact">
+          {t("supportDesk.loadError")}
+        </Text>
+        <Text className="text-ui-fg-subtle" size="small" leading="compact">
+          {t("supportDesk.loadErrorDesc")}
+        </Text>
+        <Button
+          onClick={() => {
+            void Promise.all([currentUser.refetch(), tasks.refetch(), conversations.refetch()])
+          }}
+          size="small"
+          variant="secondary"
+        >
+          {t("supportDesk.retryAction")}
+        </Button>
       </Container>
     )
   }
@@ -737,7 +766,7 @@ export const CustomerSupportContent = ({
               </Text>
             ) : (
               visibleConversations.map((item) => {
-                const itemCustomerName = customerNameFromConversation(item)
+                const itemCustomerName = customerNameFromConversation(item, t)
                 const isSelected = item.id === selectedConversationId
 
                 return (
@@ -852,6 +881,19 @@ export const CustomerSupportContent = ({
                     >
                       {t("supportDesk.loading")}
                     </Text>
+                  ) : conversation.isError && !conversation.data ? (
+                    <div className="flex flex-col items-start gap-3 rounded-lg border border-ui-border-error bg-ui-bg-base p-4">
+                      <Text className="text-ui-fg-error" size="small">
+                        {t("supportDesk.conversationLoadError")}
+                      </Text>
+                      <Button
+                        onClick={() => void conversation.refetch()}
+                        size="small"
+                        variant="secondary"
+                      >
+                        {t("supportDesk.retryAction")}
+                      </Button>
+                    </div>
                   ) : conversation.data?.messages.length ? (
                     conversation.data.messages.map((message) => {
                       const isCustomerMessage = message.direction === "INBOUND"

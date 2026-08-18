@@ -62,8 +62,7 @@ const Login = ({ setCurrentView }: Props) => {
           className="w-full mb-6 text-center text-base-regular text-ui-fg-base bg-ui-bg-subtle border border-ui-border-base rounded-rounded p-4"
           data-testid="login-verification-message"
         >
-          We sent a verification link to <strong>{message.email}</strong>.
-          Please verify your email, then sign in.
+          {t("account.verification_email_sent", { email: message.email })}
         </div>
       )}
       <form className="w-full" action={formAction}>
@@ -72,7 +71,7 @@ const Login = ({ setCurrentView }: Props) => {
             label={t("account.email_address")}
             name="email"
             type="email"
-            title="Enter a valid email address."
+            title={t("account.enter_valid_email_title")}
             autoComplete="email"
             required
             data-testid="email-input"

@@ -1,9 +1,8 @@
 # Synapse DTC Starter & Agentic Retail Ops
 
-Monorepo gồm Medusa backend/Admin, Next.js storefront, PostgreSQL, Redis và
-Qdrant. Cần Node.js 20+, pnpm 10+ và Docker Desktop.
+A monorepo featuring a Medusa backend/Admin, Next.js storefront, PostgreSQL, Redis, and Qdrant. Requires Node.js 20+, pnpm 10+, and Docker Desktop.
 
-## Chạy local lần đầu
+## First-time Local Setup
 
 ```bash
 git clone https://github.com/levanduy093-work/agentic-retail-ops.git
@@ -13,7 +12,7 @@ pnpm install
 # PostgreSQL :5432, Redis :6379, Qdrant :6333
 docker compose up -d postgres redis qdrant
 
-# Mỗi file local chỉ tạo một lần; không commit các file này.
+# Create each local env file once; do not commit these files.
 cp apps/backend/.env.template apps/backend/.env
 cp apps/storefront/.env.template apps/storefront/.env.local
 
@@ -23,68 +22,52 @@ pnpm exec medusa user -e admin@example.com -p 'choose-a-strong-password'
 cd ../..
 ```
 
-Khởi động backend trước:
+Start the backend first:
 
 ```bash
 pnpm run backend:dev
 ```
 
-Mở http://localhost:9000/app, đăng nhập bằng tài khoản vừa tạo, vào
-`Settings → Publishable API Keys` để tạo hoặc lấy key. Điền key vào
-`apps/storefront/.env.local`, sau đó dừng backend (`Ctrl+C`) nếu muốn chạy cả
-hai app bằng một lệnh:
+Open http://localhost:9000/app, log in with the newly created account, and navigate to `Settings → Publishable API Keys` to create or copy a key. Fill the key into `apps/storefront/.env.local`, then stop the backend (`Ctrl+C`) if you want to run both apps with a single command:
 
 ```env
 NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=pk_your_key_here
 ```
 
-Khởi động cả backend và storefront:
+Start both backend and storefront:
 
 ```bash
 pnpm dev
 ```
 
 - Storefront: http://localhost:8000
-- Backend API và Admin: http://localhost:9000/app
+- Backend API and Admin: http://localhost:9000/app
 
-Hoặc chạy riêng `pnpm run backend:dev` hay `pnpm run storefront:dev`.
+Alternatively, run each service separately using `pnpm run backend:dev` or `pnpm run storefront:dev`.
 
-## Cấu hình môi trường
+## Environment Configuration
 
-Hai template có sẵn cấu hình Docker local:
+Two templates are pre-configured for local Docker environments:
 
-- [Backend template](apps/backend/.env.template): database, Redis, Qdrant,
-  CORS, feature flags, Google/Knowledge Hub và Telegram.
-- [Storefront template](apps/storefront/.env.template): URL backend, region,
-  publishable key, Google One Tap và Stripe.
+- [Backend template](apps/backend/.env.template): database, Redis, Qdrant, CORS, feature flags, Google/Knowledge Hub, and Telegram.
+- [Storefront template](apps/storefront/.env.template): backend URL, region, publishable key, Google One Tap, and Stripe.
 
-Local Docker dùng sẵn các giá trị mặc định trong template. Các key bắt buộc để
-backend chạy là `DATABASE_URL`, `STORE_CORS`, `ADMIN_CORS`, `AUTH_CORS`,
-`JWT_SECRET`, `COOKIE_SECRET`, `REDIS_URL` và
-`REDIS_INFRASTRUCTURE_ENABLED`; chỉ cần thay khi hạ tầng hoặc origin khác local.
-`NEXT_PUBLIC_MEDUSA_BACKEND_URL`, `NEXT_PUBLIC_BASE_URL` và
-`NEXT_PUBLIC_DEFAULT_REGION` phải phản ánh URL/region storefront thực tế.
-`NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY` là biến bắt buộc cho storefront.
+Local Docker works out-of-the-box with the default template values. The required environment variables for the backend are `DATABASE_URL`, `STORE_CORS`, `ADMIN_CORS`, `AUTH_CORS`, `JWT_SECRET`, `COOKIE_SECRET`, `REDIS_URL`, and `REDIS_INFRASTRUCTURE_ENABLED`; modify these only when your infrastructure or origins differ from local defaults.
+`NEXT_PUBLIC_MEDUSA_BACKEND_URL`, `NEXT_PUBLIC_BASE_URL`, and `NEXT_PUBLIC_DEFAULT_REGION` must reflect the actual storefront URL/region.
+`NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY` is required for the storefront.
 
-Trước khi deploy, đổi `JWT_SECRET`, `COOKIE_SECRET` và
-`AGENT_CREDENTIAL_ENCRYPTION_KEY`; đặt `CUSTOMER_STOREFRONT_BASE_URL` là origin
-HTTPS storefront và thêm đúng origin đó vào `STORE_CORS`. Chỉ cấu hình
-`TELEGRAM_*`, `CLOUDFLARE_TUNNEL_TOKEN` và Google OAuth khi cần các tích hợp
-tương ứng.
+Before deploying to production, update `JWT_SECRET`, `COOKIE_SECRET`, and `AGENT_CREDENTIAL_ENCRYPTION_KEY`; set `CUSTOMER_STOREFRONT_BASE_URL` to your production HTTPS storefront origin and add that exact origin to `STORE_CORS`. Only configure `TELEGRAM_*`, `CLOUDFLARE_TUNNEL_TOKEN`, and Google OAuth when those integrations are needed.
 
-API key của AI và cấu hình/token hãng vận chuyển được quản lý qua Admin
-(`AI Connections` và `Shipping Hub`) và được lưu mã hóa trong PostgreSQL; không
-đưa chúng vào Git hoặc template.
+AI API keys and shipping carrier configurations/tokens are managed securely through the Admin dashboard (`AI Connections` and `Shipping Hub`) and stored encrypted in PostgreSQL; do not commit them to Git or add them to `.env` templates.
 
-## Lệnh thường dùng
+## Common Commands
 
 ```bash
-pnpm run build                         # build toàn bộ workspace
-pnpm run lint                          # lint toàn bộ workspace
-pnpm --dir apps/backend run test:unit  # test unit backend
-pnpm --dir apps/backend run test:integration:http  # test HTTP (cần PostgreSQL)
-pnpm --dir apps/backend run catalog:reseed-test  # seed catalog demo (tùy chọn)
+pnpm run build                         # build the entire workspace
+pnpm run lint                          # lint the entire workspace
+pnpm --dir apps/backend run test:unit  # run backend unit tests
+pnpm --dir apps/backend run test:integration:http  # run HTTP tests (requires PostgreSQL)
+pnpm --dir apps/backend run catalog:reseed-test  # seed demo catalog (optional)
 ```
 
-Khi dừng hạ tầng local, dùng `docker compose down`. Dữ liệu PostgreSQL/Redis/
-Qdrant được Docker giữ lại trong volumes.
+To stop local infrastructure services, run `docker compose down`. PostgreSQL, Redis, and Qdrant data are preserved in Docker volumes.

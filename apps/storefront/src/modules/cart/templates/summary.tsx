@@ -17,11 +17,12 @@ type SummaryProps = {
 function getCheckoutStep(cart: HttpTypes.StoreCart) {
   if (!cart?.shipping_address?.address_1 || !cart.email) {
     return "address"
-  } else if (cart?.shipping_methods?.length === 0) {
-    return "delivery"
-  } else {
-    return "payment"
   }
+
+  // A GHN fee depends on the current destination and package plan. Re-entering
+  // checkout always starts at Delivery so this single authoritative quote is
+  // refreshed before the customer can continue to payment.
+  return "delivery"
 }
 
 const Summary = ({ cart, customer }: SummaryProps) => {
@@ -75,4 +76,3 @@ const Summary = ({ cart, customer }: SummaryProps) => {
 }
 
 export default Summary
-

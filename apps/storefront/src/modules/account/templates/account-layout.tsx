@@ -32,7 +32,7 @@ const AccountLayout: React.FC<AccountLayoutProps> = async ({
             </span>
           </div>
           <div>
-            <UnderlineLink href="/customer-service">
+            <UnderlineLink href="/contact">
               {dict.account.customer_service}
             </UnderlineLink>
           </div>

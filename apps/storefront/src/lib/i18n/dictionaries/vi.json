@@ -25,24 +25,45 @@
     "created_at": "Mới nhất",
     "options": "Tùy chọn",
     "clear_all": "Xóa tất cả",
-    "no_products": "Không tìm thấy sản phẩm nào"
+    "no_products": "Không tìm thấy sản phẩm nào",
+    "results_for": "Kết quả tìm kiếm cho “{query}”"
   },
   "footer": {
     "categories": "Danh mục",
     "collections": "Bộ sưu tập",
+    "customer_support": "Hỗ trợ khách hàng",
+    "contact": "Liên hệ hỗ trợ",
+    "returns": "Đổi trả & Hoàn tiền",
     "rights": "Mọi quyền được bảo lưu.",
     "about": "Synapse",
     "documentation": "Tài liệu",
     "source_code": "Mã nguồn",
     "powered_by": "Phát triển bởi Synapse",
     "category_names": {
-      "sweatshirts": "Áo nỉ",
-      "shirts": "Áo sơ mi",
-      "pants": "Quần",
-      "merch": "Hàng lưu niệm"
+      "sweatshirts": "Áo nỉ & Hoodie",
+      "shirts": "Áo sơ mi nam & nữ",
+      "pants": "Quần & Đồ tiện ích",
+      "merch": "Hàng lưu niệm",
+      "quan-dai-jeans": "Quần jeans & Quần dài",
+      "ao-nam-cat": "Áo nam",
+      "quan-nam-cat": "Quần nam",
+      "ao-nu-cat": "Áo nữ",
+      "quan-nu-va-vay-cat": "Quần & Chân váy nữ",
+      "do-the-thao-va-phu-kien-cat": "Đồ thể thao & Phụ kiện",
+      "t-shirt": "Áo thun",
+      "sweatpants": "Quần nỉ thể thao",
+      "shorts": "Quần shorts",
+      "ao-hoodie-oversize": "Áo hoodie oversize",
+      "ao-polo-nam-premium": "Áo polo nam cao cấp",
+      "quan-jeans-denim-classic": "Quần jeans denim cổ điển",
+      "ao-so-mi-vintage": "Áo sơ mi vintage"
     },
     "collection_names": {
-      "summer": "Bộ sưu tập mùa hè"
+      "summer": "Bộ sưu tập mùa hè",
+      "ban-chay-nhat": "Bán chạy nhất",
+      "khuyen-mai-hot": "Khuyến mãi hot",
+      "mau-moi-ve": "Mẫu mới về",
+      "san-pham-noi-bat": "Sản phẩm nổi bật"
     }
   },
   "cart": {
@@ -76,6 +97,9 @@
     "payment": "Thanh toán",
     "payment_method": "Phương thức thanh toán",
     "payment_details": "Chi tiết thanh toán",
+    "manual_payment": "Thanh toán khi nhận hàng / Chuyển khoản",
+    "credit_card": "Thẻ tín dụng / Ghi nợ",
+    "paid_status": "Đã thanh toán",
     "discount_code": "Mã giảm giá",
     "add_discount_code": "Thêm mã ưu đãi",
     "apply": "Áp dụng",
@@ -89,17 +113,32 @@
     "continue_to_review": "Tiếp tục đến xem lại đơn hàng",
     "enter_valid_email": "Vui lòng nhập địa chỉ email hợp lệ.",
     "enter_promo_code": "Nhập mã khuyến mãi",
-    "ghn_estimated_fee": "Ước tính phí Giao Hàng Nhanh (GHN)",
-    "ghn_calculating": "Đang tính phí vận chuyển từ GHN...",
-    "ghn_standard": "GHN Chuẩn (Standard)",
-    "ghn_fast": "GHN Nhanh (Express)",
-    "ghn_estimated_time": "Thời gian dự kiến",
-    "ghn_fee_notice": "Phí vận chuyển chính thức sẽ được áp dụng ở bước tiếp theo.",
-    "save_address_to_account": "Lưu địa chỉ này vào sổ địa chỉ của tôi"
+    "save_address_to_account": "Lưu địa chỉ này vào sổ địa chỉ của tôi",
+    "province_label": "Tỉnh / Thành phố",
+    "loading_provinces": "Đang tải tỉnh thành...",
+    "select_province": "Chọn Tỉnh / Thành...",
+    "district_label": "Quận / Huyện",
+    "select_province_first": "Vui lòng chọn Tỉnh/Thành trước",
+    "loading_districts": "Đang tải quận huyện...",
+    "select_district": "Chọn Quận / Huyện...",
+    "ward_label": "Phường / Xã",
+    "select_district_first": "Vui lòng chọn Quận/Huyện trước",
+    "loading_wards": "Đang tải phường xã...",
+    "select_ward": "Chọn Phường / Xã...",
+    "street_address_label": "Số nhà, tên đường, tòa nhà",
+    "street_address_placeholder": "VD: Số 123 Nguyễn Trãi, Tòa nhà A",
+    "enter_card_details": "Nhập thông tin thẻ của bạn:",
+    "test_attention": "Lưu ý:",
+    "for_testing_only": "Chỉ dành cho mục đích thử nghiệm.",
+    "gift_card": "Thẻ quà tặng",
+    "another_step_payment": "Bước thanh toán tiếp theo sẽ xuất hiện",
+    "pickup_store": "Cửa hàng",
+    "choose_store_near_you": "Chọn cửa hàng gần bạn"
   },
   "order": {
     "thank_you": "Cảm ơn bạn!",
     "order_placed_success": "Đơn hàng của bạn đã được đặt thành công.",
+    "confirmation_sent": "Chúng tôi đã gửi chi tiết xác nhận đơn hàng đến",
     "order_details": "Chi tiết đơn hàng",
     "order_summary": "Tóm tắt đơn hàng",
     "back_to_overview": "Quay lại trang tổng quan",
@@ -113,7 +152,9 @@
     "transfer_success": "Chuyển nhượng đơn hàng thành công!",
     "transfer_declined_success": "Đã từ chối chuyển nhượng đơn hàng!",
     "complete_setup_admin": "Hoàn tất cài đặt trong trang quản trị",
-    "complete_setup_admin_desc": "Bạn có thể hoàn tất cài đặt cửa hàng trong trang quản trị ngay bây giờ."
+    "complete_setup_admin_desc": "Bạn có thể hoàn tất cài đặt cửa hàng trong trang quản trị ngay bây giờ.",
+    "test_order_created": "Đơn hàng thử nghiệm của bạn đã được tạo thành công! 🎉",
+    "paid_at": "đã thanh toán lúc"
   },
   "collection": {
     "view_all": "Xem tất cả"
@@ -141,7 +182,8 @@
     "related_products_description": "Có thể bạn cũng muốn xem các sản phẩm này.",
     "original_price": "Giá gốc:",
     "continue_setup_admin": "Tiếp tục cài đặt trong trang quản trị",
-    "continue_setup_admin_desc": "Bạn có thể tiếp tục cài đặt cửa hàng trong trang quản trị."
+    "continue_setup_admin_desc": "Bạn có thể tiếp tục cài đặt cửa hàng trong trang quản trị.",
+    "demo_product_created": "Sản phẩm demo của bạn đã được tạo thành công! 🎉"
   },
   "account": {
     "title": "Tài khoản",
@@ -226,13 +268,62 @@
     "transfer_order_desc": "Yêu cầu chuyển nhượng đơn hàng sang tài khoản hiện tại của bạn.",
     "order_id": "Mã đơn hàng",
     "transfer_code": "Mã chuyển nhượng",
-    "submit": "Gửi yêu cầu"
+    "submit": "Gửi yêu cầu",
+    "verification_email_sent": "Chúng tôi đã gửi liên kết xác minh tới {email}. Vui lòng kiểm tra hộp thư để xác minh email, sau đó đăng nhập.",
+    "terms_agreement": "Bằng cách tạo tài khoản, bạn đồng ý với",
+    "privacy_policy": "Chính sách quyền riêng tư",
+    "and": "và",
+    "terms_of_use": "Điều khoản sử dụng",
+    "enter_valid_email_title": "Nhập địa chỉ email hợp lệ.",
+    "transfer_requested_title": "Đã gửi yêu cầu chuyển nhượng cho đơn hàng {id}",
+    "transfer_requested_desc": "Email yêu cầu chuyển nhượng đã được gửi tới {email}"
   },
   "shipping": {
     "spend_more": "Mua thêm {amount} để được miễn phí giao hàng!",
     "unlocked": "Bạn đã đạt điều kiện miễn phí giao hàng!",
     "view_cart": "Xem giỏ hàng",
     "view_products": "Xem sản phẩm"
+  },
+  "chat": {
+    "title": "Synapse AI CSKH",
+    "connecting": "Đang kết nối...",
+    "realtime_active": "Realtime Đang Bật",
+    "online": "Trực tuyến",
+    "greeting": "Chào {name}",
+    "auth_required_badge": "Yêu cầu đăng nhập",
+    "clear_chat": "Làm mới đoạn chat",
+    "close_chat": "Đóng chat",
+    "auth_required_title": "Đăng nhập để trò chuyện với AI",
+    "auth_required_desc": "Vui lòng đăng nhập tài khoản Synapse để bắt đầu trò chuyện, nhận tư vấn thời trang chuẩn size và tự động lưu lịch sử hội thoại.",
+    "auth_benefit_sync": "Đồng bộ lịch sử chat xuyên suốt thiết bị",
+    "auth_benefit_size": "Tư vấn mẫu quần áo cá nhân hoá theo size",
+    "auth_benefit_orders": "Tra cứu đơn hàng và hỗ trợ đổi trả nhanh chóng",
+    "sign_in_register": "Đăng nhập / Đăng ký ngay",
+    "welcome_message": "Mình là trợ lý CSKH Synapse. Mình có thể giúp bạn tìm kiếm mẫu quần áo, kiểm tra size, giá và tư vấn phối đồ nhé.",
+    "typing": "Đang tìm mẫu và trả lời...",
+    "input_placeholder": "Nhập câu hỏi hoặc yêu cầu tìm mẫu...",
+    "send": "Gửi",
+    "view_product": "Xem chi tiết",
+    "button_label": "Chat với CSKH Synapse",
+    "quick_prompts": {
+      "jackets": "Tư vấn áo khoác đi chơi",
+      "tshirt_m": "Tìm áo thun size M dưới 300k",
+      "jeans": "Xem mẫu quần jeans",
+      "policy": "Quy trình đổi trả hàng"
+    }
+  },
+  "devLock": {
+    "badge": "Dev Safe Mode",
+    "title": "Chế độ Phát triển Riêng tư",
+    "description": "Hệ thống đang được bảo vệ trong lúc lập trình viên đang làm việc. Vui lòng nhập mã PIN được chia sẻ để mở khóa.",
+    "pin_label": "Mã PIN mở khóa",
+    "pin_placeholder": "Nhập mã PIN truy cập...",
+    "pin_required": "Vui lòng nhập mã PIN.",
+    "pin_invalid": "Mã PIN không chính xác. Vui lòng kiểm tra lại.",
+    "network_error": "Không thể kết nối đến máy chủ. Vui lòng thử lại sau.",
+    "verifying": "Đang xác thực...",
+    "unlock": "Mở khóa truy cập",
+    "localhost_notice": "Truy cập từ localhost trên máy dev luôn được cho phép trực tiếp."
   },
   "common": {
     "subtotal_excl": "Tạm tính (chưa gồm phí vận chuyển và thuế)",
@@ -249,6 +340,137 @@
     "cart_mismatch_title": "Đã xảy ra lỗi khi chuyển đổi giỏ hàng của bạn",
     "shipping_to": "Giao hàng tới:",
     "language": "Ngôn ngữ",
-    "deleting": "Đang xóa..."
+    "deleting": "Đang xóa...",
+    "page_loading": "Đang chuyển trang..."
+  },
+  "contact": {
+    "title": "Trung tâm Hỗ trợ & Liên hệ",
+    "subtitle": "Chúng tôi luôn sẵn sàng lắng nghe và đồng hành cùng trải nghiệm mua sắm của bạn.",
+    "response_sla": "Cam kết phản hồi nhanh trong 1 - 2 giờ làm việc",
+    "channels_title": "Các kênh liên hệ trực tiếp",
+    "ai_chat_title": "Trợ lý AI CSKH",
+    "ai_chat_desc": "Hỗ trợ giải đáp 24/7 về chọn size, gợi ý phối đồ, tra cứu đơn hàng và chính sách.",
+    "ai_chat_cta": "Bắt đầu trò chuyện ngay",
+    "hotline_title": "Tổng đài Hotline",
+    "hotline_number": "1900 6868",
+    "hotline_desc": "Hỗ trợ từ 08:30 - 22:00 tất cả các ngày trong tuần (kể cả Lễ, Tết).",
+    "hotline_cta": "Gọi ngay",
+    "email_title": "Email Chăm sóc khách hàng",
+    "email_address": "support@synapse.vn",
+    "email_desc": "Tiếp nhận mọi thắc mắc, đề xuất hợp tác hoặc phản ánh chất lượng dịch vụ.",
+    "email_cta": "Gửi email",
+    "store_title": "Hệ thống Showroom",
+    "store_desc": "Trải nghiệm trực tiếp các bộ sưu tập thời trang mới nhất của Synapse.",
+    "store_hn": "Hà Nội: Tầng 2, TTTM Lotte Mall Tây Hồ, 272 Võ Chí Công, Tây Hồ",
+    "store_hcm": "TP.HCM: Tầng 3, Crescent Mall, 101 Tôn Dật Tiên, Quận 7",
+    "hours": "Giờ mở cửa: 09:30 - 22:00 hàng ngày",
+    "form_title": "Gửi tin nhắn cho chúng tôi",
+    "form_desc": "Điền thông tin bên dưới, nhân viên hỗ trợ Synapse sẽ phản hồi lại bạn trong thời gian sớm nhất.",
+    "name_label": "Họ và tên",
+    "name_placeholder": "VD: Nguyễn Văn A",
+    "email_label": "Email liên hệ",
+    "email_placeholder": "VD: nguyenvana@gmail.com",
+    "phone_label": "Số điện thoại",
+    "phone_placeholder": "VD: 0912 345 678",
+    "topic_label": "Chủ đề bạn cần hỗ trợ",
+    "topic_select": "-- Chọn chủ đề --",
+    "topic_product": "Tư vấn sản phẩm & Chọn size",
+    "topic_order": "Tra cứu thông tin đơn hàng & Vận chuyển",
+    "topic_returns": "Yêu cầu đổi size / Trả hàng hoàn tiền",
+    "topic_feedback": "Góp ý & Phản ánh chất lượng dịch vụ",
+    "topic_other": "Vấn đề khác",
+    "order_id_label": "Mã đơn hàng (nếu có)",
+    "order_id_placeholder": "VD: #1001",
+    "message_label": "Nội dung cần hỗ trợ",
+    "message_placeholder": "Vui lòng mô tả chi tiết vấn đề bạn đang gặp phải...",
+    "submit_btn": "Gửi yêu cầu hỗ trợ",
+    "submitting": "Đang gửi yêu cầu...",
+    "success_title": "Gửi yêu cầu hỗ trợ thành công!",
+    "success_desc": "Mã yêu cầu của bạn là {ticket}. Đội ngũ CSKH Synapse đã tiếp nhận và sẽ phản hồi qua email/SĐT trong vòng 1-2 giờ làm việc.",
+    "send_another": "Gửi yêu cầu khác",
+    "faq_title": "Câu hỏi thường gặp",
+    "faq_subtitle": "Giải đáp nhanh những thắc mắc phổ biến của khách hàng khi mua sắm tại Synapse.",
+    "faqs": [
+      {
+        "q": "Thời gian giao hàng tiêu chuẩn là bao lâu?",
+        "a": "Nội thành Hà Nội & TP.HCM nhận hàng trong 1-2 ngày làm việc. Các tỉnh thành khác từ 3-5 ngày làm việc qua đối tác GHN / GHTK."
+      },
+      {
+        "q": "Làm thế nào để tra cứu hành trình đơn hàng?",
+        "a": "Bạn có thể đăng nhập tài khoản và vào mục 'Đơn hàng' để xem mã vận đơn, hoặc nhắn tin trực tiếp cho Trợ lý AI CSKH để kiểm tra trạng thái tức thì."
+      },
+      {
+        "q": "Tôi có thể hủy hoặc thay đổi thông tin đơn hàng đã đặt không?",
+        "a": "Nếu đơn hàng chưa chuyển sang trạng thái xuất kho, bạn có thể liên hệ ngay hotline hoặc chat với CSKH để được hỗ trợ điều chỉnh địa chỉ hoặc hủy đơn."
+      },
+      {
+        "q": "Synapse hỗ trợ những hình thức thanh toán nào?",
+        "a": "Chúng tôi hỗ trợ thanh toán khi nhận hàng (COD), thẻ tín dụng/ghi nợ quốc tế và chuyển khoản ngân hàng quét mã QR."
+      }
+    ]
+  },
+  "returns": {
+    "title": "Chính sách & Yêu cầu Đổi trả hàng",
+    "subtitle": "Đổi trả dễ dàng, an tâm mua sắm trong vòng 7 ngày với dịch vụ chăm sóc tận tâm từ Synapse.",
+    "policy_highlights_title": "Cam kết chính sách đổi trả tiêu chuẩn",
+    "policy_time_title": "Đổi hàng trong 7 ngày",
+    "policy_time_desc": "Áp dụng trong vòng 7 ngày dương lịch kể từ khi bạn nhận hàng thành công từ nhân viên giao vận.",
+    "policy_condition_title": "Điều kiện sản phẩm",
+    "policy_condition_desc": "Sản phẩm còn nguyên tem mác, hộp/túi bảo quản, chưa qua sử dụng, chưa giặt tẩy và còn đủ phụ kiện đi kèm.",
+    "policy_fee_title": "Chính sách cước phí",
+    "policy_fee_desc": "Miễn phí vận chuyển 1 chiều cho lần đổi hàng đầu tiên. Miễn phí 100% hai chiều nếu sản phẩm bị lỗi do NSX hoặc giao nhầm mẫu.",
+    "policy_exceptions_title": "Quy định loại trừ",
+    "policy_exceptions_desc": "Không áp dụng đổi trả đối với sản phẩm giảm giá từ 40% trở lên (Flash Sale/Clearance) và thẻ quà tặng điện tử.",
+    "steps_title": "Quy trình đổi trả 4 bước đơn giản",
+    "step_1_title": "1. Gửi yêu cầu đổi trả",
+    "step_1_desc": "Điền form trực tuyến bên dưới hoặc nhắn tin trực tiếp với Trợ lý AI CSKH.",
+    "step_2_title": "2. Đóng gói & Shipper lấy hàng",
+    "step_2_desc": "Đóng gói sản phẩm cẩn thận, shipper đối tác sẽ đến tận địa chỉ của bạn để thu hồi.",
+    "step_3_title": "3. Kiểm tra tại kho",
+    "step_3_desc": "Kho hàng Synapse kiểm định tình trạng sản phẩm trong vòng 24 - 48h sau khi nhận.",
+    "step_4_title": "4. Giao sản phẩm mới / Hoàn tiền",
+    "step_4_desc": "Gửi ngay size/màu mới về cho bạn hoặc hoàn tiền qua tài khoản ngân hàng ban đầu.",
+    "portal_title": "Cổng gửi yêu cầu Đổi trả & Hoàn tiền",
+    "portal_desc": "Vui lòng nhập thông tin đơn hàng để Synapse tạo mã tiếp nhận và điều phối shipper thu hồi.",
+    "order_id_label": "Mã đơn hàng",
+    "order_id_placeholder": "VD: 1001 hoặc mã đơn hàng của bạn",
+    "customer_name_label": "Họ và tên người nhận",
+    "customer_name_placeholder": "VD: Nguyễn Văn A",
+    "contact_info_label": "Email hoặc Số điện thoại đặt hàng",
+    "contact_info_placeholder": "VD: 0912 345 678 hoặc email@domain.com",
+    "reason_label": "Lý do yêu cầu đổi / trả",
+    "reason_select": "-- Chọn lý do --",
+    "reason_size": "Kích cỡ không vừa (Muốn đổi size)",
+    "reason_color": "Muốn đổi sang màu sắc hoặc mẫu khác",
+    "reason_defect": "Sản phẩm bị lỗi kỹ thuật / đường may",
+    "reason_wrong_item": "Giao sai sản phẩm / thiếu phụ kiện",
+    "reason_not_satisfied": "Chưa hài lòng với sản phẩm (Yêu cầu hoàn tiền)",
+    "exchange_target_label": "Sản phẩm hoặc Size muốn đổi sang (nếu đổi hàng)",
+    "exchange_target_placeholder": "VD: Muốn đổi từ Áo nỉ Size M sang Size L màu Đen",
+    "notes_label": "Mô tả chi tiết tình trạng sản phẩm",
+    "notes_placeholder": "Mô tả cụ thể lý do hoặc vị trí lỗi (nếu có)...",
+    "pickup_address_label": "Địa chỉ shipper đến lấy hàng tận nơi",
+    "pickup_address_placeholder": "VD: Số 123 Đường Nguyễn Trãi, Thanh Xuân, Hà Nội",
+    "submit_btn": "Tạo yêu cầu đổi trả ngay",
+    "submitting": "Đang khởi tạo yêu cầu...",
+    "success_title": "Đã tiếp nhận yêu cầu đổi trả thành công!",
+    "success_desc": "Mã yêu cầu đổi trả (RMA) của bạn là: {rmaCode}. Bộ phận CSKH Synapse sẽ liên hệ qua SĐT/Email trong vòng 2 giờ để xác nhận lịch shipper tới lấy hàng.",
+    "need_instant_help": "Cần hỗ trợ đổi size khẩn cấp?",
+    "chat_ai_now": "Nhắn tin với AI CSKH ngay",
+    "faq_title": "Câu hỏi thường gặp về Đổi trả",
+    "faqs": [
+      {
+        "q": "Tôi có được thử hàng trước khi nhận không?",
+        "a": "Synapse hỗ trợ đồng kiểm ngoại quan sản phẩm cùng shipper. Sau khi nhận hàng, bạn có 7 ngày để thử đồ tại nhà và yêu cầu đổi size thoải mái."
+      },
+      {
+        "q": "Bao lâu sau khi gửi hàng thì tôi nhận được sản phẩm đổi mới?",
+        "a": "Ngay khi shipper lấy hàng và kho xác nhận tình trạng, sản phẩm mới sẽ được gửi ngay cho bạn trong 2-3 ngày làm việc."
+      },
+      {
+        "q": "Quy trình hoàn tiền diễn ra như thế nào?",
+        "a": "Với các trường hợp sản phẩm hết size đổi hoặc hàng lỗi, tiền sẽ được hoàn về tài khoản ngân hàng hoặc thẻ của quý khách trong 2-5 ngày làm việc."
+      }
+    ]
   }
 }
