@@ -9,7 +9,7 @@ import { useTranslation } from "@lib/i18n/client"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { CheckCircleSolid, Clock, CreditCard, InformationCircleSolid } from "@medusajs/icons"
 import React, { useEffect, useMemo, useState } from "react"
-import { checkPayosPaymentStatus } from "@lib/data/payment"
+import { checkPayosPaymentStatus, refreshPayosPayment } from "@lib/data/payment"
 
 type PaymentDetailsProps = {
   order: HttpTypes.StoreOrder
@@ -50,20 +50,52 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
     : <CreditCard />
 
   // PayOS Session Data & Modal State
-  const sessionData = ((payment?.data || {}) as Record<string, unknown>)
-  const qrCode = sessionData.qrCode as string | undefined
-  const accountNumber = sessionData.accountNumber as string | undefined
-  const accountName = sessionData.accountName as string | undefined
-  const amount = (sessionData.amount as number | undefined) || payment?.amount || order.total
-  const description = (sessionData.description as string | undefined) || `DH${order.display_id}`
-  const bin = (sessionData.bin as string | undefined) || "970422"
-  const orderCode = sessionData.orderCode as number | string | undefined
-
+  const initialSessionData = (payment?.data || {}) as Record<string, unknown>
+  const [paymentData, setPaymentData] = useState<Record<string, unknown>>(initialSessionData)
   const [showModal, setShowModal] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [checkingPayment, setCheckingPayment] = useState(false)
+  const [isRegenerating, setIsRegenerating] = useState(false)
   const [modalPaidSuccess, setModalPaidSuccess] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [timeLeft, setTimeLeft] = useState<number | null>(null)
+
+  const qrCode = paymentData.qrCode as string | undefined
+  const accountNumber = paymentData.accountNumber as string | undefined
+  const accountName = paymentData.accountName as string | undefined
+  const amount = (paymentData.amount as number | undefined) || payment?.amount || order.total
+  const description = (paymentData.description as string | undefined) || `DH${order.display_id}`
+  const bin = (paymentData.bin as string | undefined) || "970422"
+  const orderCode = paymentData.orderCode as number | string | undefined
+  const expiredAt = paymentData.expiredAt as number | undefined
+
+  // Countdown timer calculation
+  useEffect(() => {
+    if (!expiredAt) {
+      setTimeLeft(null)
+      return
+    }
+
+    const updateTimer = () => {
+      const now = Math.floor(Date.now() / 1000)
+      const remaining = expiredAt - now
+      setTimeLeft(remaining > 0 ? remaining : 0)
+    }
+
+    updateTimer()
+    const interval = setInterval(updateTimer, 1000)
+    return () => clearInterval(interval)
+  }, [expiredAt])
+
+  const isExpired = timeLeft !== null && timeLeft <= 0
+
+  const formatTimer = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, "0")}:${secs
+      .toString()
+      .padStart(2, "0")}`
+  }
 
   // Auto open modal if ?pay=true is in URL and unpaid
   useEffect(() => {
@@ -101,6 +133,28 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
     setTimeout(() => setCopiedField(null), 2000)
   }
 
+  const handleRegenerateQR = async () => {
+    setIsRegenerating(true)
+    setErrorMessage(null)
+    try {
+      const res = await refreshPayosPayment(order.id)
+      if (res?.success && res.data) {
+        setPaymentData(res.data as unknown as Record<string, unknown>)
+      } else {
+        setErrorMessage(
+          res?.message ||
+            (isVi
+              ? "Không thể làm mới mã QR. Vui lòng thử lại sau."
+              : "Could not refresh QR code. Please try again.")
+        )
+      }
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : String(err))
+    } finally {
+      setIsRegenerating(false)
+    }
+  }
+
   const handleVerifyPayment = async () => {
     if (checkingPayment) return
     setCheckingPayment(true)
@@ -125,7 +179,6 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
           return
         }
       }
-      // If no orderCode to check against PayOS
       setErrorMessage(
         isVi
           ? "Đang chờ đối soát giao dịch ngân hàng. Vui lòng kiểm tra lại sau ít phút."
@@ -140,7 +193,7 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
 
   // Real-time Polling when modal is open
   useEffect(() => {
-    if (!showModal || !orderCode || isPaid || modalPaidSuccess || checkingPayment) {
+    if (!showModal || !orderCode || isPaid || modalPaidSuccess || checkingPayment || isExpired) {
       return
     }
 
@@ -164,7 +217,7 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
       isSubscribed = false
       clearInterval(interval)
     }
-  }, [showModal, orderCode, isPaid, modalPaidSuccess, checkingPayment, router])
+  }, [showModal, orderCode, isPaid, modalPaidSuccess, checkingPayment, isExpired, router])
 
   return (
     <div>
@@ -334,8 +387,27 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
                       <img
                         src={qrImageSrc}
                         alt="VietQR PayOS"
-                        className="h-56 w-56 object-contain"
+                        className={`h-56 w-56 object-contain transition-opacity duration-200 ${
+                          isExpired ? "opacity-25 blur-[1px]" : "opacity-100"
+                        }`}
                       />
+                      {isExpired && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 p-4 text-center">
+                          <p className="text-xs font-medium text-neutral-700 mb-2.5">
+                            {isVi ? "Mã QR đã hết hạn" : "QR code has expired"}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleRegenerateQR}
+                            disabled={isRegenerating}
+                            className="rounded-full bg-[#174b3d] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-[#103a2f] transition"
+                          >
+                            {isRegenerating
+                              ? (isVi ? "Đang tạo..." : "Generating...")
+                              : (isVi ? "Tạo mã QR mới" : "Generate new QR")}
+                          </button>
+                        </div>
+                      )}
                     </div>
                     <p className="mt-2 text-[11px] text-neutral-500 text-center">
                       {isVi
@@ -405,12 +477,30 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
                   )}
                 </div>
 
-                {/* Status indicator */}
+                {/* Status indicator with timer & refresh button */}
                 <div className="mt-3 flex w-full items-center justify-between text-[11px] text-neutral-500 px-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>{isVi ? "Đang chờ thanh toán" : "Waiting for payment"}</span>
+                    <span className={`inline-block h-1.5 w-1.5 rounded-full ${isExpired ? "bg-rose-500" : "bg-emerald-500 animate-pulse"}`} />
+                    <span>
+                      {isExpired
+                        ? (isVi ? "Hết thời gian" : "Expired")
+                        : timeLeft !== null
+                        ? (isVi ? `Hết hạn sau ${formatTimer(timeLeft)}` : `Expires in ${formatTimer(timeLeft)}`)
+                        : (isVi ? "Đang chờ thanh toán" : "Waiting for payment")}
+                    </span>
                   </div>
+                  {!isExpired && (
+                    <button
+                      type="button"
+                      onClick={handleRegenerateQR}
+                      disabled={isRegenerating}
+                      className="text-neutral-500 hover:text-neutral-800 underline transition cursor-pointer"
+                    >
+                      {isRegenerating
+                        ? (isVi ? "Đang tạo..." : "Generating...")
+                        : (isVi ? "Làm mới" : "Refresh")}
+                    </button>
+                  )}
                 </div>
 
                 {/* Error message inside modal */}
@@ -446,4 +536,5 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
 }
 
 export default PaymentDetails
+
 

@@ -22,6 +22,7 @@ import { sdk } from "../../lib/sdk"
 
 type PaymentProviderData = {
   provider: {
+    code?: string
     client_id?: string
     configuration?: {
       client_id?: string
@@ -36,6 +37,10 @@ type PaymentProviderData = {
     has_checksum_key?: boolean
     checksum_key_hint?: string | null
     is_enabled: boolean
+    is_timeout_enabled?: boolean
+    timeout_minutes?: number
+    display_title?: string
+    order_prefix?: string
     last_verification?: {
       latency_ms?: number
       message?: string
@@ -49,11 +54,16 @@ type PaymentProviderData = {
 const PaymentsPage = () => {
   const { t } = useTranslation()
 
+  const tr = (key: string, fallback: string) => {
+    const val = t(key)
+    return val && val !== key ? val : fallback
+  }
+
   const { data, isLoading, refetch } = useQuery<PaymentProviderData>({
-    queryKey: ["admin_payment_provider", "PAYOS"],
+    queryKey: ["admin_payment_provider"],
     queryFn: async () => {
       return sdk.client.fetch<PaymentProviderData>(
-        "/admin/payments/providers/PAYOS"
+        "/admin/payments/providers"
       )
     },
   })
@@ -61,7 +71,7 @@ const PaymentsPage = () => {
   const configureMutation = useMutation({
     mutationFn: async (payload: Record<string, any>) => {
       return sdk.client.fetch<{ provider: any }>(
-        "/admin/payments/providers/PAYOS",
+        "/admin/payments/providers",
         {
           method: "POST",
           body: payload,
@@ -104,12 +114,22 @@ const PaymentsPage = () => {
   useEffect(() => {
     if (data?.provider) {
       const p = data.provider
-      setIsEnabled(p.is_enabled)
+      setIsEnabled(Boolean(p.is_enabled))
       setClientId(p.client_id || p.configuration?.client_id || "")
-      setIsTimeoutEnabled(p.configuration?.is_timeout_enabled ?? true)
-      setTimeoutMinutes(Number(p.configuration?.timeout_minutes || 15))
-      setDisplayTitle(p.configuration?.display_title || "VietQR / Chuyển khoản ngân hàng")
-      setOrderPrefix(p.configuration?.order_prefix || "DH")
+      setIsTimeoutEnabled(
+        p.is_timeout_enabled !== undefined
+          ? Boolean(p.is_timeout_enabled)
+          : Boolean(p.configuration?.is_timeout_enabled ?? true)
+      )
+      setTimeoutMinutes(
+        Number(p.timeout_minutes || p.configuration?.timeout_minutes || 15)
+      )
+      setDisplayTitle(
+        p.display_title || p.configuration?.display_title || "VietQR / Chuyển khoản ngân hàng"
+      )
+      setOrderPrefix(
+        p.order_prefix || p.configuration?.order_prefix || "DH"
+      )
     }
   }, [data])
 
@@ -117,6 +137,7 @@ const PaymentsPage = () => {
     e.preventDefault()
 
     const payload: Record<string, any> = {
+      code: "PAYOS",
       is_enabled: isEnabled,
       environment: "production",
       client_id: clientId,
@@ -131,14 +152,14 @@ const PaymentsPage = () => {
 
     try {
       await configureMutation.mutateAsync(payload)
-      toast.success(t("general.success"), {
-        description: t("paymentHub.savedSuccess") || "Lưu cấu hình thành công.",
+      toast.success(tr("general.success", "Thành công"), {
+        description: tr("paymentHub.savedSuccess", "Đã lưu cấu hình thanh toán thành công"),
       })
       setApiKey("")
       setChecksumKey("")
     } catch (err: any) {
-      toast.error(t("general.error"), {
-        description: err?.message || t("paymentHub.savedFailed") || "Lưu cấu hình thất bại.",
+      toast.error(tr("general.error", "Lỗi"), {
+        description: err?.message || tr("paymentHub.savedFailed", "Lưu cấu hình thất bại"),
       })
     }
   }
@@ -153,17 +174,17 @@ const PaymentsPage = () => {
       })
 
       if (result.success) {
-        toast.success(t("paymentHub.testSuccess") || "Kết nối thành công", {
+        toast.success(tr("paymentHub.testSuccess", "Kết nối PayOS thành công"), {
           description: `${result.message} (${result.latency_ms}ms)`,
         })
       } else {
-        toast.error(t("paymentHub.testFailed") || "Kết nối thất bại", {
+        toast.error(tr("paymentHub.testFailed", "Kiểm tra kết nối thất bại"), {
           description: result.message,
         })
       }
     } catch (err: any) {
-      toast.error(t("paymentHub.testFailed") || "Kết nối thất bại", {
-        description: err?.message || "Failed to verify credentials.",
+      toast.error(tr("paymentHub.testFailed", "Kiểm tra kết nối thất bại"), {
+        description: err?.message || "Kiểm tra kết nối thất bại.",
       })
     }
   }
@@ -182,9 +203,9 @@ const PaymentsPage = () => {
     <div className="max-w-4xl mx-auto flex flex-col gap-y-6 pb-12">
       {/* Page Header */}
       <div className="flex flex-col gap-y-1">
-        <Heading level="h1">{t("paymentHub.title") || "Cổng thanh toán"}</Heading>
+        <Heading level="h1">{tr("paymentHub.title", "Cổng thanh toán")}</Heading>
         <Text size="small" className="text-ui-fg-subtle">
-          {t("paymentHub.description") || "Quản lý cấu hình cổng thanh toán VietQR (PayOS)"}
+          {tr("paymentHub.description", "Quản lý cấu hình cổng thanh toán VietQR (PayOS)")}
         </Text>
       </div>
 
@@ -201,16 +222,16 @@ const PaymentsPage = () => {
               <div className="flex flex-col gap-y-1">
                 <div className="flex items-center gap-2.5">
                   <Heading level="h2" className="text-base font-semibold text-ui-fg-base">
-                    {t("paymentHub.payosTitle") || "Cổng PayOS (VietQR)"}
+                    {tr("paymentHub.payosTitle", "Cổng PayOS (VietQR)")}
                   </Heading>
                   <StatusBadge color={isEnabled ? "green" : "grey"}>
-                    {isEnabled ? (t("general.enabled") || "Đã bật") : (t("general.disabled") || "Đã tắt")}
+                    {isEnabled ? tr("general.enabled", "Đã bật") : tr("general.disabled", "Đã tắt")}
                   </StatusBadge>
                 </div>
                 {p?.last_verified_at && (
                   <div className="flex items-center gap-1.5 text-xs text-ui-fg-muted">
                     <CheckCircleIcon size={13} className="text-ui-tag-green-icon shrink-0" />
-                    <span>{t("paymentHub.verifySuccess") || "Kết nối PayOS thành công"}</span>
+                    <span>{tr("paymentHub.verifySuccess", "Kết nối PayOS thành công")}</span>
                   </div>
                 )}
               </div>
@@ -223,7 +244,7 @@ const PaymentsPage = () => {
                 onCheckedChange={setIsEnabled}
               />
               <Label htmlFor="enable-payos" className="cursor-pointer text-sm font-medium text-ui-fg-base select-none">
-                {t("paymentHub.enablePayment") || "Kích hoạt thanh toán PayOS"}
+                {tr("paymentHub.enablePayment", "Kích hoạt thanh toán PayOS")}
               </Label>
             </div>
           </div>
@@ -239,7 +260,7 @@ const PaymentsPage = () => {
               <div className="flex flex-col gap-y-2 md:col-span-2">
                 <div className="h-5 flex items-center">
                   <Label htmlFor="payos-client-id" className="text-xs font-medium text-ui-fg-subtle">
-                    {t("paymentHub.clientId") || "Client ID"}
+                    {tr("paymentHub.clientId", "Client ID")}
                   </Label>
                 </div>
                 <Input
@@ -255,7 +276,7 @@ const PaymentsPage = () => {
               <div className="flex flex-col gap-y-2">
                 <div className="h-5 flex items-center justify-between">
                   <Label htmlFor="payos-api-key" className="text-xs font-medium text-ui-fg-subtle">
-                    {t("paymentHub.apiKey") || "API Key"}
+                    {tr("paymentHub.apiKey", "API Key")}
                   </Label>
                   {p?.has_api_key && p?.api_key_hint && (
                     <span className="text-[11px] font-mono text-ui-fg-muted bg-ui-bg-subtle px-1.5 py-0.5 rounded border border-ui-border-base">
@@ -277,7 +298,7 @@ const PaymentsPage = () => {
               <div className="flex flex-col gap-y-2">
                 <div className="h-5 flex items-center justify-between">
                   <Label htmlFor="payos-checksum" className="text-xs font-medium text-ui-fg-subtle">
-                    {t("paymentHub.checksumKey") || "Checksum Key"}
+                    {tr("paymentHub.checksumKey", "Checksum Key")}
                   </Label>
                   {p?.has_checksum_key && p?.checksum_key_hint && (
                     <span className="text-[11px] font-mono text-ui-fg-muted bg-ui-bg-subtle px-1.5 py-0.5 rounded border border-ui-border-base">
@@ -307,10 +328,10 @@ const PaymentsPage = () => {
                 {verifyMutation.isPending ? (
                   <>
                     <SpinnerIcon size={14} className="mr-1.5" />
-                    {t("paymentHub.testing") || "Đang kiểm tra..."}
+                    {tr("paymentHub.testing", "Đang kiểm tra...")}
                   </>
                 ) : (
-                  t("paymentHub.testConnection") || "Kiểm tra kết nối"
+                  tr("paymentHub.testConnection", "Kiểm tra kết nối")
                 )}
               </Button>
             </div>
@@ -319,7 +340,7 @@ const PaymentsPage = () => {
           {/* Section 2: Payment Timeout */}
           <div className="p-6 flex flex-col gap-y-5">
             <Heading level="h3" className="text-sm font-semibold text-ui-fg-base">
-              {t("paymentHub.timeoutTitle") || "Thời gian thanh toán"}
+              {tr("paymentHub.timeoutTitle", "Thời gian thanh toán")}
             </Heading>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5 items-center">
@@ -330,7 +351,7 @@ const PaymentsPage = () => {
                   onCheckedChange={setIsTimeoutEnabled}
                 />
                 <Label htmlFor="enable-timeout" className="cursor-pointer text-xs font-medium text-ui-fg-subtle select-none">
-                  {t("paymentHub.enableTimeout") || "Giới hạn thời gian thanh toán"}
+                  {tr("paymentHub.enableTimeout", "Giới hạn thời gian thanh toán")}
                 </Label>
               </div>
 
@@ -338,7 +359,7 @@ const PaymentsPage = () => {
                 <div className="flex flex-col gap-y-2">
                   <div className="h-5 flex items-center">
                     <Label htmlFor="timeout-minutes" className="text-xs font-medium text-ui-fg-subtle">
-                      {t("paymentHub.timeoutMinutes") || "Số phút hết hạn"}
+                      {tr("paymentHub.timeoutMinutes", "Số phút hết hạn")}
                     </Label>
                   </div>
                   <Input
@@ -358,14 +379,14 @@ const PaymentsPage = () => {
           {/* Section 3: Display & Order Prefix */}
           <div className="p-6 flex flex-col gap-y-5">
             <Heading level="h3" className="text-sm font-semibold text-ui-fg-base">
-              Hiển thị
+              {tr("paymentHub.displaySettings", "Hiển thị")}
             </Heading>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
               <div className="flex flex-col gap-y-2">
                 <div className="h-5 flex items-center">
                   <Label htmlFor="display-title" className="text-xs font-medium text-ui-fg-subtle">
-                    {t("paymentHub.displayTitle") || "Tên phương thức hiển thị"}
+                    {tr("paymentHub.displayTitle", "Tên phương thức hiển thị")}
                   </Label>
                 </div>
                 <Input
@@ -379,7 +400,7 @@ const PaymentsPage = () => {
               <div className="flex flex-col gap-y-2">
                 <div className="h-5 flex items-center">
                   <Label htmlFor="order-prefix" className="text-xs font-medium text-ui-fg-subtle">
-                    {t("paymentHub.orderPrefix") || "Tiền tố mã đơn"}
+                    {tr("paymentHub.orderPrefix", "Tiền tố mã đơn")}
                   </Label>
                 </div>
                 <Input
@@ -403,10 +424,10 @@ const PaymentsPage = () => {
               {configureMutation.isPending ? (
                 <>
                   <SpinnerIcon size={16} className="mr-2" />
-                  {t("general.saving") || "Đang lưu..."}
+                  {tr("paymentHub.saving", "Đang lưu...")}
                 </>
               ) : (
-                t("general.save") || "Lưu cấu hình"
+                tr("paymentHub.save", "Lưu cấu hình")
               )}
             </Button>
           </div>

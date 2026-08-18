@@ -64,3 +64,41 @@ export const checkPayosPaymentStatus = async (
     .then((res) => res)
     .catch(() => null)
 }
+
+export type PayosPaymentData = {
+  orderCode: number
+  amount: number
+  description: string
+  bin: string
+  accountNumber: string
+  accountName: string
+  checkoutUrl?: string
+  qrCode?: string
+  paymentLinkId?: string
+  expiredAt?: number
+  status?: string
+}
+
+export const refreshPayosPayment = async (
+  orderId: string
+): Promise<{ success: boolean; data?: PayosPaymentData; message?: string }> => {
+  const headers = {
+    ...(await getAuthHeaders()),
+  }
+
+  return sdk.client
+    .fetch<{ success: boolean; data?: PayosPaymentData; message?: string }>(
+      `/store/payos/refresh-payment/${orderId}`,
+      {
+        method: "POST",
+        headers,
+        cache: "no-store",
+      }
+    )
+    .then((res) => res)
+    .catch((err) => ({
+      success: false,
+      message: err.message || "Failed to refresh payment",
+    }))
+}
+

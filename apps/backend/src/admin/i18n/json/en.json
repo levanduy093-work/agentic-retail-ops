@@ -880,12 +880,17 @@
     "timeoutMinutes": "Expiration (minutes)",
     "displaySettings": "Display Settings",
     "displayName": "Display name",
+    "displayTitle": "Display name",
     "orderPrefix": "Order code prefix",
     "save": "Save Changes",
     "saving": "Saving...",
     "saveSuccess": "Payment configuration saved successfully",
+    "savedSuccess": "Payment configuration saved successfully",
     "saveError": "Failed to save payment configuration",
+    "savedFailed": "Failed to save payment configuration",
     "verifySuccess": "Connected to PayOS successfully",
-    "verifyError": "PayOS connection test failed"
+    "testSuccess": "Connected to PayOS successfully",
+    "verifyError": "PayOS connection test failed",
+    "testFailed": "PayOS connection test failed"
   }
 }

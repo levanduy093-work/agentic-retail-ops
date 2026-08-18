@@ -902,12 +902,17 @@
     "timeoutMinutes": "Số phút hết hạn",
     "displaySettings": "Hiển thị",
     "displayName": "Tên phương thức hiển thị",
+    "displayTitle": "Tên phương thức hiển thị",
     "orderPrefix": "Tiền tố mã đơn",
     "save": "Lưu cấu hình",
     "saving": "Đang lưu...",
     "saveSuccess": "Đã lưu cấu hình thanh toán thành công",
+    "savedSuccess": "Đã lưu cấu hình thanh toán thành công",
     "saveError": "Lưu cấu hình thất bại",
+    "savedFailed": "Lưu cấu hình thất bại",
     "verifySuccess": "Kết nối PayOS thành công",
-    "verifyError": "Kiểm tra kết nối thất bại"
+    "testSuccess": "Kết nối PayOS thành công",
+    "verifyError": "Kiểm tra kết nối thất bại",
+    "testFailed": "Kiểm tra kết nối thất bại"
   }
 }

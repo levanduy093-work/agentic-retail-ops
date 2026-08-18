@@ -1,4 +1,5 @@
 import type { MedusaContainer } from "@medusajs/framework/types"
+import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 import { PaymentProviderRegistry } from "./provider-registry"
 import { decryptPaymentSecret } from "./credential-vault"
 import type PaymentHubModuleService from "./service"
@@ -73,18 +74,28 @@ export async function getPayosSettings(
   let pgConnection: any
 
   if (container) {
-    // 1. Try __pg_connection__ first from cradle / container
-    try {
-      pgConnection = (container as any).__pg_connection__
-    } catch {
-      // not available
-    }
-
-    // 2. Try paymentHub module
-    try {
-      paymentHub = (container as any)[PAYMENT_HUB_MODULE]
-    } catch {
-      // not available
+    if (typeof (container as any).resolve === "function") {
+      try {
+        paymentHub = (container as any).resolve(PAYMENT_HUB_MODULE)
+      } catch {
+        // not available
+      }
+      try {
+        pgConnection = (container as any).resolve(ContainerRegistrationKeys.PG_CONNECTION)
+      } catch {
+        // not available
+      }
+    } else {
+      try {
+        pgConnection = (container as any).__pg_connection__
+      } catch {
+        // not available
+      }
+      try {
+        paymentHub = (container as any)[PAYMENT_HUB_MODULE]
+      } catch {
+        // not available
+      }
     }
   }
 
