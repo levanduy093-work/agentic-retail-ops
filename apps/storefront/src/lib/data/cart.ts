@@ -2,6 +2,7 @@
 
 import { sdk } from "@lib/config"
 import medusaError from "@lib/util/medusa-error"
+import { isSameAddress } from "@lib/util/compare-addresses"
 import { HttpTypes } from "@medusajs/types"
 import { revalidateTag } from "next/cache"
 import { redirect } from "next/navigation"
@@ -14,7 +15,11 @@ import {
   removeCartId,
   setCartId,
 } from "./cookies"
-import { saveCustomerShippingAddress } from "./customer"
+import { retrieveCustomer, saveCustomerShippingAddress } from "./customer"
+import {
+  calculateShippingQuote,
+  listCartShippingMethods,
+} from "./fulfillment"
 import { getRegion } from "./regions"
 
 /**
@@ -25,7 +30,7 @@ import { getRegion } from "./regions"
 export async function retrieveCart(cartId?: string, fields?: string) {
   const id = cartId || (await getCartId())
   fields ??=
-    "*items, *region, *items.product, *items.variant, *items.thumbnail, *items.metadata, +items.total, *promotions, +shipping_methods.name, +shipping_address.metadata, +billing_address.metadata"
+    "*items, *region, *items.product, *items.variant, *items.thumbnail, *items.metadata, +items.total, *promotions, +shipping_methods.name, +shipping_methods.shipping_option_id, +shipping_methods.amount, +shipping_methods.data, +shipping_address.metadata, +billing_address.metadata"
 
   if (!id) {
     return null
@@ -142,6 +147,91 @@ export async function resetCartShippingMethods(cartId?: string) {
     .catch(() => null)
 }
 
+/**
+ * Ensures the cart has the customer's default shipping address and pre-calculates the shipping quote.
+ */
+export async function syncCartWithDefaultAddressAndShipping(
+  cart: HttpTypes.StoreCart | null,
+  customer?: HttpTypes.StoreCustomer | null
+): Promise<HttpTypes.StoreCart | null> {
+  if (!cart?.id || !cart?.items?.length) {
+    return cart
+  }
+
+  const cust =
+    customer !== undefined
+      ? customer
+      : await retrieveCustomer().catch(() => null)
+  if (!cust) {
+    return cart
+  }
+
+  const defaultAddr =
+    cust.addresses?.find((a) => a.is_default_shipping) || cust.addresses?.[0]
+
+  if (!defaultAddr) {
+    return cart
+  }
+
+  let currentCart = cart
+
+  const hasValidAddress =
+    currentCart.shipping_address &&
+    isSameAddress(currentCart.shipping_address, defaultAddr)
+
+  if (!hasValidAddress) {
+    const updated = await updateCart({
+      shipping_address: {
+        first_name: defaultAddr.first_name || "",
+        last_name: defaultAddr.last_name || "",
+        address_1: defaultAddr.address_1 || "",
+        address_2: defaultAddr.address_2 || "",
+        company: defaultAddr.company || "",
+        postal_code: defaultAddr.postal_code || "700000",
+        city: defaultAddr.city || "",
+        country_code: (defaultAddr.country_code || "vn").toLowerCase(),
+        province: defaultAddr.province || "",
+        phone: defaultAddr.phone || cust.phone || "",
+        metadata: defaultAddr.metadata || undefined,
+      },
+      email: cust.email || currentCart.email,
+    }).catch(() => null)
+
+    if (updated) {
+      currentCart = updated
+    }
+  }
+
+  const shippingMethods = await listCartShippingMethods(currentCart.id)
+  const defaultMethod =
+    shippingMethods?.find((sm) => sm.price_type === "calculated") ||
+    shippingMethods?.[0]
+
+  if (defaultMethod) {
+    const quote = await calculateShippingQuote(defaultMethod.id, currentCart.id)
+    if (quote?.option?.amount != null) {
+      const currentMethod = currentCart.shipping_methods?.find(
+        (sm) => sm.shipping_option_id === defaultMethod.id
+      )
+      if (!currentMethod || currentMethod.amount !== quote.option.amount) {
+        const updated = await setShippingMethod({
+          cartId: currentCart.id,
+          shippingMethodId: defaultMethod.id,
+          data: {
+            ghn_weight: quote.totalWeight,
+            shipping_packages: quote.packages,
+          },
+        }).catch(() => null)
+        if (updated) {
+          currentCart = updated
+        }
+      }
+    }
+  }
+
+  return currentCart
+}
+
 export async function addToCart({
   variantId,
   quantity,
@@ -176,7 +266,14 @@ export async function addToCart({
       headers,
     )
     .then(async () => {
-      await resetCartShippingMethods(cart.id).catch(() => null)
+      const customer = await retrieveCustomer().catch(() => null)
+      const refreshedCart = await retrieveCart(cart.id)
+      if (customer && refreshedCart) {
+        await syncCartWithDefaultAddressAndShipping(refreshedCart, customer).catch(() => null)
+      } else {
+        await resetCartShippingMethods(cart.id).catch(() => null)
+      }
+
       const cartCacheTag = await getCacheTag("carts")
       revalidateTag(cartCacheTag)
 
@@ -210,7 +307,14 @@ export async function updateLineItem({
   await sdk.store.cart
     .updateLineItem(cartId, lineId, { quantity }, {}, headers)
     .then(async () => {
-      await resetCartShippingMethods(cartId).catch(() => null)
+      const customer = await retrieveCustomer().catch(() => null)
+      const refreshedCart = await retrieveCart(cartId)
+      if (customer && refreshedCart) {
+        await syncCartWithDefaultAddressAndShipping(refreshedCart, customer).catch(() => null)
+      } else {
+        await resetCartShippingMethods(cartId).catch(() => null)
+      }
+
       const cartCacheTag = await getCacheTag("carts")
       revalidateTag(cartCacheTag)
 
@@ -238,7 +342,14 @@ export async function deleteLineItem(lineId: string) {
   await sdk.store.cart
     .deleteLineItem(cartId, lineId, {}, headers)
     .then(async () => {
-      await resetCartShippingMethods(cartId).catch(() => null)
+      const customer = await retrieveCustomer().catch(() => null)
+      const refreshedCart = await retrieveCart(cartId)
+      if (customer && refreshedCart && (refreshedCart.items?.length ?? 0) > 0) {
+        await syncCartWithDefaultAddressAndShipping(refreshedCart, customer).catch(() => null)
+      } else {
+        await resetCartShippingMethods(cartId).catch(() => null)
+      }
+
       const cartCacheTag = await getCacheTag("carts")
       revalidateTag(cartCacheTag)
 
@@ -482,8 +593,16 @@ export async function setAddresses(
       }
     }
 
+    const currentCart = await retrieveCart(cartId)
+    const previousAddress = currentCart?.shipping_address
+    const addressChanged =
+      !previousAddress ||
+      !isSameAddress(previousAddress, shippingAddress)
+
     await updateCart(data)
-    await resetCartShippingMethods(cartId).catch(() => null)
+    if (addressChanged) {
+      await resetCartShippingMethods(cartId).catch(() => null)
+    }
 
     const saveToCustomer = formData.get("save_to_customer")
     if (saveToCustomer === "on" || saveToCustomer === "true") {

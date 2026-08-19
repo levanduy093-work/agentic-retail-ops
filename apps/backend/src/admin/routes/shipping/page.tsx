@@ -297,6 +297,10 @@ const LoadError = ({ onRetry }: { onRetry: () => void }) => {
 
 const ShippingHubPage = () => {
   const { i18n, t } = useTranslation();
+  const tr = (key: string, fallback: string) => {
+    const val = t(key);
+    return val && val !== key ? val : fallback;
+  };
   const queryClient = useQueryClient();
   const [mainTab, setMainTab] = useState<string>("shipments");
   const [searchQuery, setSearchQuery] = useState<string>("");

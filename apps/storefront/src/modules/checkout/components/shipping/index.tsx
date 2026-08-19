@@ -60,15 +60,39 @@ const Shipping: React.FC<ShippingProps> = ({
 }) => {
   const t = useTranslation()
   const [isLoading, setIsLoading] = useState(false)
-  const [isLoadingPrices, setIsLoadingPrices] = useState(true)
   const [isSynchronizingSelection, setIsSynchronizingSelection] =
     useState(false)
 
   const [showPickupOptions, setShowPickupOptions] =
     useState<string>(PICKUP_OPTION_OFF)
+
+  const existingMethod = cart.shipping_methods?.at(-1)
+  const initialPricesMap = useMemo(() => {
+    if (existingMethod?.shipping_option_id && existingMethod?.amount != null) {
+      return {
+        [existingMethod.shipping_option_id]: {
+          amount: existingMethod.amount,
+          packages:
+            (existingMethod.data?.shipping_packages as ShippingPackage[]) || [],
+          totalWeight: Number(existingMethod.data?.ghn_weight) || 300,
+        },
+      }
+    }
+    return {}
+  }, [existingMethod])
+
   const [calculatedPricesMap, setCalculatedPricesMap] = useState<
     Record<string, CalculatedShippingQuote>
-  >({})
+  >(initialPricesMap)
+
+  const isInitialPriceReady =
+    availableShippingMethods &&
+    availableShippingMethods.length > 0 &&
+    availableShippingMethods.every(
+      (sm) => sm.price_type === "flat" || !!initialPricesMap[sm.id]
+    )
+
+  const [isLoadingPrices, setIsLoadingPrices] = useState(!isInitialPriceReady)
   const [error, setError] = useState<string | null>(null)
   const [shippingMethodId, setShippingMethodId] = useState<string | null>(
     cart.shipping_methods?.at(-1)?.shipping_option_id || null
@@ -80,6 +104,15 @@ const Shipping: React.FC<ShippingProps> = ({
   const isOpen = searchParams.get("step") === "delivery"
   const cartShippingMethodId =
     cart.shipping_methods?.at(-1)?.shipping_option_id || null
+
+  useEffect(() => {
+    const currentId = cart.shipping_methods?.at(-1)?.shipping_option_id || null
+    setShippingMethodId(currentId)
+    if (!currentId) {
+      setCalculatedPricesMap({})
+      setIsLoadingPrices(true)
+    }
+  }, [cart.shipping_methods])
 
   const _shippingMethods = useMemo(
     () =>
@@ -147,9 +180,12 @@ const Shipping: React.FC<ShippingProps> = ({
     const hasAllPrices = calculatedMethods.every(
       (sm) => !!calculatedPricesMap[sm.id]
     )
-    if (!hasAllPrices) {
-      setIsLoadingPrices(true)
+    if (hasAllPrices) {
+      setIsLoadingPrices(false)
+      return
     }
+
+    setIsLoadingPrices(true)
 
     const promises = calculatedMethods.map((sm) =>
       calculateShippingQuote(sm.id, cart.id)

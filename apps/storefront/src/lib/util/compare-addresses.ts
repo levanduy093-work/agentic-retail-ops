@@ -15,8 +15,8 @@ export function normalizePhoneNumber(phone?: unknown): string {
 }
 
 export function isSameAddress(
-  address1?: Record<string, unknown> | null,
-  address2?: Record<string, unknown> | null
+  address1?: any,
+  address2?: any
 ): boolean {
   if (!address1 || !address2) return false
 
@@ -76,8 +76,8 @@ export function isSameAddress(
 }
 
 export default function compareAddresses(
-  address1?: Record<string, unknown> | null,
-  address2?: Record<string, unknown> | null
+  address1?: any,
+  address2?: any
 ): boolean {
   return isSameAddress(address1, address2)
 }
