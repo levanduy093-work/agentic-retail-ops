@@ -755,9 +755,7 @@ const KnowledgeHubPage = () => {
               size="small"
               variant={activeView === view ? "secondary" : "transparent"}
             >
-              {view === "prompts"
-                ? "Trợ lý & Prompts"
-                : t(`knowledgeHub.views.${view}`)}
+              {t(`knowledgeHub.views.${view}`)}
             </Button>
           ))}
         </div>
@@ -1550,7 +1548,8 @@ const KnowledgeHubPage = () => {
 }
 
 export const config = defineRouteConfig({
-  label: "Chatbot CSKH",
+  label: "knowledgeHub.navigation",
+  translationNs: "translation",
 })
 
 export default KnowledgeHubPage

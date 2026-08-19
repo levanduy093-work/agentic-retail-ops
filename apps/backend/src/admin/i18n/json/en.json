@@ -218,6 +218,28 @@
     "create": "Create Order",
     "order": "Order",
     "customer": "Customer",
+    "payment": {
+      "status": {
+        "pending": "Pending",
+        "authorized": "Authorized",
+        "captured": "Captured",
+        "canceled": "Canceled",
+        "requires_action": "Requires Action"
+      }
+    },
+    "fulfillment": {
+      "status": {
+        "not_fulfilled": "Not Fulfilled",
+        "partially_fulfilled": "Partially Fulfilled",
+        "fulfilled": "Fulfilled",
+        "partially_shipped": "Partially Shipped",
+        "shipped": "Shipped",
+        "partially_delivered": "Partially Delivered",
+        "delivered": "Delivered",
+        "canceled": "Canceled",
+        "returned": "Returned"
+      }
+    },
     "shipping": "Shipping"
   },
   "inventory": {
@@ -269,6 +291,7 @@
       "documents": "Guidance",
       "sources": "Connected documents",
       "search": "Check search",
+      "prompts": "Assistant & Prompts",
       "ai": "AI configuration"
     },
     "emptyStatus": {
@@ -662,6 +685,13 @@
       "strategyHybridAuto": "Hybrid Auto (Prefer PE Bag when items fit to reduce dimensional weight, fallback to Carton)",
       "strategyPeOnly": "PE Sealing Bags Only (Fashion, apparel, soft goods)",
       "strategyCartonOnly": "Carton Boxes Only (Cosmetics, fragile, electronics, boxed shoes)",
+      "autoOptimized": "Auto Optimized",
+      "peBagOnly": "PE Bag Only",
+      "cartonOnly": "Carton Box Only",
+      "recommended": "Recommended",
+      "suggestPe": "e.g., 1-2 shirts / jeans...",
+      "suggestCarton": "e.g., 1-2 small items / cosmetics...",
+      "defaultPlaceholder": "Default",
       "packageSettings": "Package Limits",
       "weight": "Carton box tare weight (g)",
       "bagWeight": "PE bag tare weight (g)",
@@ -899,6 +929,10 @@
     "description": "Manage VietQR (PayOS) payment gateway configuration",
     "payosTitle": "PayOS Gateway (VietQR)",
     "enablePayment": "Enable PayOS Payment",
+    "connectionInfo": "PayOS Connection Details",
+    "enterClientId": "Enter Client ID...",
+    "enterApiKey": "Enter API Key...",
+    "enterChecksumKey": "Enter Checksum Key...",
     "environment": "Environment",
     "sandbox": "Sandbox (Test mode)",
     "production": "Production (Live)",

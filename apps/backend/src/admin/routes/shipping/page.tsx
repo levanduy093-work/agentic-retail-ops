@@ -966,15 +966,15 @@ const ShippingHubPage = () => {
                             />
                             <Text size="small" weight="plus">
                               {strategyOption.value === "hybrid_auto"
-                                ? "Tự động tối ưu"
+                                ? tr("shippingHub.packaging.autoOptimized", "Tự động tối ưu")
                                 : strategyOption.value === "pe_only"
-                                  ? "Túi PE Only"
-                                  : "Hộp Carton Only"}
+                                  ? tr("shippingHub.packaging.peBagOnly", "Túi PE Only")
+                                  : tr("shippingHub.packaging.cartonOnly", "Hộp Carton Only")}
                             </Text>
                           </div>
                           {strategyOption.recommended && (
                             <Badge color="blue" size="small">
-                              Khuyên dùng
+                              {tr("shippingHub.packaging.recommended", "Khuyên dùng")}
                             </Badge>
                           )}
                         </div>
@@ -1140,7 +1140,7 @@ const ShippingHubPage = () => {
                           <Input
                             id={`bag-name-${bagIndex}`}
                             value={bag.name}
-                            placeholder="Gợi ý: 1-2 áo sơ mi / quần jean..."
+                            placeholder={tr("shippingHub.packaging.suggestPe", "Gợi ý: 1-2 áo sơ mi / quần jean...")}
                             onChange={(e) =>
                               setPackagingForm((current) => ({
                                 ...current,
@@ -1330,7 +1330,7 @@ const ShippingHubPage = () => {
                           <Input
                             id={`box-name-${boxIndex}`}
                             value={box.name}
-                            placeholder="Gợi ý: 1-2 món nhỏ / Mỹ phẩm..."
+                            placeholder={tr("shippingHub.packaging.suggestCarton", "Gợi ý: 1-2 món nhỏ / Mỹ phẩm...")}
                             onChange={(e) =>
                               setPackagingForm((current) => ({
                                 ...current,

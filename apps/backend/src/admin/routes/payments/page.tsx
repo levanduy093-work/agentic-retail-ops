@@ -252,7 +252,7 @@ const PaymentsPage = () => {
           {/* Section 1: Connection & Credentials */}
           <div className="p-6 flex flex-col gap-y-5">
             <Heading level="h3" className="text-sm font-semibold text-ui-fg-base">
-              Thông tin kết nối PayOS
+              {tr("paymentHub.connectionInfo", "Thông tin kết nối PayOS")}
             </Heading>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
@@ -267,7 +267,7 @@ const PaymentsPage = () => {
                   id="payos-client-id"
                   value={clientId}
                   onChange={(e) => setClientId(e.target.value)}
-                  placeholder="Nhập Client ID..."
+                  placeholder={tr("paymentHub.enterClientId", "Nhập Client ID...")}
                   className="w-full"
                 />
               </div>
@@ -289,7 +289,7 @@ const PaymentsPage = () => {
                   type="password"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={p?.has_api_key ? "••••••••••••••••" : "Nhập API Key..."}
+                  placeholder={p?.has_api_key ? "••••••••••••••••" : tr("paymentHub.enterApiKey", "Nhập API Key...")}
                   className="w-full"
                 />
               </div>
@@ -311,7 +311,7 @@ const PaymentsPage = () => {
                   type="password"
                   value={checksumKey}
                   onChange={(e) => setChecksumKey(e.target.value)}
-                  placeholder={p?.has_checksum_key ? "••••••••••••••••" : "Nhập Checksum Key..."}
+                  placeholder={p?.has_checksum_key ? "••••••••••••••••" : tr("paymentHub.enterChecksumKey", "Nhập Checksum Key...")}
                   className="w-full"
                 />
               </div>
@@ -438,7 +438,8 @@ const PaymentsPage = () => {
 }
 
 export const config = defineRouteConfig({
-  label: "Thanh toán",
+  label: "paymentHub.navigation",
+  translationNs: "translation",
   icon: CreditCardIcon,
 })
 
