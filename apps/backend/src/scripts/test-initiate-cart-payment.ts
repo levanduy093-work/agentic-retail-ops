@@ -29,7 +29,7 @@ export default async function testInitiateCartPayment({ container }: ExecArgs) {
         context: {
           return_url: "http://localhost:8000/checkout",
           cancel_url: "http://localhost:8000/checkout",
-        },
+        } as any,
       }
     )
 

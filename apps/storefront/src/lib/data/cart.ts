@@ -115,6 +115,33 @@ export async function updateCart(data: HttpTypes.StoreUpdateCart) {
     .catch(medusaError)
 }
 
+export async function resetCartShippingMethods(cartId?: string) {
+  const id = cartId || (await getCartId())
+  if (!id) return null
+
+  const headers = {
+    ...(await getAuthHeaders()),
+  }
+
+  return sdk.client
+    .fetch<{ cart: HttpTypes.StoreCart }>(
+      `/store/carts/${id}/shipping-methods/reset`,
+      {
+        method: "POST",
+        headers,
+        cache: "no-store",
+      }
+    )
+    .then(async ({ cart }) => {
+      const cartCacheTag = await getCacheTag("carts")
+      revalidateTag(cartCacheTag)
+      const fulfillmentCacheTag = await getCacheTag("fulfillment")
+      revalidateTag(fulfillmentCacheTag)
+      return cart
+    })
+    .catch(() => null)
+}
+
 export async function addToCart({
   variantId,
   quantity,
@@ -149,6 +176,7 @@ export async function addToCart({
       headers,
     )
     .then(async () => {
+      await resetCartShippingMethods(cart.id).catch(() => null)
       const cartCacheTag = await getCacheTag("carts")
       revalidateTag(cartCacheTag)
 
@@ -182,6 +210,7 @@ export async function updateLineItem({
   await sdk.store.cart
     .updateLineItem(cartId, lineId, { quantity }, {}, headers)
     .then(async () => {
+      await resetCartShippingMethods(cartId).catch(() => null)
       const cartCacheTag = await getCacheTag("carts")
       revalidateTag(cartCacheTag)
 
@@ -209,6 +238,7 @@ export async function deleteLineItem(lineId: string) {
   await sdk.store.cart
     .deleteLineItem(cartId, lineId, {}, headers)
     .then(async () => {
+      await resetCartShippingMethods(cartId).catch(() => null)
       const cartCacheTag = await getCacheTag("carts")
       revalidateTag(cartCacheTag)
 
@@ -453,6 +483,7 @@ export async function setAddresses(
     }
 
     await updateCart(data)
+    await resetCartShippingMethods(cartId).catch(() => null)
 
     const saveToCustomer = formData.get("save_to_customer")
     if (saveToCustomer === "on" || saveToCustomer === "true") {

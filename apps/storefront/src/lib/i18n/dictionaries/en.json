@@ -350,6 +350,9 @@
     "go_to_frontpage": "Go to frontpage",
     "cart_mismatch_title": "Something went wrong when we tried to transfer your cart",
     "shipping_to": "Shipping to:",
+    "free": "Free",
+    "calculated_at_checkout": "Calculated at checkout",
+    "calculating_shipping": "Calculating...",
     "language": "Language",
     "deleting": "Deleting...",
     "page_loading": "Loading page..."

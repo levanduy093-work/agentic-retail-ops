@@ -8,6 +8,13 @@ import React, { useEffect, useMemo, useRef, useState } from "react"
 import ErrorMessage from "../error-message"
 import { useTranslation } from "@lib/i18n/client"
 import { useRouter } from "next/navigation"
+import {
+  ArrowPath,
+  ArrowPathMini,
+  Clock,
+  InformationCircleSolid,
+  XMark,
+} from "@medusajs/icons"
 
 type PayOSPaymentButtonProps = {
   cart: HttpTypes.StoreCart
@@ -232,7 +239,7 @@ const PayOSPaymentButton: React.FC<PayOSPaymentButtonProps> = ({
       </Button>
 
       <ErrorMessage
-        error={errorMessage}
+        error={!showModal ? errorMessage : null}
         data-testid="payos-payment-error-message"
       />
 
@@ -258,10 +265,10 @@ const PayOSPaymentButton: React.FC<PayOSPaymentButtonProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 transition"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 transition cursor-pointer"
                   aria-label="Đóng"
                 >
-                  ✕
+                  <XMark className="w-4 h-4" />
                 </button>
               )}
             </div>
@@ -297,39 +304,90 @@ const PayOSPaymentButton: React.FC<PayOSPaymentButtonProps> = ({
               </div>
             ) : (
               <div className="mt-4 flex flex-col items-center">
-                {/* QR Code Frame */}
-                {qrImageSrc && (
-                  <div className="relative flex flex-col items-center">
-                    <div className="relative overflow-hidden rounded-xl border border-neutral-200/90 bg-white p-2.5 shadow-2xs">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                {/* QR Code Frame with Blurred Background & Centered Reload Action */}
+                <div className="relative flex flex-col items-center">
+                  <div className="relative overflow-hidden rounded-2xl border border-neutral-200/90 bg-white p-2.5 shadow-2xs w-60 h-60 flex items-center justify-center">
+                    {/* QR Background Layer */}
+                    {qrImageSrc ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
                       <img
                         src={qrImageSrc}
                         alt="VietQR PayOS"
-                        className={`h-56 w-56 object-contain transition-opacity duration-200 ${
-                          isExpired ? "opacity-25 blur-[1px]" : "opacity-100"
+                        className={`h-52 w-52 object-contain transition-all duration-300 ${
+                          isExpired || !qrImageSrc
+                            ? "opacity-20 blur-[2px] scale-95"
+                            : "opacity-100"
                         }`}
                       />
-                      {isExpired && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 p-4 text-center">
-                          <p className="text-xs font-medium text-neutral-700 mb-2.5">
-                            Mã QR đã hết hạn
-                          </p>
-                          <button
-                            type="button"
-                            onClick={handleRegenerateQR}
-                            disabled={isRegenerating}
-                            className="rounded-full bg-[#174b3d] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-[#103a2f] transition"
-                          >
-                            {isRegenerating ? "Đang tạo..." : "Tạo mã QR mới"}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <p className="mt-2 text-[11px] text-neutral-500 text-center">
-                      Mở ứng dụng ngân hàng bất kỳ để quét mã
-                    </p>
+                    ) : (
+                      <svg
+                        className="h-52 w-52 text-neutral-400 opacity-20 blur-[1px] transition-all"
+                        viewBox="0 0 100 100"
+                        fill="currentColor"
+                      >
+                        {/* Corner 1 */}
+                        <rect x="10" y="10" width="24" height="24" rx="4" fill="none" stroke="currentColor" strokeWidth="4" />
+                        <rect x="16" y="16" width="12" height="12" rx="2" fill="currentColor" />
+                        {/* Corner 2 */}
+                        <rect x="66" y="10" width="24" height="24" rx="4" fill="none" stroke="currentColor" strokeWidth="4" />
+                        <rect x="72" y="16" width="12" height="12" rx="2" fill="currentColor" />
+                        {/* Corner 3 */}
+                        <rect x="10" y="66" width="24" height="24" rx="4" fill="none" stroke="currentColor" strokeWidth="4" />
+                        <rect x="16" y="72" width="12" height="12" rx="2" fill="currentColor" />
+                        {/* QR Grid Pattern */}
+                        <rect x="40" y="10" width="7" height="7" rx="1.5" />
+                        <rect x="53" y="10" width="7" height="7" rx="1.5" />
+                        <rect x="40" y="22" width="7" height="7" rx="1.5" />
+                        <rect x="53" y="22" width="7" height="7" rx="1.5" />
+                        <rect x="10" y="40" width="7" height="7" rx="1.5" />
+                        <rect x="22" y="40" width="7" height="7" rx="1.5" />
+                        <rect x="10" y="53" width="7" height="7" rx="1.5" />
+                        <rect x="22" y="53" width="7" height="7" rx="1.5" />
+                        <rect x="38" y="38" width="24" height="24" rx="4" fill="currentColor" />
+                        <rect x="68" y="40" width="8" height="8" rx="1.5" />
+                        <rect x="80" y="40" width="10" height="8" rx="1.5" />
+                        <rect x="68" y="52" width="8" height="12" rx="1.5" />
+                        <rect x="80" y="52" width="10" height="8" rx="1.5" />
+                        <rect x="40" y="68" width="8" height="12" rx="1.5" />
+                        <rect x="52" y="72" width="8" height="8" rx="1.5" />
+                        <rect x="40" y="84" width="20" height="6" rx="1.5" />
+                        <rect x="68" y="68" width="12" height="8" rx="1.5" />
+                        <rect x="84" y="76" width="6" height="14" rx="1.5" />
+                        <rect x="68" y="80" width="12" height="8" rx="1.5" />
+                      </svg>
+                    )}
+
+                    {/* Expired / Missing Overlay with Centered Floating Reload Button */}
+                    {(isExpired || !qrImageSrc) && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center animate-fadeIn">
+                        <button
+                          type="button"
+                          onClick={handleRegenerateQR}
+                          disabled={isRegenerating}
+                          className="group flex h-14 w-14 items-center justify-center rounded-full bg-[#174b3d] text-white shadow-lg hover:bg-[#103a2f] hover:scale-110 active:scale-95 transition-all duration-200 cursor-pointer disabled:opacity-50"
+                          aria-label="Tải lại mã QR"
+                          title="Tải lại mã QR"
+                        >
+                          <ArrowPath
+                            className={`h-6 w-6 ${
+                              isRegenerating
+                                ? "animate-spin"
+                                : "group-hover:rotate-180 transition-transform duration-500"
+                            }`}
+                          />
+                        </button>
+                        <span className="mt-2.5 text-xs font-semibold text-neutral-800 drop-shadow-xs">
+                          {isRegenerating ? "Đang tạo mã..." : "Tải lại mã QR"}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
+                  <p className="mt-2 text-[11px] text-neutral-500 text-center">
+                    {isExpired || !qrImageSrc
+                      ? "Nhấn nút để tải lại mã QR thanh toán mới"
+                      : "Mở ứng dụng ngân hàng bất kỳ để quét mã"}
+                  </p>
+                </div>
 
                 {/* Transfer Info Card (Clean & Compact) */}
                 <div className="mt-3.5 w-full rounded-xl bg-neutral-50/80 p-3 border border-neutral-200/70 text-xs space-y-2">
@@ -389,35 +447,51 @@ const PayOSPaymentButton: React.FC<PayOSPaymentButtonProps> = ({
                   )}
                 </div>
 
-                {/* Status bar with subtle timer */}
-                <div className="mt-3 flex w-full items-center justify-between text-[11px] text-neutral-500 px-1">
+                {/* Status indicator & refresh button (Minimal & Clean) */}
+                <div className="mt-3 flex w-full items-center justify-between text-[11px] text-neutral-500 px-0.5">
                   <div className="flex items-center gap-1.5">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>
-                      {isExpired
-                        ? "Hết thời gian"
-                        : timeLeft !== null
-                        ? `Hết hạn sau ${formatTimer(timeLeft)}`
-                        : "Đang chờ thanh toán"}
-                    </span>
+                    {isExpired || !qrImageSrc ? (
+                      <>
+                        <Clock className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                        <span>Mã QR đã hết hạn</span>
+                      </>
+                    ) : timeLeft !== null ? (
+                      <>
+                        <Clock className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                        <span>Hết hạn sau</span>
+                        <span className="font-mono font-medium tabular-nums text-neutral-700">
+                          {formatTimer(timeLeft)}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#174b3d] animate-pulse shrink-0" />
+                        <span>Đang chờ quét mã</span>
+                      </>
+                    )}
                   </div>
-                  {!isExpired && (
-                    <button
-                      type="button"
-                      onClick={handleRegenerateQR}
-                      disabled={isRegenerating}
-                      className="text-neutral-500 hover:text-neutral-800 underline transition cursor-pointer"
-                    >
-                      {isRegenerating ? "Đang tạo..." : "Làm mới"}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleRegenerateQR}
+                    disabled={isRegenerating}
+                    className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-500 hover:text-neutral-900 transition disabled:opacity-50 cursor-pointer"
+                  >
+                    <ArrowPathMini
+                      className={`w-3 h-3 text-neutral-400 ${
+                        isRegenerating ? "animate-spin text-[#174b3d]" : ""
+                      }`}
+                    />
+                    <span>{isRegenerating ? "Đang tạo..." : "Làm mới"}</span>
+                  </button>
                 </div>
 
-                {/* Error message inside modal */}
+                {/* Error / Alert notice inside modal */}
                 {errorMessage && (
-                  <div className="mt-3.5 w-full p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2">
-                    <span className="font-bold text-sm shrink-0">⚠️</span>
-                    <span className="leading-snug">{errorMessage}</span>
+                  <div className="mt-3.5 w-full rounded-xl bg-amber-50/80 border border-amber-200/70 p-3 text-xs flex items-start gap-2.5 animate-fadeIn">
+                    <InformationCircleSolid className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <span className="leading-relaxed text-amber-900 font-normal">
+                      {errorMessage}
+                    </span>
                   </div>
                 )}
 

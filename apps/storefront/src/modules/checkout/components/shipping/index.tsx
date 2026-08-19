@@ -394,16 +394,16 @@ const Shipping: React.FC<ShippingProps> = ({
                 <RadioGroup
                   value={shippingMethodId}
                   onChange={(v) => {
-                    if (v) {
+                    if (v && !isLoadingPrices) {
                       return handleSetShippingMethod(v, "shipping")
                     }
                   }}
                 >
                   {_shippingMethods?.map((option) => {
                     const isDisabled =
-                      option.price_type === "calculated" &&
-                      !isLoadingPrices &&
-                      !calculatedPricesMap[option.id]
+                      isLoadingPrices ||
+                      (option.price_type === "calculated" &&
+                        !calculatedPricesMap[option.id])
 
                     return (
                       <Radio
@@ -416,7 +416,7 @@ const Shipping: React.FC<ShippingProps> = ({
                           {
                             "border-ui-border-interactive":
                               option.id === shippingMethodId,
-                            "hover:shadow-brders-none cursor-not-allowed":
+                            "hover:shadow-brders-none cursor-not-allowed opacity-75":
                               isDisabled,
                           }
                         )}
@@ -441,7 +441,10 @@ const Shipping: React.FC<ShippingProps> = ({
                               currency_code: cart?.currency_code,
                             })
                           ) : isLoadingPrices ? (
-                            <Loader />
+                            <span className="flex items-center gap-x-1.5 text-ui-fg-muted text-xs">
+                              <Loader className="animate-spin" />
+                              <span>{t("common.calculating_shipping") || "Đang tính cước..."}</span>
+                            </span>
                           ) : (
                             "-"
                           )}
@@ -546,6 +549,7 @@ const Shipping: React.FC<ShippingProps> = ({
                 !shippingMethodId ||
                 !isSelectedShippingQuoteReady ||
                 isLoading ||
+                isLoadingPrices ||
                 isSynchronizingSelection
               }
               data-testid="submit-delivery-option-button"

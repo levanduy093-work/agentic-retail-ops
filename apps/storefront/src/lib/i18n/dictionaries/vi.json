@@ -350,6 +350,9 @@
     "go_to_frontpage": "Về trang chủ",
     "cart_mismatch_title": "Đã xảy ra lỗi khi chuyển đổi giỏ hàng của bạn",
     "shipping_to": "Giao hàng tới:",
+    "free": "Miễn phí",
+    "calculated_at_checkout": "Tính ở bước thanh toán",
+    "calculating_shipping": "Đang tính cước...",
     "language": "Ngôn ngữ",
     "deleting": "Đang xóa...",
     "page_loading": "Đang chuyển trang..."
