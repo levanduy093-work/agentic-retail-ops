@@ -288,8 +288,49 @@
       "documents": "Hướng dẫn",
       "sources": "Tài liệu kết nối",
       "search": "Kiểm tra tìm kiếm",
+      "channels": "Kênh chat CSKH",
       "prompts": "Trợ lý & Prompts",
       "ai": "Cấu hình AI"
+    },
+    "chatChannels": {
+      "title": "Kênh chat CSKH (Omnichannel)",
+      "subtitle": "Cấu hình kết nối bot hỗ trợ khách hàng đa kênh. Toàn bộ Token và Secret được mã hóa AES-256 trong Database và tự động nạp khi server chạy.",
+      "loading": "Đang tải danh sách kênh...",
+      "loadError": "Không thể tải danh sách kênh chat.",
+      "saveSuccess": "Đã lưu và kích hoạt cấu hình kênh thành công.",
+      "saveError": "Không thể lưu cấu hình kênh. Vui lòng kiểm tra lại token và URL.",
+      "disconnectSuccess": "Đã ngắt kết nối kênh chat.",
+      "disconnectError": "Không thể ngắt kết nối kênh chat.",
+      "disconnectConfirm": "Bạn có chắc chắn muốn ngắt kết nối và tạm dừng nhận tin nhắn từ kênh này không?",
+      "testSuccess": "Kết nối thành công tới {{name}} (@{{username}} - ID: {{id}}).",
+      "testError": "Kiểm tra token thất bại. Vui lòng kiểm tra lại Bot Token.",
+      "status": {
+        "active": "Đang hoạt động",
+        "disabled": "Tạm dừng / Chưa kích hoạt"
+      },
+      "telegram": {
+        "name": "Telegram Bot CSKH",
+        "description": "Kết nối Telegram Bot để tự động trả lời khách hàng 24/7 qua kho tri thức Knowledge Hub.",
+        "configureAction": "Cấu hình Telegram",
+        "disconnectAction": "Tạm dừng bot",
+        "testAction": "Kiểm tra kết nối",
+        "drawerTitle": "Cấu hình Telegram Bot CSKH",
+        "drawerHint": "Nhập Bot Token từ @BotFather và Domain công khai của hệ thống để nhận Webhook.",
+        "fields": {
+          "botToken": "Telegram Bot Token",
+          "botTokenPlaceholder": "Nhập token dạng 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ...",
+          "botTokenStoredHint": "Đã mã hóa và lưu: {{hint}}. Để trống ô này nếu không muốn đổi token mới.",
+          "publicBaseUrl": "Domain công khai (HTTPS Public URL)",
+          "publicBaseUrlPlaceholder": "https://trendhub.sbs hoặc Cloudflare Tunnel URL",
+          "publicBaseUrlHint": "URL của server có thể truy cập từ Internet để Telegram gửi Webhook.",
+          "allowUnmappedUsers": "Quyền nhắn tin của khách hàng",
+          "allowUnmappedUsersPublic": "Cho phép tất cả khách hàng nhắn tin tự do với Bot",
+          "allowUnmappedUsersRestricted": "Chỉ cho phép các Chat ID đã được phân quyền trước",
+          "rateLimitTitle": "Giới hạn tần suất & Bảo mật",
+          "burstLimit": "Giới hạn tin nhắn / phút (Burst limit)",
+          "dailyLimit": "Giới hạn tin nhắn / ngày (Daily limit)"
+        }
+      }
     },
     "emptyStatus": {
       "approved": "Chưa có hướng dẫn nào đang được sử dụng.",

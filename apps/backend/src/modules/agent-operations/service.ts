@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto"
 import { Context, ICachingModuleService } from "@medusajs/framework/types"
 import {
   InjectTransactionManager,
@@ -28,6 +29,15 @@ import {
   encryptConnectorSecret,
 } from "./credential-vault"
 import {
+  isVaultSecretReference,
+  parseVaultSecretReference,
+  resolveSecretReference,
+} from "./secret-reference"
+import type {
+  TelegramChannelConfig,
+  TelegramChannelIdentity,
+} from "./telegram"
+import {
   createGoogleKnowledgeAccessToken,
   getGoogleKnowledgeOAuthPlatformStatus,
 } from "./google-knowledge-oauth"
@@ -36,6 +46,7 @@ import AgentActionRequest from "./models/agent-action-request"
 import AgentApproval from "./models/agent-approval"
 import AgentAuditEvent from "./models/agent-audit-event"
 import AgentChannelConnection from "./models/agent-channel-connection"
+import AgentChannelCredential from "./models/agent-channel-credential"
 import AgentConnectorCredential from "./models/agent-connector-credential"
 import AgentAiProviderCredential from "./models/agent-ai-provider-credential"
 import AgentConversation from "./models/agent-conversation"
@@ -191,6 +202,7 @@ import {
   isSafeCustomerConversationBody,
 } from "./customer-conversation-responder"
 import {
+  CustomerChatSecurityConfig,
   isExplicitPromptAttack,
   normalizeCustomerChatSecurityConfig,
 } from "./customer-chat-security"
@@ -313,6 +325,7 @@ class AgentOperationsModuleService extends MedusaService({
   AgentApproval,
   AgentAuditEvent,
   AgentChannelConnection,
+  AgentChannelCredential,
   AgentConnectorCredential,
   AgentAiProviderCredential,
   AgentConversation,
@@ -1411,6 +1424,483 @@ class AgentOperationsModuleService extends MedusaService({
       },
       sharedContext
     )
+
+    return { disconnected: true }
+  }
+
+  async getChannelStatuses(tenantId = "default") {
+    const [connections, credentials] = await Promise.all([
+      this.listAgentChannelConnections(
+        { channel: "TELEGRAM", tenant_id: tenantId },
+        { order: { updated_at: "DESC" }, take: 20 }
+      ),
+      this.listAgentChannelCredentials(
+        { channel: "TELEGRAM", tenant_id: tenantId },
+        { order: { updated_at: "DESC" }, take: 20 }
+      ),
+    ])
+
+    const telegramConn =
+      connections.find((c) => c.account_ref === "primary" && c.status === "ACTIVE") ??
+      connections.find((c) => c.account_ref === "primary") ??
+      connections.find((c) => c.status === "ACTIVE") ??
+      connections[0]
+
+    const telegramCred =
+      credentials.find((c) => c.account_ref === "primary") ??
+      credentials[0]
+
+    const telegramConfig = telegramConn?.config as
+      | (TelegramChannelConfig & { bot_id?: string; bot_username?: string })
+      | undefined
+
+    const envBotToken = process.env.TELEGRAM_BOT_TOKEN?.trim()
+    const telegramSecretHint =
+      telegramCred?.secret_hint ??
+      (envBotToken
+        ? `${envBotToken.slice(0, 4)}...${envBotToken.slice(-4)}`
+        : null)
+    const telegramPublicUrl =
+      telegramCred?.public_base_url ??
+      telegramConfig?.webhook_url ??
+      process.env.TELEGRAM_PUBLIC_BASE_URL ??
+      null
+
+    return [
+      {
+        account_ref: telegramConn?.account_ref ?? "primary",
+        allow_unmapped_users: telegramConfig?.allow_unmapped_users ?? true,
+        bot_id: telegramConfig?.bot_id ?? null,
+        bot_username: telegramConfig?.bot_username ?? null,
+        channel: "TELEGRAM" as const,
+        configured: Boolean(telegramCred || envBotToken),
+        identities: telegramConfig?.identities ?? [],
+        public_base_url: telegramPublicUrl,
+        secret_hint: telegramSecretHint,
+        security: telegramConfig?.security ?? null,
+        status: telegramConn?.status ?? "DISABLED",
+        updated_at:
+          telegramCred?.updated_at ?? telegramConn?.updated_at ?? null,
+        webhook_url: telegramConfig?.webhook_url ?? null,
+      },
+    ]
+  }
+
+  async resolveChannelBotToken(connection: {
+    account_ref?: string
+    channel: string
+    secret_ref?: string | null
+    tenant_id?: string
+  }): Promise<string> {
+    if (connection.secret_ref && isVaultSecretReference(connection.secret_ref)) {
+      const credId = parseVaultSecretReference(connection.secret_ref)
+      if (credId) {
+        const credential = await this.retrieveAgentChannelCredential(credId)
+        return decryptConnectorSecret({
+          encrypted_secret: credential.encrypted_secret,
+          encryption_iv: credential.encryption_iv,
+          encryption_tag: credential.encryption_tag,
+          key_version: credential.key_version,
+        })
+      }
+    }
+
+    const credentials = await this.listAgentChannelCredentials({
+      account_ref: connection.account_ref ?? "primary",
+      channel: connection.channel as any,
+      tenant_id: connection.tenant_id ?? "default",
+    })
+    if (credentials.length > 0) {
+      const credential = credentials[0]
+      return decryptConnectorSecret({
+        encrypted_secret: credential.encrypted_secret,
+        encryption_iv: credential.encryption_iv,
+        encryption_tag: credential.encryption_tag,
+        key_version: credential.key_version,
+      })
+    }
+
+    if (connection.secret_ref && connection.secret_ref.startsWith("env:")) {
+      return resolveSecretReference(connection.secret_ref)
+    }
+
+    if (connection.channel === "TELEGRAM" && process.env.TELEGRAM_BOT_TOKEN?.trim()) {
+      return process.env.TELEGRAM_BOT_TOKEN.trim()
+    }
+
+    throw new MedusaError(
+      MedusaError.Types.NOT_ALLOWED,
+      `No bot token credential found for channel ${connection.channel}.`
+    )
+  }
+
+  async resolveChannelWebhookSecret(connection: {
+    account_ref?: string
+    channel: string
+    config?: unknown
+    tenant_id?: string
+  }): Promise<string> {
+    const config = connection.config as TelegramChannelConfig | undefined
+    const secretRef = config?.webhook_secret_ref
+
+    if (secretRef && isVaultSecretReference(secretRef)) {
+      const credId = parseVaultSecretReference(secretRef)
+      if (credId) {
+        const credential = await this.retrieveAgentChannelCredential(credId)
+        if (
+          credential.encrypted_webhook_secret &&
+          credential.webhook_secret_iv &&
+          credential.webhook_secret_tag
+        ) {
+          return decryptConnectorSecret({
+            encrypted_secret: credential.encrypted_webhook_secret,
+            encryption_iv: credential.webhook_secret_iv,
+            encryption_tag: credential.webhook_secret_tag,
+            key_version: credential.key_version,
+          })
+        }
+      }
+    }
+
+    const credentials = await this.listAgentChannelCredentials({
+      account_ref: connection.account_ref ?? "primary",
+      channel: connection.channel as any,
+      tenant_id: connection.tenant_id ?? "default",
+    })
+    if (
+      credentials.length > 0 &&
+      credentials[0].encrypted_webhook_secret &&
+      credentials[0].webhook_secret_iv &&
+      credentials[0].webhook_secret_tag
+    ) {
+      return decryptConnectorSecret({
+        encrypted_secret: credentials[0].encrypted_webhook_secret,
+        encryption_iv: credentials[0].webhook_secret_iv,
+        encryption_tag: credentials[0].webhook_secret_tag,
+        key_version: credentials[0].key_version,
+      })
+    }
+
+    if (secretRef && secretRef.startsWith("env:")) {
+      return resolveSecretReference(secretRef)
+    }
+
+    if (process.env.TELEGRAM_WEBHOOK_SECRET?.trim()) {
+      return process.env.TELEGRAM_WEBHOOK_SECRET.trim()
+    }
+
+    throw new MedusaError(
+      MedusaError.Types.NOT_ALLOWED,
+      `No webhook secret found for channel ${connection.channel}.`
+    )
+  }
+
+  async testTelegramBotToken(
+    botToken: string,
+    apiBaseUrl = "https://api.telegram.org"
+  ) {
+    if (!botToken?.trim()) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "Telegram Bot Token is required."
+      )
+    }
+    const cleanToken = botToken.trim()
+    const url = `${apiBaseUrl.replace(/\/$/, "")}/bot${cleanToken}/getMe`
+    const response = await fetch(url, {
+      headers: { "content-type": "application/json" },
+      method: "POST",
+      signal: AbortSignal.timeout(10_000),
+    })
+    const payload = (await response.json()) as {
+      description?: string
+      ok: boolean
+      result?: { first_name: string; id: number; is_bot: boolean; username?: string }
+    }
+    if (!response.ok || !payload.ok || !payload.result) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        `Telegram bot verification failed: ${payload.description ?? `HTTP ${response.status}`}`
+      )
+    }
+    return payload.result
+  }
+
+  @InjectManager()
+  async configureTelegramChannelGui(
+    input: {
+      account_ref?: string
+      actor_id: string
+      allow_unmapped_users?: boolean
+      api_base_url?: string
+      bot_token?: string
+      identities?: TelegramChannelIdentity[]
+      public_base_url: string
+      security?: Partial<CustomerChatSecurityConfig>
+      tenant_id?: string
+      webhook_secret?: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.configureTelegramChannelGui_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async configureTelegramChannelGui_(
+    input: {
+      account_ref?: string
+      actor_id: string
+      allow_unmapped_users?: boolean
+      api_base_url?: string
+      bot_token?: string
+      identities?: TelegramChannelIdentity[]
+      public_base_url: string
+      security?: Partial<CustomerChatSecurityConfig>
+      tenant_id?: string
+      webhook_secret?: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const tenantId = input.tenant_id ?? "default"
+    const accountRef = input.account_ref ?? "primary"
+    const apiBaseUrl = input.api_base_url ?? "https://api.telegram.org"
+    const publicBaseUrl = input.public_base_url.replace(/\/$/, "")
+
+    if (!publicBaseUrl.startsWith("https://")) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "Telegram public_base_url must use HTTPS."
+      )
+    }
+
+    const existingCredentials = await this.listAgentChannelCredentials(
+      { account_ref: accountRef, channel: "TELEGRAM", tenant_id: tenantId },
+      { take: 1 },
+      sharedContext
+    )
+    const existingCred = existingCredentials[0]
+
+    let resolvedBotToken: string
+    if (input.bot_token?.trim()) {
+      resolvedBotToken = input.bot_token.trim()
+    } else if (existingCred) {
+      resolvedBotToken = decryptConnectorSecret({
+        encrypted_secret: existingCred.encrypted_secret,
+        encryption_iv: existingCred.encryption_iv,
+        encryption_tag: existingCred.encryption_tag,
+        key_version: existingCred.key_version,
+      })
+    } else if (process.env.TELEGRAM_BOT_TOKEN?.trim()) {
+      resolvedBotToken = process.env.TELEGRAM_BOT_TOKEN.trim()
+    } else {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "Telegram Bot Token is required."
+      )
+    }
+
+    const bot = await this.testTelegramBotToken(resolvedBotToken, apiBaseUrl)
+
+    let resolvedWebhookSecret: string
+    if (input.webhook_secret?.trim()) {
+      resolvedWebhookSecret = input.webhook_secret.trim()
+    } else if (
+      existingCred?.encrypted_webhook_secret &&
+      existingCred.webhook_secret_iv &&
+      existingCred.webhook_secret_tag
+    ) {
+      resolvedWebhookSecret = decryptConnectorSecret({
+        encrypted_secret: existingCred.encrypted_webhook_secret,
+        encryption_iv: existingCred.webhook_secret_iv,
+        encryption_tag: existingCred.webhook_secret_tag,
+        key_version: existingCred.key_version,
+      })
+    } else if (process.env.TELEGRAM_WEBHOOK_SECRET?.trim()) {
+      resolvedWebhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET.trim()
+    } else {
+      resolvedWebhookSecret = randomBytes(24).toString("hex")
+    }
+
+    const encryptedToken = encryptConnectorSecret(resolvedBotToken)
+    const encryptedSecret = encryptConnectorSecret(resolvedWebhookSecret)
+    const secretHint =
+      resolvedBotToken.length > 8
+        ? `${resolvedBotToken.slice(0, 4)}...${resolvedBotToken.slice(-4)}`
+        : `bot...${resolvedBotToken.slice(-2)}`
+
+    const credData = {
+      account_ref: accountRef,
+      channel: "TELEGRAM" as const,
+      encrypted_secret: encryptedToken.encrypted_secret,
+      encrypted_webhook_secret: encryptedSecret.encrypted_secret,
+      encryption_iv: encryptedToken.encryption_iv,
+      encryption_tag: encryptedToken.encryption_tag,
+      key_version: encryptedToken.key_version,
+      public_base_url: publicBaseUrl,
+      secret_hint: secretHint,
+      tenant_id: tenantId,
+      updated_by_id: input.actor_id,
+      webhook_secret_iv: encryptedSecret.encryption_iv,
+      webhook_secret_tag: encryptedSecret.encryption_tag,
+    }
+
+    const credential = existingCred
+      ? await this.updateAgentChannelCredentials(
+          { ...credData, id: existingCred.id },
+          sharedContext
+        )
+      : await this.createAgentChannelCredentials(credData, sharedContext)
+
+    const existingConnections = await this.listAgentChannelConnections(
+      { account_ref: accountRef, channel: "TELEGRAM", tenant_id: tenantId },
+      { take: 1 },
+      sharedContext
+    )
+    const existingConn = existingConnections[0]
+
+    const configData: Record<string, unknown> = {
+      allow_unmapped_users: input.allow_unmapped_users ?? true,
+      api_base_url: apiBaseUrl,
+      bot_id: String(bot.id),
+      bot_username: bot.username,
+      identities: input.identities ?? [],
+      security: normalizeCustomerChatSecurityConfig(input.security),
+      webhook_secret_ref: `vault:${credential.id}`,
+    }
+
+    const connection = existingConn
+      ? await this.updateAgentChannelConnections(
+          {
+            config: configData,
+            id: existingConn.id,
+            secret_ref: `vault:${credential.id}`,
+            status: "DISABLED",
+          },
+          sharedContext
+        )
+      : await this.createAgentChannelConnections(
+          {
+            account_ref: accountRef,
+            channel: "TELEGRAM",
+            config: configData,
+            secret_ref: `vault:${credential.id}`,
+            status: "DISABLED",
+            tenant_id: tenantId,
+          },
+          sharedContext
+        )
+
+    const webhookUrl = `${publicBaseUrl}/webhooks/agent-operations/telegram/${connection.id}`
+
+    const setWebhookUrl = `${apiBaseUrl.replace(/\/$/, "")}/bot${resolvedBotToken}/setWebhook`
+    const setWebhookRes = await fetch(setWebhookUrl, {
+      body: JSON.stringify({
+        allowed_updates: ["message"],
+        drop_pending_updates: false,
+        max_connections: 20,
+        secret_token: resolvedWebhookSecret,
+        url: webhookUrl,
+      }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+      signal: AbortSignal.timeout(10_000),
+    })
+    const webhookPayload = (await setWebhookRes.json()) as {
+      description?: string
+      ok: boolean
+    }
+    if (!setWebhookRes.ok || !webhookPayload.ok) {
+      throw new MedusaError(
+        MedusaError.Types.UNEXPECTED_STATE,
+        `Telegram setWebhook failed: ${webhookPayload.description ?? `HTTP ${setWebhookRes.status}`}`
+      )
+    }
+
+    const activeConnection = await this.updateAgentChannelConnections(
+      {
+        config: {
+          ...configData,
+          webhook_url: webhookUrl,
+        },
+        id: connection.id,
+        status: "ACTIVE",
+      },
+      sharedContext
+    )
+
+    await this.createAgentAuditEvents(
+      {
+        action: "telegram-channel-configured-gui",
+        actor_id: input.actor_id,
+        actor_type: "user",
+        correlation_id: `telegram:connection:${activeConnection.id}`,
+        data: {
+          account_ref: activeConnection.account_ref,
+          bot_username: bot.username,
+          identity_count: (input.identities ?? []).length,
+          public_questions_enabled: input.allow_unmapped_users ?? true,
+          webhook_url: webhookUrl,
+        },
+        event_type: "agent.channel.configured",
+        recorded_at: new Date(),
+        resource_id: activeConnection.id,
+        resource_type: "agent_channel_connection",
+      },
+      sharedContext
+    )
+
+    return {
+      bot_username: bot.username,
+      connection: activeConnection,
+      secret_hint: secretHint,
+      webhook_url: webhookUrl,
+    }
+  }
+
+  @InjectManager()
+  async disconnectTelegramChannel(
+    input: { account_ref?: string; actor_id: string; tenant_id?: string },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.disconnectTelegramChannel_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async disconnectTelegramChannel_(
+    input: { account_ref?: string; actor_id: string; tenant_id?: string },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const tenantId = input.tenant_id ?? "default"
+    const accountRef = input.account_ref ?? "primary"
+
+    const connections = await this.listAgentChannelConnections(
+      { account_ref: accountRef, channel: "TELEGRAM", tenant_id: tenantId },
+      { take: 1 },
+      sharedContext
+    )
+    const conn = connections[0]
+    if (conn) {
+      try {
+        const botToken = await this.resolveChannelBotToken(conn)
+        const apiBaseUrl =
+          (conn.config as any)?.api_base_url ?? "https://api.telegram.org"
+        await fetch(
+          `${apiBaseUrl.replace(/\/$/, "")}/bot${botToken}/deleteWebhook`,
+          {
+            headers: { "content-type": "application/json" },
+            method: "POST",
+            signal: AbortSignal.timeout(5_000),
+          }
+        )
+      } catch {
+        // ignore deleteWebhook failure on disconnect
+      }
+
+      await this.updateAgentChannelConnections(
+        { id: conn.id, status: "DISABLED" },
+        sharedContext
+      )
+    }
 
     return { disconnected: true }
   }

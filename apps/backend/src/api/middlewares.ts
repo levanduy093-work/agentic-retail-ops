@@ -12,9 +12,11 @@ import {
   AdminCreateSupportSimulatorMessage,
   AdminConfigureAiProvider,
   AdminConfigureAiPrompt,
+  AdminConfigureTelegramChannel,
   AdminClearAgentConversation,
   AdminDiscoverAiModels,
   AdminDecideAgentApproval,
+  AdminDisconnectTelegramChannel,
   AdminIngestInventoryLowEvent,
   AdminIngestOrderExceptionEvent,
   AdminIngestSupportRequest,
@@ -25,6 +27,7 @@ import {
   AdminSearchKnowledge,
   AdminSendAgentConversationMessage,
   AdminSendSupportSimulatorReply,
+  AdminTestTelegramBot,
   AdminTransitionAgentTask,
   TelegramWebhookUpdate,
 } from "./admin/agent-operations/validators"
@@ -433,6 +436,25 @@ import { getSepaySettings } from "../modules/payment-hub/sepay-connection"
       method: "GET",
       policies: [{ resource: "agent_platform", operation: "read" }],
     },
+    {
+      matcher: "/admin/agent-operations/channels/telegram",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminConfigureTelegramChannel)],
+      policies: [{ resource: "agent_platform", operation: "configure" }],
+    },
+    {
+      matcher: "/admin/agent-operations/channels/telegram/test",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminTestTelegramBot)],
+      policies: [{ resource: "agent_platform", operation: "read" }],
+    },
+    {
+      matcher: "/admin/agent-operations/channels/telegram/disconnect",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminDisconnectTelegramChannel)],
+      policies: [{ resource: "agent_platform", operation: "delete" }],
+    },
 ]
 
 export default defineMiddlewares({ routes })
+

@@ -6,9 +6,8 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
   const service = req.scope.resolve<AgentOperationsModuleService>(
     AGENT_OPERATIONS_MODULE
   )
-  const [channels, count] = await service.listAndCountAgentChannelConnections(
-    {},
-    { order: { created_at: "DESC" }, take: 100 }
-  )
-  res.json({ count, channels })
+  const tenantId = (req.query.tenant_id as string) || "default"
+  const channels = await service.getChannelStatuses(tenantId)
+  res.json({ channels, count: channels.length })
 }
+

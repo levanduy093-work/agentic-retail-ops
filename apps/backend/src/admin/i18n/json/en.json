@@ -291,8 +291,49 @@
       "documents": "Guidance",
       "sources": "Connected documents",
       "search": "Check search",
+      "channels": "Chat Channels",
       "prompts": "Assistant & Prompts",
       "ai": "AI configuration"
+    },
+    "chatChannels": {
+      "title": "Customer Support Channels (Omnichannel)",
+      "subtitle": "Configure multi-channel bots for customer support. All tokens and secrets are AES-256 encrypted in PostgreSQL and loaded automatically on startup.",
+      "loading": "Loading channels...",
+      "loadError": "Could not load chat channels.",
+      "saveSuccess": "Channel configuration saved and activated successfully.",
+      "saveError": "Could not save channel configuration. Please check the token and URL.",
+      "disconnectSuccess": "Chat channel disconnected.",
+      "disconnectError": "Could not disconnect chat channel.",
+      "disconnectConfirm": "Are you sure you want to disconnect and pause incoming messages from this channel?",
+      "testSuccess": "Successfully connected to {{name}} (@{{username}} - ID: {{id}}).",
+      "testError": "Token verification failed. Please check the Bot Token.",
+      "status": {
+        "active": "Active",
+        "disabled": "Paused / Inactive"
+      },
+      "telegram": {
+        "name": "Telegram Support Bot",
+        "description": "Connect Telegram Bot to automatically answer customer inquiries 24/7 using the Knowledge Hub.",
+        "configureAction": "Configure Telegram",
+        "disconnectAction": "Pause Bot",
+        "testAction": "Test Connection",
+        "drawerTitle": "Configure Telegram Support Bot",
+        "drawerHint": "Enter the Bot Token from @BotFather and your system's public HTTPS domain to receive webhooks.",
+        "fields": {
+          "botToken": "Telegram Bot Token",
+          "botTokenPlaceholder": "Enter token like 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ...",
+          "botTokenStoredHint": "Encrypted and saved: {{hint}}. Leave blank to keep current token.",
+          "publicBaseUrl": "Public Domain (HTTPS Public URL)",
+          "publicBaseUrlPlaceholder": "https://trendhub.sbs or Cloudflare Tunnel URL",
+          "publicBaseUrlHint": "Publicly accessible server URL for Telegram to deliver webhooks.",
+          "allowUnmappedUsers": "Customer Messaging Access",
+          "allowUnmappedUsersPublic": "Allow all customers to chat freely with the Bot",
+          "allowUnmappedUsersRestricted": "Only allow pre-mapped internal Chat IDs",
+          "rateLimitTitle": "Rate Limits & Security",
+          "burstLimit": "Burst message limit / minute",
+          "dailyLimit": "Daily message limit / day"
+        }
+      }
     },
     "emptyStatus": {
       "approved": "No guidance is currently in use.",

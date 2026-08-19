@@ -101,7 +101,7 @@ const deliverAgentMessageStep = createStep<
                       (connection.config as Record<string, unknown>).api_base_url
                     )
                   : undefined,
-              bot_token: resolveSecretReference(connection.secret_ref),
+              bot_token: await service.resolveChannelBotToken(connection),
             }
           : undefined,
     })

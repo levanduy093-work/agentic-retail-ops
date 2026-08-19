@@ -82,7 +82,7 @@ const ingestTelegramWebhookStep = createStep<
     }
 
     const config = connection.config as TelegramChannelConfig
-    const expectedSecret = resolveSecretReference(config.webhook_secret_ref)
+    const expectedSecret = await service.resolveChannelWebhookSecret(connection)
     if (!secureTokenMatches(input.secret_token, expectedSecret)) {
       return new StepResponse<IngestTelegramWebhookResult>({
         accepted: false,

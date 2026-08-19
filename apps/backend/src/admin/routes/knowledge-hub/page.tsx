@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next"
 import { sdk } from "../../lib/sdk"
 import { AiConnectionsContent } from "../ai-connections/page"
 import { CustomerSupportContent } from "../customer-support/page"
+import { ChatChannelsContent } from "./chat-channels"
 import { PromptsConfigContent } from "./prompts-config"
 import {
   GooglePickerCredential,
@@ -227,7 +228,7 @@ const KnowledgeHubPage = () => {
   const [sourceOpen, setSourceOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeView, setActiveView] = useState<
-    "ai" | "conversations" | "documents" | "prompts" | "search" | "sources"
+    "ai" | "channels" | "conversations" | "documents" | "prompts" | "search" | "sources"
   >("conversations")
   const [searchQuery, setSearchQuery] = useState("")
   const [searchLocale, setSearchLocale] = useState("vi")
@@ -745,6 +746,7 @@ const KnowledgeHubPage = () => {
               "documents",
               "sources",
               "search",
+              "channels",
               "prompts",
               "ai",
             ] as const
@@ -762,6 +764,8 @@ const KnowledgeHubPage = () => {
       </Container>
 
       {activeView === "conversations" && <CustomerSupportContent embedded />}
+
+      {activeView === "channels" && <ChatChannelsContent embedded />}
 
       {activeView === "prompts" && <PromptsConfigContent />}
 
