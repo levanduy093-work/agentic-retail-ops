@@ -1,0 +1,2 @@
+- [x] Tích hợp Zalo OA (Code đã hoàn thiện)
+- [ ] Kiểm tra kết nối Zalo OA (Đang chờ xác thực tài khoản OA)

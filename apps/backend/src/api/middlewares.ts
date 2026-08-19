@@ -13,10 +13,12 @@ import {
   AdminConfigureAiProvider,
   AdminConfigureAiPrompt,
   AdminConfigureTelegramChannel,
+  AdminConfigureZaloChannel,
   AdminClearAgentConversation,
   AdminDiscoverAiModels,
   AdminDecideAgentApproval,
   AdminDisconnectTelegramChannel,
+  AdminDisconnectZaloChannel,
   AdminIngestInventoryLowEvent,
   AdminIngestOrderExceptionEvent,
   AdminIngestSupportRequest,
@@ -28,8 +30,10 @@ import {
   AdminSendAgentConversationMessage,
   AdminSendSupportSimulatorReply,
   AdminTestTelegramBot,
+  AdminTestZaloOa,
   AdminTransitionAgentTask,
   TelegramWebhookUpdate,
+  ZaloWebhookPayload,
 } from "./admin/agent-operations/validators"
 import { StoreCreateCustomerChatMessage } from "./store/customer-chat/validators"
 import { shippingHubMiddlewares } from "./admin/shipping/middlewares"
@@ -449,12 +453,30 @@ import { getSepaySettings } from "../modules/payment-hub/sepay-connection"
       policies: [{ resource: "agent_platform", operation: "read" }],
     },
     {
-      matcher: "/admin/agent-operations/channels/telegram/disconnect",
+      matcher: "/webhooks/agent-operations/zalo/:id",
       method: "POST",
-      middlewares: [validateAndTransformBody(AdminDisconnectTelegramChannel)],
+      middlewares: [validateAndTransformBody(ZaloWebhookPayload)],
+    },
+    {
+      matcher: "/admin/agent-operations/channels/zalo",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminConfigureZaloChannel)],
+      policies: [{ resource: "agent_platform", operation: "configure" }],
+    },
+    {
+      matcher: "/admin/agent-operations/channels/zalo/test",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminTestZaloOa)],
+      policies: [{ resource: "agent_platform", operation: "read" }],
+    },
+    {
+      matcher: "/admin/agent-operations/channels/zalo/disconnect",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminDisconnectZaloChannel)],
       policies: [{ resource: "agent_platform", operation: "delete" }],
     },
 ]
 
 export default defineMiddlewares({ routes })
+
 

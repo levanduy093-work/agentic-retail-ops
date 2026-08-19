@@ -37,6 +37,11 @@ import type {
   TelegramChannelConfig,
   TelegramChannelIdentity,
 } from "./telegram"
+import type {
+  ZaloChannelConfig,
+  ZaloChannelIdentity,
+  ZaloStoredCredentialPayload,
+} from "./zalo"
 import {
   createGoogleKnowledgeAccessToken,
   getGoogleKnowledgeOAuthPlatformStatus,
@@ -1431,24 +1436,24 @@ class AgentOperationsModuleService extends MedusaService({
   async getChannelStatuses(tenantId = "default") {
     const [connections, credentials] = await Promise.all([
       this.listAgentChannelConnections(
-        { channel: "TELEGRAM", tenant_id: tenantId },
-        { order: { updated_at: "DESC" }, take: 20 }
+        { tenant_id: tenantId },
+        { order: { updated_at: "DESC" }, take: 50 }
       ),
       this.listAgentChannelCredentials(
-        { channel: "TELEGRAM", tenant_id: tenantId },
-        { order: { updated_at: "DESC" }, take: 20 }
+        { tenant_id: tenantId },
+        { order: { updated_at: "DESC" }, take: 50 }
       ),
     ])
 
     const telegramConn =
-      connections.find((c) => c.account_ref === "primary" && c.status === "ACTIVE") ??
-      connections.find((c) => c.account_ref === "primary") ??
-      connections.find((c) => c.status === "ACTIVE") ??
-      connections[0]
+      connections.find((c) => c.channel === "TELEGRAM" && c.account_ref === "primary" && c.status === "ACTIVE") ??
+      connections.find((c) => c.channel === "TELEGRAM" && c.account_ref === "primary") ??
+      connections.find((c) => c.channel === "TELEGRAM" && c.status === "ACTIVE") ??
+      connections.find((c) => c.channel === "TELEGRAM")
 
     const telegramCred =
-      credentials.find((c) => c.account_ref === "primary") ??
-      credentials[0]
+      credentials.find((c) => c.channel === "TELEGRAM" && c.account_ref === "primary") ??
+      credentials.find((c) => c.channel === "TELEGRAM")
 
     const telegramConfig = telegramConn?.config as
       | (TelegramChannelConfig & { bot_id?: string; bot_username?: string })
@@ -1466,6 +1471,23 @@ class AgentOperationsModuleService extends MedusaService({
       process.env.TELEGRAM_PUBLIC_BASE_URL ??
       null
 
+    const zaloConn =
+      connections.find((c) => c.channel === "ZALO" && c.account_ref === "primary" && c.status === "ACTIVE") ??
+      connections.find((c) => c.channel === "ZALO" && c.account_ref === "primary") ??
+      connections.find((c) => c.channel === "ZALO" && c.status === "ACTIVE") ??
+      connections.find((c) => c.channel === "ZALO")
+
+    const zaloCred =
+      credentials.find((c) => c.channel === "ZALO" && c.account_ref === "primary") ??
+      credentials.find((c) => c.channel === "ZALO")
+
+    const zaloConfig = zaloConn?.config as
+      | (ZaloChannelConfig & { app_id?: string; oa_avatar?: string; oa_id?: string; oa_name?: string })
+      | undefined
+
+    const zaloSecretHint = zaloCred?.secret_hint ?? null
+    const zaloPublicUrl = zaloCred?.public_base_url ?? zaloConfig?.webhook_url ?? null
+
     return [
       {
         account_ref: telegramConn?.account_ref ?? "primary",
@@ -1475,6 +1497,7 @@ class AgentOperationsModuleService extends MedusaService({
         channel: "TELEGRAM" as const,
         configured: Boolean(telegramCred || envBotToken),
         identities: telegramConfig?.identities ?? [],
+        oa_avatar: null,
         public_base_url: telegramPublicUrl,
         secret_hint: telegramSecretHint,
         security: telegramConfig?.security ?? null,
@@ -1482,6 +1505,23 @@ class AgentOperationsModuleService extends MedusaService({
         updated_at:
           telegramCred?.updated_at ?? telegramConn?.updated_at ?? null,
         webhook_url: telegramConfig?.webhook_url ?? null,
+      },
+      {
+        account_ref: zaloConn?.account_ref ?? "primary",
+        allow_unmapped_users: zaloConfig?.allow_unmapped_users ?? true,
+        bot_id: zaloConfig?.oa_id ?? null,
+        bot_username: zaloConfig?.oa_name ?? null,
+        channel: "ZALO" as const,
+        configured: Boolean(zaloCred),
+        identities: zaloConfig?.identities ?? [],
+        oa_avatar: zaloConfig?.oa_avatar ?? null,
+        public_base_url: zaloPublicUrl,
+        secret_hint: zaloSecretHint,
+        security: zaloConfig?.security ?? null,
+        status: zaloConn?.status ?? "DISABLED",
+        updated_at:
+          zaloCred?.updated_at ?? zaloConn?.updated_at ?? null,
+        webhook_url: zaloConfig?.webhook_url ?? null,
       },
     ]
   }
@@ -1492,6 +1532,60 @@ class AgentOperationsModuleService extends MedusaService({
     secret_ref?: string | null
     tenant_id?: string
   }): Promise<string> {
+    if (connection.channel === "ZALO") {
+      let raw = ""
+      if (connection.secret_ref && isVaultSecretReference(connection.secret_ref)) {
+        const credId = parseVaultSecretReference(connection.secret_ref)
+        if (credId) {
+          const credential = await this.retrieveAgentChannelCredential(credId)
+          raw = decryptConnectorSecret({
+            encrypted_secret: credential.encrypted_secret,
+            encryption_iv: credential.encryption_iv,
+            encryption_tag: credential.encryption_tag,
+            key_version: credential.key_version,
+          })
+        }
+      }
+      if (!raw) {
+        const credentials = await this.listAgentChannelCredentials({
+          account_ref: connection.account_ref ?? "primary",
+          channel: "ZALO",
+          tenant_id: connection.tenant_id ?? "default",
+        })
+        if (credentials.length > 0) {
+          raw = decryptConnectorSecret({
+            encrypted_secret: credentials[0].encrypted_secret,
+            encryption_iv: credentials[0].encryption_iv,
+            encryption_tag: credentials[0].encryption_tag,
+            key_version: credentials[0].key_version,
+          })
+        }
+      }
+
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as ZaloStoredCredentialPayload
+          if (
+            parsed.expires_at &&
+            parsed.expires_at - Date.now() < 30 * 60 * 1000 &&
+            parsed.refresh_token
+          ) {
+            try {
+              return await this.refreshZaloOaAccessToken(
+                connection.account_ref ?? "primary",
+                connection.tenant_id ?? "default"
+              )
+            } catch {
+              return parsed.access_token
+            }
+          }
+          return parsed.access_token || raw
+        } catch {
+          return raw
+        }
+      }
+    }
+
     if (connection.secret_ref && isVaultSecretReference(connection.secret_ref)) {
       const credId = parseVaultSecretReference(connection.secret_ref)
       if (credId) {
@@ -1896,6 +1990,386 @@ class AgentOperationsModuleService extends MedusaService({
         // ignore deleteWebhook failure on disconnect
       }
 
+      await this.updateAgentChannelConnections(
+        { id: conn.id, status: "DISABLED" },
+        sharedContext
+      )
+    }
+
+    return { disconnected: true }
+  }
+
+  async testZaloOaToken(
+    accessToken: string,
+    apiBaseUrl = "https://openapi.zalo.me"
+  ) {
+    const base = apiBaseUrl.replace(/\/$/, "")
+    let res = await fetch(`${base}/v2.0/oa/getoa`, {
+      headers: {
+        access_token: accessToken,
+      },
+      signal: AbortSignal.timeout(10_000),
+    })
+    let payload = (await res.json()) as {
+      data?: {
+        avatar?: string
+        description?: string
+        name?: string
+        oa_id?: string
+        oaid?: string
+      }
+      error?: number
+      message?: string
+    }
+
+    if (!res.ok || (payload.error && payload.error !== 0)) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        `Zalo getoa test failed: ${payload.message ?? `HTTP ${res.status}`}`
+      )
+    }
+
+    const oaId = String(payload.data?.oa_id ?? payload.data?.oaid ?? "")
+    return {
+      avatar: payload.data?.avatar ?? "",
+      description: payload.data?.description ?? "",
+      name: payload.data?.name ?? "",
+      oa_id: oaId,
+    }
+  }
+
+  async refreshZaloOaAccessToken(
+    accountRef = "primary",
+    tenantId = "default"
+  ): Promise<string> {
+    const credentials = await this.listAgentChannelCredentials({
+      account_ref: accountRef,
+      channel: "ZALO",
+      tenant_id: tenantId,
+    })
+    const cred = credentials[0]
+    if (!cred) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_FOUND,
+        "No Zalo OA credential found to refresh."
+      )
+    }
+
+    const decrypted = decryptConnectorSecret({
+      encrypted_secret: cred.encrypted_secret,
+      encryption_iv: cred.encryption_iv,
+      encryption_tag: cred.encryption_tag,
+      key_version: cred.key_version,
+    })
+
+    let payload: ZaloStoredCredentialPayload
+    try {
+      payload = JSON.parse(decrypted)
+    } catch {
+      return decrypted
+    }
+
+    if (!payload.refresh_token || !payload.app_id || !payload.secret_key) {
+      return payload.access_token
+    }
+
+    const refreshRes = await fetch("https://oauth.zalo.me/v4/oa/access_token", {
+      body: new URLSearchParams({
+        app_id: payload.app_id,
+        grant_type: "refresh_token",
+        refresh_token: payload.refresh_token,
+      }),
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        secret_key: payload.secret_key,
+      },
+      method: "POST",
+      signal: AbortSignal.timeout(10_000),
+    })
+    const data = (await refreshRes.json()) as {
+      access_token?: string
+      error?: number
+      error_description?: string
+      error_name?: string
+      expires_in?: string | number
+      message?: string
+      refresh_token?: string
+    }
+
+    if (!refreshRes.ok || data.error || !data.access_token) {
+      throw new MedusaError(
+        MedusaError.Types.UNEXPECTED_STATE,
+        `Zalo token refresh failed: ${data.message ?? data.error_description ?? `HTTP ${refreshRes.status}`}`
+      )
+    }
+
+    const newPayload: ZaloStoredCredentialPayload = {
+      ...payload,
+      access_token: data.access_token,
+      expires_at: Date.now() + (Number(data.expires_in) || 90000) * 1000,
+      refresh_token: data.refresh_token || payload.refresh_token,
+    }
+
+    const encryptedToken = encryptConnectorSecret(JSON.stringify(newPayload))
+    await this.updateAgentChannelCredentials({
+      encrypted_secret: encryptedToken.encrypted_secret,
+      encryption_iv: encryptedToken.encryption_iv,
+      encryption_tag: encryptedToken.encryption_tag,
+      id: cred.id,
+      key_version: encryptedToken.key_version,
+    })
+
+    return data.access_token
+  }
+
+  @InjectManager()
+  async configureZaloChannelGui(
+    input: {
+      account_ref?: string
+      actor_id: string
+      allow_unmapped_users?: boolean
+      api_base_url?: string
+      app_id: string
+      secret_key: string
+      oa_secret_key?: string
+      access_token?: string
+      refresh_token?: string
+      identities?: ZaloChannelIdentity[]
+      public_base_url: string
+      security?: Partial<CustomerChatSecurityConfig>
+      tenant_id?: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.configureZaloChannelGui_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async configureZaloChannelGui_(
+    input: {
+      account_ref?: string
+      actor_id: string
+      allow_unmapped_users?: boolean
+      api_base_url?: string
+      app_id: string
+      secret_key: string
+      oa_secret_key?: string
+      access_token?: string
+      refresh_token?: string
+      identities?: ZaloChannelIdentity[]
+      public_base_url: string
+      security?: Partial<CustomerChatSecurityConfig>
+      tenant_id?: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const tenantId = input.tenant_id ?? "default"
+    const accountRef = input.account_ref ?? "primary"
+    const apiBaseUrl = input.api_base_url ?? "https://openapi.zalo.me"
+    const publicBaseUrl = input.public_base_url.replace(/\/$/, "")
+
+    if (!publicBaseUrl.startsWith("https://")) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "Zalo public_base_url must use HTTPS."
+      )
+    }
+
+    const existingCredentials = await this.listAgentChannelCredentials(
+      { account_ref: accountRef, channel: "ZALO", tenant_id: tenantId },
+      { take: 1 },
+      sharedContext
+    )
+    const existingCred = existingCredentials[0]
+
+    let existingPayload: ZaloStoredCredentialPayload | null = null
+    if (existingCred) {
+      try {
+        const raw = decryptConnectorSecret({
+          encrypted_secret: existingCred.encrypted_secret,
+          encryption_iv: existingCred.encryption_iv,
+          encryption_tag: existingCred.encryption_tag,
+          key_version: existingCred.key_version,
+        })
+        existingPayload = JSON.parse(raw)
+      } catch {
+        existingPayload = null
+      }
+    }
+
+    const resolvedAccessToken =
+      input.access_token?.trim() || existingPayload?.access_token || ""
+    const resolvedRefreshToken =
+      input.refresh_token?.trim() || existingPayload?.refresh_token || ""
+    const resolvedAppId = input.app_id?.trim() || existingPayload?.app_id || ""
+    const resolvedSecretKey =
+      input.secret_key?.trim() || existingPayload?.secret_key || ""
+    const resolvedOaSecretKey =
+      input.oa_secret_key?.trim() || existingPayload?.oa_secret_key || ""
+
+    if (!resolvedAccessToken) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "Zalo OA Access Token is required."
+      )
+    }
+
+    const oaInfo = await this.testZaloOaToken(resolvedAccessToken, apiBaseUrl)
+
+    const credentialPayload: ZaloStoredCredentialPayload = {
+      access_token: resolvedAccessToken,
+      app_id: resolvedAppId,
+      expires_at: Date.now() + 90000 * 1000,
+      oa_avatar: oaInfo.avatar,
+      oa_id: oaInfo.oa_id,
+      oa_name: oaInfo.name,
+      oa_secret_key: resolvedOaSecretKey,
+      refresh_token: resolvedRefreshToken,
+      secret_key: resolvedSecretKey,
+    }
+
+    const encryptedToken = encryptConnectorSecret(
+      JSON.stringify(credentialPayload)
+    )
+    const encryptedOaSecret = resolvedOaSecretKey
+      ? encryptConnectorSecret(resolvedOaSecretKey)
+      : null
+
+    const secretHint = oaInfo.name
+      ? `OA: ${oaInfo.name} (${oaInfo.oa_id})`
+      : `OA: ${oaInfo.oa_id}`
+
+    const credData = {
+      account_ref: accountRef,
+      channel: "ZALO" as const,
+      encrypted_secret: encryptedToken.encrypted_secret,
+      encrypted_webhook_secret: encryptedOaSecret?.encrypted_secret ?? null,
+      encryption_iv: encryptedToken.encryption_iv,
+      encryption_tag: encryptedToken.encryption_tag,
+      key_version: encryptedToken.key_version,
+      public_base_url: publicBaseUrl,
+      secret_hint: secretHint,
+      tenant_id: tenantId,
+      updated_by_id: input.actor_id,
+      webhook_secret_iv: encryptedOaSecret?.encryption_iv ?? null,
+      webhook_secret_tag: encryptedOaSecret?.encryption_tag ?? null,
+    }
+
+    const credential = existingCred
+      ? await this.updateAgentChannelCredentials(
+          { ...credData, id: existingCred.id },
+          sharedContext
+        )
+      : await this.createAgentChannelCredentials(credData, sharedContext)
+
+    const existingConnections = await this.listAgentChannelConnections(
+      { account_ref: accountRef, channel: "ZALO", tenant_id: tenantId },
+      { take: 1 },
+      sharedContext
+    )
+    const existingConn = existingConnections[0]
+
+    const configData: Record<string, unknown> = {
+      allow_unmapped_users: input.allow_unmapped_users ?? true,
+      api_base_url: apiBaseUrl,
+      app_id: resolvedAppId,
+      identities: input.identities ?? [],
+      oa_avatar: oaInfo.avatar,
+      oa_id: oaInfo.oa_id,
+      oa_name: oaInfo.name,
+      security: normalizeCustomerChatSecurityConfig(input.security),
+      webhook_secret_ref: `vault:${credential.id}`,
+    }
+
+    const connection = existingConn
+      ? await this.updateAgentChannelConnections(
+          {
+            config: configData,
+            id: existingConn.id,
+            secret_ref: `vault:${credential.id}`,
+            status: "DISABLED",
+          },
+          sharedContext
+        )
+      : await this.createAgentChannelConnections(
+          {
+            account_ref: accountRef,
+            channel: "ZALO",
+            config: configData,
+            secret_ref: `vault:${credential.id}`,
+            status: "DISABLED",
+            tenant_id: tenantId,
+          },
+          sharedContext
+        )
+
+    const webhookUrl = `${publicBaseUrl}/webhooks/agent-operations/zalo/${connection.id}`
+
+    const activeConnection = await this.updateAgentChannelConnections(
+      {
+        config: {
+          ...configData,
+          webhook_url: webhookUrl,
+        },
+        id: connection.id,
+        status: "ACTIVE",
+      },
+      sharedContext
+    )
+
+    await this.createAgentAuditEvents(
+      {
+        action: "zalo-channel-configured-gui",
+        actor_id: input.actor_id,
+        actor_type: "user",
+        correlation_id: `zalo:connection:${activeConnection.id}`,
+        data: {
+          account_ref: activeConnection.account_ref,
+          oa_id: oaInfo.oa_id,
+          oa_name: oaInfo.name,
+          webhook_url: webhookUrl,
+        },
+        event_type: "agent.channel.configured",
+        recorded_at: new Date(),
+        resource_id: activeConnection.id,
+        resource_type: "agent_channel_connection",
+      },
+      sharedContext
+    )
+
+    return {
+      connection: activeConnection,
+      oa_avatar: oaInfo.avatar,
+      oa_id: oaInfo.oa_id,
+      oa_name: oaInfo.name,
+      secret_hint: secretHint,
+      webhook_url: webhookUrl,
+    }
+  }
+
+  @InjectManager()
+  async disconnectZaloChannel(
+    input: { account_ref?: string; actor_id: string; tenant_id?: string },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.disconnectZaloChannel_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async disconnectZaloChannel_(
+    input: { account_ref?: string; actor_id: string; tenant_id?: string },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const tenantId = input.tenant_id ?? "default"
+    const accountRef = input.account_ref ?? "primary"
+
+    const connections = await this.listAgentChannelConnections(
+      { account_ref: accountRef, channel: "ZALO", tenant_id: tenantId },
+      { take: 1 },
+      sharedContext
+    )
+    const conn = connections[0]
+    if (conn) {
       await this.updateAgentChannelConnections(
         { id: conn.id, status: "DISABLED" },
         sharedContext

@@ -415,3 +415,78 @@ export type AdminDisconnectTelegramChannelType = z.infer<
   typeof AdminDisconnectTelegramChannel
 >
 
+export const ZaloWebhookPayload = z.object({
+  app_id: z.string().optional(),
+  event_name: z.string(),
+  message: z
+    .object({
+      msg_id: z.string().optional(),
+      text: z.string().optional(),
+    })
+    .optional(),
+  oa_id: z.string().optional(),
+  recipient: z.object({ id: z.string() }).optional(),
+  sender: z.object({ id: z.string() }).optional(),
+  timestamp: z.union([z.number(), z.string()]).optional(),
+  user_id_by_app: z.string().optional(),
+})
+
+export type ZaloWebhookPayloadType = z.infer<typeof ZaloWebhookPayload>
+
+export const AdminConfigureZaloChannel = z.object({
+  access_token: z.string().min(1).optional(),
+  account_ref: z.string().min(1).default("primary"),
+  allow_unmapped_users: z.boolean().default(true),
+  api_base_url: z.string().min(1).optional(),
+  app_id: z.string().min(1),
+  identities: z
+    .array(
+      z.object({
+        user_id: z.string().min(1),
+        zalo_user_id: z.string().min(1),
+      })
+    )
+    .default([]),
+  oa_secret_key: z.string().min(1).optional(),
+  public_base_url: z.string().min(1),
+  refresh_token: z.string().min(1).optional(),
+  secret_key: z.string().min(1),
+  security: z
+    .object({
+      blocked_chat_ids: z.array(z.string()).optional(),
+      burst_limit: z.number().int().positive().optional(),
+      burst_window_seconds: z.number().int().positive().optional(),
+      daily_limit: z.number().int().positive().optional(),
+      global_burst_limit: z.number().int().positive().optional(),
+      global_daily_limit: z.number().int().positive().optional(),
+      max_message_characters: z.number().int().positive().optional(),
+      max_open_escalations: z.number().int().positive().optional(),
+      max_update_age_seconds: z.number().int().positive().optional(),
+    })
+    .optional(),
+  tenant_id: z.string().min(1).default("default"),
+})
+
+export type AdminConfigureZaloChannelType = z.infer<
+  typeof AdminConfigureZaloChannel
+>
+
+export const AdminTestZaloOa = z.object({
+  access_token: z.string().min(1).optional(),
+  account_ref: z.string().min(1).default("primary"),
+  api_base_url: z.string().min(1).optional(),
+  tenant_id: z.string().min(1).default("default"),
+})
+
+export type AdminTestZaloOaType = z.infer<typeof AdminTestZaloOa>
+
+export const AdminDisconnectZaloChannel = z.object({
+  account_ref: z.string().min(1).default("primary"),
+  tenant_id: z.string().min(1).default("default"),
+})
+
+export type AdminDisconnectZaloChannelType = z.infer<
+  typeof AdminDisconnectZaloChannel
+>
+
+

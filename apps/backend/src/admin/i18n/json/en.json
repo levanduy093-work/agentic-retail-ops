@@ -333,6 +333,39 @@
           "burstLimit": "Burst message limit / minute",
           "dailyLimit": "Daily message limit / day"
         }
+      },
+      "zalo": {
+        "name": "Zalo Official Account (OA)",
+        "description": "Connect Zalo OA to automatically advise and answer customer inquiries 24/7 on Zalo.",
+        "configureAction": "Configure Zalo OA",
+        "disconnectAction": "Pause OA",
+        "testAction": "Test Connection",
+        "drawerTitle": "Configure Zalo Official Account (OA)",
+        "drawerHint": "Enter App ID, App Secret, and Access Token from Zalo Developer to enable automated customer support.",
+        "testSuccess": "Successfully connected to {{name}} (OA ID: {{id}}).",
+        "testError": "Token verification failed. Please check your Zalo OA Token.",
+        "fields": {
+          "appId": "Zalo App ID",
+          "appIdPlaceholder": "Enter Zalo App ID from Zalo Developer...",
+          "secretKey": "Zalo App Secret Key",
+          "secretKeyPlaceholder": "Enter App Secret Key...",
+          "oaSecretKey": "OA Secret Key (Webhook Verification)",
+          "oaSecretKeyPlaceholder": "Enter OA Secret Key to verify incoming Webhook signatures (optional)...",
+          "accessToken": "Zalo OA Access Token",
+          "accessTokenPlaceholder": "Enter Access Token from Zalo Developer...",
+          "accessTokenStoredHint": "Encrypted and saved: {{hint}}. Leave blank to keep current token.",
+          "refreshToken": "Zalo OA Refresh Token (25h Auto-Renewal)",
+          "refreshTokenPlaceholder": "Enter Refresh Token for automatic 25h token renewal...",
+          "publicBaseUrl": "Public Domain (HTTPS Public URL)",
+          "publicBaseUrlPlaceholder": "https://trendhub.sbs or Cloudflare Tunnel URL",
+          "publicBaseUrlHint": "Publicly accessible server URL to receive webhooks from Zalo OA.",
+          "allowUnmappedUsers": "Customer Messaging Access",
+          "allowUnmappedUsersPublic": "Allow all Zalo users to chat with the OA",
+          "allowUnmappedUsersRestricted": "Only allow pre-mapped internal user IDs",
+          "rateLimitTitle": "Rate Limits & Security",
+          "burstLimit": "Burst message limit / minute",
+          "dailyLimit": "Daily message limit / day"
+        }
       }
     },
     "emptyStatus": {

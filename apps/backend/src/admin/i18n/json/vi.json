@@ -330,6 +330,39 @@
           "burstLimit": "Giới hạn tin nhắn / phút (Burst limit)",
           "dailyLimit": "Giới hạn tin nhắn / ngày (Daily limit)"
         }
+      },
+      "zalo": {
+        "name": "Zalo Official Account (OA)",
+        "description": "Kết nối Zalo OA để tự động tư vấn và trả lời tin nhắn khách hàng 24/7 qua Zalo.",
+        "configureAction": "Cấu hình Zalo OA",
+        "disconnectAction": "Tạm dừng OA",
+        "testAction": "Kiểm tra kết nối",
+        "drawerTitle": "Cấu hình Zalo Official Account (OA)",
+        "drawerHint": "Nhập App ID, App Secret và Token từ Zalo Developer để tự động trả lời tin nhắn OA.",
+        "testSuccess": "Kết nối thành công tới {{name}} (OA ID: {{id}}).",
+        "testError": "Kiểm tra Access Token thất bại. Vui lòng kiểm tra lại Token Zalo OA.",
+        "fields": {
+          "appId": "Zalo App ID",
+          "appIdPlaceholder": "Nhập App ID từ Zalo Developer...",
+          "secretKey": "Zalo App Secret Key",
+          "secretKeyPlaceholder": "Nhập Secret Key ứng dụng...",
+          "oaSecretKey": "OA Secret Key (Xác thực Webhook)",
+          "oaSecretKeyPlaceholder": "Nhập OA Secret Key để xác thực chữ ký Webhook (tùy chọn)...",
+          "accessToken": "Zalo OA Access Token",
+          "accessTokenPlaceholder": "Nhập Access Token từ Zalo OA Developer...",
+          "accessTokenStoredHint": "Đã mã hóa và lưu: {{hint}}. Để trống nếu không muốn đổi token mới.",
+          "refreshToken": "Zalo OA Refresh Token (Tự động gia hạn 25h)",
+          "refreshTokenPlaceholder": "Nhập Refresh Token để hệ thống tự động làm mới token sau 25h...",
+          "publicBaseUrl": "Domain công khai (HTTPS Public URL)",
+          "publicBaseUrlPlaceholder": "https://trendhub.sbs hoặc Cloudflare Tunnel URL",
+          "publicBaseUrlHint": "URL của server để nhận Webhook từ Zalo OA.",
+          "allowUnmappedUsers": "Quyền nhắn tin của khách hàng",
+          "allowUnmappedUsersPublic": "Cho phép tất cả người dùng Zalo nhắn tin với OA",
+          "allowUnmappedUsersRestricted": "Chỉ người dùng được ánh xạ trước",
+          "rateLimitTitle": "Giới hạn tần suất & Bảo mật",
+          "burstLimit": "Giới hạn tin nhắn / phút (Burst limit)",
+          "dailyLimit": "Giới hạn tin nhắn / ngày (Daily limit)"
+        }
       }
     },
     "emptyStatus": {

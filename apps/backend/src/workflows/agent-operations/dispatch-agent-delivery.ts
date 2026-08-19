@@ -104,6 +104,19 @@ const deliverAgentMessageStep = createStep<
               bot_token: await service.resolveChannelBotToken(connection),
             }
           : undefined,
+      zalo:
+        delivery.channel === "ZALO"
+          ? {
+              access_token: await service.resolveChannelBotToken(connection),
+              api_base_url:
+                typeof (connection.config as Record<string, unknown>)
+                  .api_base_url === "string"
+                  ? String(
+                      (connection.config as Record<string, unknown>).api_base_url
+                    )
+                  : undefined,
+            }
+          : undefined,
     })
     const receipt = await adapter.deliver({
       body: message.body,
