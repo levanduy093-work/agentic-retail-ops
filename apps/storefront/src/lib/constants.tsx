@@ -38,6 +38,10 @@ export const paymentInfoMap: Record<
     title: "VietQR / Ngân hàng",
     icon: <VietQRIcon />,
   },
+  pp_sepay_sepay: {
+    title: "VietQR / Ngân hàng",
+    icon: <VietQRIcon />,
+  },
   // Add more payment providers here
 }
 
@@ -56,6 +60,12 @@ export const isManual = (providerId?: string) => {
 }
 export const isPayOS = (providerId?: string) => {
   return providerId?.startsWith("pp_payos")
+}
+export const isSepay = (providerId?: string) => {
+  return providerId?.startsWith("pp_sepay")
+}
+export const isVietQR = (providerId?: string) => {
+  return isPayOS(providerId) || isSepay(providerId)
 }
 
 // Add currencies that don't need to be divided by 100

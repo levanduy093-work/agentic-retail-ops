@@ -427,6 +427,11 @@ const Shipping: React.FC<ShippingProps> = ({
                     </Radio>
                   </RadioGroup>
                 )}
+                {!_shippingMethods?.length && !hasPickupOptions && (
+                  <Text className="text-ui-fg-muted txt-medium py-2">
+                    {t("checkout.no_shipping_methods") || "Chưa có phương thức vận chuyển khả dụng cho địa chỉ này."}
+                  </Text>
+                )}
                 <RadioGroup
                   value={shippingMethodId}
                   onChange={(v) => {

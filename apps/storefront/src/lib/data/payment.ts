@@ -16,6 +16,10 @@ export type PayosPaymentStatusResponse = {
 }
 
 export const listCartPaymentMethods = async (regionId: string) => {
+  if (!regionId) {
+    return []
+  }
+
   const headers = {
     ...(await getAuthHeaders()),
   }
@@ -36,12 +40,13 @@ export const listCartPaymentMethods = async (regionId: string) => {
       }
     )
     .then(({ payment_providers }) =>
-      payment_providers.sort((a, b) => {
+      (payment_providers || []).sort((a, b) => {
         return a.id > b.id ? 1 : -1
       })
     )
-    .catch(() => {
-      return null
+    .catch((err) => {
+      console.error("[listCartPaymentMethods] Error fetching payment providers:", err)
+      return []
     })
 }
 

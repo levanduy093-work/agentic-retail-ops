@@ -33,6 +33,7 @@ import { shippingHubMiddlewares } from "./admin/shipping/middlewares"
 import { paymentHubMiddlewares } from "./admin/payments/providers/middlewares"
 import { getGhnSettings } from "../modules/shipping-hub/ghn-connection"
 import { getPayosSettings } from "../modules/payment-hub/payos-connection"
+import { getSepaySettings } from "../modules/payment-hub/sepay-connection"
 
   const routes: MiddlewareRoute[] = [
     ...shippingHubMiddlewares,
@@ -43,7 +44,10 @@ import { getPayosSettings } from "../modules/payment-hub/payos-connection"
       middlewares: [
         async (req, _res, next) => {
           try {
-            await getPayosSettings(req.scope)
+            await Promise.all([
+              getPayosSettings(req.scope),
+              getSepaySettings(req.scope),
+            ])
             next()
           } catch (error) {
             next(error)

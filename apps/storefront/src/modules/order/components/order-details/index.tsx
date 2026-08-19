@@ -60,8 +60,15 @@ const OrderDetails = ({ order, showStatus }: OrderDetailsProps) => {
     }
   }
 
+  const isActuallyPaid =
+    order.payment_status === "captured" ||
+    Boolean(order.payment_collections?.[0]?.payments?.[0]?.captured_at) ||
+    order.payment_collections?.[0]?.status === "completed"
+
   const fulfillmentInfo = getFulfillmentStatusInfo(order.fulfillment_status)
-  const paymentInfo = getPaymentStatusInfo(order.payment_status)
+  const paymentInfo = isActuallyPaid
+    ? { label: isVi ? "Đã thanh toán" : "Paid", color: "green" as const }
+    : getPaymentStatusInfo(order.payment_status)
 
   return (
     <div>

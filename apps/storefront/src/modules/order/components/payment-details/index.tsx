@@ -31,7 +31,10 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
   const isVi = locale === "vi"
 
   const payment = order.payment_collections?.[0]?.payments?.[0]
-  const isPaid = order.payment_status === "captured" || Boolean(payment?.captured_at)
+  const isPaid =
+    order.payment_status === "captured" ||
+    Boolean(payment?.captured_at) ||
+    order.payment_collections?.[0]?.status === "completed"
   
   const paymentDate = payment?.created_at
     ? new Intl.DateTimeFormat(isVi ? "vi-VN" : "en-US", {
@@ -111,6 +114,22 @@ const PaymentDetails = ({ order }: PaymentDetailsProps) => {
       setShowModal(true)
     }
   }, [searchParams, isPaid])
+
+  // Auto poll order payment status every 3 seconds if currently unpaid
+  useEffect(() => {
+    if (isPaid || !orderCode) return
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await checkPayosPaymentStatus(orderCode)
+        if (res?.is_paid) {
+          router.refresh()
+        }
+      } catch {}
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [isPaid, orderCode, router])
 
   const qrImageSrc = useMemo(() => {
     if (

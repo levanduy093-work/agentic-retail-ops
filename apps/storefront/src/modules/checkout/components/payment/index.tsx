@@ -1,6 +1,6 @@
 "use client"
 import { RadioGroup } from "@headlessui/react"
-import { isStripeLike, paymentInfoMap } from "@lib/constants"
+import { isSepay, isStripeLike, isVietQR, paymentInfoMap } from "@lib/constants"
 import { initiatePaymentSession } from "@lib/data/cart"
 import { CheckCircleSolid, CreditCard } from "@medusajs/icons"
 import ErrorMessage from "@modules/checkout/components/error-message"
@@ -16,7 +16,7 @@ import {
 } from "@modules/common/components/ui"
 import { HttpTypes } from "@medusajs/types"
 import { useSearchParams } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "@lib/i18n/client"
 import { setCheckoutStep } from "@modules/checkout/utils/set-checkout-step"
 
@@ -32,12 +32,25 @@ const Payment = ({
     (paymentSession) => paymentSession.status === "pending"
   )
 
+  const displayedPaymentMethods = useMemo(() => {
+    if (!availablePaymentMethods) return []
+    return availablePaymentMethods.filter((method, index, self) => {
+      if (!isVietQR(method.id)) return true
+      const preferredVietQr =
+        self.find((m) => m.id === activeSession?.provider_id && isVietQR(m.id)) ||
+        self.find((m) => isSepay(m.id)) ||
+        self.find((m) => isVietQR(m.id))
+
+      return method.id === preferredVietQr?.id
+    })
+  }, [availablePaymentMethods, activeSession?.provider_id])
+
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [cardBrand, setCardBrand] = useState<string | null>(null)
   const [cardComplete, setCardComplete] = useState(false)
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(
-    activeSession?.provider_id ?? ""
+    activeSession?.provider_id ?? displayedPaymentMethods[0]?.id ?? ""
   )
 
   const searchParams = useSearchParams()
@@ -129,13 +142,13 @@ const Payment = ({
       </div>
       <div>
         <div className={isOpen ? "block" : "hidden"}>
-          {!paidByGiftcard && availablePaymentMethods?.length && (
+          {!paidByGiftcard && displayedPaymentMethods?.length > 0 && (
             <>
               <RadioGroup
                 value={selectedPaymentMethod}
                 onChange={(value: string) => setPaymentMethod(value)}
               >
-                {availablePaymentMethods.map((paymentMethod) => (
+                {displayedPaymentMethods.map((paymentMethod) => (
                   <div key={paymentMethod.id}>
                     {isStripeLike(paymentMethod.id) ? (
                       <StripeCardContainer
@@ -157,6 +170,12 @@ const Payment = ({
                 ))}
               </RadioGroup>
             </>
+          )}
+
+          {!paidByGiftcard && displayedPaymentMethods?.length === 0 && (
+            <Text className="text-ui-fg-muted txt-medium py-2">
+              {t("checkout.no_payment_methods") || "Chưa có phương thức thanh toán khả dụng cho khu vực này."}
+            </Text>
           )}
 
           {paidByGiftcard && (

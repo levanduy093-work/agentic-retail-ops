@@ -926,9 +926,22 @@
   "paymentHub": {
     "navigation": "Payments",
     "title": "Payment Providers",
-    "description": "Manage VietQR (PayOS) payment gateway configuration",
+    "description": "Manage VietQR (SePay / PayOS) payment gateway configuration",
+    "recommended": "Recommended",
+    "activeGatewayInfo": "The system automatically activates 1 primary VietQR gateway for seamless customer checkout.",
+    "sepayTitle": "SePay Gateway (VietQR)",
+    "enableSepay": "Enable SePay Payment",
+    "sepayConnectionInfo": "SePay Connection Details",
+    "enterSepayApiKey": "Enter API Token from SePay...",
+    "sepayApiKey": "API Token",
+    "bank": "Bank",
+    "accountNumber": "Bank Account Number",
+    "enterAccountNumber": "Enter bank account number...",
+    "accountHolderName": "Account Holder Name",
+    "enterAccountHolderName": "Enter account holder name (e.g. NGUYEN VAN A)...",
     "payosTitle": "PayOS Gateway (VietQR)",
     "enablePayment": "Enable PayOS Payment",
+    "enablePayos": "Enable PayOS Payment",
     "connectionInfo": "PayOS Connection Details",
     "enterClientId": "Enter Client ID...",
     "enterApiKey": "Enter API Key...",
@@ -954,9 +967,9 @@
     "savedSuccess": "Payment configuration saved successfully",
     "saveError": "Failed to save payment configuration",
     "savedFailed": "Failed to save payment configuration",
-    "verifySuccess": "Connected to PayOS successfully",
-    "testSuccess": "Connected to PayOS successfully",
-    "verifyError": "PayOS connection test failed",
-    "testFailed": "PayOS connection test failed"
+    "verifySuccess": "Connected successfully",
+    "testSuccess": "Connected successfully",
+    "verifyError": "Connection test failed",
+    "testFailed": "Connection test failed"
   }
 }

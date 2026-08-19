@@ -7,6 +7,7 @@ import { Button } from "@modules/common/components/ui"
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import ErrorMessage from "../error-message"
 import { useTranslation } from "@lib/i18n/client"
+import { isVietQR } from "@lib/constants"
 import { useRouter } from "next/navigation"
 import {
   ArrowPath,
@@ -46,7 +47,7 @@ const PayOSPaymentButton: React.FC<PayOSPaymentButtonProps> = ({
   const isCompletingRef = useRef(false)
 
   const paymentSession = cart.payment_collection?.payment_sessions?.find(
-    (s) => s.provider_id?.startsWith("pp_payos")
+    (s) => isVietQR(s.provider_id)
   )
 
   const sessionData = (paymentSession?.data || {}) as Record<string, unknown>
@@ -123,7 +124,7 @@ const PayOSPaymentButton: React.FC<PayOSPaymentButtonProps> = ({
     setErrorMessage(null)
     try {
       await initiatePaymentSession(cart, {
-        provider_id: "pp_payos_payos",
+        provider_id: paymentSession?.provider_id || "pp_sepay_sepay",
       })
       router.refresh()
     } catch (err: unknown) {

@@ -346,6 +346,11 @@ module.exports = defineConfig({
       options: {
         providers: [
           {
+            resolve: './src/modules/sepay-payment',
+            id: 'sepay',
+            options: {},
+          },
+          {
             resolve: './src/modules/payos-payment',
             id: 'payos',
             options: {},

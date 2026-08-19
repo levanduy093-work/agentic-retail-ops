@@ -3,24 +3,24 @@ import { Container } from "@modules/common/components/ui"
 import Checkbox from "@modules/common/components/checkbox"
 import Input from "@modules/common/components/input"
 import { mapKeys } from "lodash"
-import React, { useCallback, useEffect, useMemo, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import AddressSelect from "../address-select"
 import CountrySelect from "../country-select"
 import VietnamAddressSelect from "../vietnam-address-select"
 import { useTranslation } from "@lib/i18n/client"
+import { applyAddressAndRecalculateShipping } from "@lib/data/cart"
 
 const ShippingAddress = ({
   customer,
   cart,
-  checked,
-  onChange,
 }: {
   customer: HttpTypes.StoreCustomer | null
   cart: HttpTypes.StoreCart | null
-  checked: boolean
-  onChange: () => void
 }) => {
   const t = useTranslation()
+  const router = useRouter()
+  const [, startTransition] = useTransition()
   const [formData, setFormData] = useState<Record<string, string>>({
     "shipping_address.first_name": cart?.shipping_address?.first_name || customer?.first_name || "",
     "shipping_address.last_name": cart?.shipping_address?.last_name || customer?.last_name || "",
@@ -97,10 +97,89 @@ const ShippingAddress = ({
     [customer?.first_name, customer?.last_name, customer?.phone]
   )
 
+  // User manually selects a saved address from dropdown
+  const handleSavedAddressSelect = useCallback(
+    (address?: HttpTypes.StoreCartAddress, email?: string) => {
+      setFormAddress(address, email)
+      if (address) {
+        startTransition(async () => {
+          await applyAddressAndRecalculateShipping(address, email || cart?.email)
+          router.refresh()
+        })
+      }
+    },
+    [setFormAddress, cart?.email, router]
+  )
+
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const isInitialMount = useRef(true)
+
+  const handleVietnamAddressChange = useCallback(
+    (data: {
+      provinceId?: number
+      provinceName?: string
+      districtId?: number
+      districtName?: string
+      wardCode?: string
+      wardName?: string
+      streetAddress?: string
+    }) => {
+      if (data.provinceName) {
+        setFormData((prev) => ({
+          ...prev,
+          "shipping_address.province": data.provinceName || prev["shipping_address.province"],
+          "shipping_address.city": data.districtName || prev["shipping_address.city"],
+          "shipping_address.address_1": [data.streetAddress, data.wardName].filter(Boolean).join(", "),
+        }))
+      }
+
+      // Do not auto-trigger during initial mount
+      if (isInitialMount.current) {
+        isInitialMount.current = false
+        return
+      }
+
+      if (data.districtId && data.wardCode) {
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current)
+        }
+        debounceTimerRef.current = setTimeout(() => {
+          startTransition(async () => {
+            await applyAddressAndRecalculateShipping(
+              {
+                first_name: formData["shipping_address.first_name"] || customer?.first_name || "",
+                last_name: formData["shipping_address.last_name"] || customer?.last_name || "",
+                phone: formData["shipping_address.phone"] || customer?.phone || "",
+                address_1: [data.streetAddress, data.wardName].filter(Boolean).join(", "),
+                city: data.districtName || "",
+                province: data.provinceName || "",
+                country_code: "vn",
+                postal_code: "700000",
+                metadata: {
+                  ghn_province_id: data.provinceId,
+                  ghn_district_id: data.districtId,
+                  ghn_ward_code: data.wardCode,
+                },
+              },
+              formData.email || cart?.email
+            )
+            router.refresh()
+          })
+        }, 500)
+      }
+    },
+    [formData, customer?.first_name, customer?.last_name, customer?.phone, cart?.email, router]
+  )
+
+  const hasInitializedRef = useRef(false)
+
   useEffect(() => {
+    if (hasInitializedRef.current) return
+
     // If cart has an existing shipping address, populate it
     if (cart && cart.shipping_address && cart.shipping_address.address_1) {
       setFormAddress(cart.shipping_address, cart.email)
+      hasInitializedRef.current = true
       return
     }
 
@@ -111,12 +190,14 @@ const ShippingAddress = ({
         addressesInRegion[0]
       if (defaultAddr) {
         setFormAddress(defaultAddr as HttpTypes.StoreCartAddress, customer.email || cart?.email)
+        hasInitializedRef.current = true
         return
       }
     }
 
     if (cart && !cart.email && customer?.email) {
       setFormAddress(undefined, customer.email)
+      hasInitializedRef.current = true
     }
   }, [cart, customer, addressesInRegion, setFormAddress])
 
@@ -150,7 +231,7 @@ const ShippingAddress = ({
                 key.replace("shipping_address.", "")
               ) as unknown as HttpTypes.StoreCartAddress
             }
-            onSelect={setFormAddress}
+            onSelect={handleSavedAddressSelect}
           />
         </Container>
       )}
@@ -196,6 +277,7 @@ const ShippingAddress = ({
             initialCity={formData["shipping_address.city"]}
             initialAddress1={formData["shipping_address.address_1"]}
             initialMetadata={selectedAddressMetadata}
+            onChange={handleVietnamAddressChange}
           />
         ) : (
           <>
@@ -247,14 +329,7 @@ const ShippingAddress = ({
             data-testid="save-to-customer-address"
           />
         )}
-        <Checkbox
-          id="same-as-billing-address"
-          label={t("checkout.same_as_shipping")}
-          name="same_as_billing"
-          checked={checked}
-          onChange={onChange}
-          data-testid="billing-address-checkbox"
-        />
+        <input type="hidden" name="same_as_billing" value="on" />
       </div>
       <div className="grid grid-cols-2 gap-4 mb-4">
         <Input

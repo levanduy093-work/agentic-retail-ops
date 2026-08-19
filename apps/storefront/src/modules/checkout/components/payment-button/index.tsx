@@ -1,6 +1,6 @@
 "use client"
 
-import { isManual, isPayOS, isStripeLike } from "@lib/constants"
+import { isManual, isVietQR, isStripeLike } from "@lib/constants"
 import { placeOrder } from "@lib/data/cart"
 import { HttpTypes } from "@medusajs/types"
 import { Button } from "@modules/common/components/ui"
@@ -28,14 +28,14 @@ const PaymentButton: React.FC<PaymentButtonProps> = ({
 }) => {
   const t = useTranslation()
   const notReady =
-    !cart ||
-    !cart.shipping_address ||
-    !cart.email ||
-    (cart.shipping_methods?.length ?? 0) < 1
+  !cart ||
+  !cart.shipping_address ||
+  !cart.email ||
+  (cart.shipping_methods?.length ?? 0) < 1
 
   const paymentSession =
     cart.payment_collection?.payment_sessions?.find(
-      (s) => isPayOS(s.provider_id) || s.status === "pending"
+      (s) => isVietQR(s.provider_id) || s.status === "pending"
     ) || cart.payment_collection?.payment_sessions?.[0]
 
   switch (true) {
@@ -47,7 +47,7 @@ const PaymentButton: React.FC<PaymentButtonProps> = ({
           data-testid={dataTestId}
         />
       )
-    case isPayOS(paymentSession?.provider_id):
+    case isVietQR(paymentSession?.provider_id):
       return (
         <PayOSPaymentButton
           notReady={notReady}

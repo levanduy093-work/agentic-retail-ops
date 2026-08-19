@@ -12,17 +12,17 @@ import {
   buildSecretHint,
 } from "../../modules/payment-hub/credential-vault"
 import { PaymentProviderRegistry } from "../../modules/payment-hub/provider-registry"
-import type { ConfigurePayosProviderType } from "../../api/admin/payments/providers/validators"
+import type { ConfigureSepayProviderType } from "../../api/admin/payments/providers/validators"
 
-export const configurePayosProviderStep = createStep(
-  "configure-payos-provider",
-  async (input: ConfigurePayosProviderType, { container }) => {
+export const configureSepayProviderStep = createStep(
+  "configure-sepay-provider",
+  async (input: ConfigureSepayProviderType, { container }) => {
     const paymentHub = container.resolve<PaymentHubModuleService>(
       PAYMENT_HUB_MODULE
     )
 
     const [existing] = (await paymentHub.listPaymentProviderConnections({
-      code: "PAYOS",
+      code: "SEPAY",
     })) as any[]
 
     let encryptedSecret = existing?.encrypted_secret ?? null
@@ -40,25 +40,20 @@ export const configurePayosProviderStep = createStep(
       secretHint = buildSecretHint(input.api_key.trim())
     }
 
-    let encryptedChecksum = existing?.encrypted_checksum ?? null
-    let checksumIv = existing?.checksum_iv ?? null
-    let checksumTag = existing?.checksum_tag ?? null
-    let checksumHint = existing?.checksum_hint ?? null
-
-    if (input.checksum_key && input.checksum_key.trim()) {
-      const encrypted = encryptPaymentSecret(input.checksum_key.trim())
-      encryptedChecksum = encrypted.encrypted_secret
-      checksumIv = encrypted.encryption_iv
-      checksumTag = encrypted.encryption_tag
-      checksumHint = buildSecretHint(input.checksum_key.trim())
-    }
-
     const configuration = {
       ...(existing?.configuration || {}),
-      client_id:
-        input.client_id !== undefined
-          ? input.client_id.trim()
-          : existing?.configuration?.client_id || "",
+      account_number:
+        input.account_number !== undefined
+          ? input.account_number.trim()
+          : existing?.configuration?.account_number || "",
+      bank_code:
+        input.bank_code !== undefined
+          ? input.bank_code.trim().toUpperCase()
+          : existing?.configuration?.bank_code || "MB",
+      account_holder_name:
+        input.account_holder_name !== undefined
+          ? input.account_holder_name.trim()
+          : existing?.configuration?.account_holder_name || "",
       is_timeout_enabled: input.is_timeout_enabled,
       timeout_minutes: input.timeout_minutes,
       display_title: input.display_title,
@@ -71,8 +66,8 @@ export const configurePayosProviderStep = createStep(
     if (existing) {
       connection = await paymentHub.updatePaymentProviderConnections({
         id: existing.id,
-        name: "PayOS VietQR",
-        provider_id: "payos",
+        name: "SePay VietQR",
+        provider_id: "sepay",
         environment: envEnum,
         is_enabled: input.is_enabled,
         configuration,
@@ -81,16 +76,12 @@ export const configurePayosProviderStep = createStep(
         encryption_tag: encryptionTag,
         key_version: keyVersion,
         secret_hint: secretHint,
-        encrypted_checksum: encryptedChecksum,
-        checksum_iv: checksumIv,
-        checksum_tag: checksumTag,
-        checksum_hint: checksumHint,
       })
     } else {
       connection = await paymentHub.createPaymentProviderConnections({
-        code: "PAYOS",
-        name: "PayOS VietQR",
-        provider_id: "payos",
+        code: "SEPAY",
+        name: "SePay VietQR",
+        provider_id: "sepay",
         environment: envEnum,
         is_enabled: input.is_enabled,
         configuration,
@@ -99,27 +90,23 @@ export const configurePayosProviderStep = createStep(
         encryption_tag: encryptionTag,
         key_version: keyVersion,
         secret_hint: secretHint,
-        encrypted_checksum: encryptedChecksum,
-        checksum_iv: checksumIv,
-        checksum_tag: checksumTag,
-        checksum_hint: checksumHint,
       })
     }
 
-    PaymentProviderRegistry.remove("PAYOS")
+    PaymentProviderRegistry.remove("SEPAY")
 
-    // Active Gateway Switch: If PayOS is enabled, deactivate SePay
+    // Active Gateway Switch: If SePay is enabled, deactivate PayOS
     if (input.is_enabled) {
       try {
-        const [sepayConn] = (await paymentHub.listPaymentProviderConnections({
-          code: "SEPAY",
+        const [payosConn] = (await paymentHub.listPaymentProviderConnections({
+          code: "PAYOS",
         })) as any[]
-        if (sepayConn && sepayConn.is_enabled) {
+        if (payosConn && payosConn.is_enabled) {
           await paymentHub.updatePaymentProviderConnections({
-            id: sepayConn.id,
+            id: payosConn.id,
             is_enabled: false,
           })
-          PaymentProviderRegistry.remove("SEPAY")
+          PaymentProviderRegistry.remove("PAYOS")
         }
       } catch {
         // Ignore errors
@@ -133,26 +120,11 @@ export const configurePayosProviderStep = createStep(
           fields: ["id", "payment_providers.*"],
         })
         for (const region of regions) {
-          const hasPayos = (region as any).payment_providers?.some(
-            (p: any) => p.id === "pp_payos_payos"
-          )
-          if (!hasPayos) {
-            await link.create({
-              [Modules.REGION]: {
-                region_id: region.id,
-              },
-              [Modules.PAYMENT]: {
-                payment_provider_id: "pp_payos_payos",
-              },
-            })
-          }
-
-          // Dismiss SePay so only 1 VietQR provider is active on checkout
           const hasSepay = (region as any).payment_providers?.some(
             (p: any) => p.id === "pp_sepay_sepay"
           )
-          if (hasSepay) {
-            await link.dismiss({
+          if (!hasSepay) {
+            await link.create({
               [Modules.REGION]: {
                 region_id: region.id,
               },
@@ -161,20 +133,8 @@ export const configurePayosProviderStep = createStep(
               },
             })
           }
-        }
-      } catch {
-        // Fall through
-      }
-    } else {
-      // If PayOS is disabled, unlink from regions
-      try {
-        const query = container.resolve(ContainerRegistrationKeys.QUERY)
-        const link = container.resolve(ContainerRegistrationKeys.LINK)
-        const { data: regions } = await query.graph({
-          entity: "region",
-          fields: ["id", "payment_providers.*"],
-        })
-        for (const region of regions) {
+
+          // Dismiss PayOS so only 1 VietQR provider is active on checkout
           const hasPayos = (region as any).payment_providers?.some(
             (p: any) => p.id === "pp_payos_payos"
           )
@@ -192,23 +152,50 @@ export const configurePayosProviderStep = createStep(
       } catch {
         // Fall through
       }
+    } else {
+      // If SePay is disabled, unlink from regions
+      try {
+        const query = container.resolve(ContainerRegistrationKeys.QUERY)
+        const link = container.resolve(ContainerRegistrationKeys.LINK)
+        const { data: regions } = await query.graph({
+          entity: "region",
+          fields: ["id", "payment_providers.*"],
+        })
+        for (const region of regions) {
+          const hasSepay = (region as any).payment_providers?.some(
+            (p: any) => p.id === "pp_sepay_sepay"
+          )
+          if (hasSepay) {
+            await link.dismiss({
+              [Modules.REGION]: {
+                region_id: region.id,
+              },
+              [Modules.PAYMENT]: {
+                payment_provider_id: "pp_sepay_sepay",
+              },
+            })
+          }
+        }
+      } catch {
+        // Fall through
+      }
     }
 
     const result = {
-      code: "PAYOS",
-      name: "PayOS VietQR",
-      provider_id: "payos",
+      code: "SEPAY",
+      name: "SePay VietQR",
+      provider_id: "sepay",
       environment: input.environment,
       is_enabled: input.is_enabled,
       is_timeout_enabled: input.is_timeout_enabled,
       timeout_minutes: input.timeout_minutes,
       display_title: input.display_title,
       order_prefix: input.order_prefix,
-      client_id: configuration.client_id,
+      account_number: configuration.account_number,
+      bank_code: configuration.bank_code,
+      account_holder_name: configuration.account_holder_name,
       has_api_key: Boolean(encryptedSecret),
       api_key_hint: secretHint,
-      has_checksum_key: Boolean(encryptedChecksum),
-      checksum_key_hint: checksumHint,
       last_verified_at: connection.last_verified_at,
       last_verification: connection.last_verification,
       updated_at: connection.updated_at,
@@ -218,10 +205,10 @@ export const configurePayosProviderStep = createStep(
   }
 )
 
-export const configurePayosProviderWorkflow = createWorkflow(
-  "configure-payos-provider",
-  function (input: ConfigurePayosProviderType) {
-    const result = configurePayosProviderStep(input)
+export const configureSepayProviderWorkflow = createWorkflow(
+  "configure-sepay-provider",
+  function (input: ConfigureSepayProviderType) {
+    const result = configureSepayProviderStep(input)
     return new WorkflowResponse(result)
   }
 )

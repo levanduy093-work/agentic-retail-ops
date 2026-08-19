@@ -18,6 +18,10 @@ export type ShippingQuote = {
 }
 
 export const listCartShippingMethods = async (cartId: string) => {
+  if (!cartId) {
+    return []
+  }
+
   const headers = {
     ...(await getAuthHeaders()),
   }
@@ -34,9 +38,10 @@ export const listCartShippingMethods = async (cartId: string) => {
         cache: "no-store",
       },
     )
-    .then(({ shipping_options }) => shipping_options)
-    .catch(() => {
-      return null
+    .then(({ shipping_options }) => shipping_options || [])
+    .catch((err) => {
+      console.error("[listCartShippingMethods] Error fetching shipping options:", err)
+      return []
     })
 }
 

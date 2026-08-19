@@ -3,19 +3,19 @@ import {
   type MiddlewareRoute,
 } from "@medusajs/framework/http"
 import {
-  ConfigurePayosProvider,
-  TestPayosProvider,
+  ConfigurePaymentProvider,
+  TestPaymentProvider,
 } from "./validators"
 
 export const paymentHubMiddlewares: MiddlewareRoute[] = [
   {
     matcher: "/admin/payments/providers",
     method: "POST",
-    middlewares: [validateAndTransformBody(ConfigurePayosProvider)],
+    middlewares: [validateAndTransformBody(ConfigurePaymentProvider)],
   },
   {
     matcher: "/admin/payments/providers/verify",
     method: "POST",
-    middlewares: [validateAndTransformBody(TestPayosProvider)],
+    middlewares: [validateAndTransformBody(TestPaymentProvider)],
   },
 ]

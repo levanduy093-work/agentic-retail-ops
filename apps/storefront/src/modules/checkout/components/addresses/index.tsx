@@ -1,7 +1,5 @@
 "use client"
 import { setAddresses, SetAddressesState } from "@lib/data/cart"
-import useToggleState from "@lib/hooks/use-toggle-state"
-import compareAddresses from "@lib/util/compare-addresses"
 import { CheckCircleSolid } from "@medusajs/icons"
 import { HttpTypes } from "@medusajs/types"
 import Divider from "@modules/common/components/divider"
@@ -9,7 +7,6 @@ import { Heading, Text } from "@modules/common/components/ui"
 import Spinner from "@modules/common/icons/spinner"
 import { useSearchParams } from "next/navigation"
 import { useActionState, useCallback, useEffect, useState } from "react"
-import BillingAddress from "../billing_address"
 import ErrorMessage from "../error-message"
 import ShippingAddress from "../shipping-address"
 import { SubmitButton } from "../submit-button"
@@ -27,12 +24,6 @@ const Addresses = ({
   const searchParams = useSearchParams()
 
   const isOpen = searchParams.get("step") === "address"
-
-  const { state: sameAsBilling, toggle: toggleSameAsBilling } = useToggleState(
-    cart?.shipping_address && cart?.billing_address
-      ? compareAddresses(cart?.shipping_address, cart?.billing_address)
-      : true
-  )
 
   const handleEdit = () => {
     setCheckoutStep("address")
@@ -81,7 +72,7 @@ const Addresses = ({
           <Text>
             <button
               onClick={handleEdit}
-              className="text-ui-fg-interactive hover:text-ui-fg-interactive-hover"
+              className="text-ui-fg-interactive hover:text-ui-fg-interactive-hover cursor-pointer"
               data-testid="edit-address-button"
             >
               {t("account.edit")}
@@ -99,23 +90,9 @@ const Addresses = ({
           <div className="pb-8">
             <ShippingAddress
               customer={customer}
-              checked={sameAsBilling}
-              onChange={toggleSameAsBilling}
               cart={cart}
             />
 
-            {!sameAsBilling && (
-              <div>
-                <Heading
-                  level="h2"
-                  className="text-3xl-regular gap-x-4 pb-6 pt-8"
-                >
-                  {t("checkout.billing_address")}
-                </Heading>
-
-                <BillingAddress cart={cart} />
-              </div>
-            )}
             <SubmitButton className="mt-6" data-testid="submit-address-button">
               {t("checkout.continue_to_shipping")}
             </SubmitButton>
@@ -129,13 +106,7 @@ const Addresses = ({
         <div>
           <div className="text-small-regular">
             {cart && cart.shipping_address ? (
-              <div
-                className={`grid ${
-                  sameAsBilling
-                    ? "grid-cols-1 md:grid-cols-2"
-                    : "grid-cols-1 md:grid-cols-3"
-                } gap-6 w-full`}
-              >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
                 <div
                   className="flex flex-col"
                   data-testid="shipping-address-summary"
@@ -152,11 +123,11 @@ const Addresses = ({
                     {cart.shipping_address.address_2}
                   </Text>
                   <Text className="txt-medium text-ui-fg-subtle">
-                    {cart.shipping_address.postal_code},{" "}
                     {cart.shipping_address.city}
-                  </Text>
-                  <Text className="txt-medium text-ui-fg-subtle">
-                    {cart.shipping_address.country_code?.toUpperCase()}
+                    {cart.shipping_address.province &&
+                    cart.shipping_address.city !== cart.shipping_address.province
+                      ? `, ${cart.shipping_address.province}`
+                      : ""}
                   </Text>
                 </div>
 
@@ -174,32 +145,6 @@ const Addresses = ({
                     {cart.email}
                   </Text>
                 </div>
-
-                {!sameAsBilling && (
-                  <div
-                    className="flex flex-col"
-                    data-testid="billing-address-summary"
-                  >
-                    <Text className="txt-medium-plus text-ui-fg-base mb-1 font-medium">
-                      {t("checkout.billing_address")}
-                    </Text>
-                    <Text className="txt-medium text-ui-fg-subtle">
-                      {cart.billing_address?.first_name}{" "}
-                      {cart.billing_address?.last_name}
-                    </Text>
-                    <Text className="txt-medium text-ui-fg-subtle">
-                      {cart.billing_address?.address_1}{" "}
-                      {cart.billing_address?.address_2}
-                    </Text>
-                    <Text className="txt-medium text-ui-fg-subtle">
-                      {cart.billing_address?.postal_code},{" "}
-                      {cart.billing_address?.city}
-                    </Text>
-                    <Text className="txt-medium text-ui-fg-subtle">
-                      {cart.billing_address?.country_code?.toUpperCase()}
-                    </Text>
-                  </div>
-                )}
               </div>
             ) : (
               <div>

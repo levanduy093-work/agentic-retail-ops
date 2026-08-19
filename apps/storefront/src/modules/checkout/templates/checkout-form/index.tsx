@@ -17,12 +17,9 @@ export default async function CheckoutForm({
     return null
   }
 
-  const shippingMethods = await listCartShippingMethods(cart.id)
-  const paymentMethods = await listCartPaymentMethods(cart.region?.id ?? "")
-
-  if (!shippingMethods || !paymentMethods) {
-    return null
-  }
+  const regionId = cart.region?.id || cart.region_id || ""
+  const shippingMethods = (await listCartShippingMethods(cart.id)) || []
+  const paymentMethods = (await listCartPaymentMethods(regionId)) || []
 
   return (
     <div className="w-full grid grid-cols-1 gap-y-8">

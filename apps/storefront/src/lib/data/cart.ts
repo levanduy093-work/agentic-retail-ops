@@ -30,7 +30,7 @@ import { getRegion } from "./regions"
 export async function retrieveCart(cartId?: string, fields?: string) {
   const id = cartId || (await getCartId())
   fields ??=
-    "*items, *region, *items.product, *items.variant, *items.thumbnail, *items.metadata, +items.total, *promotions, +shipping_methods.name, +shipping_methods.shipping_option_id, +shipping_methods.amount, +shipping_methods.data, +shipping_address.metadata, +billing_address.metadata"
+    "*items, *region, *items.product, *items.variant, *items.thumbnail, *items.metadata, +items.total, *promotions, +shipping_methods.name, +shipping_methods.shipping_option_id, +shipping_methods.amount, +shipping_methods.data, +shipping_address.metadata, +billing_address.metadata, *payment_collection.payment_sessions"
 
   if (!id) {
     return null
@@ -230,6 +230,67 @@ export async function syncCartWithDefaultAddressAndShipping(
   }
 
   return currentCart
+}
+
+/**
+ * Updates cart shipping address and immediately calculates/applies the GHN shipping method quote.
+ */
+export async function applyAddressAndRecalculateShipping(
+  addressInput: Partial<HttpTypes.StoreCartAddress>,
+  email?: string
+): Promise<HttpTypes.StoreCart | null> {
+  const cartId = await getCartId()
+  if (!cartId) return null
+
+  const shippingAddress: HttpTypes.StoreCreateCustomerAddress = {
+    first_name: addressInput.first_name || "",
+    last_name: addressInput.last_name || "",
+    address_1: addressInput.address_1 || "",
+    address_2: addressInput.address_2 || "",
+    company: addressInput.company || "",
+    postal_code: addressInput.postal_code || "700000",
+    city: addressInput.city || "",
+    country_code: (addressInput.country_code || "vn").toLowerCase(),
+    province: addressInput.province || "",
+    phone: addressInput.phone || "",
+    metadata: addressInput.metadata || undefined,
+  }
+
+  let updatedCart = await updateCart({
+    shipping_address: shippingAddress,
+    billing_address: shippingAddress,
+    ...(email ? { email } : {}),
+  }).catch(() => null)
+
+  if (!updatedCart) {
+    updatedCart = await retrieveCart(cartId).catch(() => null)
+  }
+
+  if (!updatedCart) return null
+
+  const shippingMethods = await listCartShippingMethods(updatedCart.id).catch(() => null)
+  const defaultMethod =
+    shippingMethods?.find((sm) => sm.price_type === "calculated") ||
+    shippingMethods?.[0]
+
+  if (defaultMethod) {
+    const quote = await calculateShippingQuote(defaultMethod.id, updatedCart.id).catch(() => null)
+    if (quote?.option?.amount != null) {
+      const updatedWithShipping = await setShippingMethod({
+        cartId: updatedCart.id,
+        shippingMethodId: defaultMethod.id,
+        data: {
+          ghn_weight: quote.totalWeight,
+          shipping_packages: quote.packages,
+        },
+      }).catch(() => null)
+      if (updatedWithShipping) {
+        updatedCart = updatedWithShipping
+      }
+    }
+  }
+
+  return updatedCart
 }
 
 export async function addToCart({
@@ -565,9 +626,9 @@ export async function setAddresses(
     }
 
     const sameAsBilling = formData.get("same_as_billing")
-    if (sameAsBilling === "on") data.billing_address = data.shipping_address
-
-    if (sameAsBilling !== "on") {
+    if (sameAsBilling === "on" || !sameAsBilling) {
+      data.billing_address = data.shipping_address
+    } else {
       const billingPhone =
         (formData.get("billing_address.phone") as string)?.trim() || phone
 

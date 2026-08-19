@@ -1,3 +1,5 @@
+import { HttpTypes } from "@medusajs/types"
+
 export function normalizeString(str?: unknown): string {
   if (!str) return ""
   return String(str).trim().toLowerCase().replace(/\s+/g, " ")
@@ -14,11 +16,22 @@ export function normalizePhoneNumber(phone?: unknown): string {
   return clean
 }
 
+export type AddressLike =
+  | HttpTypes.StoreCartAddress
+  | HttpTypes.StoreCustomerAddress
+  | HttpTypes.StoreCreateCustomerAddress
+  | Record<string, unknown>
+  | null
+  | undefined
+
 export function isSameAddress(
-  address1?: any,
-  address2?: any
+  address1?: AddressLike,
+  address2?: AddressLike
 ): boolean {
   if (!address1 || !address2) return false
+
+  const a1 = address1 as Record<string, unknown>
+  const a2 = address2 as Record<string, unknown>
 
   const fieldsToCompare = [
     "first_name",
@@ -32,15 +45,15 @@ export function isSameAddress(
   ]
 
   for (const field of fieldsToCompare) {
-    const val1 = normalizeString(address1[field])
-    const val2 = normalizeString(address2[field])
+    const val1 = normalizeString(a1[field])
+    const val2 = normalizeString(a2[field])
     if (val1 !== val2) {
       return false
     }
   }
 
-  const phone1 = normalizePhoneNumber(address1.phone)
-  const phone2 = normalizePhoneNumber(address2.phone)
+  const phone1 = normalizePhoneNumber(a1.phone)
+  const phone2 = normalizePhoneNumber(a2.phone)
   if (phone1 !== phone2) {
     return false
   }
@@ -76,8 +89,8 @@ export function isSameAddress(
 }
 
 export default function compareAddresses(
-  address1?: any,
-  address2?: any
+  address1?: AddressLike,
+  address2?: AddressLike
 ): boolean {
   return isSameAddress(address1, address2)
 }
