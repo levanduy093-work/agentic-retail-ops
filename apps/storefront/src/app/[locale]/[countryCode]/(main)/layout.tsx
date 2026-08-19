@@ -24,7 +24,7 @@ export default async function PageLayout(props: {
   children: React.ReactNode
   params: Promise<{ countryCode: string; locale: string }>
 }) {
-  const { countryCode, locale } = await props.params
+  const { countryCode: _countryCode, locale: _locale } = await props.params
   const [customer, cart] = await Promise.all([
     retrieveCustomer(),
     retrieveCart(),
