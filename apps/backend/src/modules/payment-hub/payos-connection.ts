@@ -74,28 +74,36 @@ export async function getPayosSettings(
   let pgConnection: any
 
   if (container) {
-    if (typeof (container as any).resolve === "function") {
-      try {
+    try {
+      if (typeof (container as any)?.resolve === "function") {
         paymentHub = (container as any).resolve(PAYMENT_HUB_MODULE)
-      } catch {
-        // not available
       }
-      try {
-        pgConnection = (container as any).resolve(ContainerRegistrationKeys.PG_CONNECTION)
-      } catch {
-        // not available
-      }
-    } else {
-      try {
-        pgConnection = (container as any).__pg_connection__
-      } catch {
-        // not available
-      }
-      try {
+    } catch {
+      // not available
+    }
+
+    try {
+      if (!paymentHub && typeof (container as any)[PAYMENT_HUB_MODULE] === "object") {
         paymentHub = (container as any)[PAYMENT_HUB_MODULE]
-      } catch {
-        // not available
       }
+    } catch {
+      // not available
+    }
+
+    try {
+      if (typeof (container as any)?.resolve === "function") {
+        pgConnection = (container as any).resolve(ContainerRegistrationKeys.PG_CONNECTION)
+      }
+    } catch {
+      // not available
+    }
+
+    try {
+      if (!pgConnection && (container as any).__pg_connection__) {
+        pgConnection = (container as any).__pg_connection__
+      }
+    } catch {
+      // not available
     }
   }
 

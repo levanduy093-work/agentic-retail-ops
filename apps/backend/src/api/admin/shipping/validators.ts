@@ -1,17 +1,31 @@
 import { z } from "@medusajs/framework/zod"
 
+export const PackagingBoxSchema = z.object({
+  code: z.string().trim().min(1).max(30),
+  name: z.string().trim().max(100).optional(),
+  length: z.number().positive().max(200),
+  width: z.number().positive().max(200),
+  height: z.number().positive().max(200),
+  max_items: z.number().int().positive().max(100).optional(),
+})
+
+export const PackagingBagSchema = z.object({
+  code: z.string().trim().min(1).max(30),
+  name: z.string().trim().max(100).optional(),
+  length: z.number().positive().max(200),
+  width: z.number().positive().max(200),
+  max_thickness: z.number().positive().max(50).optional(),
+  max_items: z.number().int().positive().max(100).optional(),
+})
+
 export const ConfigurePackagingProfile = z.object({
+  strategy: z.enum(["hybrid_auto", "pe_only", "carton_only"]).optional(),
   packaging_weight: z.number().positive().max(5000),
+  bag_packaging_weight: z.number().positive().max(1000).optional(),
   max_items_per_package: z.number().int().positive().max(100),
   max_weight_per_package: z.number().positive().max(50000),
-  boxes: z.array(
-    z.object({
-      code: z.string().trim().min(1).max(20),
-      length: z.number().positive().max(200),
-      width: z.number().positive().max(200),
-      height: z.number().positive().max(200),
-    })
-  ).min(1).max(10),
+  boxes: z.array(PackagingBoxSchema).min(1).max(20),
+  bags: z.array(PackagingBagSchema).max(20).optional(),
 })
 
 export type ConfigurePackagingProfile = z.infer<typeof ConfigurePackagingProfile>

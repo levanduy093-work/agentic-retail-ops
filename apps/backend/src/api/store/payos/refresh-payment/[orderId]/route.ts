@@ -38,7 +38,9 @@ export async function POST(
       filters: { id: orderId },
     })
 
-    const order = orders?.[0]
+    const order = orders?.[0] as
+      | (Record<string, any> & { payment_status?: string })
+      | undefined
     if (!order) {
       res.status(404).json({
         success: false,
