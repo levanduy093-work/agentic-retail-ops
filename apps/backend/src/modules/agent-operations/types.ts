@@ -74,6 +74,8 @@ export const CONVERSATION_CHANNELS = [
   "WEB_PUSH",
   "TELEGRAM",
   "ZALO",
+  "MESSENGER",
+  "EMAIL",
   "SLACK",
   "TEAMS",
 ] as const

@@ -348,3 +348,168 @@ export const ClipboardCopyIcon = React.forwardRef<SVGSVGElement, IconProps>(
 )
 ClipboardCopyIcon.displayName = "ClipboardCopyIcon"
 
+export const EllipsisHorizontalIcon = React.forwardRef<SVGSVGElement, IconProps>(
+  ({ className = "", size = 15, color = "currentColor", ...props }, ref) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 15 15"
+      fill="none"
+      className={className}
+      ref={ref}
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        fill={color}
+        fillRule="evenodd"
+        d="M2.5 7.5a1.25 1.25 0 1 1 2.5 0 1.25 1.25 0 0 1-2.5 0M6.25 7.5a1.25 1.25 0 1 1 2.5 0 1.25 1.25 0 0 1-2.5 0m3.75 0a1.25 1.25 0 1 1 2.5 0 1.25 1.25 0 0 1-2.5 0"
+        clipRule="evenodd"
+      />
+    </svg>
+  )
+)
+EllipsisHorizontalIcon.displayName = "EllipsisHorizontalIcon"
+
+export const TrashIcon = React.forwardRef<SVGSVGElement, IconProps>(
+  ({ className = "", size = 15, color = "currentColor", ...props }, ref) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 15 15"
+      fill="none"
+      className={className}
+      ref={ref}
+      aria-hidden="true"
+      {...props}
+    >
+      <g
+        stroke={color}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.25}
+      >
+        <path d="M2.5 3.5h10M5.5 3.5V2a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v1.5M3.5 3.5v9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-9M6 6.5v4M9 6.5v4" />
+      </g>
+    </svg>
+  )
+)
+TrashIcon.displayName = "TrashIcon"
+
+export const SendIcon = React.forwardRef<SVGSVGElement, IconProps>(
+  ({ className = "", size = 15, color = "currentColor", ...props }, ref) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 15 15"
+      fill="none"
+      className={className}
+      ref={ref}
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        fill={color}
+        d="m1.206 1.134 12.5 5.833a.625.625 0 0 1 0 1.133l-12.5 5.833a.625.625 0 0 1-.871-.692l1.246-4.985a.625.625 0 0 1 .472-.464L8.125 7.5 4.553 6.708a.625.625 0 0 1-.472-.464L2.835 1.259a.625.625 0 0 1 .871-.692z"
+      />
+    </svg>
+  )
+)
+SendIcon.displayName = "SendIcon"
+
+export const TelegramIcon = React.forwardRef<SVGSVGElement, IconProps>(
+  ({ className = "", size = 15, color = "currentColor", ...props }, ref) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      ref={ref}
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        fill={color}
+        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8-1.7 8.01c-.13.57-.46.71-.94.44l-2.6-1.92-1.25 1.21c-.14.14-.26.26-.53.26l.19-2.64 4.81-4.35c.21-.19-.05-.29-.32-.1l-5.95 3.75-2.56-.8c-.56-.17-.57-.56.12-.83l10.01-3.86c.46-.17.87.11.72.83z"
+      />
+    </svg>
+  )
+)
+TelegramIcon.displayName = "TelegramIcon"
+
+export const ZaloIcon = React.forwardRef<SVGSVGElement, IconProps>(
+  ({ className = "", size = 15, color = "currentColor", ...props }, ref) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      ref={ref}
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        fill={color}
+        d="M12 2C6.477 2 2 6.145 2 11.258c0 2.923 1.472 5.534 3.774 7.218-.168 1.13-.67 2.766-1.574 3.82-.128.15-.038.384.156.384 1.956 0 4.092-1.04 5.344-1.897.734.183 1.506.28 2.3.28 5.523 0 10-4.145 10-9.257C22 6.145 17.523 2 12 2zm-3.2 12.8h-2.1c-.28 0-.46-.24-.46-.5 0-.12.06-.24.16-.34l2.54-2.8h-2.24c-.28 0-.46-.22-.46-.5s.18-.5.46-.5h2.1c.28 0 .46.24.46.5 0 .12-.06.24-.16.34L6.56 13.8h2.24c.28 0 .46.22.46.5s-.18.5-.46.5zm5.5 0h-1c-.28 0-.46-.22-.46-.5v-4.6c0-.28.18-.5.46-.5s.46.22.46.5v4.1h.54c.28 0 .46.22.46.5s-.18.5-.46.5zm3.7 0h-2c-.55 0-1-.45-1-1v-3.6c0-.55.45-1 1-1h2c.55 0 1 .45 1 1v3.6c0 .55-.45 1-1 1zm0-1v-3.6h-2v3.6h2z"
+      />
+    </svg>
+  )
+)
+ZaloIcon.displayName = "ZaloIcon"
+
+export const FacebookMessengerIcon = React.forwardRef<SVGSVGElement, IconProps>(
+  ({ className = "", size = 15, color = "currentColor", ...props }, ref) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      ref={ref}
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        fill={color}
+        d="M12 2C6.477 2 2 6.145 2 11.258c0 2.923 1.472 5.534 3.774 7.218-.168 1.13-.67 2.766-1.574 3.82-.128.15-.038.384.156.384 1.956 0 4.092-1.04 5.344-1.897.734.183 1.506.28 2.3.28 5.523 0 10-4.145 10-9.257C22 6.145 17.523 2 12 2zm1.09 12.35-2.73-2.91-5.33 2.91 5.86-6.22 2.8 2.91 5.26-2.91-5.86 6.22z"
+      />
+    </svg>
+  )
+)
+FacebookMessengerIcon.displayName = "FacebookMessengerIcon"
+
+export const MailIcon = React.forwardRef<SVGSVGElement, IconProps>(
+  ({ className = "", size = 15, color = "currentColor", ...props }, ref) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 15 15"
+      fill="none"
+      className={className}
+      ref={ref}
+      aria-hidden="true"
+      {...props}
+    >
+      <g
+        stroke={color}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={1.25}
+      >
+        <rect x="1.5" y="2.5" width="12" height="10" rx="1.5" />
+        <path d="m2 3.5 5.5 4.5 5.5-4.5" />
+      </g>
+    </svg>
+  )
+)
+MailIcon.displayName = "MailIcon"
+

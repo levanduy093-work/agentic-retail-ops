@@ -577,6 +577,20 @@
     "clearHistoryDescription": "This removes every message and the AI memory for this conversation. Any pending support requests will also be cancelled. The next message starts a new conversation without the old context.",
     "confirmClearHistory": "Clear chat and AI memory",
     "historyCleared": "Chat and AI memory were cleared. The next consultation starts fresh.",
+    "actionsMenu": "Actions",
+    "replyDirectPlaceholder": "Type a direct reply to customer... (Press Enter to send, Shift+Enter for new line)",
+    "directSend": "Send",
+    "directSending": "Sending...",
+    "directSendSuccess": "Message sent to customer successfully.",
+    "channels": {
+      "in_app": "Storefront Web",
+      "telegram": "Telegram",
+      "zalo": "Zalo OA",
+      "messenger": "Facebook Messenger",
+      "email": "Gmail / Email",
+      "slack": "Slack",
+      "teams": "MS Teams"
+    },
     "status": {
       "todo": "Waiting for an employee",
       "claimed": "Taken by an employee",

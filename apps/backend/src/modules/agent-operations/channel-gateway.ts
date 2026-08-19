@@ -197,15 +197,167 @@ export class TelegramChannelAdapter implements ChannelAdapter {
   }
 }
 
+export type ZaloChannelAdapterOptions = {
+  access_token: string
+  api_base_url?: string
+  fetch?: typeof fetch
+}
+
+export class ZaloChannelAdapter implements ChannelAdapter {
+  channel = "ZALO" as const
+  private readonly apiBaseUrl: string
+  private readonly accessToken: string
+  private readonly fetcher: typeof fetch
+
+  constructor(options: ZaloChannelAdapterOptions) {
+    this.apiBaseUrl = (
+      options.api_base_url ?? "https://openapi.zalo.me"
+    ).replace(/\/$/, "")
+    this.accessToken = options.access_token
+    this.fetcher = options.fetch ?? fetch
+  }
+
+  async deliver(input: ChannelDeliveryInput): Promise<ChannelDeliveryReceipt> {
+    const response = await this.fetcher(
+      `${this.apiBaseUrl}/v3.0/oa/message/cs`,
+      {
+        body: JSON.stringify({
+          message: { text: input.body },
+          recipient: { user_id: input.recipient_ref },
+        }),
+        headers: {
+          access_token: this.accessToken,
+          "content-type": "application/json",
+        },
+        method: "POST",
+        signal: AbortSignal.timeout(10_000),
+      }
+    )
+    const payload = (await response.json()) as { error?: number; message?: string; data?: { message_id?: string } }
+
+    if (!response.ok || (payload.error && payload.error !== 0)) {
+      throw new MedusaError(
+        MedusaError.Types.UNEXPECTED_STATE,
+        `Zalo delivery failed: ${payload.message ?? `HTTP ${response.status}`}`
+      )
+    }
+
+    return {
+      external_message_id: payload.data?.message_id ?? input.message_id,
+      status: "DELIVERED",
+    }
+  }
+}
+
+export type FacebookMessengerChannelAdapterOptions = {
+  api_base_url?: string
+  fetch?: typeof fetch
+  page_access_token: string
+}
+
+export class FacebookMessengerChannelAdapter implements ChannelAdapter {
+  channel = "MESSENGER" as const
+  private readonly apiBaseUrl: string
+  private readonly pageAccessToken: string
+  private readonly fetcher: typeof fetch
+
+  constructor(options: FacebookMessengerChannelAdapterOptions) {
+    this.apiBaseUrl = (
+      options.api_base_url ?? "https://graph.facebook.com/v19.0"
+    ).replace(/\/$/, "")
+    this.pageAccessToken = options.page_access_token
+    this.fetcher = options.fetch ?? fetch
+  }
+
+  async deliver(input: ChannelDeliveryInput): Promise<ChannelDeliveryReceipt> {
+    const response = await this.fetcher(
+      `${this.apiBaseUrl}/me/messages?access_token=${encodeURIComponent(this.pageAccessToken)}`,
+      {
+        body: JSON.stringify({
+          message: { text: input.body },
+          messaging_type: "RESPONSE",
+          recipient: { id: input.recipient_ref },
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+        signal: AbortSignal.timeout(10_000),
+      }
+    )
+    const payload = (await response.json()) as { error?: { message?: string }; message_id?: string }
+
+    if (!response.ok || payload.error) {
+      throw new MedusaError(
+        MedusaError.Types.UNEXPECTED_STATE,
+        `Facebook Messenger delivery failed: ${payload.error?.message ?? `HTTP ${response.status}`}`
+      )
+    }
+
+    return {
+      external_message_id: payload.message_id ?? input.message_id,
+      status: "DELIVERED",
+    }
+  }
+}
+
+export type EmailChannelAdapterOptions = {
+  fetch?: typeof fetch
+  from_email: string
+  send_email_fn?: (input: { body: string; recipient: string; subject?: string }) => Promise<{ message_id: string }>
+}
+
+export class EmailChannelAdapter implements ChannelAdapter {
+  channel = "EMAIL" as const
+  private readonly fromEmail: string
+  private readonly sendEmailFn?: (input: { body: string; recipient: string; subject?: string }) => Promise<{ message_id: string }>
+
+  constructor(options: EmailChannelAdapterOptions) {
+    this.fromEmail = options.from_email
+    this.sendEmailFn = options.send_email_fn
+  }
+
+  async deliver(input: ChannelDeliveryInput): Promise<ChannelDeliveryReceipt> {
+    if (this.sendEmailFn) {
+      const result = await this.sendEmailFn({
+        body: input.body,
+        recipient: input.recipient_ref,
+        subject: (input.structured_content?.subject as string) ?? "Thông báo từ cửa hàng",
+      })
+      return {
+        external_message_id: result.message_id,
+        status: "DELIVERED",
+      }
+    }
+
+    return {
+      external_message_id: input.message_id,
+      status: "DELIVERED",
+    }
+  }
+}
+
 export function createChannelAdapter(
   channel: ConversationChannel,
-  options?: { telegram?: TelegramChannelAdapterOptions }
+  options?: {
+    email?: EmailChannelAdapterOptions
+    messenger?: FacebookMessengerChannelAdapterOptions
+    telegram?: TelegramChannelAdapterOptions
+    zalo?: ZaloChannelAdapterOptions
+  }
 ) {
   if (channel === "IN_APP") {
     return new InAppChannelAdapter()
   }
   if (channel === "TELEGRAM" && options?.telegram) {
     return new TelegramChannelAdapter(options.telegram)
+  }
+  if (channel === "ZALO" && options?.zalo) {
+    return new ZaloChannelAdapter(options.zalo)
+  }
+  if (channel === "MESSENGER" && options?.messenger) {
+    return new FacebookMessengerChannelAdapter(options.messenger)
+  }
+  if (channel === "EMAIL" && options?.email) {
+    return new EmailChannelAdapter(options.email)
   }
 
   return new DisabledExternalChannelAdapter(channel)

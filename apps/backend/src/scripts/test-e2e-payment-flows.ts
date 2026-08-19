@@ -102,6 +102,7 @@ export default async function testE2EPaymentFlows({
       account_holder_name: "LE VAN DUY",
       display_title: "VietQR / Ngân hàng",
       order_prefix: "DH",
+      is_timeout_enabled: true,
       timeout_minutes: 15,
     },
   })

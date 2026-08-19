@@ -2,8 +2,10 @@ import {
   Button,
   Container,
   Drawer,
+  DropdownMenu,
   FocusModal,
   Heading,
+  IconButton,
   Select,
   StatusBadge,
   Text,
@@ -13,6 +15,16 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
+import {
+  EllipsisHorizontalIcon,
+  FacebookMessengerIcon,
+  GlobeIcon,
+  MailIcon,
+  SendIcon,
+  TelegramIcon,
+  TrashIcon,
+  ZaloIcon,
+} from "../../lib/icons"
 import { sdk } from "../../lib/sdk"
 
 type SupportTaskInput = {
@@ -144,7 +156,7 @@ const customerNameFromConversation = (
   const title = conversation.title?.trim()
   if (title) {
     const customerName = title.replace(
-      /^(Telegram|Zalo|Slack|Teams)\s+[—–-]\s+/i,
+      /^(Telegram|Zalo|Slack|Teams|Messenger|Facebook|Email|Gmail)\s+[—–-]\s+/i,
       "",
     )
 
@@ -156,6 +168,32 @@ const customerNameFromConversation = (
   }
 
   return t ? t("supportDesk.customer", "Customer") : "Customer"
+}
+
+const getChannelIcon = (channel?: string | null, size = 16) => {
+  const norm = (channel ?? "").toUpperCase()
+  if (norm.includes("TELEGRAM")) {
+    return <TelegramIcon size={size} className="shrink-0 text-[#229ED9]" />
+  }
+  if (norm.includes("ZALO")) {
+    return <ZaloIcon size={size} className="shrink-0 text-[#0068FF]" />
+  }
+  if (norm.includes("MESSENGER") || norm.includes("FACEBOOK")) {
+    return <FacebookMessengerIcon size={size} className="shrink-0 text-[#0084FF]" />
+  }
+  if (norm.includes("EMAIL") || norm.includes("GMAIL") || norm.includes("MAIL")) {
+    return <MailIcon size={size} className="shrink-0 text-[#EA4335]" />
+  }
+  return <GlobeIcon size={size} className="shrink-0 text-ui-fg-muted" />
+}
+
+const getChannelLabel = (channel?: string | null, t?: (key: any, ...args: any[]) => any) => {
+  const norm = (channel ?? "").toLowerCase()
+  if (norm.includes("telegram")) return t ? t("supportDesk.channels.telegram", { defaultValue: "Telegram" }) : "Telegram"
+  if (norm.includes("zalo")) return t ? t("supportDesk.channels.zalo", { defaultValue: "Zalo OA" }) : "Zalo OA"
+  if (norm.includes("messenger") || norm.includes("facebook")) return t ? t("supportDesk.channels.messenger", { defaultValue: "Facebook Messenger" }) : "Facebook Messenger"
+  if (norm.includes("email") || norm.includes("gmail") || norm.includes("mail")) return t ? t("supportDesk.channels.email", { defaultValue: "Gmail / Email" }) : "Gmail / Email"
+  return t ? t("supportDesk.channels.in_app", { defaultValue: "Storefront Web" }) : "Storefront Web"
 }
 
 type CustomerSupportContentProps = {
@@ -768,6 +806,7 @@ export const CustomerSupportContent = ({
               visibleConversations.map((item) => {
                 const itemCustomerName = customerNameFromConversation(item, t)
                 const isSelected = item.id === selectedConversationId
+                const itemChannel = item.channel || item.support_task?.input?.channel || "IN_APP"
 
                 return (
                   <Button
@@ -781,16 +820,19 @@ export const CustomerSupportContent = ({
                     variant="transparent"
                     onClick={() => setSelectedConversationId(item.id)}
                   >
-                    <div className="flex min-w-0 flex-1 flex-col gap-y-1">
+                    <div className="flex min-w-0 flex-1 flex-col gap-y-1.5">
                       <div className="flex min-w-0 items-center justify-between gap-x-2">
-                        <Text
-                          className="truncate"
-                          size="small"
-                          leading="compact"
-                          weight="plus"
-                        >
-                          {itemCustomerName}
-                        </Text>
+                        <div className="flex min-w-0 items-center gap-x-1.5">
+                          {getChannelIcon(itemChannel, 14)}
+                          <Text
+                            className="truncate"
+                            size="small"
+                            leading="compact"
+                            weight="plus"
+                          >
+                            {itemCustomerName}
+                          </Text>
+                        </div>
                         <div
                           aria-label={
                             item.requires_human_attention
@@ -814,6 +856,14 @@ export const CustomerSupportContent = ({
                           item.memory?.summary ??
                           item.title}
                       </Text>
+                      <div className="flex items-center justify-between text-ui-fg-muted">
+                        <Text size="xsmall" leading="compact">
+                          {getChannelLabel(itemChannel, t)}
+                        </Text>
+                        <Text size="xsmall" leading="compact">
+                          {formatDate(item.last_message_at)}
+                        </Text>
+                      </div>
                     </div>
                   </Button>
                 )
@@ -835,18 +885,21 @@ export const CustomerSupportContent = ({
             </div>
           ) : (
             <div className="divide-y divide-ui-border-base md:flex md:h-full md:min-h-0 md:flex-col">
-              <div className="flex shrink-0 flex-col gap-y-3 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex flex-col gap-y-1">
-                  <Heading level="h2">{customerName}</Heading>
-                  <Text
-                    size="small"
-                    leading="compact"
-                    className="text-ui-fg-subtle"
-                  >
-                    {customerReference}
-                  </Text>
+              <div className="flex shrink-0 flex-col gap-y-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-x-3">
+                  {getChannelIcon(selectedConversation.channel || selectedTask?.input?.channel, 20)}
+                  <div className="flex flex-col gap-y-0.5">
+                    <Heading level="h2">{customerName}</Heading>
+                    <Text
+                      size="xsmall"
+                      leading="compact"
+                      className="text-ui-fg-subtle"
+                    >
+                      {getChannelLabel(selectedConversation.channel || selectedTask?.input?.channel, t)} · {customerReference}
+                    </Text>
+                  </div>
                 </div>
-                <div className="flex flex-col items-start gap-y-1 sm:items-end">
+                <div className="flex items-center gap-x-2">
                   <StatusBadge
                     color={selectedTask ? statusColor(selectedTask.status) : "green"}
                   >
@@ -858,13 +911,51 @@ export const CustomerSupportContent = ({
                     <Text
                       size="xsmall"
                       leading="compact"
-                      className="text-ui-fg-subtle"
+                      className="text-ui-fg-subtle hidden sm:inline"
                     >
                       {t("supportDesk.due", {
                         time: formatDate(selectedTask.due_at),
                       })}
                     </Text>
                   )}
+
+                  {/* 3-dots Dropdown Menu */}
+                  <DropdownMenu>
+                    <DropdownMenu.Trigger asChild>
+                      <IconButton
+                        variant="transparent"
+                        size="small"
+                        aria-label={t("supportDesk.actionsMenu", "Thao tác")}
+                        className="text-ui-fg-subtle hover:text-ui-fg-base"
+                      >
+                        <EllipsisHorizontalIcon size={16} />
+                      </IconButton>
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Content align="end" className="min-w-[180px]">
+                      {selectedTask &&
+                        !TERMINAL_STATUSES.includes(selectedTask.status) &&
+                        !assignedToManager && (
+                          <DropdownMenu.Item
+                            onClick={() => setTransferOpen(true)}
+                            disabled={assignedToOther}
+                            className="cursor-pointer"
+                          >
+                            {t("supportDesk.transferManager")}
+                          </DropdownMenu.Item>
+                        )}
+                      {selectedTask &&
+                        !TERMINAL_STATUSES.includes(selectedTask.status) &&
+                        !assignedToManager && <DropdownMenu.Separator />}
+                      <DropdownMenu.Item
+                        className="cursor-pointer text-ui-fg-error focus:bg-ui-bg-base-hover"
+                        onClick={() => setClearHistoryOpen(true)}
+                        disabled={!canClearHistory || clearConversationHistory.isPending}
+                      >
+                        <TrashIcon className="mr-2" size={14} />
+                        {t("supportDesk.clearHistory")}
+                      </DropdownMenu.Item>
+                    </DropdownMenu.Content>
+                  </DropdownMenu>
                 </div>
               </div>
 
@@ -960,97 +1051,87 @@ export const CustomerSupportContent = ({
                   )}
                 </div>
 
-                {selectedTask && !messageSent ? (
-                  <div className="border-t border-ui-border-base bg-ui-bg-base px-6 py-4">
+                {/* Direct Message Input Bar */}
+                <div className="border-t border-ui-border-base bg-ui-bg-base px-4 py-3 sm:px-6">
+                  {/* Status hint if AI handling or assigned */}
+                  <div className="mb-2 flex items-center justify-between">
+                    <div>
+                      {!selectedTask && (
+                        <Text
+                          size="xsmall"
+                          leading="compact"
+                          className="text-ui-fg-subtle"
+                        >
+                          {t("supportDesk.noHumanActionNeeded")}
+                        </Text>
+                      )}
+                      {assignedToManager && (
+                        <Text
+                          size="xsmall"
+                          leading="compact"
+                          className="text-ui-fg-warning font-medium"
+                        >
+                          {t("supportDesk.transferred")}
+                        </Text>
+                      )}
+                      {assignedToOther && (
+                        <Text
+                          size="xsmall"
+                          leading="compact"
+                          className="text-ui-fg-subtle"
+                        >
+                          {t("supportDesk.claimedByOther")}
+                        </Text>
+                      )}
+                      {messageSent && (
+                        <Text
+                          size="xsmall"
+                          leading="compact"
+                          className="text-ui-fg-success"
+                        >
+                          {t("supportDesk.simulatorAlreadySent")}
+                        </Text>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-end gap-x-2">
                     <Textarea
-                      className="resize-none cursor-text"
-                      aria-label={t("supportDesk.suggestedReply")}
-                      disabled={!canEdit}
-                      placeholder={t("supportDesk.suggestedReply")}
-                      rows={3}
+                      className="min-h-[48px] max-h-[140px] flex-1 resize-none cursor-text text-small"
+                      placeholder={t("supportDesk.replyDirectPlaceholder", {
+                        defaultValue: "Nhập tin nhắn phản hồi cho khách... (Enter để gửi, Shift+Enter để xuống dòng)",
+                      })}
+                      rows={2}
+                      disabled={assignedToManager || assignedToOther || submitAndSendReply.isPending}
                       value={reply}
                       onChange={(event) => setReply(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && !event.shiftKey) {
+                          event.preventDefault()
+                          if (canSend && selectedTask && reply.trim().length >= 2) {
+                            submitAndSendReply.mutate(selectedTask)
+                          }
+                        }
+                      }}
                     />
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="flex shrink-0 flex-col gap-y-2 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  {!selectedTask && (
-                    <Text
-                      size="small"
-                      leading="compact"
-                      className="text-ui-fg-success"
-                    >
-                      {t("supportDesk.noHumanActionNeeded")}
-                    </Text>
-                  )}
-                  {assignedToManager && (
-                    <Text
-                      size="small"
-                      leading="compact"
-                      className="text-ui-fg-warning"
-                    >
-                      {t("supportDesk.transferred")}
-                    </Text>
-                  )}
-                  {assignedToOther && (
-                    <Text
-                      size="small"
-                      leading="compact"
-                      className="text-ui-fg-subtle"
-                    >
-                      {t("supportDesk.claimedByOther")}
-                    </Text>
-                  )}
-                  {messageSent && (
-                    <Text
-                      size="small"
-                      leading="compact"
-                      className="text-ui-fg-success"
-                    >
-                      {t("supportDesk.simulatorAlreadySent")}
-                    </Text>
-                  )}
-                </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  <Button
-                    size="small"
-                    variant="secondary"
-                    disabled={
-                      !canClearHistory || clearConversationHistory.isPending
-                    }
-                    onClick={() => setClearHistoryOpen(true)}
-                  >
-                    {t("supportDesk.clearHistory")}
-                  </Button>
-                  {selectedTask &&
-                    !TERMINAL_STATUSES.includes(selectedTask.status) &&
-                    !assignedToManager && (
-                      <Button
-                        size="small"
-                        variant="secondary"
-                        disabled={assignedToOther}
-                        onClick={() => setTransferOpen(true)}
-                      >
-                        {t("supportDesk.transferManager")}
-                      </Button>
-                    )}
-                  {canSend && selectedTask && (
                     <Button
                       size="small"
+                      variant="primary"
+                      className="h-[48px] px-4 shrink-0"
                       disabled={
-                        reply.trim().length < 3 &&
-                        (typeof selectedTask.result?.response_body !== "string" ||
-                          selectedTask.result.response_body.trim().length < 3)
+                        !canSend ||
+                        !selectedTask ||
+                        (reply.trim().length < 2 &&
+                          (typeof selectedTask.result?.response_body !== "string" ||
+                            selectedTask.result.response_body.trim().length < 2))
                       }
                       isLoading={submitAndSendReply.isPending}
                       onClick={() => selectedTask && submitAndSendReply.mutate(selectedTask)}
                     >
-                      {t("supportDesk.sendReply", { defaultValue: "Gửi phản hồi cho khách" })}
+                      <SendIcon className="mr-1.5" size={14} />
+                      {t("supportDesk.directSend", { defaultValue: "Gửi" })}
                     </Button>
-                  )}
+                  </div>
                 </div>
               </div>
             </div>
