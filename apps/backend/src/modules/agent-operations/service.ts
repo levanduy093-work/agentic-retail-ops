@@ -346,51 +346,6 @@ import {
 import { agentRealtimeHub } from "./realtime-hub"
 
 class AgentOperationsModuleService extends MedusaService({
-  // [AGENTIC REFACTOR] Phương thức mới sử dụng AgentEngine
-  async processCustomerMessageAgentic(input: { inbound_message_id: string }, @MedusaContext() sharedContext: Context = {}) {
-    const inbound = await this.retrieveAgentMessage(input.inbound_message_id, {}, sharedContext);
-    const conversation = await this.retrieveAgentConversation(inbound.conversation_id, {}, sharedContext);
-    
-    // Load history
-    const contextMessages = await this.listAgentMessages(
-      { conversation_id: inbound.conversation_id }, 
-      { take: 10 }, 
-      sharedContext
-    );
-    
-    const formattedMessages = contextMessages.map(m => ({
-      role: m.direction === "INBOUND" ? "user" : "assistant",
-      content: m.body || ""
-    }));
-    
-    // Load Memory & Preferences to inject into System Prompt
-    const memories = await this.listAgentConversationMemories({ conversation_id: conversation.id }, { take: 1 }, sharedContext);
-    const memoryStr = memories[0] ? `[TRÍ NHỚ CUỘC TRÒ CHUYỆN]\nTóm tắt: ${memories[0].summary}\nĐã giải quyết: ${memories[0].resolved_topics}\nFacts: ${memories[0].customer_facts}` : "";
-    
-    let prefStr = "";
-    const metadata = (conversation.metadata ?? {}) as Record<string, unknown>;
-    if (metadata.customer_id) {
-      const prefs = await this.listAgentCustomerPreferences({ customer_id: metadata.customer_id as string }, { take: 10 }, sharedContext);
-      if (prefs.length) prefStr = "\n[HỒ SƠ KHÁCH HÀNG]\n" + prefs.map(p => `- ${p.preference_type}: ${p.value}`).join("\n");
-    }
-    
-    // Khởi tạo AgentEngine
-    const { AgentEngine } = await import("./agent-engine");
-    const credentials = await this.getActiveAiProviderCredentials("generation", conversation.tenant_id);
-    if (!credentials.length) throw new Error("No AI Provider");
-    
-    const engine = new AgentEngine(
-      this,
-      { customer_id: metadata?.customer_id as string, tenant_id: conversation.tenant_id },
-      credentials[0].api_key,
-      credentials[0].model
-    );
-    
-    const systemPrompt = "Bạn là tư vấn viên thời trang thông minh. Hãy dùng công cụ tìm kiếm để tư vấn cho khách. Trả lời ngắn gọn, tự nhiên.\n" + memoryStr + prefStr;
-    const answer = await engine.runCustomerSupportSession(systemPrompt, formattedMessages);
-    
-    return { body: answer, disposition: "ANSWER", grounded: true, citations: [], product_media: [] };
-  }
   AgentActionRequest,
   AgentApproval,
   AgentAuditEvent,
@@ -419,6 +374,51 @@ class AgentOperationsModuleService extends MedusaService({
   AgentTask,
   AgentToolCall,
 }) {
+  // [AGENTIC REFACTOR] Phương thức mới sử dụng AgentEngine
+  async processCustomerMessageAgentic(input: { inbound_message_id: string }, @MedusaContext() sharedContext: Context = {}) {
+    const inbound = await this.retrieveAgentMessage(input.inbound_message_id, {}, sharedContext);
+    const conversation = await this.retrieveAgentConversation(inbound.conversation_id, {}, sharedContext);
+    
+    // Load history
+    const contextMessages = await this.listAgentMessages(
+      { conversation_id: inbound.conversation_id }, 
+      { take: 10 }, 
+      sharedContext
+    );
+    
+    const formattedMessages = contextMessages.map(m => ({
+      role: (m.direction === "INBOUND" ? "user" : "assistant") as any,
+      content: m.body || ""
+    }));
+    
+    // Load Memory & Preferences to inject into System Prompt
+    const memories = await this.listAgentConversationMemories({ conversation_id: conversation.id }, { take: 1 }, sharedContext);
+    const memoryStr = memories[0] ? `[TRÍ NHỚ CUỘC TRÒ CHUYỆN]\nTóm tắt: ${memories[0].summary}\nĐã giải quyết: ${memories[0].resolved_topics}\nFacts: ${memories[0].customer_facts}` : "";
+    
+    let prefStr = "";
+    const metadata = (conversation.metadata ?? {}) as Record<string, unknown>;
+    if (metadata.customer_id) {
+      const prefs = await this.listAgentCustomerPreferences({ customer_id: metadata.customer_id as string }, { take: 10 }, sharedContext);
+      if (prefs.length) prefStr = "\n[HỒ SƠ KHÁCH HÀNG]\n" + prefs.map(p => `- ${p.preference_type}: ${p.value}`).join("\n");
+    }
+    
+    // Khởi tạo AgentEngine
+    const { AgentEngine } = await import("./agent-engine.js");
+    const credentials = await this.getActiveAiProviderCredentials("generation", conversation.tenant_id);
+    if (!credentials.length) throw new Error("No AI Provider");
+    
+    const engine = new AgentEngine(
+      this,
+      { customer_id: metadata?.customer_id as string, tenant_id: conversation.tenant_id },
+      credentials[0].api_key,
+      credentials[0].model
+    );
+    
+    const systemPrompt = "Bạn là tư vấn viên thời trang thông minh. Hãy dùng công cụ tìm kiếm để tư vấn cho khách. Trả lời ngắn gọn, tự nhiên.\n" + memoryStr + prefStr;
+    const answer = await engine.runCustomerSupportSession(systemPrompt, formattedMessages);
+    
+    return { body: answer, disposition: "ANSWER", grounded: true, citations: [], product_media: [], delivery_id: undefined, response_message_id: undefined, support_task_id: undefined } as any;
+  }
   async broadcastMessageCreated(msg: {
     body: string
     channel: string
@@ -960,7 +960,7 @@ class AgentOperationsModuleService extends MedusaService({
     const credentials = await this.getActiveAiProviderCredentials("generation", conversation.tenant_id);
     if (!credentials.length) return { memory: existing, updated: false };
     
-    const { MemoryEngine } = await import("./memory-engine");
+    const { MemoryEngine } = await import("./memory-engine.js");
     const engine = new MemoryEngine(credentials[0].api_key, credentials[0].model);
     
     const previousMemoryObj = existing ? {
@@ -974,9 +974,9 @@ class AgentOperationsModuleService extends MedusaService({
     
     const data = {
       summary: memoryUpdate.summary,
-      customer_facts: JSON.stringify(memoryUpdate.customer_facts),
-      open_questions: JSON.stringify(memoryUpdate.open_questions),
-      resolved_topics: JSON.stringify(memoryUpdate.resolved_topics),
+      customer_facts: memoryUpdate.customer_facts as any,
+      open_questions: memoryUpdate.open_questions as any,
+      resolved_topics: memoryUpdate.resolved_topics as any,
       last_message_id: latestMessage.id,
       source_message_count: messageCount,
       summarized_at: new Date()

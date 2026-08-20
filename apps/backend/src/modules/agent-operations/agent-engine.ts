@@ -21,13 +21,13 @@ export class AgentEngine {
   ) {
     this.llm = new ChatGoogleGenerativeAI({
       apiKey,
-      modelName,
+      model: modelName,
       temperature: 0.2,
     });
   }
 
   private getLangchainTools() {
-    const tools = [];
+    const tools: any[] = [];
     
     // 1. Tool tìm kiếm sản phẩm
     const catalogToolDef = AGENT_TOOL_REGISTRY["catalog.read"];
@@ -37,7 +37,7 @@ export class AgentEngine {
           const result = await executeCatalogRead(this.service.__container__, args, { tenant_id: this.context.tenant_id });
           return JSON.stringify(result.output);
         },
-        { name: "search_catalog", description: "Tìm kiếm sản phẩm trong kho. Gọi khi khách hỏi mua đồ.", schema: catalogToolDef.input_schema }
+        { name: "search_catalog", description: "Tìm kiếm sản phẩm trong kho. Gọi khi khách hỏi mua đồ.", schema: catalogToolDef.input_schema as any }
       ));
     }
 
@@ -50,7 +50,7 @@ export class AgentEngine {
           const result = await this.service.searchGovernedKnowledge({ ...args, limit: 5 }, { tenant_id: this.context.tenant_id });
           return JSON.stringify(result.output.results.map((r: any) => ({ title: r.title, content: r.excerpt })));
         },
-        { name: "search_knowledge_base", description: "Tra cứu chính sách cửa hàng (đổi trả, bảo hành, phí ship).", schema: knowledgeToolDef.input_schema }
+        { name: "search_knowledge_base", description: "Tra cứu chính sách cửa hàng (đổi trả, bảo hành, phí ship).", schema: knowledgeToolDef.input_schema as any }
       ));
     }
     
@@ -61,7 +61,7 @@ export class AgentEngine {
         async (args: any) => {
           return JSON.stringify({ status: "ESCALATED", message: "Đã tạo ticket cho nhân viên." });
         },
-        { name: "escalate_to_human", description: "Bàn giao cho nhân viên thật xử lý khi vấn đề quá phức tạp.", schema: escalateToolDef.input_schema }
+        { name: "escalate_to_human", description: "Bàn giao cho nhân viên thật xử lý khi vấn đề quá phức tạp.", schema: escalateToolDef.input_schema as any }
       ));
     }
 
@@ -81,7 +81,7 @@ export class AgentEngine {
             });
             if (!orders || orders.length === 0) return JSON.stringify({ error: "Không tìm thấy đơn hàng nào khớp với mã này của bạn." });
             
-            const { executeOrderRead } = await import("./order-read-runtime");
+            const { executeOrderRead } = await import("./order-read-runtime.js");
             const result = await executeOrderRead(this.service.__container__, { order_id: orders[0].id }, "customer-agent");
             return JSON.stringify(result.output);
           } catch (e: any) {

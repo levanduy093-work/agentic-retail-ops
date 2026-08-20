@@ -21,7 +21,7 @@ export class MemoryEngine {
     // Sử dụng model có hỗ trợ structured output (withStructuredOutput)
     this.llm = new ChatGoogleGenerativeAI({
       apiKey,
-      modelName,
+      model: modelName,
       temperature: 0.1,
     });
   }
