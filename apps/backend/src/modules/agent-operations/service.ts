@@ -346,6 +346,51 @@ import {
 import { agentRealtimeHub } from "./realtime-hub"
 
 class AgentOperationsModuleService extends MedusaService({
+  // [AGENTIC REFACTOR] Phương thức mới sử dụng AgentEngine
+  async processCustomerMessageAgentic(input: { inbound_message_id: string }, @MedusaContext() sharedContext: Context = {}) {
+    const inbound = await this.retrieveAgentMessage(input.inbound_message_id, {}, sharedContext);
+    const conversation = await this.retrieveAgentConversation(inbound.conversation_id, {}, sharedContext);
+    
+    // Load history
+    const contextMessages = await this.listAgentMessages(
+      { conversation_id: inbound.conversation_id }, 
+      { take: 10 }, 
+      sharedContext
+    );
+    
+    const formattedMessages = contextMessages.map(m => ({
+      role: m.direction === "INBOUND" ? "user" : "assistant",
+      content: m.body || ""
+    }));
+    
+    // Load Memory & Preferences to inject into System Prompt
+    const memories = await this.listAgentConversationMemories({ conversation_id: conversation.id }, { take: 1 }, sharedContext);
+    const memoryStr = memories[0] ? `[TRÍ NHỚ CUỘC TRÒ CHUYỆN]\nTóm tắt: ${memories[0].summary}\nĐã giải quyết: ${memories[0].resolved_topics}\nFacts: ${memories[0].customer_facts}` : "";
+    
+    let prefStr = "";
+    const metadata = (conversation.metadata ?? {}) as Record<string, unknown>;
+    if (metadata.customer_id) {
+      const prefs = await this.listAgentCustomerPreferences({ customer_id: metadata.customer_id as string }, { take: 10 }, sharedContext);
+      if (prefs.length) prefStr = "\n[HỒ SƠ KHÁCH HÀNG]\n" + prefs.map(p => `- ${p.preference_type}: ${p.value}`).join("\n");
+    }
+    
+    // Khởi tạo AgentEngine
+    const { AgentEngine } = await import("./agent-engine");
+    const credentials = await this.getActiveAiProviderCredentials("generation", conversation.tenant_id);
+    if (!credentials.length) throw new Error("No AI Provider");
+    
+    const engine = new AgentEngine(
+      this,
+      { customer_id: metadata?.customer_id as string, tenant_id: conversation.tenant_id },
+      credentials[0].api_key,
+      credentials[0].model
+    );
+    
+    const systemPrompt = "Bạn là tư vấn viên thời trang thông minh. Hãy dùng công cụ tìm kiếm để tư vấn cho khách. Trả lời ngắn gọn, tự nhiên.\n" + memoryStr + prefStr;
+    const answer = await engine.runCustomerSupportSession(systemPrompt, formattedMessages);
+    
+    return { body: answer, disposition: "ANSWER", grounded: true, citations: [], product_media: [] };
+  }
   AgentActionRequest,
   AgentApproval,
   AgentAuditEvent,
@@ -872,7 +917,97 @@ class AgentOperationsModuleService extends MedusaService({
   }
 
   @InjectManager()
+  // [AGENTIC REFACTOR] Nâng cấp Trí nhớ khách hàng (Phase 2)
   async refreshConversationMemory(
+    conversationId: string,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const conversation = await this.retrieveAgentConversation(conversationId, {}, sharedContext);
+    // Lấy TẤT CẢ tin nhắn chưa tóm tắt
+    const [messages, messageCount] = await this.listAndCountAgentMessages(
+      { conversation_id: conversation.id },
+      { order: { occurred_at: "DESC" }, take: 100 },
+      sharedContext
+    );
+    const latestMessage = messages[0];
+    if (!latestMessage) return { memory: null, updated: false };
+    
+    const existing = (
+      await this.listAgentConversationMemories(
+        { conversation_id: conversation.id },
+        { take: 1 },
+        sharedContext
+      )
+    )[0];
+    if (existing?.last_message_id === latestMessage.id) {
+      return { memory: existing, updated: false };
+    }
+    
+    const orderedMessages = messages.slice().reverse();
+    const previousMessageIndex = existing
+      ? orderedMessages.findIndex(m => m.id === existing.last_message_id)
+      : -1;
+    
+    const unsummarizedMessages = orderedMessages
+      .slice(previousMessageIndex >= 0 ? previousMessageIndex + 1 : 0)
+      .map(m => ({
+        content: m.body,
+        role: m.direction === "INBOUND" ? "user" : "assistant"
+      }));
+      
+    if (unsummarizedMessages.length === 0) return { memory: existing, updated: false };
+    
+    const credentials = await this.getActiveAiProviderCredentials("generation", conversation.tenant_id);
+    if (!credentials.length) return { memory: existing, updated: false };
+    
+    const { MemoryEngine } = await import("./memory-engine");
+    const engine = new MemoryEngine(credentials[0].api_key, credentials[0].model);
+    
+    const previousMemoryObj = existing ? {
+      summary: existing.summary,
+      customer_facts: typeof existing.customer_facts === "string" ? JSON.parse(existing.customer_facts) : existing.customer_facts,
+      open_questions: typeof existing.open_questions === "string" ? JSON.parse(existing.open_questions) : existing.open_questions,
+      resolved_topics: typeof existing.resolved_topics === "string" ? JSON.parse(existing.resolved_topics) : existing.resolved_topics
+    } : null;
+    
+    const memoryUpdate = await engine.summarizeConversation(previousMemoryObj, unsummarizedMessages);
+    
+    const data = {
+      summary: memoryUpdate.summary,
+      customer_facts: JSON.stringify(memoryUpdate.customer_facts),
+      open_questions: JSON.stringify(memoryUpdate.open_questions),
+      resolved_topics: JSON.stringify(memoryUpdate.resolved_topics),
+      last_message_id: latestMessage.id,
+      source_message_count: messageCount,
+      summarized_at: new Date()
+    };
+    
+    const memory = existing
+      ? await this.updateAgentConversationMemories({ ...data, id: existing.id }, sharedContext)
+      : await this.createAgentConversationMemories({ ...data, conversation_id: conversation.id }, sharedContext);
+    
+    if (memoryUpdate.extracted_preferences && memoryUpdate.extracted_preferences.length > 0) {
+      const metadata = (conversation.metadata ?? {}) as Record<string, unknown>;
+      const customerId = metadata.customer_id as string;
+      if (customerId) {
+        for (const pref of memoryUpdate.extracted_preferences) {
+          await this.createAgentCustomerPreferences({
+            tenant_id: conversation.tenant_id,
+            customer_id: customerId,
+            preference_type: pref.preference_type,
+            value: pref.value,
+            status: "CUSTOMER_STATED",
+            source_conversation_id: conversation.id,
+            source_message_id: latestMessage.id
+          }, sharedContext);
+        }
+      }
+    }
+    
+    return { memory, updated: true };
+  }
+
+  async refreshConversationMemoryLegacy(
     conversationId: string,
     @MedusaContext() sharedContext: Context = {}
   ) {

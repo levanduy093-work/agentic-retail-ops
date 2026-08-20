@@ -1,11 +1,14 @@
 import { MedusaError } from "@medusajs/framework/utils"
 
+export type ToolDefinition = { name: string; description: string; parameters: Record<string, unknown>; };
+
 export type ModelInvocation = {
   agent_id: string
   image_urls?: string[]
-  input: Record<string, unknown>
+  input: Record<string, unknown> | any[];
+  tools?: ToolDefinition[];
   max_tokens: number
-  output_schema: Record<string, unknown>
+  output_schema?: Record<string, unknown>
   prompt_key: string
   prompt_version: string
   system_prompt: string
@@ -53,7 +56,7 @@ export function assertModelInvocation(input: ModelInvocation) {
       "Model max_tokens must be between 1 and 8192."
     )
   }
-  if (!Object.keys(input.output_schema).length) {
+  if (!Object.keys(input.output_schema || {}).length && !input.tools?.length) {
     throw new MedusaError(
       MedusaError.Types.INVALID_DATA,
       "A structured output schema is required for model runs."
