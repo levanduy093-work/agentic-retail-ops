@@ -14,6 +14,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { FormEvent, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { FacebookMessengerIcon, TelegramIcon, ZaloIcon, ClipboardCopyIcon } from "../../lib/icons"
 import { sdk } from "../../lib/sdk"
 
 type ChannelStatus = {
@@ -21,9 +22,9 @@ type ChannelStatus = {
   allow_unmapped_users: boolean
   bot_id: string | null
   bot_username: string | null
-  channel: "TELEGRAM" | "ZALO"
+  channel: "TELEGRAM" | "ZALO" | "MESSENGER"
   configured: boolean
-  identities: Array<{ chat_id?: string; user_id: string; zalo_user_id?: string }>
+  identities: Array<{ chat_id?: string; psid?: string; user_id: string; zalo_user_id?: string }>
   oa_avatar?: string | null
   public_base_url: string | null
   secret_hint: string | null
@@ -34,6 +35,7 @@ type ChannelStatus = {
   } | null
   status: "ACTIVE" | "DISABLED"
   updated_at: string | null
+  verify_token?: string | null
   webhook_url: string | null
 }
 
@@ -62,6 +64,15 @@ type ZaloTestResponse = {
   ok: boolean
 }
 
+type FacebookTestResponse = {
+  ok: boolean
+  page: {
+    avatar?: string
+    page_id: string
+    page_name: string
+  }
+}
+
 type ChatChannelsContentProps = {
   embedded?: boolean
 }
@@ -75,12 +86,16 @@ export const ChatChannelsContent = ({
 
   const [selectedTelegram, setSelectedTelegram] = useState<ChannelStatus | null>(null)
   const [selectedZalo, setSelectedZalo] = useState<ChannelStatus | null>(null)
+  const [selectedMessenger, setSelectedMessenger] = useState<ChannelStatus | null>(null)
 
   const [telegramTestResult, setTelegramTestResult] = useState<string | null>(null)
   const [telegramTestLoading, setTelegramTestLoading] = useState(false)
 
   const [zaloTestResult, setZaloTestResult] = useState<string | null>(null)
   const [zaloTestLoading, setZaloTestLoading] = useState(false)
+
+  const [messengerTestResult, setMessengerTestResult] = useState<string | null>(null)
+  const [messengerTestLoading, setMessengerTestLoading] = useState(false)
 
   const [telegramForm, setTelegramForm] = useState({
     allow_unmapped_users: true,
@@ -104,6 +119,18 @@ export const ChatChannelsContent = ({
     secret_key: "",
   })
 
+  const [messengerForm, setMessengerForm] = useState({
+    allow_unmapped_users: true,
+    api_base_url: "https://graph.facebook.com/v19.0",
+    app_id: "",
+    app_secret: "",
+    burst_limit: 6,
+    daily_limit: 100,
+    page_access_token: "",
+    public_base_url: "",
+    verify_token: "",
+  })
+
   const channelsQuery = useQuery({
     queryFn: () =>
       sdk.client.fetch<ChannelListResponse>(
@@ -120,6 +147,9 @@ export const ChatChannelsContent = ({
   )
   const zaloChannel = channelsQuery.data?.channels.find(
     (c) => c.channel === "ZALO"
+  )
+  const messengerChannel = channelsQuery.data?.channels.find(
+    (c) => c.channel === "MESSENGER"
   )
 
   const openTelegramDrawer = (channel?: ChannelStatus) => {
@@ -169,6 +199,32 @@ export const ChatChannelsContent = ({
       public_base_url: defaultUrl,
       refresh_token: "",
       secret_key: "",
+    })
+  }
+
+  const openMessengerDrawer = (channel?: ChannelStatus) => {
+    setMessengerTestResult(null)
+    const current = channel ?? messengerChannel
+    setSelectedMessenger(current ?? null)
+    const defaultUrl =
+      current?.public_base_url &&
+      !current.public_base_url.includes("invalid") &&
+      !current.public_base_url.includes("webhooks/")
+        ? current.public_base_url
+        : typeof window !== "undefined"
+          ? window.location.origin
+          : ""
+
+    setMessengerForm({
+      allow_unmapped_users: current?.allow_unmapped_users ?? true,
+      api_base_url: "https://graph.facebook.com/v19.0",
+      app_id: "",
+      app_secret: "",
+      burst_limit: current?.security?.burst_limit ?? 6,
+      daily_limit: current?.security?.daily_limit ?? 100,
+      page_access_token: "",
+      public_base_url: defaultUrl,
+      verify_token: current?.verify_token ?? "",
     })
   }
 
@@ -385,6 +441,113 @@ export const ChatChannelsContent = ({
     saveZaloMutation.mutate()
   }
 
+  const testMessengerMutation = useMutation({
+    mutationFn: async () => {
+      const token = messengerForm.page_access_token.trim()
+      if (!token && !messengerChannel?.configured) {
+        throw new Error(t("knowledgeHub.chatChannels.messenger.fields.pageAccessTokenPlaceholder"))
+      }
+      setMessengerTestLoading(true)
+      setMessengerTestResult(null)
+      try {
+        const res = await sdk.client.fetch<FacebookTestResponse>(
+          "/admin/agent-operations/channels/messenger/test",
+          {
+            body: {
+              ...(token ? { page_access_token: token } : {}),
+              account_ref: "primary",
+              api_base_url: messengerForm.api_base_url,
+              tenant_id: "default",
+            },
+            method: "POST",
+          }
+        )
+        const msg = t("knowledgeHub.chatChannels.messenger.testSuccess", {
+          id: res.page.page_id,
+          name: res.page.page_name,
+        })
+        setMessengerTestResult(msg)
+        toast.success(msg)
+      } catch (err: any) {
+        const errMsg = err?.message || t("knowledgeHub.chatChannels.messenger.testError")
+        setMessengerTestResult(errMsg)
+        toast.error(errMsg)
+      } finally {
+        setMessengerTestLoading(false)
+      }
+    },
+  })
+
+  const saveMessengerMutation = useMutation({
+    mutationFn: async () => {
+      return sdk.client.fetch("/admin/agent-operations/channels/messenger", {
+        body: {
+          account_ref: "primary",
+          allow_unmapped_users: messengerForm.allow_unmapped_users,
+          api_base_url: messengerForm.api_base_url,
+          app_id: messengerForm.app_id.trim() || undefined,
+          ...(messengerForm.app_secret.trim() ? { app_secret: messengerForm.app_secret.trim() } : {}),
+          ...(messengerForm.page_access_token.trim() ? { page_access_token: messengerForm.page_access_token.trim() } : {}),
+          public_base_url: messengerForm.public_base_url.trim(),
+          security: {
+            burst_limit: Number(messengerForm.burst_limit),
+            daily_limit: Number(messengerForm.daily_limit),
+          },
+          tenant_id: "default",
+          ...(messengerForm.verify_token.trim() ? { verify_token: messengerForm.verify_token.trim() } : {}),
+        },
+        method: "POST",
+      })
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || t("knowledgeHub.chatChannels.saveError"))
+    },
+    onSuccess: async () => {
+      setSelectedMessenger(null)
+      setMessengerForm((cur) => ({ ...cur, page_access_token: "" }))
+      await refresh()
+      toast.success(t("knowledgeHub.chatChannels.saveSuccess"))
+    },
+  })
+
+  const disconnectMessengerMutation = useMutation({
+    mutationFn: async () => {
+      return sdk.client.fetch(
+        "/admin/agent-operations/channels/messenger/disconnect",
+        {
+          body: {
+            account_ref: "primary",
+            tenant_id: "default",
+          },
+          method: "POST",
+        }
+      )
+    },
+    onError: () => toast.error(t("knowledgeHub.chatChannels.disconnectError")),
+    onSuccess: async () => {
+      await refresh()
+      toast.success(t("knowledgeHub.chatChannels.disconnectSuccess"))
+    },
+  })
+
+  const handleDisconnectMessenger = async () => {
+    const ok = await confirm({
+      cancelText: t("knowledgeHub.cancel"),
+      confirmText: t("knowledgeHub.chatChannels.messenger.disconnectAction"),
+      description: t("knowledgeHub.chatChannels.disconnectConfirm"),
+      title: t("knowledgeHub.chatChannels.messenger.disconnectAction"),
+      variant: "danger",
+    })
+    if (ok) {
+      disconnectMessengerMutation.mutate()
+    }
+  }
+
+  const handleMessengerSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    saveMessengerMutation.mutate()
+  }
+
   return (
     <div className="flex flex-col gap-y-4">
       {!embedded && (
@@ -416,13 +579,8 @@ export const ChatChannelsContent = ({
             {/* Telegram Channel Item */}
             <div className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-500 shadow-sm border">
-                  <svg
-                    className="h-6 w-6 fill-current"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161c-.18.847-.96 4.966-1.359 7.098-.17.9-.5 1.2-.818 1.23-.695.064-1.222-.46-1.896-.9-1.055-.693-1.652-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.664 3.498-1.524 5.831-2.529 7.001-3.014 3.332-1.386 4.025-1.627 4.476-1.635.099-.002.321.023.465.14.121.099.155.232.171.326.016.094.037.309.02.479z" />
-                  </svg>
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-[#229ED9] shadow-sm border border-sky-100">
+                  <TelegramIcon size={24} color="#229ED9" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
@@ -430,6 +588,7 @@ export const ChatChannelsContent = ({
                       {t("knowledgeHub.chatChannels.telegram.name")}
                     </Text>
                     <StatusBadge
+                      className="shrink-0 whitespace-nowrap"
                       color={
                         telegramChannel?.status === "ACTIVE"
                           ? "green"
@@ -508,11 +667,12 @@ export const ChatChannelsContent = ({
                 {zaloChannel?.oa_avatar ? (
                   <Avatar
                     className="h-12 w-12 shrink-0 rounded-xl border shadow-sm"
+                    fallback="Zalo"
                     src={zaloChannel.oa_avatar}
                   />
                 ) : (
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 font-bold shadow-sm border text-sm">
-                    Zalo
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0068FF] shadow-sm border border-blue-100">
+                    <ZaloIcon size={24} color="#0068FF" />
                   </div>
                 )}
                 <div>
@@ -521,6 +681,7 @@ export const ChatChannelsContent = ({
                       {t("knowledgeHub.chatChannels.zalo.name")}
                     </Text>
                     <StatusBadge
+                      className="shrink-0 whitespace-nowrap"
                       color={
                         zaloChannel?.status === "ACTIVE"
                           ? "green"
@@ -544,7 +705,7 @@ export const ChatChannelsContent = ({
                         <span>
                           OA:{" "}
                           <strong className="text-ui-fg-base">
-                            {zaloChannel.bot_username}
+                            @{zaloChannel.bot_username}
                           </strong>
                         </span>
                       )}
@@ -593,21 +754,96 @@ export const ChatChannelsContent = ({
               </div>
             </div>
 
-            {/* Facebook Messenger Placeholder */}
-            <div className="flex items-center justify-between p-6 opacity-60">
+            {/* Facebook Messenger Channel Item */}
+            <div className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 border">
-                  <span className="font-bold text-sm">FB</span>
-                </div>
+                {messengerChannel?.oa_avatar ? (
+                  <Avatar
+                    className="h-12 w-12 shrink-0 rounded-xl border shadow-sm"
+                    fallback="Messenger"
+                    src={messengerChannel.oa_avatar}
+                  />
+                ) : (
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-[#0084FF] shadow-sm border border-blue-100">
+                    <FacebookMessengerIcon size={24} color="#0084FF" />
+                  </div>
+                )}
                 <div>
                   <div className="flex items-center gap-2">
-                    <Text weight="plus">Facebook Messenger</Text>
-                    <StatusBadge color="grey">Sắp ra mắt</StatusBadge>
+                    <Text weight="plus">
+                      {t("knowledgeHub.chatChannels.messenger.name")}
+                    </Text>
+                    <StatusBadge
+                      className="shrink-0 whitespace-nowrap"
+                      color={
+                        messengerChannel?.status === "ACTIVE"
+                          ? "green"
+                          : messengerChannel?.configured
+                            ? "orange"
+                            : "grey"
+                      }
+                    >
+                      {messengerChannel?.status === "ACTIVE"
+                        ? t("knowledgeHub.chatChannels.status.active")
+                        : t("knowledgeHub.chatChannels.status.disabled")}
+                    </StatusBadge>
                   </div>
                   <Text className="mt-1 text-ui-fg-subtle" size="small">
-                    Kết nối Fanpage tự động trả lời tin nhắn Messenger.
+                    {t("knowledgeHub.chatChannels.messenger.description")}
                   </Text>
+
+                  {messengerChannel?.configured && (
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ui-fg-muted">
+                      {messengerChannel.bot_username && (
+                        <span>
+                          Fanpage:{" "}
+                          <strong className="text-ui-fg-base">
+                            {messengerChannel.bot_username}
+                          </strong>
+                        </span>
+                      )}
+                      {messengerChannel.secret_hint && (
+                        <span>
+                          Info:{" "}
+                          <span className="font-mono text-ui-fg-subtle">
+                            {messengerChannel.secret_hint}
+                          </span>
+                          <span className="ml-1 rounded bg-ui-bg-subtle px-1 py-0.5 text-[10px] text-ui-fg-muted border">
+                            AES-256
+                          </span>
+                        </span>
+                      )}
+                      {messengerChannel.webhook_url && (
+                        <span className="truncate max-w-xs">
+                          Webhook:{" "}
+                          <span className="font-mono text-ui-fg-subtle">
+                            {messengerChannel.webhook_url}
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {messengerChannel?.status === "ACTIVE" && (
+                  <Button
+                    disabled={disconnectMessengerMutation.isPending}
+                    onClick={handleDisconnectMessenger}
+                    size="small"
+                    variant="danger"
+                  >
+                    {t("knowledgeHub.chatChannels.messenger.disconnectAction")}
+                  </Button>
+                )}
+                <Button
+                  onClick={() => openMessengerDrawer(messengerChannel)}
+                  size="small"
+                  variant="secondary"
+                >
+                  {t("knowledgeHub.chatChannels.messenger.configureAction")}
+                </Button>
               </div>
             </div>
           </div>
@@ -623,9 +859,14 @@ export const ChatChannelsContent = ({
       >
         <Drawer.Content className="overflow-y-auto">
           <Drawer.Header>
-            <Drawer.Title>
-              {t("knowledgeHub.chatChannels.telegram.drawerTitle")}
-            </Drawer.Title>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[#229ED9]/10 text-[#229ED9]">
+                <TelegramIcon size={18} />
+              </div>
+              <Drawer.Title>
+                {t("knowledgeHub.chatChannels.telegram.drawerTitle")}
+              </Drawer.Title>
+            </div>
             <Drawer.Description>
               {t("knowledgeHub.chatChannels.telegram.drawerHint")}
             </Drawer.Description>
@@ -633,10 +874,42 @@ export const ChatChannelsContent = ({
 
           <form onSubmit={handleTelegramSubmit}>
             <Drawer.Body className="space-y-4">
-              <div className="space-y-1">
-                <Label htmlFor="telegram-bot-token" size="small" weight="plus">
-                  {t("knowledgeHub.chatChannels.telegram.fields.botToken")}
-                </Label>
+              {selectedTelegram?.configured && selectedTelegram?.secret_hint && (
+                <div className="rounded-lg border border-ui-border-base bg-ui-bg-subtle p-3 flex items-start gap-3">
+                  <div className="rounded-md bg-ui-bg-base p-1.5 border shadow-2xs text-[#229ED9] shrink-0 mt-0.5">
+                    <TelegramIcon size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <Text size="small" weight="plus" className="text-ui-fg-base truncate">
+                        {selectedTelegram.secret_hint}
+                      </Text>
+                      <StatusBadge className="shrink-0 whitespace-nowrap" color="green">
+                        {t("knowledgeHub.chatChannels.status.active")}
+                      </StatusBadge>
+                    </div>
+                    <Text size="xsmall" className="text-ui-fg-subtle">
+                      {t("knowledgeHub.chatChannels.telegram.fields.botTokenStoredHint", {
+                        hint: selectedTelegram.secret_hint,
+                      })}
+                    </Text>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between min-h-[22px]">
+                  <Label htmlFor="telegram-bot-token" size="small" weight="plus">
+                    {t("knowledgeHub.chatChannels.telegram.fields.botToken")}
+                  </Label>
+                  {selectedTelegram?.configured ? (
+                    <span className="rounded bg-ui-bg-subtle px-1.5 py-0.5 text-[10px] font-mono text-ui-fg-muted border">
+                      AES-256
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-ui-fg-error">* {t("knowledgeHub.required", "Bắt buộc")}</span>
+                  )}
+                </div>
                 <Input
                   autoComplete="off"
                   id="telegram-bot-token"
@@ -644,10 +917,9 @@ export const ChatChannelsContent = ({
                     setTelegramForm((cur) => ({ ...cur, bot_token: e.target.value }))
                   }
                   placeholder={
-                    selectedTelegram?.secret_hint
+                    selectedTelegram?.configured
                       ? t(
-                          "knowledgeHub.chatChannels.telegram.fields.botTokenStoredHint",
-                          { hint: selectedTelegram.secret_hint }
+                          "knowledgeHub.chatChannels.telegram.fields.botTokenPlaceholderConfigured"
                         )
                       : t(
                           "knowledgeHub.chatChannels.telegram.fields.botTokenPlaceholder"
@@ -656,68 +928,94 @@ export const ChatChannelsContent = ({
                   type="password"
                   value={telegramForm.bot_token}
                 />
-                {selectedTelegram?.secret_hint && (
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <Button
+                    disabled={
+                      telegramTestLoading ||
+                      (!telegramForm.bot_token.trim() && !selectedTelegram?.configured)
+                    }
+                    isLoading={telegramTestLoading}
+                    onClick={() => testTelegramBotMutation.mutate()}
+                    size="small"
+                    type="button"
+                    variant="secondary"
+                  >
+                    {t("knowledgeHub.chatChannels.telegram.testAction")}
+                  </Button>
+                  {telegramTestResult && (
+                    <Text
+                      className={
+                        telegramTestResult.includes("thành công") || telegramTestResult.includes("Successfully")
+                          ? "text-ui-fg-interactive text-xs font-medium"
+                          : "text-ui-fg-error text-xs font-medium"
+                      }
+                      size="small"
+                    >
+                      {telegramTestResult}
+                    </Text>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t pt-4 space-y-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between min-h-[22px]">
+                    <Label htmlFor="telegram-public-url" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.telegram.fields.publicBaseUrl")}
+                    </Label>
+                    <span className="text-[11px] text-ui-fg-interactive font-medium">HTTPS</span>
+                  </div>
+                  <Input
+                    id="telegram-public-url"
+                    onChange={(e) =>
+                      setTelegramForm((cur) => ({
+                        ...cur,
+                        public_base_url: e.target.value,
+                      }))
+                    }
+                    placeholder={t(
+                      "knowledgeHub.chatChannels.telegram.fields.publicBaseUrlPlaceholder"
+                    )}
+                    required
+                    type="url"
+                    value={telegramForm.public_base_url}
+                  />
                   <Text className="text-ui-fg-subtle" size="xsmall">
                     {t(
-                      "knowledgeHub.chatChannels.telegram.fields.botTokenStoredHint",
-                      { hint: selectedTelegram.secret_hint }
+                      "knowledgeHub.chatChannels.telegram.fields.publicBaseUrlHint"
                     )}
                   </Text>
-                )}
-              </div>
+                </div>
 
-              <div className="flex items-center gap-3">
-                <Button
-                  disabled={
-                    telegramTestLoading ||
-                    (!telegramForm.bot_token.trim() && !selectedTelegram?.configured)
-                  }
-                  isLoading={telegramTestLoading}
-                  onClick={() => testTelegramBotMutation.mutate()}
-                  size="small"
-                  type="button"
-                  variant="secondary"
-                >
-                  {t("knowledgeHub.chatChannels.telegram.testAction")}
-                </Button>
-                {telegramTestResult && (
-                  <Text
-                    className={
-                      telegramTestResult.includes("thành công") || telegramTestResult.includes("Successfully")
-                        ? "text-ui-fg-interactive text-xs"
-                        : "text-ui-fg-error text-xs"
-                    }
-                    size="small"
-                  >
-                    {telegramTestResult}
+                <div className="rounded-lg border border-ui-border-base bg-ui-bg-subtle p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Text className="text-ui-fg-base" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.telegram.webhookUrl")}
+                    </Text>
+                    <Button
+                      className="h-6 px-2 text-xs"
+                      onClick={() => {
+                        const base = telegramForm.public_base_url.trim().replace(/\/$/, "") || "https://trendhub.sbs"
+                        const url = `${base}/api/store/telegram/webhook`
+                        navigator.clipboard.writeText(url)
+                        toast.success(t("knowledgeHub.chatChannels.telegram.webhookCopied"))
+                      }}
+                      size="small"
+                      type="button"
+                      variant="secondary"
+                    >
+                      <ClipboardCopyIcon className="mr-1" size={12} />
+                      {t("knowledgeHub.chatChannels.telegram.copyWebhookUrl")}
+                    </Button>
+                  </div>
+                  <div className="rounded bg-ui-bg-base px-2.5 py-1.5 border font-mono text-xs text-ui-fg-subtle break-all select-all">
+                    {`${(telegramForm.public_base_url.trim().replace(/\/$/, "") || "https://trendhub.sbs")}/api/store/telegram/webhook`}
+                  </div>
+                  <Text className="text-ui-fg-muted" size="xsmall">
+                    {t("knowledgeHub.chatChannels.telegram.webhookUrlHint")}
                   </Text>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="telegram-public-url" size="small" weight="plus">
-                  {t("knowledgeHub.chatChannels.telegram.fields.publicBaseUrl")}
-                </Label>
-                <Input
-                  id="telegram-public-url"
-                  onChange={(e) =>
-                    setTelegramForm((cur) => ({
-                      ...cur,
-                      public_base_url: e.target.value,
-                    }))
-                  }
-                  placeholder={t(
-                    "knowledgeHub.chatChannels.telegram.fields.publicBaseUrlPlaceholder"
-                  )}
-                  required
-                  type="url"
-                  value={telegramForm.public_base_url}
-                />
-                <Text className="text-ui-fg-subtle" size="xsmall">
-                  {t(
-                    "knowledgeHub.chatChannels.telegram.fields.publicBaseUrlHint"
-                  )}
-                </Text>
+                </div>
               </div>
 
               <div className="border-t pt-4 space-y-3">
@@ -728,12 +1026,14 @@ export const ChatChannelsContent = ({
                 </Text>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="telegram-burst-limit" size="small">
-                      {t(
-                        "knowledgeHub.chatChannels.telegram.fields.burstLimit"
-                      )}
-                    </Label>
+                  <div className="space-y-1.5">
+                    <div className="min-h-[22px] flex items-center">
+                      <Label htmlFor="telegram-burst-limit" size="small">
+                        {t(
+                          "knowledgeHub.chatChannels.telegram.fields.burstLimit"
+                        )}
+                      </Label>
+                    </div>
                     <Input
                       id="telegram-burst-limit"
                       min={1}
@@ -748,12 +1048,14 @@ export const ChatChannelsContent = ({
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <Label htmlFor="telegram-daily-limit" size="small">
-                      {t(
-                        "knowledgeHub.chatChannels.telegram.fields.dailyLimit"
-                      )}
-                    </Label>
+                  <div className="space-y-1.5">
+                    <div className="min-h-[22px] flex items-center">
+                      <Label htmlFor="telegram-daily-limit" size="small">
+                        {t(
+                          "knowledgeHub.chatChannels.telegram.fields.dailyLimit"
+                        )}
+                      </Label>
+                    </div>
                     <Input
                       id="telegram-daily-limit"
                       min={1}
@@ -803,9 +1105,14 @@ export const ChatChannelsContent = ({
       >
         <Drawer.Content className="overflow-y-auto">
           <Drawer.Header>
-            <Drawer.Title>
-              {t("knowledgeHub.chatChannels.zalo.drawerTitle")}
-            </Drawer.Title>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[#0068FF]/10 text-[#0068FF]">
+                <ZaloIcon size={18} />
+              </div>
+              <Drawer.Title>
+                {t("knowledgeHub.chatChannels.zalo.drawerTitle")}
+              </Drawer.Title>
+            </div>
             <Drawer.Description>
               {t("knowledgeHub.chatChannels.zalo.drawerHint")}
             </Drawer.Description>
@@ -813,11 +1120,36 @@ export const ChatChannelsContent = ({
 
           <form onSubmit={handleZaloSubmit}>
             <Drawer.Body className="space-y-4">
+              {selectedZalo?.configured && selectedZalo?.secret_hint && (
+                <div className="rounded-lg border border-ui-border-base bg-ui-bg-subtle p-3 flex items-start gap-3">
+                  <div className="rounded-md bg-ui-bg-base p-1.5 border shadow-2xs text-[#0068FF] shrink-0 mt-0.5">
+                    <ZaloIcon size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <Text size="small" weight="plus" className="text-ui-fg-base truncate">
+                        {selectedZalo.secret_hint}
+                      </Text>
+                      <StatusBadge className="shrink-0 whitespace-nowrap" color="green">
+                        {t("knowledgeHub.chatChannels.status.active")}
+                      </StatusBadge>
+                    </div>
+                    <Text size="xsmall" className="text-ui-fg-subtle">
+                      {t("knowledgeHub.chatChannels.zalo.fields.accessTokenStoredHint", {
+                        hint: selectedZalo.secret_hint,
+                      })}
+                    </Text>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label htmlFor="zalo-app-id" size="small" weight="plus">
-                    {t("knowledgeHub.chatChannels.zalo.fields.appId")}
-                  </Label>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between min-h-[22px]">
+                    <Label htmlFor="zalo-app-id" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.zalo.fields.appId")}
+                    </Label>
+                  </div>
                   <Input
                     id="zalo-app-id"
                     onChange={(e) =>
@@ -831,10 +1163,12 @@ export const ChatChannelsContent = ({
                   />
                 </div>
 
-                <div className="space-y-1">
-                  <Label htmlFor="zalo-secret-key" size="small" weight="plus">
-                    {t("knowledgeHub.chatChannels.zalo.fields.secretKey")}
-                  </Label>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between min-h-[22px]">
+                    <Label htmlFor="zalo-secret-key" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.zalo.fields.secretKey")}
+                    </Label>
+                  </div>
                   <Input
                     autoComplete="off"
                     id="zalo-secret-key"
@@ -851,10 +1185,19 @@ export const ChatChannelsContent = ({
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="zalo-access-token" size="small" weight="plus">
-                  {t("knowledgeHub.chatChannels.zalo.fields.accessToken")}
-                </Label>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between min-h-[22px]">
+                  <Label htmlFor="zalo-access-token" size="small" weight="plus">
+                    {t("knowledgeHub.chatChannels.zalo.fields.accessToken")}
+                  </Label>
+                  {selectedZalo?.configured ? (
+                    <span className="rounded bg-ui-bg-subtle px-1.5 py-0.5 text-[10px] font-mono text-ui-fg-muted border">
+                      AES-256
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-ui-fg-error">* {t("knowledgeHub.required", "Bắt buộc")}</span>
+                  )}
+                </div>
                 <Input
                   autoComplete="off"
                   id="zalo-access-token"
@@ -862,10 +1205,9 @@ export const ChatChannelsContent = ({
                     setZaloForm((cur) => ({ ...cur, access_token: e.target.value }))
                   }
                   placeholder={
-                    selectedZalo?.secret_hint
+                    selectedZalo?.configured
                       ? t(
-                          "knowledgeHub.chatChannels.zalo.fields.accessTokenStoredHint",
-                          { hint: selectedZalo.secret_hint }
+                          "knowledgeHub.chatChannels.zalo.fields.accessTokenPlaceholderConfigured"
                         )
                       : t(
                           "knowledgeHub.chatChannels.zalo.fields.accessTokenPlaceholder"
@@ -874,104 +1216,136 @@ export const ChatChannelsContent = ({
                   type="password"
                   value={zaloForm.access_token}
                 />
-                {selectedZalo?.secret_hint && (
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <Button
+                    disabled={
+                      zaloTestLoading ||
+                      (!zaloForm.access_token.trim() && !selectedZalo?.configured)
+                    }
+                    isLoading={zaloTestLoading}
+                    onClick={() => testZaloMutation.mutate()}
+                    size="small"
+                    type="button"
+                    variant="secondary"
+                  >
+                    {t("knowledgeHub.chatChannels.zalo.testAction")}
+                  </Button>
+                  {zaloTestResult && (
+                    <Text
+                      className={
+                        zaloTestResult.includes("thành công") || zaloTestResult.includes("Successfully")
+                          ? "text-ui-fg-interactive text-xs font-medium"
+                          : "text-ui-fg-error text-xs font-medium"
+                      }
+                      size="small"
+                    >
+                      {zaloTestResult}
+                    </Text>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between min-h-[22px]">
+                    <Label htmlFor="zalo-refresh-token" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.zalo.fields.refreshToken")}
+                    </Label>
+                  </div>
+                  <Input
+                    autoComplete="off"
+                    id="zalo-refresh-token"
+                    onChange={(e) =>
+                      setZaloForm((cur) => ({ ...cur, refresh_token: e.target.value }))
+                    }
+                    placeholder={t(
+                      "knowledgeHub.chatChannels.zalo.fields.refreshTokenPlaceholder"
+                    )}
+                    type="password"
+                    value={zaloForm.refresh_token}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between min-h-[22px]">
+                    <Label htmlFor="zalo-oa-secret-key" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.zalo.fields.oaSecretKey")}
+                    </Label>
+                  </div>
+                  <Input
+                    autoComplete="off"
+                    id="zalo-oa-secret-key"
+                    onChange={(e) =>
+                      setZaloForm((cur) => ({ ...cur, oa_secret_key: e.target.value }))
+                    }
+                    placeholder={t(
+                      "knowledgeHub.chatChannels.zalo.fields.oaSecretKeyPlaceholder"
+                    )}
+                    type="password"
+                    value={zaloForm.oa_secret_key}
+                  />
+                </div>
+              </div>
+
+              <div className="border-t pt-4 space-y-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between min-h-[22px]">
+                    <Label htmlFor="zalo-public-url" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.zalo.fields.publicBaseUrl")}
+                    </Label>
+                    <span className="text-[11px] text-ui-fg-interactive font-medium">HTTPS</span>
+                  </div>
+                  <Input
+                    id="zalo-public-url"
+                    onChange={(e) =>
+                      setZaloForm((cur) => ({
+                        ...cur,
+                        public_base_url: e.target.value,
+                      }))
+                    }
+                    placeholder={t(
+                      "knowledgeHub.chatChannels.zalo.fields.publicBaseUrlPlaceholder"
+                    )}
+                    required
+                    type="url"
+                    value={zaloForm.public_base_url}
+                  />
                   <Text className="text-ui-fg-subtle" size="xsmall">
                     {t(
-                      "knowledgeHub.chatChannels.zalo.fields.accessTokenStoredHint",
-                      { hint: selectedZalo.secret_hint }
+                      "knowledgeHub.chatChannels.zalo.fields.publicBaseUrlHint"
                     )}
                   </Text>
-                )}
-              </div>
+                </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="zalo-refresh-token" size="small">
-                  {t("knowledgeHub.chatChannels.zalo.fields.refreshToken")}
-                </Label>
-                <Input
-                  autoComplete="off"
-                  id="zalo-refresh-token"
-                  onChange={(e) =>
-                    setZaloForm((cur) => ({ ...cur, refresh_token: e.target.value }))
-                  }
-                  placeholder={t(
-                    "knowledgeHub.chatChannels.zalo.fields.refreshTokenPlaceholder"
-                  )}
-                  type="password"
-                  value={zaloForm.refresh_token}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="zalo-oa-secret-key" size="small">
-                  {t("knowledgeHub.chatChannels.zalo.fields.oaSecretKey")}
-                </Label>
-                <Input
-                  autoComplete="off"
-                  id="zalo-oa-secret-key"
-                  onChange={(e) =>
-                    setZaloForm((cur) => ({ ...cur, oa_secret_key: e.target.value }))
-                  }
-                  placeholder={t(
-                    "knowledgeHub.chatChannels.zalo.fields.oaSecretKeyPlaceholder"
-                  )}
-                  type="password"
-                  value={zaloForm.oa_secret_key}
-                />
-              </div>
-
-              <div className="flex items-center gap-3">
-                <Button
-                  disabled={
-                    zaloTestLoading ||
-                    (!zaloForm.access_token.trim() && !selectedZalo?.configured)
-                  }
-                  isLoading={zaloTestLoading}
-                  onClick={() => testZaloMutation.mutate()}
-                  size="small"
-                  type="button"
-                  variant="secondary"
-                >
-                  {t("knowledgeHub.chatChannels.zalo.testAction")}
-                </Button>
-                {zaloTestResult && (
-                  <Text
-                    className={
-                      zaloTestResult.includes("thành công") || zaloTestResult.includes("Successfully")
-                        ? "text-ui-fg-interactive text-xs"
-                        : "text-ui-fg-error text-xs"
-                    }
-                    size="small"
-                  >
-                    {zaloTestResult}
+                <div className="rounded-lg border border-ui-border-base bg-ui-bg-subtle p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Text className="text-ui-fg-base" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.zalo.webhookUrl")}
+                    </Text>
+                    <Button
+                      className="h-6 px-2 text-xs"
+                      onClick={() => {
+                        const base = zaloForm.public_base_url.trim().replace(/\/$/, "") || "https://trendhub.sbs"
+                        const url = `${base}/api/store/zalo/webhook`
+                        navigator.clipboard.writeText(url)
+                        toast.success(t("knowledgeHub.chatChannels.zalo.webhookCopied"))
+                      }}
+                      size="small"
+                      type="button"
+                      variant="secondary"
+                    >
+                      <ClipboardCopyIcon className="mr-1" size={12} />
+                      {t("knowledgeHub.chatChannels.zalo.copyWebhookUrl")}
+                    </Button>
+                  </div>
+                  <div className="rounded bg-ui-bg-base px-2.5 py-1.5 border font-mono text-xs text-ui-fg-subtle break-all select-all">
+                    {`${(zaloForm.public_base_url.trim().replace(/\/$/, "") || "https://trendhub.sbs")}/api/store/zalo/webhook`}
+                  </div>
+                  <Text className="text-ui-fg-muted" size="xsmall">
+                    {t("knowledgeHub.chatChannels.zalo.webhookUrlHint")}
                   </Text>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="zalo-public-url" size="small" weight="plus">
-                  {t("knowledgeHub.chatChannels.zalo.fields.publicBaseUrl")}
-                </Label>
-                <Input
-                  id="zalo-public-url"
-                  onChange={(e) =>
-                    setZaloForm((cur) => ({
-                      ...cur,
-                      public_base_url: e.target.value,
-                    }))
-                  }
-                  placeholder={t(
-                    "knowledgeHub.chatChannels.zalo.fields.publicBaseUrlPlaceholder"
-                  )}
-                  required
-                  type="url"
-                  value={zaloForm.public_base_url}
-                />
-                <Text className="text-ui-fg-subtle" size="xsmall">
-                  {t(
-                    "knowledgeHub.chatChannels.zalo.fields.publicBaseUrlHint"
-                  )}
-                </Text>
+                </div>
               </div>
 
               <div className="border-t pt-4 space-y-3">
@@ -982,12 +1356,14 @@ export const ChatChannelsContent = ({
                 </Text>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="zalo-burst-limit" size="small">
-                      {t(
-                        "knowledgeHub.chatChannels.zalo.fields.burstLimit"
-                      )}
-                    </Label>
+                  <div className="space-y-1.5">
+                    <div className="min-h-[22px] flex items-center">
+                      <Label htmlFor="zalo-burst-limit" size="small">
+                        {t(
+                          "knowledgeHub.chatChannels.zalo.fields.burstLimit"
+                        )}
+                      </Label>
+                    </div>
                     <Input
                       id="zalo-burst-limit"
                       min={1}
@@ -1002,12 +1378,14 @@ export const ChatChannelsContent = ({
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <Label htmlFor="zalo-daily-limit" size="small">
-                      {t(
-                        "knowledgeHub.chatChannels.zalo.fields.dailyLimit"
-                      )}
-                    </Label>
+                  <div className="space-y-1.5">
+                    <div className="min-h-[22px] flex items-center">
+                      <Label htmlFor="zalo-daily-limit" size="small">
+                        {t(
+                          "knowledgeHub.chatChannels.zalo.fields.dailyLimit"
+                        )}
+                      </Label>
+                    </div>
                     <Input
                       id="zalo-daily-limit"
                       min={1}
@@ -1040,6 +1418,335 @@ export const ChatChannelsContent = ({
                   !zaloForm.secret_key.trim()
                 }
                 isLoading={saveZaloMutation.isPending}
+                size="small"
+                type="submit"
+              >
+                {t("knowledgeHub.saveDraft")}
+              </Button>
+            </Drawer.Footer>
+          </form>
+        </Drawer.Content>
+      </Drawer>
+
+      {/* Drawer: Configure Facebook Messenger */}
+      <Drawer
+        onOpenChange={(open) => {
+          if (!open) setSelectedMessenger(null)
+        }}
+        open={Boolean(selectedMessenger)}
+      >
+        <Drawer.Content className="overflow-y-auto">
+          <Drawer.Header>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[#0084FF]/10 text-[#0084FF]">
+                <FacebookMessengerIcon size={18} />
+              </div>
+              <Drawer.Title>
+                {t("knowledgeHub.chatChannels.messenger.drawerTitle")}
+              </Drawer.Title>
+            </div>
+            <Drawer.Description>
+              {t("knowledgeHub.chatChannels.messenger.drawerHint")}
+            </Drawer.Description>
+          </Drawer.Header>
+
+          <form onSubmit={handleMessengerSubmit}>
+            <Drawer.Body className="space-y-4">
+              {selectedMessenger?.configured && (
+                <div className="rounded-lg border border-ui-border-base bg-ui-bg-subtle p-3 flex items-start gap-3">
+                  <div className="rounded-md bg-ui-bg-base p-1.5 border shadow-2xs text-[#0084FF] shrink-0 mt-0.5">
+                    <FacebookMessengerIcon size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <Text size="small" weight="plus" className="text-ui-fg-base truncate">
+                        {selectedMessenger.secret_hint || t("knowledgeHub.chatChannels.messenger.connectedCardTitle")}
+                      </Text>
+                      <StatusBadge className="shrink-0 whitespace-nowrap" color="green">
+                        {t("knowledgeHub.chatChannels.status.active")}
+                      </StatusBadge>
+                    </div>
+                    <Text size="xsmall" className="text-ui-fg-subtle">
+                      {t("knowledgeHub.chatChannels.messenger.fields.pageAccessTokenStoredHint", {
+                        hint: selectedMessenger.secret_hint || "Meta Fanpage",
+                      })}
+                    </Text>
+                  </div>
+                </div>
+              )}
+
+              {/* Section 1: Page Access Token & Test Connection */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between min-h-[22px]">
+                  <Label htmlFor="fb-page-token" size="small" weight="plus">
+                    {t("knowledgeHub.chatChannels.messenger.fields.pageAccessToken")}
+                  </Label>
+                  {selectedMessenger?.configured ? (
+                    <span className="rounded bg-ui-bg-subtle px-1.5 py-0.5 text-[10px] font-mono text-ui-fg-muted border">
+                      AES-256
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-ui-fg-error">* {t("knowledgeHub.required", "Bắt buộc")}</span>
+                  )}
+                </div>
+                <Input
+                  autoComplete="off"
+                  id="fb-page-token"
+                  onChange={(e) =>
+                    setMessengerForm((cur) => ({ ...cur, page_access_token: e.target.value }))
+                  }
+                  placeholder={
+                    selectedMessenger?.configured
+                      ? t(
+                          "knowledgeHub.chatChannels.messenger.fields.pageAccessTokenPlaceholderConfigured"
+                        )
+                      : t(
+                          "knowledgeHub.chatChannels.messenger.fields.pageAccessTokenPlaceholder"
+                        )
+                  }
+                  type="password"
+                  value={messengerForm.page_access_token}
+                />
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <Button
+                    disabled={
+                      messengerTestLoading ||
+                      (!messengerForm.page_access_token.trim() && !selectedMessenger?.configured)
+                    }
+                    isLoading={messengerTestLoading}
+                    onClick={() => testMessengerMutation.mutate()}
+                    size="small"
+                    type="button"
+                    variant="secondary"
+                  >
+                    {t("knowledgeHub.chatChannels.messenger.testAction")}
+                  </Button>
+                  {messengerTestResult && (
+                    <Text
+                      className={
+                        messengerTestResult.includes("thành công") || messengerTestResult.includes("Successfully")
+                          ? "text-ui-fg-interactive text-xs font-medium"
+                          : "text-ui-fg-error text-xs font-medium"
+                      }
+                      size="small"
+                    >
+                      {messengerTestResult}
+                    </Text>
+                  )}
+                </div>
+              </div>
+
+              {/* Section 2: Meta App Credentials (2 Columns Aligned) */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between min-h-[22px]">
+                    <Label htmlFor="fb-app-id" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.messenger.fields.appId")}
+                    </Label>
+                    <span className="text-[11px] text-ui-fg-subtle">
+                      {t("knowledgeHub.chatChannels.messenger.fields.appIdOptional")}
+                    </span>
+                  </div>
+                  <Input
+                    id="fb-app-id"
+                    onChange={(e) =>
+                      setMessengerForm((cur) => ({ ...cur, app_id: e.target.value }))
+                    }
+                    placeholder={t(
+                      "knowledgeHub.chatChannels.messenger.fields.appIdPlaceholder"
+                    )}
+                    value={messengerForm.app_id}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between min-h-[22px]">
+                    <Label htmlFor="fb-app-secret" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.messenger.fields.appSecret")}
+                    </Label>
+                    <span className="text-[11px] text-ui-fg-subtle font-mono">
+                      HMAC
+                    </span>
+                  </div>
+                  <Input
+                    autoComplete="off"
+                    id="fb-app-secret"
+                    onChange={(e) =>
+                      setMessengerForm((cur) => ({ ...cur, app_secret: e.target.value }))
+                    }
+                    placeholder={t(
+                      "knowledgeHub.chatChannels.messenger.fields.appSecretPlaceholder"
+                    )}
+                    type="password"
+                    value={messengerForm.app_secret}
+                  />
+                </div>
+              </div>
+
+              {/* Section 3: Webhook Configuration */}
+              <div className="border-t pt-4 space-y-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between min-h-[22px]">
+                    <Label htmlFor="fb-public-url" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.messenger.fields.publicBaseUrl")}
+                    </Label>
+                    <span className="text-[11px] text-ui-fg-interactive font-medium">HTTPS</span>
+                  </div>
+                  <Input
+                    id="fb-public-url"
+                    onChange={(e) =>
+                      setMessengerForm((cur) => ({
+                        ...cur,
+                        public_base_url: e.target.value,
+                      }))
+                    }
+                    placeholder={t(
+                      "knowledgeHub.chatChannels.messenger.fields.publicBaseUrlPlaceholder"
+                    )}
+                    required
+                    type="url"
+                    value={messengerForm.public_base_url}
+                  />
+                  <Text className="text-ui-fg-subtle" size="xsmall">
+                    {t(
+                      "knowledgeHub.chatChannels.messenger.fields.publicBaseUrlHint"
+                    )}
+                  </Text>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between min-h-[22px]">
+                    <Label htmlFor="fb-verify-token" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.messenger.fields.verifyToken")}
+                    </Label>
+                    <button
+                      className="text-[11px] text-ui-fg-interactive hover:underline cursor-pointer font-medium"
+                      onClick={() => {
+                        const rand = "fb_verify_" + Math.random().toString(36).slice(2, 12)
+                        setMessengerForm((cur) => ({ ...cur, verify_token: rand }))
+                      }}
+                      type="button"
+                    >
+                      {t("knowledgeHub.chatChannels.messenger.generateToken")}
+                    </button>
+                  </div>
+                  <Input
+                    autoComplete="off"
+                    id="fb-verify-token"
+                    onChange={(e) =>
+                      setMessengerForm((cur) => ({ ...cur, verify_token: e.target.value }))
+                    }
+                    placeholder={t(
+                      "knowledgeHub.chatChannels.messenger.fields.verifyTokenPlaceholder"
+                    )}
+                    value={messengerForm.verify_token}
+                  />
+                  <Text className="text-ui-fg-subtle" size="xsmall">
+                    {t("knowledgeHub.chatChannels.messenger.fields.verifyTokenHint")}
+                  </Text>
+                </div>
+
+                {/* Webhook Callback URL Copy Box */}
+                <div className="rounded-lg border border-ui-border-base bg-ui-bg-subtle p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Text className="text-ui-fg-base" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.messenger.webhookUrl")}
+                    </Text>
+                    <Button
+                      className="h-6 px-2 text-xs"
+                      onClick={() => {
+                        const base = messengerForm.public_base_url.trim().replace(/\/$/, "") || "https://trendhub.sbs"
+                        const url = `${base}/api/store/messenger/webhook`
+                        navigator.clipboard.writeText(url)
+                        toast.success(t("knowledgeHub.chatChannels.messenger.webhookCopied"))
+                      }}
+                      size="small"
+                      type="button"
+                      variant="secondary"
+                    >
+                      <ClipboardCopyIcon className="mr-1" size={12} />
+                      {t("knowledgeHub.chatChannels.messenger.copyWebhookUrl")}
+                    </Button>
+                  </div>
+                  <div className="rounded bg-ui-bg-base px-2.5 py-1.5 border font-mono text-xs text-ui-fg-subtle break-all select-all">
+                    {`${(messengerForm.public_base_url.trim().replace(/\/$/, "") || "https://trendhub.sbs")}/api/store/messenger/webhook`}
+                  </div>
+                  <Text className="text-ui-fg-muted" size="xsmall">
+                    {t("knowledgeHub.chatChannels.messenger.webhookUrlHint")}
+                  </Text>
+                </div>
+              </div>
+
+              {/* Section 4: Rate Limits & Security (2 Columns Aligned) */}
+              <div className="border-t pt-4 space-y-3">
+                <Text size="small" weight="plus">
+                  {t(
+                    "knowledgeHub.chatChannels.messenger.fields.rateLimitTitle"
+                  )}
+                </Text>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <div className="min-h-[22px] flex items-center">
+                      <Label htmlFor="fb-burst-limit" size="small">
+                        {t(
+                          "knowledgeHub.chatChannels.messenger.fields.burstLimit"
+                        )}
+                      </Label>
+                    </div>
+                    <Input
+                      id="fb-burst-limit"
+                      min={1}
+                      onChange={(e) =>
+                        setMessengerForm((cur) => ({
+                          ...cur,
+                          burst_limit: Number(e.target.value),
+                        }))
+                      }
+                      type="number"
+                      value={messengerForm.burst_limit}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="min-h-[22px] flex items-center">
+                      <Label htmlFor="fb-daily-limit" size="small">
+                        {t(
+                          "knowledgeHub.chatChannels.messenger.fields.dailyLimit"
+                        )}
+                      </Label>
+                    </div>
+                    <Input
+                      id="fb-daily-limit"
+                      min={1}
+                      onChange={(e) =>
+                        setMessengerForm((cur) => ({
+                          ...cur,
+                          daily_limit: Number(e.target.value),
+                        }))
+                      }
+                      type="number"
+                      value={messengerForm.daily_limit}
+                    />
+                  </div>
+                </div>
+              </div>
+            </Drawer.Body>
+
+            <Drawer.Footer>
+              <Drawer.Close asChild>
+                <Button size="small" type="button" variant="secondary">
+                  {t("knowledgeHub.cancel")}
+                </Button>
+              </Drawer.Close>
+              <Button
+                disabled={
+                  saveMessengerMutation.isPending ||
+                  (!messengerForm.page_access_token.trim() && !selectedMessenger?.configured) ||
+                  !messengerForm.public_base_url.trim()
+                }
+                isLoading={saveMessengerMutation.isPending}
                 size="small"
                 type="submit"
               >

@@ -506,4 +506,94 @@ export type AdminDisconnectZaloChannelType = z.infer<
   typeof AdminDisconnectZaloChannel
 >
 
+export const MessengerWebhookPayload = z.object({
+  entry: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        messaging: z
+          .array(
+            z.object({
+              message: z
+                .object({
+                  is_echo: z.boolean().optional(),
+                  mid: z.string().optional(),
+                  text: z.string().optional(),
+                })
+                .optional(),
+              recipient: z.object({ id: z.string() }).optional(),
+              sender: z.object({ id: z.string() }).optional(),
+              timestamp: z.union([z.number(), z.string()]).optional(),
+            })
+          )
+          .optional(),
+        time: z.union([z.number(), z.string()]).optional(),
+      })
+    )
+    .optional(),
+  object: z.string().optional(),
+})
+
+export type MessengerWebhookPayloadType = z.infer<
+  typeof MessengerWebhookPayload
+>
+
+export const AdminConfigureMessengerChannel = z.object({
+  account_ref: z.string().min(1).default("primary"),
+  allow_unmapped_users: z.boolean().default(true),
+  api_base_url: z.string().min(1).optional(),
+  app_id: z.string().min(1).optional(),
+  app_secret: z.string().min(1).optional(),
+  identities: z
+    .array(
+      z.object({
+        psid: z.string().min(1),
+        user_id: z.string().min(1),
+      })
+    )
+    .default([]),
+  page_access_token: z.string().min(1).optional(),
+  public_base_url: z.string().min(1),
+  security: z
+    .object({
+      blocked_chat_ids: z.array(z.string()).optional(),
+      burst_limit: z.number().int().positive().optional(),
+      burst_window_seconds: z.number().int().positive().optional(),
+      daily_limit: z.number().int().positive().optional(),
+      global_burst_limit: z.number().int().positive().optional(),
+      global_daily_limit: z.number().int().positive().optional(),
+      max_message_characters: z.number().int().positive().optional(),
+      max_open_escalations: z.number().int().positive().optional(),
+      max_update_age_seconds: z.number().int().positive().optional(),
+    })
+    .optional(),
+  tenant_id: z.string().min(1).default("default"),
+  verify_token: z.string().min(1).optional(),
+})
+
+export type AdminConfigureMessengerChannelType = z.infer<
+  typeof AdminConfigureMessengerChannel
+>
+
+export const AdminTestMessengerConnection = z.object({
+  account_ref: z.string().min(1).default("primary"),
+  api_base_url: z.string().min(1).optional(),
+  page_access_token: z.string().min(1).optional(),
+  tenant_id: z.string().min(1).default("default"),
+})
+
+export type AdminTestMessengerConnectionType = z.infer<
+  typeof AdminTestMessengerConnection
+>
+
+export const AdminDisconnectMessengerChannel = z.object({
+  account_ref: z.string().min(1).default("primary"),
+  tenant_id: z.string().min(1).default("default"),
+})
+
+export type AdminDisconnectMessengerChannelType = z.infer<
+  typeof AdminDisconnectMessengerChannel
+>
+
+
 

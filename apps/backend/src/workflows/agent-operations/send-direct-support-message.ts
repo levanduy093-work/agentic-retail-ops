@@ -113,10 +113,11 @@ const sendDirectSupportMessageStep = createStep<
 
     for (const task of openTasks) {
       try {
-        await service.transitionAgentTask({
+        await service.transitionGovernedAgentTask({
+          actor_id: input.actor_id,
           assigned_to_id: input.actor_id,
           assigned_to_type: "user",
-          expected_status: task.status,
+          expected_status: task.status as any,
           result: {
             direct_staff_reply: true,
             message_sent: true,

@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import {
   EllipsisHorizontalIcon,
+  FacebookIcon,
   FacebookMessengerIcon,
   GlobeIcon,
   MailIcon,
@@ -77,6 +78,7 @@ type SupportConversationResponse = {
     channel: string
     id: string
     last_message_at: string
+    metadata?: Record<string, unknown> | null
     title: string
   }
   memory: ConversationMemory | null
@@ -111,6 +113,7 @@ type SupportConversationListItem = {
     occurred_at: string
   } | null
   memory: ConversationMemory | null
+  metadata?: Record<string, unknown> | null
   requires_human_attention: boolean
   status: string
   support_task: SupportTask | null
@@ -179,8 +182,11 @@ const getChannelIcon = (channel?: string | null, size = 16) => {
   if (norm.includes("ZALO")) {
     return <ZaloIcon size={size} className="shrink-0 text-[#0068FF]" />
   }
-  if (norm.includes("MESSENGER") || norm.includes("FACEBOOK")) {
+  if (norm.includes("MESSENGER")) {
     return <FacebookMessengerIcon size={size} className="shrink-0 text-[#0084FF]" />
+  }
+  if (norm.includes("FACEBOOK")) {
+    return <FacebookIcon size={size} className="shrink-0 text-[#1877F2]" />
   }
   if (norm.includes("EMAIL") || norm.includes("GMAIL") || norm.includes("MAIL")) {
     return <MailIcon size={size} className="shrink-0 text-[#EA4335]" />

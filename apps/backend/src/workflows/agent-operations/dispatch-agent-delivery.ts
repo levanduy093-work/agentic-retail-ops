@@ -91,6 +91,19 @@ const deliverAgentMessageStep = createStep<
     }
 
     const adapter = createChannelAdapter(delivery.channel, {
+      messenger:
+        delivery.channel === "MESSENGER"
+          ? {
+              api_base_url:
+                typeof (connection.config as Record<string, unknown>)
+                  .api_base_url === "string"
+                  ? String(
+                      (connection.config as Record<string, unknown>).api_base_url
+                    )
+                  : undefined,
+              page_access_token: await service.resolveChannelBotToken(connection),
+            }
+          : undefined,
       telegram:
         delivery.channel === "TELEGRAM"
           ? {

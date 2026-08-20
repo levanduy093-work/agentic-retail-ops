@@ -14,11 +14,13 @@ import {
   AdminConfigureAiPrompt,
   AdminConfigureTelegramChannel,
   AdminConfigureZaloChannel,
+  AdminConfigureMessengerChannel,
   AdminClearAgentConversation,
   AdminDiscoverAiModels,
   AdminDecideAgentApproval,
   AdminDisconnectTelegramChannel,
   AdminDisconnectZaloChannel,
+  AdminDisconnectMessengerChannel,
   AdminIngestInventoryLowEvent,
   AdminIngestOrderExceptionEvent,
   AdminIngestSupportRequest,
@@ -32,10 +34,12 @@ import {
   AdminSendSupportSimulatorReply,
   AdminTestTelegramBot,
   AdminTestZaloOa,
+  AdminTestMessengerConnection,
   AdminToggleConversationAi,
   AdminTransitionAgentTask,
   TelegramWebhookUpdate,
   ZaloWebhookPayload,
+  MessengerWebhookPayload,
 } from "./admin/agent-operations/validators"
 import { StoreCreateCustomerChatMessage } from "./store/customer-chat/validators"
 import { shippingHubMiddlewares } from "./admin/shipping/middlewares"
@@ -491,6 +495,30 @@ import { getSepaySettings } from "../modules/payment-hub/sepay-connection"
       matcher: "/admin/agent-operations/channels/zalo/disconnect",
       method: "POST",
       middlewares: [validateAndTransformBody(AdminDisconnectZaloChannel)],
+      policies: [{ resource: "agent_platform", operation: "delete" }],
+    },
+    {
+      matcher: "/webhooks/agent-operations/messenger/:id",
+      method: "POST",
+      bodyParser: { preserveRawBody: true },
+      middlewares: [validateAndTransformBody(MessengerWebhookPayload)],
+    },
+    {
+      matcher: "/admin/agent-operations/channels/messenger",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminConfigureMessengerChannel)],
+      policies: [{ resource: "agent_platform", operation: "configure" }],
+    },
+    {
+      matcher: "/admin/agent-operations/channels/messenger/test",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminTestMessengerConnection)],
+      policies: [{ resource: "agent_platform", operation: "read" }],
+    },
+    {
+      matcher: "/admin/agent-operations/channels/messenger/disconnect",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminDisconnectMessengerChannel)],
       policies: [{ resource: "agent_platform", operation: "delete" }],
     },
 ]

@@ -42,6 +42,11 @@ import type {
   ZaloChannelIdentity,
   ZaloStoredCredentialPayload,
 } from "./zalo"
+import type {
+  FacebookMessengerChannelConfig,
+  FacebookMessengerIdentity,
+  FacebookStoredCredentialPayload,
+} from "./facebook"
 import {
   createGoogleKnowledgeAccessToken,
   getGoogleKnowledgeOAuthPlatformStatus,
@@ -1488,6 +1493,23 @@ class AgentOperationsModuleService extends MedusaService({
     const zaloSecretHint = zaloCred?.secret_hint ?? null
     const zaloPublicUrl = zaloCred?.public_base_url ?? zaloConfig?.webhook_url ?? null
 
+    const fbConn =
+      connections.find((c) => c.channel === "MESSENGER" && c.account_ref === "primary" && c.status === "ACTIVE") ??
+      connections.find((c) => c.channel === "MESSENGER" && c.account_ref === "primary") ??
+      connections.find((c) => c.channel === "MESSENGER" && c.status === "ACTIVE") ??
+      connections.find((c) => c.channel === "MESSENGER")
+
+    const fbCred =
+      credentials.find((c) => c.channel === "MESSENGER" && c.account_ref === "primary") ??
+      credentials.find((c) => c.channel === "MESSENGER")
+
+    const fbConfig = fbConn?.config as
+      | (FacebookMessengerChannelConfig & { app_id?: string; page_avatar?: string; page_id?: string; page_name?: string })
+      | undefined
+
+    const fbSecretHint = fbCred?.secret_hint ?? null
+    const fbPublicUrl = fbCred?.public_base_url ?? fbConfig?.webhook_url ?? null
+
     return [
       {
         account_ref: telegramConn?.account_ref ?? "primary",
@@ -1523,6 +1545,23 @@ class AgentOperationsModuleService extends MedusaService({
           zaloCred?.updated_at ?? zaloConn?.updated_at ?? null,
         webhook_url: zaloConfig?.webhook_url ?? null,
       },
+      {
+        account_ref: fbConn?.account_ref ?? "primary",
+        allow_unmapped_users: fbConfig?.allow_unmapped_users ?? true,
+        bot_id: fbConfig?.page_id ?? null,
+        bot_username: fbConfig?.page_name ?? null,
+        channel: "MESSENGER" as const,
+        configured: Boolean(fbCred),
+        identities: fbConfig?.identities ?? [],
+        oa_avatar: fbConfig?.page_avatar ?? null,
+        public_base_url: fbPublicUrl,
+        secret_hint: fbSecretHint,
+        security: fbConfig?.security ?? null,
+        status: fbConn?.status ?? "DISABLED",
+        updated_at:
+          fbCred?.updated_at ?? fbConn?.updated_at ?? null,
+        webhook_url: fbConfig?.webhook_url ?? null,
+      },
     ]
   }
 
@@ -1532,6 +1571,46 @@ class AgentOperationsModuleService extends MedusaService({
     secret_ref?: string | null
     tenant_id?: string
   }): Promise<string> {
+    if (connection.channel === "MESSENGER") {
+      let raw = ""
+      if (connection.secret_ref && isVaultSecretReference(connection.secret_ref)) {
+        const credId = parseVaultSecretReference(connection.secret_ref)
+        if (credId) {
+          const credential = await this.retrieveAgentChannelCredential(credId)
+          raw = decryptConnectorSecret({
+            encrypted_secret: credential.encrypted_secret,
+            encryption_iv: credential.encryption_iv,
+            encryption_tag: credential.encryption_tag,
+            key_version: credential.key_version,
+          })
+        }
+      }
+      if (!raw) {
+        const credentials = await this.listAgentChannelCredentials({
+          account_ref: connection.account_ref ?? "primary",
+          channel: "MESSENGER",
+          tenant_id: connection.tenant_id ?? "default",
+        })
+        if (credentials.length > 0) {
+          raw = decryptConnectorSecret({
+            encrypted_secret: credentials[0].encrypted_secret,
+            encryption_iv: credentials[0].encryption_iv,
+            encryption_tag: credentials[0].encryption_tag,
+            key_version: credentials[0].key_version,
+          })
+        }
+      }
+
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as FacebookStoredCredentialPayload
+          return parsed.page_access_token || raw
+        } catch {
+          return raw
+        }
+      }
+    }
+
     if (connection.channel === "ZALO") {
       let raw = ""
       if (connection.secret_ref && isVaultSecretReference(connection.secret_ref)) {
@@ -2365,6 +2444,412 @@ class AgentOperationsModuleService extends MedusaService({
 
     const connections = await this.listAgentChannelConnections(
       { account_ref: accountRef, channel: "ZALO", tenant_id: tenantId },
+      { take: 1 },
+      sharedContext
+    )
+    const conn = connections[0]
+    if (conn) {
+      await this.updateAgentChannelConnections(
+        { id: conn.id, status: "DISABLED" },
+        sharedContext
+      )
+    }
+
+    return { disconnected: true }
+  }
+
+  async testFacebookPageToken(
+    pageToken: string,
+    apiBaseUrl = "https://graph.facebook.com/v19.0"
+  ) {
+    if (!pageToken?.trim()) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "Facebook Page Access Token is required."
+      )
+    }
+    const cleanToken = pageToken.trim()
+    const baseUrl = apiBaseUrl.replace(/\/$/, "")
+
+    // Try reading id, name, picture first
+    let response = await fetch(
+      `${baseUrl}/me?fields=id,name,picture&access_token=${encodeURIComponent(cleanToken)}`,
+      {
+        headers: { "content-type": "application/json" },
+        method: "GET",
+        signal: AbortSignal.timeout(10_000),
+      }
+    )
+    let payload = (await response.json()) as {
+      error?: { message?: string; code?: number }
+      id?: string
+      name?: string
+      picture?: { data?: { url?: string } }
+    }
+
+    // Fallback 1: Try without picture (fields=id,name) if #100 or permission error
+    if (!response.ok || payload.error || !payload.id) {
+      const fallback1 = await fetch(
+        `${baseUrl}/me?fields=id,name&access_token=${encodeURIComponent(cleanToken)}`,
+        {
+          headers: { "content-type": "application/json" },
+          method: "GET",
+          signal: AbortSignal.timeout(10_000),
+        }
+      )
+      const res1 = (await fallback1.json()) as {
+        error?: { message?: string; code?: number }
+        id?: string
+        name?: string
+      }
+      if (fallback1.ok && res1.id) {
+        response = fallback1
+        payload = res1
+      }
+    }
+
+    // Fallback 2: Try basic /me without fields query
+    if (!response.ok || payload.error || !payload.id) {
+      const fallback2 = await fetch(
+        `${baseUrl}/me?access_token=${encodeURIComponent(cleanToken)}`,
+        {
+          headers: { "content-type": "application/json" },
+          method: "GET",
+          signal: AbortSignal.timeout(10_000),
+        }
+      )
+      const res2 = (await fallback2.json()) as {
+        error?: { message?: string; code?: number }
+        id?: string
+        name?: string
+      }
+      if (fallback2.ok && res2.id) {
+        response = fallback2
+        payload = res2
+      }
+    }
+
+    // Fallback 3: Try debug_token endpoint (validates Page token and retrieves Page ID without read_engagement)
+    if (!response.ok || payload.error || !payload.id) {
+      const debugRes = await fetch(
+        `${baseUrl}/debug_token?input_token=${encodeURIComponent(cleanToken)}&access_token=${encodeURIComponent(cleanToken)}`,
+        {
+          headers: { "content-type": "application/json" },
+          method: "GET",
+          signal: AbortSignal.timeout(10_000),
+        }
+      )
+      const debugPayload = (await debugRes.json()) as {
+        data?: {
+          application?: string
+          is_valid?: boolean
+          profile_id?: string
+          target_id?: string
+        }
+        error?: { message?: string }
+      }
+      if (debugRes.ok && debugPayload.data?.is_valid) {
+        return {
+          avatar: undefined,
+          page_id:
+            debugPayload.data.target_id ||
+            debugPayload.data.profile_id ||
+            "facebook-page",
+          page_name: debugPayload.data.application || "Facebook Fanpage",
+        }
+      }
+    }
+
+    // Fallback 4: Try /me/permissions endpoint
+    if (!response.ok || payload.error || !payload.id) {
+      const permRes = await fetch(
+        `${baseUrl}/me/permissions?access_token=${encodeURIComponent(cleanToken)}`,
+        {
+          headers: { "content-type": "application/json" },
+          method: "GET",
+          signal: AbortSignal.timeout(10_000),
+        }
+      )
+      const permPayload = (await permRes.json()) as {
+        data?: Array<{ permission: string; status: string }>
+        error?: { message?: string }
+      }
+      if (
+        permRes.ok &&
+        Array.isArray(permPayload.data) &&
+        permPayload.data.length > 0
+      ) {
+        return {
+          avatar: undefined,
+          page_id: "facebook-page",
+          page_name: "Facebook Fanpage (Token hợp lệ)",
+        }
+      }
+    }
+
+    if (!response.ok || payload.error || !payload.id) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        `Facebook verification failed: ${payload.error?.message ?? `HTTP ${response.status}`}`
+      )
+    }
+
+    return {
+      avatar: (payload as any).picture?.data?.url ?? undefined,
+      page_id: payload.id,
+      page_name: payload.name ?? `Page ${payload.id}`,
+    }
+  }
+
+  @InjectManager()
+  async configureMessengerChannelGui(
+    input: {
+      account_ref?: string
+      actor_id: string
+      allow_unmapped_users?: boolean
+      api_base_url?: string
+      app_id?: string
+      app_secret?: string
+      identities?: FacebookMessengerIdentity[]
+      page_access_token?: string
+      public_base_url: string
+      security?: Partial<CustomerChatSecurityConfig>
+      tenant_id?: string
+      verify_token?: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.configureMessengerChannelGui_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async configureMessengerChannelGui_(
+    input: {
+      account_ref?: string
+      actor_id: string
+      allow_unmapped_users?: boolean
+      api_base_url?: string
+      app_id?: string
+      app_secret?: string
+      identities?: FacebookMessengerIdentity[]
+      page_access_token?: string
+      public_base_url: string
+      security?: Partial<CustomerChatSecurityConfig>
+      tenant_id?: string
+      verify_token?: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const tenantId = input.tenant_id ?? "default"
+    const accountRef = input.account_ref ?? "primary"
+    const apiBaseUrl = input.api_base_url ?? "https://graph.facebook.com/v19.0"
+    const publicBaseUrl = input.public_base_url.replace(/\/$/, "")
+
+    if (!publicBaseUrl.startsWith("https://")) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "Facebook Messenger public_base_url must use HTTPS."
+      )
+    }
+
+    const existingCredentials = await this.listAgentChannelCredentials(
+      { account_ref: accountRef, channel: "MESSENGER", tenant_id: tenantId },
+      { take: 1 },
+      sharedContext
+    )
+    const existingCred = existingCredentials[0]
+
+    let existingPayload: FacebookStoredCredentialPayload | null = null
+    if (existingCred) {
+      try {
+        const raw = decryptConnectorSecret({
+          encrypted_secret: existingCred.encrypted_secret,
+          encryption_iv: existingCred.encryption_iv,
+          encryption_tag: existingCred.encryption_tag,
+          key_version: existingCred.key_version,
+        })
+        existingPayload = JSON.parse(raw)
+      } catch {
+        existingPayload = null
+      }
+    }
+
+    const resolvedAccessToken =
+      input.page_access_token?.trim() || existingPayload?.page_access_token || ""
+    const resolvedAppSecret =
+      input.app_secret?.trim() || existingPayload?.app_secret || ""
+    const resolvedAppId = input.app_id?.trim() || existingPayload?.app_id || ""
+    const resolvedVerifyToken =
+      input.verify_token?.trim() ||
+      existingPayload?.verify_token ||
+      randomBytes(16).toString("hex")
+
+    if (!resolvedAccessToken) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "Facebook Page Access Token is required."
+      )
+    }
+
+    const pageInfo = await this.testFacebookPageToken(resolvedAccessToken, apiBaseUrl)
+
+    const credentialPayload: FacebookStoredCredentialPayload = {
+      app_id: resolvedAppId,
+      app_secret: resolvedAppSecret,
+      page_access_token: resolvedAccessToken,
+      page_avatar: pageInfo.avatar,
+      page_id: pageInfo.page_id,
+      page_name: pageInfo.page_name,
+      verify_token: resolvedVerifyToken,
+    }
+
+    const encryptedToken = encryptConnectorSecret(
+      JSON.stringify(credentialPayload)
+    )
+    const encryptedAppSecret = resolvedAppSecret
+      ? encryptConnectorSecret(resolvedAppSecret)
+      : null
+
+    const secretHint = pageInfo.page_name
+      ? `Page: ${pageInfo.page_name} (${pageInfo.page_id})`
+      : `Page: ${pageInfo.page_id}`
+
+    const credData = {
+      account_ref: accountRef,
+      channel: "MESSENGER" as const,
+      encrypted_secret: encryptedToken.encrypted_secret,
+      encrypted_webhook_secret: encryptedAppSecret?.encrypted_secret ?? null,
+      encryption_iv: encryptedToken.encryption_iv,
+      encryption_tag: encryptedToken.encryption_tag,
+      key_version: encryptedToken.key_version,
+      public_base_url: publicBaseUrl,
+      secret_hint: secretHint,
+      tenant_id: tenantId,
+      updated_by_id: input.actor_id,
+      webhook_secret_iv: encryptedAppSecret?.encryption_iv ?? null,
+      webhook_secret_tag: encryptedAppSecret?.encryption_tag ?? null,
+    }
+
+    const credential = existingCred
+      ? await this.updateAgentChannelCredentials(
+          { ...credData, id: existingCred.id },
+          sharedContext
+        )
+      : await this.createAgentChannelCredentials(credData, sharedContext)
+
+    const existingConnections = await this.listAgentChannelConnections(
+      { account_ref: accountRef, channel: "MESSENGER", tenant_id: tenantId },
+      { take: 1 },
+      sharedContext
+    )
+    const existingConn = existingConnections[0]
+
+    const configData: Record<string, unknown> = {
+      allow_unmapped_users: input.allow_unmapped_users ?? true,
+      api_base_url: apiBaseUrl,
+      app_id: resolvedAppId,
+      identities: input.identities ?? [],
+      page_avatar: pageInfo.avatar,
+      page_id: pageInfo.page_id,
+      page_name: pageInfo.page_name,
+      security: normalizeCustomerChatSecurityConfig(input.security),
+      verify_token: resolvedVerifyToken,
+      webhook_secret_ref: `vault:${credential.id}`,
+    }
+
+    const connection = existingConn
+      ? await this.updateAgentChannelConnections(
+          {
+            config: configData,
+            id: existingConn.id,
+            secret_ref: `vault:${credential.id}`,
+            status: "DISABLED",
+          },
+          sharedContext
+        )
+      : await this.createAgentChannelConnections(
+          {
+            account_ref: accountRef,
+            channel: "MESSENGER",
+            config: configData,
+            secret_ref: `vault:${credential.id}`,
+            status: "DISABLED",
+            tenant_id: tenantId,
+          },
+          sharedContext
+        )
+
+    const webhookUrl = `${publicBaseUrl}/webhooks/agent-operations/messenger/${connection.id}`
+
+    const activeConnection = await this.updateAgentChannelConnections(
+      {
+        config: {
+          ...configData,
+          webhook_url: webhookUrl,
+        },
+        id: connection.id,
+        status: "ACTIVE",
+      },
+      sharedContext
+    )
+
+    // Automatically subscribe the Facebook Page to this App's Webhook events
+    try {
+      const subUrl = `${apiBaseUrl.replace(/\/$/, "")}/me/subscribed_apps?subscribed_fields=messages,messaging_postbacks&access_token=${encodeURIComponent(resolvedAccessToken)}`
+      await fetch(subUrl, { method: "POST", signal: AbortSignal.timeout(5_000) })
+    } catch {
+      // Non-blocking if offline
+    }
+
+    await this.createAgentAuditEvents(
+      {
+        action: "messenger-channel-configured-gui",
+        actor_id: input.actor_id,
+        actor_type: "user",
+        correlation_id: `messenger:connection:${activeConnection.id}`,
+        data: {
+          account_ref: activeConnection.account_ref,
+          page_id: pageInfo.page_id,
+          page_name: pageInfo.page_name,
+          webhook_url: webhookUrl,
+        },
+        event_type: "agent.channel.configured",
+        recorded_at: new Date(),
+        resource_id: activeConnection.id,
+        resource_type: "agent_channel_connection",
+      },
+      sharedContext
+    )
+
+    return {
+      connection: activeConnection,
+      page_avatar: pageInfo.avatar,
+      page_id: pageInfo.page_id,
+      page_name: pageInfo.page_name,
+      secret_hint: secretHint,
+      verify_token: resolvedVerifyToken,
+      webhook_url: webhookUrl,
+    }
+  }
+
+  @InjectManager()
+  async disconnectMessengerChannel(
+    input: { account_ref?: string; actor_id: string; tenant_id?: string },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.disconnectMessengerChannel_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async disconnectMessengerChannel_(
+    input: { account_ref?: string; actor_id: string; tenant_id?: string },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const tenantId = input.tenant_id ?? "default"
+    const accountRef = input.account_ref ?? "primary"
+
+    const connections = await this.listAgentChannelConnections(
+      { account_ref: accountRef, channel: "MESSENGER", tenant_id: tenantId },
       { take: 1 },
       sharedContext
     )
