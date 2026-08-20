@@ -553,6 +553,14 @@
     "selectConversation": "Choose a conversation on the left to view its history and memory.",
     "needsHuman": "Needs staff",
     "aiHandling": "AI handling",
+    "aiPaused": "AI paused",
+    "aiPausedDesc": "AI Assistant is paused for this conversation. You can chat directly with the customer.",
+    "aiActiveDesc": "AI is handling this conversation. You can send direct messages or pause AI at any time.",
+    "pauseAi": "Pause AI",
+    "resumeAi": "Resume AI",
+    "aiPausedSuccess": "AI Assistant paused for this conversation.",
+    "aiResumedSuccess": "AI Assistant resumed for this conversation.",
+    "newMessage": "New message",
     "noHumanActionNeeded": "AI is handling this conversation; staff action is not currently required.",
     "conversationMemory": "Conversation memory",
     "memoryVersion": "Version {{version}} · {{count}} messages",
@@ -904,53 +912,6 @@
     "saveError": "Could not save access settings",
     "switchedPublic": "Switched to Public",
     "switchedPrivate": "Switched to Private"
-  },
-  "agentOperations": {
-    "navigation": "Agent Operations",
-    "title": "Agent Operations",
-    "subtitle": "Control plane for governed retail agents",
-    "initializeFoundation": "Initialize foundation",
-    "incidents": "Incidents",
-    "pendingApprovals": "Pending approvals",
-    "openTasks": "Open tasks",
-    "activeScenarios": "Active scenarios",
-    "loadError": "Some control-plane data could not be loaded. Saved records were not deleted.",
-    "loading": "Loading agent control plane...",
-    "retry": "Retry",
-    "tabs": {
-      "readiness": "Readiness",
-      "incidents": "Incidents",
-      "approvals": "Approvals",
-      "tasks": "Tasks",
-      "knowledge": "Knowledge",
-      "evaluation": "Evaluation",
-      "catalog": "Catalog"
-    },
-    "badges": {
-      "codeReady": "CODE READY",
-      "setupRequired": "SETUP REQUIRED",
-      "deploymentReady": "DEPLOYMENT READY",
-      "deploymentGatesOpen": "DEPLOYMENT GATES OPEN",
-      "ready": "READY",
-      "missing": "MISSING"
-    },
-    "empty": {
-      "incidents": "No incidents recorded.",
-      "approvals": "No pending approvals.",
-      "tasks": "No operational tasks.",
-      "knowledge": "No governed knowledge documents.",
-      "evaluation": "No evaluation scenarios. Initialize the foundation first."
-    },
-    "role": "Role: {{role}}",
-    "review": "Review",
-    "decisionReason": "Required decision reason",
-    "decisionReasonAria": "Decision reason",
-    "reject": "Reject",
-    "approve": "Approve",
-    "toasts": {
-      "bootstrapSuccess": "Agent platform foundation initialized",
-      "decisionSuccess": "Approval decision recorded"
-    }
   },
   "prompts": {
     "title": "AI Assistant & System Prompts Configuration",

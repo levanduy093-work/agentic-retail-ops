@@ -28,9 +28,11 @@ import {
   AdminRetireKnowledgeDocument,
   AdminSearchKnowledge,
   AdminSendAgentConversationMessage,
+  AdminSendDirectSupportMessage,
   AdminSendSupportSimulatorReply,
   AdminTestTelegramBot,
   AdminTestZaloOa,
+  AdminToggleConversationAi,
   AdminTransitionAgentTask,
   TelegramWebhookUpdate,
   ZaloWebhookPayload,
@@ -230,6 +232,22 @@ import { getSepaySettings } from "../modules/payment-hub/sepay-connection"
         validateAndTransformBody(AdminSendAgentConversationMessage),
       ],
       policies: [{ resource: "agent_message", operation: "create" }],
+    },
+    {
+      matcher: "/admin/agent-operations/conversations/:id/direct-message",
+      method: "POST",
+      middlewares: [
+        validateAndTransformBody(AdminSendDirectSupportMessage),
+      ],
+      policies: [{ resource: "agent_message", operation: "create" }],
+    },
+    {
+      matcher: "/admin/agent-operations/conversations/:id/toggle-ai",
+      method: "POST",
+      middlewares: [
+        validateAndTransformBody(AdminToggleConversationAi),
+      ],
+      policies: [{ resource: "agent_conversation", operation: "update" }],
     },
     {
       matcher: "/admin/agent-operations/catalog",

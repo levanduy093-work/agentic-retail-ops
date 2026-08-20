@@ -155,6 +155,23 @@ export const AdminSendAgentConversationMessage = z.strictObject({
   message_type: z.literal("COMMAND"),
 })
 
+export const AdminSendDirectSupportMessage = z.strictObject({
+  body: z.string().trim().min(1).max(4000),
+  client_message_id: z.string().trim().min(1).max(200).optional(),
+})
+
+export type AdminSendDirectSupportMessageType = z.infer<
+  typeof AdminSendDirectSupportMessage
+>
+
+export const AdminToggleConversationAi = z.strictObject({
+  paused: z.boolean(),
+})
+
+export type AdminToggleConversationAiType = z.infer<
+  typeof AdminToggleConversationAi
+>
+
 export const AdminClearAgentConversation = z.strictObject({
   idempotency_key: z.string().trim().min(1).max(200),
 })

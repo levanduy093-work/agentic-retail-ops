@@ -1,4 +1,5 @@
 import {
+  Badge,
   Button,
   Container,
   Drawer,
@@ -650,6 +651,61 @@ export const CustomerSupportContent = ({
     },
   })
 
+  const sendDirectMessage = useMutation({
+    mutationFn: async ({
+      conversationId,
+      body,
+    }: {
+      conversationId: string
+      body: string
+    }) => {
+      const text = body.trim()
+      if (text.length < 1) {
+        throw new Error(t("supportDesk.replyRequired", { defaultValue: "Vui lòng nhập nội dung tin nhắn." }))
+      }
+      return sdk.client.fetch(
+        `/admin/agent-operations/conversations/${conversationId}/direct-message`,
+        {
+          body: { body: text, client_message_id: crypto.randomUUID() },
+          method: "POST",
+        }
+      )
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+    onSuccess: async () => {
+      toast.success(t("supportDesk.directSendSuccess", { defaultValue: "Đã gửi tin nhắn cho khách hàng." }))
+      setReply("")
+      await invalidateSupportData()
+    },
+  })
+
+  const toggleConversationAi = useMutation({
+    mutationFn: async ({
+      conversationId,
+      paused,
+    }: {
+      conversationId: string
+      paused: boolean
+    }) => {
+      return sdk.client.fetch(
+        `/admin/agent-operations/conversations/${conversationId}/toggle-ai`,
+        {
+          body: { paused },
+          method: "POST",
+        }
+      )
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+    onSuccess: async (_, variables) => {
+      toast.success(
+        variables.paused
+          ? t("supportDesk.aiPausedSuccess", { defaultValue: "Đã tạm dừng AI cho cuộc hội thoại này." })
+          : t("supportDesk.aiResumedSuccess", { defaultValue: "Đã bật lại AI hỗ trợ." })
+      )
+      await invalidateSupportData()
+    },
+  })
+
   const humanStatus = (status: string) =>
     t(`supportDesk.status.${status.toLowerCase()}`, { defaultValue: status })
   const formatDate = (value: string | null) =>
@@ -672,6 +728,11 @@ export const CustomerSupportContent = ({
     selectedConversation?.channel ??
     selectedTask?.input?.channel ??
     "—"
+  const conversationMetadata = (selectedConversation?.metadata ?? {}) as Record<string, unknown>
+  const isAiPaused = conversationMetadata.ai_paused === true
+  const isSending = submitAndSendReply.isPending || sendDirectMessage.isPending
+  const isTogglingAi = toggleConversationAi.isPending
+
   const assignedToManager = selectedTask
     ? isAssignedToManager(selectedTask)
     : false
@@ -687,12 +748,29 @@ export const CustomerSupportContent = ({
     !assignedToManager &&
     !messageSent
   const canSend =
-    Boolean(selectedTask) &&
-    !["CANCELLED", "DEAD"].includes(selectedTask!.status) &&
+    Boolean(selectedConversation) &&
     !assignedToManager &&
     !assignedToOther &&
-    !messageSent
+    !isSending &&
+    reply.trim().length >= 1
   const canClearHistory = Boolean(selectedConversation)
+
+  const handleSend = () => {
+    if (!selectedConversation || reply.trim().length < 1 || isSending) return
+
+    if (
+      selectedTask &&
+      !TERMINAL_STATUSES.includes(selectedTask.status) &&
+      !messageSent
+    ) {
+      submitAndSendReply.mutate(selectedTask)
+    } else {
+      sendDirectMessage.mutate({
+        conversationId: selectedConversation.id,
+        body: reply.trim(),
+      })
+    }
+  }
 
   if (tasks.isLoading || conversations.isLoading || currentUser.isLoading) {
     return (
@@ -807,13 +885,18 @@ export const CustomerSupportContent = ({
                 const itemCustomerName = customerNameFromConversation(item, t)
                 const isSelected = item.id === selectedConversationId
                 const itemChannel = item.channel || item.support_task?.input?.channel || "IN_APP"
+                const isAiPausedItem = (item.metadata as Record<string, unknown> | null)?.ai_paused === true
+                const isUnreplied = item.latest_message?.direction === "INBOUND" || item.requires_human_attention
+                const isAnswered = !isUnreplied && Boolean(item.latest_message)
 
                 return (
                   <Button
-                    className={`h-auto w-full shrink-0 justify-start rounded-lg border px-3 py-3 text-left shadow-elevation-card-rest transition-colors ${
+                    className={`h-auto w-full shrink-0 justify-start rounded-lg border px-3 py-3 text-left transition-all ${
                       isSelected
-                        ? "border-ui-border-interactive bg-ui-bg-highlight hover:bg-ui-bg-highlight"
-                        : "border-ui-border-base bg-ui-bg-base hover:bg-ui-bg-component-hover"
+                        ? "border-ui-border-interactive bg-ui-bg-highlight shadow-elevation-card-rest hover:bg-ui-bg-highlight"
+                        : isUnreplied
+                        ? "border-ui-border-base bg-ui-bg-base shadow-elevation-card-rest hover:bg-ui-bg-component-hover"
+                        : "border-ui-border-base/60 bg-ui-bg-subtle/50 opacity-75 hover:bg-ui-bg-component-hover hover:opacity-100"
                     }`}
                     key={item.id}
                     size="small"
@@ -825,30 +908,44 @@ export const CustomerSupportContent = ({
                         <div className="flex min-w-0 items-center gap-x-1.5">
                           {getChannelIcon(itemChannel, 14)}
                           <Text
-                            className="truncate"
+                            className={`truncate ${isUnreplied ? "text-ui-fg-base" : "text-ui-fg-subtle"}`}
                             size="small"
                             leading="compact"
-                            weight="plus"
+                            weight={isUnreplied ? "plus" : "regular"}
                           >
                             {itemCustomerName}
                           </Text>
                         </div>
-                        <div
-                          aria-label={
-                            item.requires_human_attention
-                              ? t("supportDesk.needsHuman")
-                              : t("supportDesk.aiHandling")
-                          }
-                          className={`size-2 shrink-0 rounded-full ${
-                            item.requires_human_attention
-                              ? "bg-ui-tag-orange-icon"
-                              : "bg-ui-tag-green-icon"
-                          }`}
-                          role="img"
-                        />
+                        {item.requires_human_attention ? (
+                          <Badge
+                            color="red"
+                            size="2xsmall"
+                            className="shrink-0 font-medium"
+                          >
+                            {t("supportDesk.needsHuman")}
+                          </Badge>
+                        ) : isAiPausedItem ? (
+                          <Badge
+                            color="purple"
+                            size="2xsmall"
+                            className="shrink-0 font-medium"
+                          >
+                            {t("supportDesk.aiPaused", { defaultValue: "AI đã tạm dừng" })}
+                          </Badge>
+                        ) : item.latest_message?.direction === "INBOUND" ? (
+                          <Badge
+                            color="green"
+                            size="2xsmall"
+                            className="shrink-0 font-medium"
+                          >
+                            {t("supportDesk.newMessage", { defaultValue: "Tin mới" })}
+                          </Badge>
+                        ) : null}
                       </div>
                       <Text
-                        className="line-clamp-2 text-ui-fg-subtle"
+                        className={`line-clamp-2 ${
+                          isUnreplied ? "text-ui-fg-base font-medium" : "text-ui-fg-muted"
+                        }`}
                         size="small"
                         leading="compact"
                       >
@@ -901,11 +998,19 @@ export const CustomerSupportContent = ({
                 </div>
                 <div className="flex items-center gap-x-2">
                   <StatusBadge
-                    color={selectedTask ? statusColor(selectedTask.status) : "green"}
+                    color={
+                      selectedTask
+                        ? statusColor(selectedTask.status)
+                        : isAiPaused
+                        ? "purple"
+                        : "green"
+                    }
                   >
                     {selectedTask
                       ? humanStatus(selectedTask.status)
-                      : t("supportDesk.aiHandling")}
+                      : isAiPaused
+                      ? t("supportDesk.aiPaused", { defaultValue: "AI đã tạm dừng" })
+                      : t("supportDesk.aiHandling", { defaultValue: "AI đang hỗ trợ" })}
                   </StatusBadge>
                   {selectedTask?.due_at && (
                     <Text
@@ -917,6 +1022,26 @@ export const CustomerSupportContent = ({
                         time: formatDate(selectedTask.due_at),
                       })}
                     </Text>
+                  )}
+
+                  {/* Pause / Resume AI Button */}
+                  {selectedConversation && (
+                    <Button
+                      size="small"
+                      variant="secondary"
+                      className="text-xsmall"
+                      isLoading={isTogglingAi}
+                      onClick={() =>
+                        toggleConversationAi.mutate({
+                          conversationId: selectedConversation.id,
+                          paused: !isAiPaused,
+                        })
+                      }
+                    >
+                      {isAiPaused
+                        ? t("supportDesk.resumeAi", { defaultValue: "Bật lại AI" })
+                        : t("supportDesk.pauseAi", { defaultValue: "Tạm dừng AI" })}
+                    </Button>
                   )}
 
                   {/* 3-dots Dropdown Menu */}
@@ -946,6 +1071,23 @@ export const CustomerSupportContent = ({
                       {selectedTask &&
                         !TERMINAL_STATUSES.includes(selectedTask.status) &&
                         !assignedToManager && <DropdownMenu.Separator />}
+                      {selectedConversation && (
+                        <DropdownMenu.Item
+                          onClick={() =>
+                            toggleConversationAi.mutate({
+                              conversationId: selectedConversation.id,
+                              paused: !isAiPaused,
+                            })
+                          }
+                          className="cursor-pointer"
+                          disabled={isTogglingAi}
+                        >
+                          {isAiPaused
+                            ? t("supportDesk.resumeAi", { defaultValue: "Bật lại AI" })
+                            : t("supportDesk.pauseAi", { defaultValue: "Tạm dừng AI" })}
+                        </DropdownMenu.Item>
+                      )}
+                      {selectedConversation && <DropdownMenu.Separator />}
                       <DropdownMenu.Item
                         className="cursor-pointer text-ui-fg-error focus:bg-ui-bg-base-hover"
                         onClick={() => setClearHistoryOpen(true)}
@@ -1056,13 +1198,22 @@ export const CustomerSupportContent = ({
                   {/* Status hint if AI handling or assigned */}
                   <div className="mb-2 flex items-center justify-between">
                     <div>
-                      {!selectedTask && (
+                      {!selectedTask && isAiPaused && (
+                        <Text
+                          size="xsmall"
+                          leading="compact"
+                          className="text-ui-fg-warning font-medium"
+                        >
+                          {t("supportDesk.aiPausedDesc")}
+                        </Text>
+                      )}
+                      {!selectedTask && !isAiPaused && (
                         <Text
                           size="xsmall"
                           leading="compact"
                           className="text-ui-fg-subtle"
                         >
-                          {t("supportDesk.noHumanActionNeeded")}
+                          {t("supportDesk.aiActiveDesc")}
                         </Text>
                       )}
                       {assignedToManager && (
@@ -1102,14 +1253,14 @@ export const CustomerSupportContent = ({
                         defaultValue: "Nhập tin nhắn phản hồi cho khách... (Enter để gửi, Shift+Enter để xuống dòng)",
                       })}
                       rows={2}
-                      disabled={assignedToManager || assignedToOther || submitAndSendReply.isPending}
+                      disabled={assignedToManager || assignedToOther || isSending}
                       value={reply}
                       onChange={(event) => setReply(event.target.value)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" && !event.shiftKey) {
                           event.preventDefault()
-                          if (canSend && selectedTask && reply.trim().length >= 2) {
-                            submitAndSendReply.mutate(selectedTask)
+                          if (canSend) {
+                            handleSend()
                           }
                         }
                       }}
@@ -1118,18 +1269,12 @@ export const CustomerSupportContent = ({
                       size="small"
                       variant="primary"
                       className="h-[48px] px-4 shrink-0"
-                      disabled={
-                        !canSend ||
-                        !selectedTask ||
-                        (reply.trim().length < 2 &&
-                          (typeof selectedTask.result?.response_body !== "string" ||
-                            selectedTask.result.response_body.trim().length < 2))
-                      }
-                      isLoading={submitAndSendReply.isPending}
-                      onClick={() => selectedTask && submitAndSendReply.mutate(selectedTask)}
+                      disabled={!canSend}
+                      isLoading={isSending}
+                      onClick={handleSend}
                     >
                       <SendIcon className="mr-1.5" size={14} />
-                      {t("supportDesk.directSend", { defaultValue: "Gửi" })}
+                      {t("supportDesk.directSend", { defaultValue: "Gửi tin nhắn" })}
                     </Button>
                   </div>
                 </div>

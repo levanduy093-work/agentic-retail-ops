@@ -4568,6 +4568,16 @@ class AgentOperationsModuleService extends MedusaService({
       sharedContext
     )
     const metadata = (conversation.metadata ?? {}) as Record<string, unknown>
+    if (metadata.ai_paused === true) {
+      return {
+        ai_paused: true,
+        delivery_id: null,
+        duplicate: false,
+        grounded: false,
+        response_message_id: null,
+        support_task_id: null,
+      }
+    }
     if (!isCustomerSupportConversation({
       metadata,
       topic_type: conversation.topic_type,
