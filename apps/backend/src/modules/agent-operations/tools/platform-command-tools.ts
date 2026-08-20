@@ -125,6 +125,16 @@ export const DraftCartCreateInput = z.strictObject({
   sales_channel_id: z.string().trim().min(1),
 })
 
+export const ReturnProposeInput = z.strictObject({
+  conversation_id: z.string().trim().min(1),
+  customer_confirmation_message_id: z.string().trim().min(1),
+  order_code: z
+    .union([z.string().trim().regex(/^\d{1,12}$/), z.number().int().positive()])
+    .transform((value) => Number(value)),
+  reason: z.string().trim().min(5).max(2_000),
+  requested_resolution: z.enum(["EXCHANGE", "REFUND", "RETURN"]),
+})
+
 export const CartHandoffSendInput = z.strictObject({
   body: z.string().trim().min(1).max(4_000),
   cart_id: z.string().trim().min(1),
@@ -148,6 +158,17 @@ const CartHandoffSendOutput = z.union([
     message_id: z.string(),
     outcome: z.literal("SUCCEEDED"),
     status: z.literal("AVAILABLE"),
+  }),
+  CommandConflict,
+])
+
+const ReturnProposeOutput = z.union([
+  z.strictObject({
+    duplicate: z.boolean(),
+    incident_id: z.string(),
+    outcome: z.literal("SUCCEEDED"),
+    status: z.literal("PENDING_HUMAN_REVIEW"),
+    task_id: z.string(),
   }),
   CommandConflict,
 ])
@@ -284,6 +305,30 @@ export const DRAFT_CART_CREATE_TOOL = defineAgentTool({
   risk_level: "MEDIUM",
 })
 
+export const RETURN_PROPOSE_TOOL = defineAgentTool({
+  ...commandDefaults,
+  approval_required: false,
+  audit_fields: [
+    "conversation_id",
+    "customer_confirmation_message_id",
+    "order_code",
+    "requested_resolution",
+  ],
+  description:
+    "Create a human-review return, exchange, or refund proposal for a verified customer's own order. It never creates a Medusa return or refund.",
+  error_codes: [
+    "ACTION_GATE_REJECTED",
+    "CUSTOMER_ORDER_NOT_FOUND",
+    "RETURN_REVIEW_REQUIRED",
+  ],
+  input_schema: ReturnProposeInput,
+  name: "return.propose",
+  output_schema: ReturnProposeOutput,
+  permission: "agent_task:create",
+  required_role: null,
+  risk_level: "MEDIUM",
+})
+
 export const CART_HANDOFF_SEND_TOOL = defineAgentTool({
   ...commandDefaults,
   approval_required: false,
@@ -310,4 +355,5 @@ export type PlatformCommandOutput = z.infer<
   | typeof MessageSendOutput
   | typeof DraftCartCreateOutput
   | typeof CartHandoffSendOutput
+  | typeof ReturnProposeOutput
 >

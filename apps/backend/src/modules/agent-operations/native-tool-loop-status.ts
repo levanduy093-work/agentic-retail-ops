@@ -18,8 +18,8 @@ export function summarizeNativeToolLoopStatus(
 ) {
   const completed = events.filter((event) => event.event_type.endsWith("completed"))
   const failed = events.filter((event) => event.event_type.endsWith("failed"))
-  const eligible = completed.filter(
-    (event) => getData(getData(event.data).evaluation).canary_eligible === true
+  const safeToUse = completed.filter(
+    (event) => getData(getData(event.data).evaluation).safe_to_use === true
   )
   const usedAsResponseContext = completed.filter(
     (event) => getData(event.data).used_as_response_context === true
@@ -27,7 +27,7 @@ export function summarizeNativeToolLoopStatus(
 
   return {
     counts: {
-      canary_eligible: eligible.length,
+      safe_to_use: safeToUse.length,
       completed: completed.length,
       failed: failed.length,
       used_as_response_context: usedAsResponseContext.length,

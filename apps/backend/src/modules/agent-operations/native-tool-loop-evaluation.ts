@@ -6,7 +6,7 @@ export type NativeToolLoopEvaluationAssertion = {
 }
 
 export type NativeToolLoopEvaluation = {
-  canary_eligible: boolean
+  safe_to_use: boolean
   score: number
   assertions: NativeToolLoopEvaluationAssertion[]
 }
@@ -18,9 +18,10 @@ type EvaluateNativeToolLoopInput = {
 }
 
 /**
- * Evaluates safety properties that must hold before a shadow trace can count
- * toward a production rollout. It intentionally does not judge answer quality:
- * that requires curated scenarios and human review outside the request path.
+ * Evaluates deterministic safety properties for using a native-tool-loop result
+ * as response context. This is not a rollout gate: ACTIVE mode always invokes
+ * the native harness. A failed or rejected trace simply cannot supply facts to
+ * the customer-facing response.
  */
 export function evaluateNativeToolLoop(
   input: EvaluateNativeToolLoopInput
@@ -45,7 +46,7 @@ export function evaluateNativeToolLoop(
 
   return {
     assertions,
-    canary_eligible: passedCount === assertions.length,
+    safe_to_use: passedCount === assertions.length,
     score: Math.round((passedCount / assertions.length) * 10_000),
   }
 }

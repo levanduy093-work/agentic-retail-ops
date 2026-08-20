@@ -244,13 +244,16 @@ import {
 import {
   APPROVAL_DECIDE_TOOL,
   APPROVAL_REQUEST_TOOL,
+  CartHandoffSendInput,
   CART_HANDOFF_SEND_TOOL,
+  DraftCartCreateInput,
   DRAFT_CART_CREATE_TOOL,
   INCIDENT_CREATE_TOOL,
   INCIDENT_UPDATE_TOOL,
   KNOWLEDGE_PROPOSE_TOOL,
   MESSAGE_SEND_TOOL,
-  PlatformCommandOutput
+  PlatformCommandOutput,
+  ReturnProposeInput,
 } from "./tools/platform-command-tools"
 
 type IndexableKnowledgeDocument = {
@@ -5105,12 +5108,22 @@ class AgentOperationsModuleService extends MedusaService({
     const smallTalk = explicitAttack
       ? null
       : buildCustomerSmallTalkReply(question, locale, settings)
+    const nativeIntent =
+      !explicitAttack && input.native_route
+        ? {
+            confidence: 1,
+            intent: input.native_route,
+            reason: "Native tool selection supplied the governed response route."
+          }
+        : null
     const intent = explicitAttack
       ? {
           confidence: 1,
           intent: "UNSAFE" as const,
           reason: "Matched a backend security rule."
         }
+      : nativeIntent
+        ? nativeIntent
       : await this.classifyCustomerMessageIntent(
           {
             conversation_memory: memorySummary,
@@ -5122,7 +5135,7 @@ class AgentOperationsModuleService extends MedusaService({
           },
           sharedContext
         )
-    const routedIntent = resolveCustomerMessageIntent(intent)
+    const routedIntent = nativeIntent?.intent ?? resolveCustomerMessageIntent(intent)
     const sentiment = analyzeCustomerSentiment(question)
     let reviewRouted = false
     let supportTaskId: string | null = null
@@ -5254,17 +5267,21 @@ class AgentOperationsModuleService extends MedusaService({
         (hybridKind === "PRODUCT_AND_SHIPPING" || hybridKind === "PRODUCT_AND_POLICY") &&
         question.length >= 4
       ) {
-        const retrievedKnowledge = await this.searchGovernedKnowledge(
-          {
-            limit: 3,
-            locale,
-            query: question.slice(0, 500),
-            scope: "customer_support",
-            tenant_id: conversation.tenant_id
-          },
-          sharedContext
-        )
-        await recordKnowledgeSearchTool(question, retrievedKnowledge)
+        const retrievedKnowledge =
+          input.knowledge_snapshot ??
+          (await this.searchGovernedKnowledge(
+            {
+              limit: 3,
+              locale,
+              query: question.slice(0, 500),
+              scope: "customer_support",
+              tenant_id: conversation.tenant_id
+            },
+            sharedContext
+          ))
+        if (!input.knowledge_snapshot) {
+          await recordKnowledgeSearchTool(question, retrievedKnowledge)
+        }
         const relevantKnowledge = filterKnowledgeEvidenceForQuestion(question, retrievedKnowledge)
         if (hasSufficientKnowledgeEvidence(relevantKnowledge)) {
           const knowledgeSubAnswer = await this.draftGovernedKnowledgeAnswer(
@@ -6108,6 +6125,560 @@ class AgentOperationsModuleService extends MedusaService({
       sharedContext
     )
     return { duplicate: false, tool_call: toolCall }
+  }
+
+  /**
+   * Turns an authenticated customer's explicit cart confirmation into a governed
+   * proposal. This method deliberately never creates a Medusa cart: it only
+   * produces the event, incident, recommendation, and manager approval needed
+   * before the existing cart.create-draft action may be requested.
+   */
+  @InjectManager()
+  async proposeCustomerDraftCart(
+    input: Record<string, unknown>,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.proposeCustomerDraftCart_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async proposeCustomerDraftCart_(
+    input: Record<string, unknown>,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const proposal = DraftCartCreateInput.parse(input)
+    const [conversation, confirmation] = await Promise.all([
+      this.retrieveAgentConversation(proposal.conversation_id, {}, sharedContext),
+      this.retrieveAgentMessage(
+        proposal.customer_confirmation_message_id,
+        {},
+        sharedContext
+      )
+    ])
+    const metadata = (conversation.metadata ?? {}) as Record<string, unknown>
+    const customerId =
+      typeof metadata.customer_id === "string" &&
+      metadata.principal_role === "CUSTOMER" &&
+      metadata.customer_identity_verified === true
+        ? metadata.customer_id
+        : null
+    if (
+      !customerId ||
+      conversation.channel !== "IN_APP" ||
+      conversation.status !== "OPEN" ||
+      confirmation.conversation_id !== conversation.id ||
+      confirmation.direction !== "INBOUND"
+    ) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        "A verified customer confirmation in the current open in-app conversation is required."
+      )
+    }
+
+    const container = (
+      this as unknown as { __container__: MedusaContainer }
+    ).__container__
+    const query = container.resolve(ContainerRegistrationKeys.QUERY)
+    const [regions, salesChannels, variants] = await Promise.all([
+      query.graph({
+        entity: "region",
+        fields: ["id"],
+        filters: { id: proposal.region_id },
+        pagination: { skip: 0, take: 2 }
+      }),
+      query.graph({
+        entity: "sales_channel",
+        fields: ["id"],
+        filters: { id: proposal.sales_channel_id },
+        pagination: { skip: 0, take: 2 }
+      }),
+      query.graph({
+        entity: "product_variant",
+        fields: ["id", "product.id", "product.status", "product.title", "title"],
+        filters: { id: proposal.items.map((item) => item.variant_id) },
+        pagination: { skip: 0, take: proposal.items.length + 1 }
+      })
+    ])
+    if (regions.data.length !== 1 || salesChannels.data.length !== 1) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "The requested selling region or sales channel is unavailable."
+      )
+    }
+    const variantsById = new Map(
+      (variants.data as Array<{
+        id: string
+        product?: { id?: string; status?: string; title?: string | null } | null
+        title?: string | null
+      }>).map((variant) => [variant.id, variant])
+    )
+    const selectedVariants = proposal.items.map((item) => variantsById.get(item.variant_id))
+    if (
+      selectedVariants.some(
+        (variant) => !variant?.product?.id || variant.product.status !== "published"
+      )
+    ) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "Every proposed cart item must be a currently published product variant."
+      )
+    }
+
+    const source = "in-app-customer-cart"
+    const eventId = `draft-cart-proposal:${confirmation.id}`
+    const existingEvent = (
+      await this.listAgentEvents({ event_id: eventId, source }, { take: 1 }, sharedContext)
+    )[0]
+    if (existingEvent) {
+      const incident = (
+        await this.listAgentIncidents(
+          { trigger_event_id: existingEvent.id },
+          { take: 1 },
+          sharedContext
+        )
+      )[0]
+      return {
+        approval: await this.findApprovalForIncident(incident?.id, sharedContext),
+        duplicate: true,
+        event: existingEvent,
+        incident,
+        recommendation: await this.findRecommendationForIncident(incident?.id, sharedContext)
+      }
+    }
+
+    const now = new Date()
+    const correlationId = `customer-draft-cart:${conversation.id}:${confirmation.id}`
+    const event = await this.createAgentEvents(
+      {
+        correlation_id: correlationId,
+        event_id: eventId,
+        event_type: "customer.cart-draft-confirmed",
+        event_version: 1,
+        occurred_at: confirmation.occurred_at,
+        payload: {
+          conversation_id: conversation.id,
+          customer_confirmation_message_id: confirmation.id,
+          customer_id: customerId,
+          items: proposal.items,
+          region_id: proposal.region_id,
+          sales_channel_id: proposal.sales_channel_id
+        },
+        processed_at: now,
+        received_at: now,
+        source,
+        status: "PROCESSED",
+        subject_id: conversation.id,
+        subject_type: "conversation",
+        tenant_id: conversation.tenant_id
+      },
+      sharedContext
+    )
+    const incident = await this.createAgentIncidents(
+      {
+        context: {
+          customer_confirmation_message_id: confirmation.id,
+          customer_id: customerId,
+          items: proposal.items
+        },
+        correlation_id: correlationId,
+        incident_type: "CUSTOMER_DRAFT_CART",
+        priority: "MEDIUM",
+        status: "RECEIVED",
+        subject_id: conversation.id,
+        subject_type: "conversation",
+        summary: "Verified customer requested a draft cart from the current conversation.",
+        tenant_id: conversation.tenant_id,
+        title: `Customer draft cart for ${conversation.title}`,
+        trigger_event_id: event.id
+      },
+      sharedContext
+    )
+    const run = await this.createAgentRuns(
+      {
+        agent_id: "customer-support-agent",
+        agent_version: "1.0.0",
+        incident_id: incident.id,
+        input: event.payload,
+        started_at: now,
+        status: "RECEIVED",
+        trigger_event_id: event.id
+      },
+      sharedContext
+    )
+    await this.transitionIncident(incident.id, "RECEIVED", "INVESTIGATING", sharedContext)
+    const recommendation = await this.createAgentRecommendations(
+      {
+        action_type: "CART_CREATE_DRAFT",
+        evidence: {
+          customer_confirmation_message_id: confirmation.id,
+          customer_id: customerId,
+          selected_variants: selectedVariants.map((variant) => ({
+            id: variant!.id,
+            product_id: variant!.product!.id,
+            product_title: variant!.product!.title ?? null,
+            title: variant!.title ?? null
+          }))
+        },
+        incident_id: incident.id,
+        proposal,
+        rationale:
+          "The customer is authenticated and explicitly confirmed the selected published variants in this open in-app conversation.",
+        risk_level: "MEDIUM",
+        run_id: run.id,
+        status: "PENDING_APPROVAL",
+        summary: "Create a customer-owned draft cart after operations-manager approval."
+      },
+      sharedContext
+    )
+    await this.transitionIncident(incident.id, "INVESTIGATING", "OPTIONS_READY", sharedContext)
+    await this.transitionIncident(incident.id, "OPTIONS_READY", "AWAITING_APPROVAL", sharedContext)
+    const policy = (
+      await this.listAgentPolicyDefinitions(
+        {
+          action_type: DRAFT_CART_CREATE_TOOL.name,
+          policy_key: "cart.create-draft.customer-confirmed",
+          status: "ACTIVE",
+          tenant_id: conversation.tenant_id,
+          version: DRAFT_CART_CREATE_TOOL.version
+        },
+        { take: 1 },
+        sharedContext
+      )
+    )[0]
+    if (!policy || policy.effective_at > now || (policy.expires_at && policy.expires_at <= now)) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        "No active approval policy is available for customer draft carts."
+      )
+    }
+    const approval = await this.createAgentApprovals(
+      {
+        expires_at: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+        incident_id: incident.id,
+        policy_key: policy.policy_key,
+        policy_version: policy.version,
+        recommendation_id: recommendation.id,
+        requested_at: now,
+        requested_by_id: run.id,
+        requested_by_type: "agent_run",
+        required_role: policy.required_role ?? "operations_manager",
+        status: "PENDING"
+      },
+      sharedContext
+    )
+    await this.updateAgentRuns(
+      {
+        completed_at: now,
+        id: run.id,
+        output: { approval_id: approval.id, recommendation_id: recommendation.id },
+        status: "AWAITING_APPROVAL"
+      },
+      sharedContext
+    )
+    await this.createAgentAuditEvents(
+      {
+        action: "customer-draft-cart-proposed",
+        actor_id: run.id,
+        actor_type: "agent_run",
+        correlation_id: correlationId,
+        data: {
+          approval_id: approval.id,
+          customer_confirmation_message_id: confirmation.id,
+          recommendation_id: recommendation.id
+        },
+        event_type: "agent.customer-support.draft-cart-proposed",
+        incident_id: incident.id,
+        recorded_at: now,
+        resource_id: recommendation.id,
+        resource_type: "agent_recommendation"
+      },
+      sharedContext
+    )
+    await this.createAgentOutboxEvents(
+      {
+        aggregate_id: incident.id,
+        aggregate_type: "agent_incident",
+        available_at: now,
+        event_type: "agent.approval.requested",
+        event_version: 1,
+        idempotency_key: `approval:${approval.id}:requested`,
+        payload: {
+          approval_id: approval.id,
+          incident_id: incident.id,
+          recommendation_id: recommendation.id
+        },
+        status: "PENDING"
+      },
+      sharedContext
+    )
+    return { approval, duplicate: false, event, incident, recommendation }
+  }
+
+  /**
+   * Creates a staff-owned review case for a return, exchange, or refund request.
+   * It is intentionally not a commerce mutation and cannot create a Medusa return
+   * or refund; a human must evaluate policy, evidence, and final eligibility.
+   */
+  @InjectManager()
+  async proposeCustomerReturnReview(
+    input: Record<string, unknown>,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.proposeCustomerReturnReview_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async proposeCustomerReturnReview_(
+    input: Record<string, unknown>,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const proposal = ReturnProposeInput.parse(input)
+    const [conversation, confirmation] = await Promise.all([
+      this.retrieveAgentConversation(proposal.conversation_id, {}, sharedContext),
+      this.retrieveAgentMessage(
+        proposal.customer_confirmation_message_id,
+        {},
+        sharedContext
+      )
+    ])
+    const metadata = (conversation.metadata ?? {}) as Record<string, unknown>
+    const customerId =
+      typeof metadata.customer_id === "string" &&
+      metadata.principal_role === "CUSTOMER" &&
+      metadata.customer_identity_verified === true
+        ? metadata.customer_id
+        : null
+    if (
+      !customerId ||
+      conversation.channel !== "IN_APP" ||
+      conversation.status !== "OPEN" ||
+      confirmation.conversation_id !== conversation.id ||
+      confirmation.direction !== "INBOUND"
+    ) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        "A verified customer request in the current open conversation is required."
+      )
+    }
+    const container = (
+      this as unknown as { __container__: MedusaContainer }
+    ).__container__
+    const query = container.resolve(ContainerRegistrationKeys.QUERY)
+    const { data: orders } = await query.graph({
+      entity: "order",
+      fields: [
+        "id",
+        "display_id",
+        "fulfillment_status",
+        "items.id",
+        "items.quantity",
+        "items.title",
+        "payment_status",
+        "status",
+      ],
+      filters: {
+        customer_id: customerId,
+        display_id: String(proposal.order_code),
+      },
+      pagination: { skip: 0, take: 2 },
+    })
+    const order = orders[0] as
+      | {
+          display_id: string
+          fulfillment_status?: string | null
+          id: string
+          items?: Array<{ id: string; quantity: number; title?: string | null }>
+          payment_status?: string | null
+          status?: string | null
+        }
+      | undefined
+    if (orders.length !== 1 || !order) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_FOUND,
+        "The requested order does not belong to the verified customer."
+      )
+    }
+
+    const source = "in-app-customer-return"
+    const eventId = `return-proposal:${confirmation.id}`
+    const existingEvent = (
+      await this.listAgentEvents({ event_id: eventId, source }, { take: 1 }, sharedContext)
+    )[0]
+    if (existingEvent) {
+      const incident = (
+        await this.listAgentIncidents(
+          { trigger_event_id: existingEvent.id },
+          { take: 1 },
+          sharedContext
+        )
+      )[0]
+      const task = incident
+        ? (
+            await this.listAgentTasks(
+              { incident_id: incident.id },
+              { take: 1 },
+              sharedContext
+            )
+          )[0]
+        : null
+      return { duplicate: true, incident, task }
+    }
+
+    const now = new Date()
+    const correlationId = `customer-return:${conversation.id}:${confirmation.id}`
+    const event = await this.createAgentEvents(
+      {
+        correlation_id: correlationId,
+        event_id: eventId,
+        event_type: "customer.return-requested",
+        event_version: 1,
+        occurred_at: confirmation.occurred_at,
+        payload: {
+          conversation_id: conversation.id,
+          customer_confirmation_message_id: confirmation.id,
+          order_code: proposal.order_code,
+          order_id: order.id,
+          reason: proposal.reason,
+          requested_resolution: proposal.requested_resolution,
+        },
+        processed_at: now,
+        received_at: now,
+        source,
+        status: "PROCESSED",
+        subject_id: order.id,
+        subject_type: "order",
+        tenant_id: conversation.tenant_id,
+      },
+      sharedContext
+    )
+    const incident = await this.createAgentIncidents(
+      {
+        context: { customer_id: customerId, order_id: order.id },
+        correlation_id: correlationId,
+        incident_type: "CUSTOMER_RETURN_REQUEST",
+        priority: "HIGH",
+        status: "RECEIVED",
+        subject_id: order.id,
+        subject_type: "order",
+        summary: proposal.reason,
+        tenant_id: conversation.tenant_id,
+        title: `Customer ${proposal.requested_resolution.toLowerCase()} request for #${order.display_id}`,
+        trigger_event_id: event.id,
+      },
+      sharedContext
+    )
+    const run = await this.createAgentRuns(
+      {
+        agent_id: "returns-refund-agent",
+        agent_version: "1.0.0",
+        incident_id: incident.id,
+        input: event.payload,
+        started_at: now,
+        status: "RECEIVED",
+        trigger_event_id: event.id,
+      },
+      sharedContext
+    )
+    await this.transitionIncident(incident.id, "RECEIVED", "INVESTIGATING", sharedContext)
+    const recommendation = await this.createAgentRecommendations(
+      {
+        action_type: "RETURN_PROPOSE",
+        evidence: {
+          customer_confirmation_message_id: confirmation.id,
+          fulfillment_status: order.fulfillment_status ?? null,
+          item_count: order.items?.length ?? 0,
+          order_id: order.id,
+          payment_status: order.payment_status ?? null,
+        },
+        incident_id: incident.id,
+        proposal,
+        rationale:
+          "The order ownership is verified, but return, exchange, and refund eligibility require human review of policy and evidence.",
+        risk_level: "MEDIUM",
+        run_id: run.id,
+        status: "PROPOSED",
+        summary: `Review customer ${proposal.requested_resolution.toLowerCase()} request for order #${order.display_id}.`,
+      },
+      sharedContext
+    )
+    await this.transitionIncident(incident.id, "INVESTIGATING", "ESCALATED", sharedContext)
+    const task = await this.createAgentTasks(
+      {
+        created_by_id: run.id,
+        created_by_type: "agent",
+        conversation_id: conversation.id,
+        description:
+          "Review order eligibility, approved policy, customer evidence, and requested resolution. Do not issue a return, exchange, or refund until an authorized staff member decides.",
+        due_at: new Date(now.getTime() + 30 * 60 * 1_000),
+        idempotency_key: `customer-return-review:${confirmation.id}`,
+        incident_id: incident.id,
+        input: {
+          customer_confirmation_message_id: confirmation.id,
+          customer_id: customerId,
+          order: {
+            display_id: order.display_id,
+            fulfillment_status: order.fulfillment_status ?? null,
+            id: order.id,
+            items: order.items ?? [],
+            payment_status: order.payment_status ?? null,
+            status: order.status ?? null,
+          },
+          proposal,
+          recommendation_id: recommendation.id,
+          requires_human_review: true,
+        },
+        priority: "HIGH",
+        status: "TODO",
+        task_type: "SUPPORT_RETURN_REVIEW",
+        tenant_id: conversation.tenant_id,
+        title: `Review ${proposal.requested_resolution.toLowerCase()} request for #${order.display_id}`,
+      },
+      sharedContext
+    )
+    await this.updateAgentRuns(
+      {
+        completed_at: now,
+        id: run.id,
+        output: { recommendation_id: recommendation.id, task_id: task.id },
+        status: "ESCALATED",
+      },
+      sharedContext
+    )
+    this.broadcastTaskUpdated({
+      assigned_to_id: task.assigned_to_id,
+      id: task.id,
+      priority: task.priority,
+      status: task.status,
+      support_conversation_id: conversation.id,
+      task_type: task.task_type,
+    })
+    this.broadcastConversationUpdated({
+      channel: conversation.channel,
+      id: conversation.id,
+      last_message_at: now,
+      metadata: { requires_human_attention: true },
+      title: conversation.title,
+    })
+    await this.createAgentAuditEvents(
+      {
+        action: "customer-return-review-proposed",
+        actor_id: run.id,
+        actor_type: "agent_run",
+        correlation_id: correlationId,
+        data: {
+          order_id: order.id,
+          requested_resolution: proposal.requested_resolution,
+          task_id: task.id,
+        },
+        event_type: "agent.returns-refund.review-proposed",
+        incident_id: incident.id,
+        recorded_at: now,
+        resource_id: task.id,
+        resource_type: "agent_task",
+      },
+      sharedContext
+    )
+    return { duplicate: false, incident, task }
   }
 
   @InjectManager()
@@ -8654,6 +9225,112 @@ class AgentOperationsModuleService extends MedusaService({
         `Action ${action.id} lost its execution lease.`
       )
     }
+    if (
+      action.tool_name === DRAFT_CART_CREATE_TOOL.name &&
+      result.outcome === "SUCCEEDED"
+    ) {
+      const draftInput = DraftCartCreateInput.parse(action.input)
+      const cartId = (result as { cart_id?: unknown }).cart_id
+      if (typeof cartId !== "string") {
+        throw new MedusaError(
+          MedusaError.Types.UNEXPECTED_STATE,
+          "A successful draft cart action did not return a cart id."
+        )
+      }
+      const confirmation = await this.retrieveAgentMessage(
+        draftInput.customer_confirmation_message_id,
+        {},
+        sharedContext
+      )
+      const confirmationContent = (confirmation.structured_content ?? {}) as Record<
+        string,
+        unknown
+      >
+      const body =
+        confirmationContent.locale === "en"
+          ? "Your cart is ready. Open it to review the items and continue checkout."
+          : "Mình đã chuẩn bị giỏ hàng theo lựa chọn của bạn. Bạn mở giỏ để xem lại và tiếp tục thanh toán nhé."
+      const handoffInput = CartHandoffSendInput.parse({
+        body,
+        cart_id: cartId,
+        conversation_id: draftInput.conversation_id,
+      })
+      const handoffIdempotencyKey = `action:${action.id}:cart-handoff`
+      const existingHandoff = (
+        await this.listAgentActionRequests(
+          { idempotency_key: handoffIdempotencyKey },
+          { take: 1 },
+          sharedContext
+        )
+      )[0]
+      const handoffAction =
+        existingHandoff ??
+        (await this.createAgentActionRequests(
+          {
+            action_type: "CART_SEND_HANDOFF",
+            approval_id: null,
+            authorized_roles: { values: [] },
+            available_at: completedAt,
+            correlation_id: action.correlation_id,
+            idempotency_key: handoffIdempotencyKey,
+            incident_id: action.incident_id,
+            input: handoffInput,
+            permission: CART_HANDOFF_SEND_TOOL.permission,
+            policy_key: "cart.send-handoff.customer-owned",
+            policy_version: CART_HANDOFF_SEND_TOOL.version,
+            recommendation_id: action.recommendation_id,
+            requested_at: completedAt,
+            requested_by_id: "customer-support-agent",
+            requested_by_type: "agent",
+            risk_level: CART_HANDOFF_SEND_TOOL.risk_level,
+            status: "PENDING",
+            tenant_id: action.tenant_id,
+            tool_name: CART_HANDOFF_SEND_TOOL.name,
+            tool_version: CART_HANDOFF_SEND_TOOL.version,
+          },
+          sharedContext
+        ))
+      if (!existingHandoff) {
+        await this.createAgentAuditEvents(
+          {
+            action: "customer-draft-cart-handoff-queued",
+            actor_id: "customer-support-agent",
+            actor_type: "agent",
+            correlation_id: action.correlation_id,
+            data: {
+              cart_id: cartId,
+              draft_action_request_id: action.id,
+              handoff_action_request_id: handoffAction.id,
+            },
+            event_type: "agent.customer-support.draft-cart-handoff-queued",
+            incident_id: action.incident_id,
+            recorded_at: completedAt,
+            resource_id: handoffAction.id,
+            resource_type: "agent_action_request",
+          },
+          sharedContext
+        )
+        await this.createAgentOutboxEvents(
+          {
+            aggregate_id: action.incident_id ?? action.id,
+            aggregate_type: action.incident_id
+              ? "agent_incident"
+              : "agent_action_request",
+            available_at: completedAt,
+            event_type: "agent.action.requested",
+            event_version: 1,
+            idempotency_key: `action:${handoffAction.id}:requested`,
+            payload: {
+              action_request_id: handoffAction.id,
+              cart_id: cartId,
+              source_action_request_id: action.id,
+            },
+            status: "PENDING",
+          },
+          sharedContext
+        )
+      }
+    }
     await this.createAgentToolCalls(
       {
         action_request_id: action.id,
@@ -9443,14 +10120,20 @@ class AgentOperationsModuleService extends MedusaService({
     )
     let actionRequest: Awaited<ReturnType<typeof this.retrieveAgentActionRequest>> | null = null
 
-    if (input.decision === "APPROVED" && recommendation.action_type === "INVENTORY_TRANSFER") {
+    if (
+      input.decision === "APPROVED" &&
+      ["INVENTORY_TRANSFER", "CART_CREATE_DRAFT"].includes(recommendation.action_type)
+    ) {
       const proposal = recommendation.proposal as Record<string, unknown>
-      const actionInput = InventoryTransferInput.parse({
-        inventory_item_id: proposal.inventory_item_id,
-        quantity: proposal.quantity,
-        source_location_id: proposal.source_location_id,
-        target_location_id: proposal.target_location_id
-      })
+      const isInventoryTransfer = recommendation.action_type === "INVENTORY_TRANSFER"
+      const actionInput = isInventoryTransfer
+        ? InventoryTransferInput.parse({
+            inventory_item_id: proposal.inventory_item_id,
+            quantity: proposal.quantity,
+            source_location_id: proposal.source_location_id,
+            target_location_id: proposal.target_location_id
+          })
+        : DraftCartCreateInput.parse(proposal)
       actionRequest = await this.createAgentActionRequests(
         {
           action_type: recommendation.action_type,
@@ -9458,10 +10141,14 @@ class AgentOperationsModuleService extends MedusaService({
           authorized_roles: { values: [approval.required_role] },
           available_at: now,
           correlation_id: incident.correlation_id,
-          idempotency_key: `approval:${approval.id}:inventory-transfer:1`,
+          idempotency_key: isInventoryTransfer
+            ? `approval:${approval.id}:inventory-transfer:1`
+            : `approval:${approval.id}:customer-draft-cart:1`,
           incident_id: incident.id,
           input: actionInput,
-          permission: "agent_inventory:transfer",
+          permission: isInventoryTransfer
+            ? "agent_inventory:transfer"
+            : DRAFT_CART_CREATE_TOOL.permission,
           policy_key: approval.policy_key,
           policy_version: approval.policy_version,
           recommendation_id: recommendation.id,
@@ -9471,8 +10158,12 @@ class AgentOperationsModuleService extends MedusaService({
           risk_level: recommendation.risk_level,
           status: "PENDING",
           tenant_id: incident.tenant_id,
-          tool_name: "inventory.execute-transfer",
-          tool_version: "1.0.0"
+          tool_name: isInventoryTransfer
+            ? "inventory.execute-transfer"
+            : DRAFT_CART_CREATE_TOOL.name,
+          tool_version: isInventoryTransfer
+            ? "1.0.0"
+            : DRAFT_CART_CREATE_TOOL.version
         },
         sharedContext
       )

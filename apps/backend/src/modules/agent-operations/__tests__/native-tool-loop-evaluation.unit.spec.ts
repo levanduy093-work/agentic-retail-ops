@@ -4,10 +4,11 @@ const allowedToolNames = new Set([
   "search_catalog",
   "search_knowledge_base",
   "check_order_status",
+  "check_delivery_status",
 ])
 
 describe("native tool loop evaluation", () => {
-  it("marks a completed allowlisted trace eligible for canary analysis", () => {
+  it("marks a completed allowlisted trace safe to use as response context", () => {
     expect(
       evaluateNativeToolLoop({
         allowed_tool_names: allowedToolNames,
@@ -27,7 +28,7 @@ describe("native tool loop evaluation", () => {
         { id: "no-rejected-calls", passed: true },
         { id: "allowlisted-tool-names", passed: true },
       ],
-      canary_eligible: true,
+      safe_to_use: true,
       score: 10_000,
     })
   })
@@ -40,7 +41,7 @@ describe("native tool loop evaluation", () => {
         trace: [],
       })
     ).toMatchObject({
-      canary_eligible: false,
+      safe_to_use: false,
       score: 6_667,
     })
   })
@@ -65,7 +66,7 @@ describe("native tool loop evaluation", () => {
         { id: "no-rejected-calls", passed: false },
         { id: "allowlisted-tool-names", passed: false },
       ],
-      canary_eligible: false,
+      safe_to_use: false,
       score: 3_333,
     })
   })

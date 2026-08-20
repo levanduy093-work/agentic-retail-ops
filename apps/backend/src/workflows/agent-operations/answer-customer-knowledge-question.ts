@@ -30,7 +30,8 @@ import { executePaymentRead } from "../../modules/agent-operations/payment-read-
 import {
   createCustomerSupportNativeToolDispatcher,
   CUSTOMER_SUPPORT_NATIVE_TOOL_NAMES,
-  CUSTOMER_SUPPORT_NATIVE_TOOLS
+  CUSTOMER_SUPPORT_NATIVE_TOOLS,
+  resolveCustomerDraftCartPurchaseContext
 } from "../../modules/agent-operations/customer-native-tool-dispatcher"
 import { createModelAdapter } from "../../modules/agent-operations/model-gateway"
 import { extractNativeCustomerSupportContext } from "../../modules/agent-operations/native-customer-support-context"
@@ -48,6 +49,7 @@ const answerCustomerKnowledgeQuestionStep = createStep(
     let customerOrderLookup: ProcessCustomerKnowledgeQuestionInput["customer_order_lookup"]
     let customerOrderLookupLocale: "en" | "vi" | undefined
     let knowledgeSnapshot: ProcessCustomerKnowledgeQuestionInput["knowledge_snapshot"]
+    let nativeRoute: ProcessCustomerKnowledgeQuestionInput["native_route"]
     let useNativeToolContext = false
     const existingResponse = (
       await service.listAgentMessages(
@@ -68,6 +70,10 @@ const answerCustomerKnowledgeQuestionStep = createStep(
               await service.getActiveAiProviderCredentials("generation", conversation.tenant_id)
             )[0]
             if (credential) {
+              const purchaseContext = await resolveCustomerDraftCartPurchaseContext(
+                container,
+                locale
+              )
               const loop = await runNativeToolLoop({
                 adapter: createModelAdapter({
                   apiKey: credential.api_key,
@@ -89,16 +95,19 @@ const answerCustomerKnowledgeQuestionStep = createStep(
                       ? "customer-support-native-tool-agent"
                       : "customer-support-native-tool-shadow",
                   input: {
+                    conversation_id: conversation.id,
+                    customer_confirmation_message_id: inbound.id,
                     message: inbound.body.slice(0, 1_000),
-                    mode: assistantSettings.native_tool_loop_mode
+                    mode: assistantSettings.native_tool_loop_mode,
+                    purchase_context: purchaseContext
                   },
                   max_tokens: 500,
                   prompt_key: "customer-support.native-tool-loop",
                   prompt_version: "1.0.0",
                   system_prompt:
                     assistantSettings.native_tool_loop_mode === "ACTIVE"
-                      ? "You are the customer-support retrieval agent. Use only the provided read tools whenever live catalog, approved policy, or the authenticated customer's order facts are needed. Never perform actions, never request identifiers outside the tool schema, and return a concise JSON object after tool use."
-                      : "You are running in shadow mode. Use only the provided read tools when live facts are needed. Do not perform actions, do not claim an answer was sent, and return a concise JSON object after tool use.",
+                      ? "You are the customer-support retrieval agent. Use the provided read tools whenever live catalog, approved policy, or the authenticated customer's order facts are needed. Use check_delivery_status rather than estimating shipment location or arrival. You may only use propose_draft_cart after the current authenticated customer explicitly confirms exact published variant IDs. Use only the server-provided conversation, confirmation, and purchase context plus variant IDs returned by the live catalog tool. You may only use propose_return_review when the current authenticated customer explicitly requests a return, exchange, or refund and supplies their own order code; it creates a human review only. Neither proposal tool creates a cart, return, or refund. Never perform any other action, never invent identifiers, and return a concise JSON object after tool use."
+                      : "You are running in shadow mode. Use only the provided read tools when live facts are needed. You may evaluate proposal tools only with server-provided context, exact trusted identifiers, and the current explicit customer request. Proposals never create a cart, return, or refund. Do not claim an answer was sent, do not invent identifiers, and return a concise JSON object after tool use.",
                   tools: CUSTOMER_SUPPORT_NATIVE_TOOLS,
                   timeout_ms: 15_000
                 }
@@ -116,12 +125,13 @@ const answerCustomerKnowledgeQuestionStep = createStep(
               )
               if (
                 assistantSettings.native_tool_loop_mode === "ACTIVE" &&
-                evaluation.canary_eligible &&
+                evaluation.safe_to_use &&
                 hasNativeReadContext
               ) {
                 catalogSnapshot = nativeContext.catalog_snapshot
                 customerOrderLookup = nativeContext.customer_order_lookup
                 knowledgeSnapshot = nativeContext.knowledge_snapshot
+                nativeRoute = nativeContext.route
                 useNativeToolContext = true
               }
               await service.createAgentAuditEvents({
@@ -136,7 +146,7 @@ const answerCustomerKnowledgeQuestionStep = createStep(
                   mode: assistantSettings.native_tool_loop_mode,
                   used_as_response_context:
                     assistantSettings.native_tool_loop_mode === "ACTIVE" &&
-                    evaluation.canary_eligible &&
+                    evaluation.safe_to_use &&
                     hasNativeReadContext,
                   evaluation,
                   iterations: loop.iterations,
@@ -363,7 +373,8 @@ const answerCustomerKnowledgeQuestionStep = createStep(
           customer_order_lookup: customerOrderLookup,
           customer_order_lookup_locale: customerOrderLookupLocale,
           inbound_message_id: inbound.id,
-          knowledge_snapshot: knowledgeSnapshot
+          knowledge_snapshot: knowledgeSnapshot,
+          native_route: nativeRoute,
         })
     )
     const imageAttachments = ((inbound.structured_content ?? {}) as Record<string, unknown>)

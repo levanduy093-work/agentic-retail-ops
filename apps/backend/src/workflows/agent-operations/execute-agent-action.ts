@@ -32,6 +32,8 @@ import {
 import {
   APPROVAL_DECIDE_TOOL,
   APPROVAL_REQUEST_TOOL,
+  CART_HANDOFF_SEND_TOOL,
+  DRAFT_CART_CREATE_TOOL,
   INCIDENT_CREATE_TOOL,
   INCIDENT_UPDATE_TOOL,
   KNOWLEDGE_PROPOSE_TOOL,
@@ -46,6 +48,17 @@ const DEFAULT_MAX_RETRY_DELAY_MS =
   INVENTORY_EXECUTE_TRANSFER_TOOL.retry.max_delay_ms
 const DEFAULT_RETRY_BASE_DELAY_MS =
   INVENTORY_EXECUTE_TRANSFER_TOOL.retry.base_delay_ms
+
+export const PLATFORM_COMMAND_TOOL_NAMES = [
+  APPROVAL_DECIDE_TOOL.name,
+  APPROVAL_REQUEST_TOOL.name,
+  CART_HANDOFF_SEND_TOOL.name,
+  DRAFT_CART_CREATE_TOOL.name,
+  INCIDENT_CREATE_TOOL.name,
+  INCIDENT_UPDATE_TOOL.name,
+  KNOWLEDGE_PROPOSE_TOOL.name,
+  MESSAGE_SEND_TOOL.name,
+] as const
 
 type ClaimResult = Awaited<
   ReturnType<AgentOperationsModuleService["claimAgentAction"]>
@@ -384,17 +397,9 @@ const executePlatformCommandStep = createStep(
     input: { claim: ClaimResult; dispatch: ExecuteAgentActionInput },
     { container }
   ) => {
-    const platformTools = [
-      APPROVAL_DECIDE_TOOL.name,
-      APPROVAL_REQUEST_TOOL.name,
-      INCIDENT_CREATE_TOOL.name,
-      INCIDENT_UPDATE_TOOL.name,
-      KNOWLEDGE_PROPOSE_TOOL.name,
-      MESSAGE_SEND_TOOL.name,
-    ] as string[]
     if (
       !input.claim.claimed ||
-      !platformTools.includes(input.claim.action.tool_name)
+      !PLATFORM_COMMAND_TOOL_NAMES.includes(input.claim.action.tool_name as never)
     ) {
       return new StepResponse<PlatformExecutionResult>({ outcome: "SKIPPED" })
     }

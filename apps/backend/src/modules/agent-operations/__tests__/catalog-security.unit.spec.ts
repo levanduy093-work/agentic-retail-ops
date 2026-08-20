@@ -3,7 +3,12 @@ import {
   buildTrustedProductUrl,
   resolveTrustedStorefrontOrigin,
 } from "../storefront-product-url"
-import { CATALOG_READ_TOOL, CatalogReadInput } from "../tools/catalog-tools"
+import {
+  CATALOG_READ_TOOL,
+  CATALOG_REALTIME_STOCK_TOOL,
+  CatalogReadInput,
+  CatalogRealtimeStockInput,
+} from "../tools/catalog-tools"
 
 describe("customer catalog security boundary", () => {
   const environment = {
@@ -36,6 +41,19 @@ describe("customer catalog security boundary", () => {
         query: "x".repeat(161),
       }).success
     ).toBe(false)
+  })
+
+  it("requires an exact variant or public product selection for realtime stock", () => {
+    expect(CATALOG_REALTIME_STOCK_TOOL).toMatchObject({
+      kind: "READ",
+      name: "catalog.check-realtime-stock",
+      permission: "agent_catalog:read",
+      risk_level: "READ_ONLY",
+    })
+    expect(
+      CatalogRealtimeStockInput.parse({ quantity: 2, variant_id: "variant_1" })
+    ).toMatchObject({ quantity: 2, variant_id: "variant_1" })
+    expect(() => CatalogRealtimeStockInput.parse({ quantity: 1 })).toThrow()
   })
 
   it("builds links only on the configured CORS-approved storefront origin", () => {

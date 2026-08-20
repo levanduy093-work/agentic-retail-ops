@@ -31,7 +31,7 @@ const AGENT_IMPLEMENTATION_STATUS = {
   "owner-briefing-agent": "contracted",
   "payment-fraud-watcher": "contracted",
   "pricing-promotion-analyst": "contracted",
-  "returns-refund-agent": "contracted",
+  "returns-refund-agent": "implemented-static",
   "workforce-coordinator-agent": "implemented-static",
 } as const satisfies Readonly<Record<string, AgentCatalogStatus>>
 
@@ -97,9 +97,9 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
   ...[
     ["order-exception-agent", "Order Exception Agent", "Detect and coordinate stuck orders.", ["order.exception"], ["order.read", "task.create"]],
     ["fulfillment-agent", "Fulfillment Agent", "Monitor fulfillment flow and delivery SLA.", ["fulfillment.status_changed"], ["fulfillment.read", "task.create"]],
-    ["customer-support-agent", "Customer Support Agent", "Advise customers from live catalog data and approved store knowledge.", ["support.requested", "agent.telegram.customer-message-received"], ["catalog.read", "order.read", "knowledge.search", "response.draft"]],
+    ["customer-support-agent", "Customer Support Agent", "Advise customers from live catalog data and approved store knowledge, check realtime stock, and create staff-review proposals for customer-confirmed carts or returns.", ["support.requested", "agent.telegram.customer-message-received", "customer.cart-draft-confirmed", "customer.return-requested"], ["catalog.read", "catalog.check-realtime-stock", "order.read", "knowledge.search", "response.draft", "cart.create-draft", "return.propose"]],
     ["knowledge-curator-agent", "Knowledge Curator Agent", "Find knowledge gaps and propose governed updates.", ["knowledge.gap_detected"], ["knowledge.search", "knowledge.propose"]],
-    ["returns-refund-agent", "Returns & Refund Agent", "Collect evidence and propose return or refund outcomes.", ["return.requested"], ["order.read", "return.propose"]],
+    ["returns-refund-agent", "Returns & Refund Agent", "Collect evidence and create staff-review proposals for return, exchange, or refund requests; it never issues a return or refund itself.", ["customer.return-requested"], ["order.read", "return.propose"]],
     ["payment-fraud-watcher", "Payment & Fraud Watcher", "Escalate suspicious payments without autonomous financial action.", ["payment.anomaly"], ["payment.read", "incident.create"]],
     ["catalog-quality-agent", "Catalog Quality Agent", "Detect catalog quality and synchronization defects.", ["product.updated"], ["catalog.read", "task.create"]],
     ["pricing-promotion-analyst", "Pricing & Promotion Analyst", "Analyze margin and promotion effectiveness.", ["promotion.changed"], ["pricing.read", "analytics.query"]],

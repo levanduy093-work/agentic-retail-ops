@@ -2,6 +2,11 @@ import {
   CART_HANDOFF_SEND_TOOL,
   DRAFT_CART_CREATE_TOOL,
 } from "../tools/platform-command-tools"
+import {
+  CUSTOMER_SUPPORT_NATIVE_TOOL_NAMES,
+  CUSTOMER_SUPPORT_NATIVE_TOOLS,
+} from "../customer-native-tool-dispatcher"
+import { PLATFORM_COMMAND_TOOL_NAMES } from "../../../workflows/agent-operations/execute-agent-action"
 
 describe("draft cart command tool", () => {
   it("requires explicit confirmation, real variant ids, and manager approval", () => {
@@ -42,5 +47,18 @@ describe("draft cart command tool", () => {
         conversation_id: "agconv_1",
       })
     ).toThrow()
+  })
+
+  it("exposes a proposal-only native tool, never a direct cart action", () => {
+    expect(CUSTOMER_SUPPORT_NATIVE_TOOL_NAMES.has("propose_draft_cart")).toBe(true)
+    expect(
+      CUSTOMER_SUPPORT_NATIVE_TOOLS.find((tool) => tool.name === "propose_draft_cart")
+        ?.description
+    ).toContain("never creates a cart")
+  })
+
+  it("lets the action worker execute only the approved cart commands", () => {
+    expect(PLATFORM_COMMAND_TOOL_NAMES).toContain(DRAFT_CART_CREATE_TOOL.name)
+    expect(PLATFORM_COMMAND_TOOL_NAMES).toContain(CART_HANDOFF_SEND_TOOL.name)
   })
 })

@@ -378,6 +378,7 @@ export type ProcessCustomerKnowledgeQuestionInput = {
   customer_order_lookup_locale?: "en" | "vi"
   inbound_message_id: string
   knowledge_snapshot?: import("./tools/platform-read-tools").KnowledgeSearchOutput
+  native_route?: "PRODUCT_DISCOVERY" | "STORE_QUESTION"
 }
 
 export type ProcessTelegramKnowledgeQuestionInput = ProcessCustomerKnowledgeQuestionInput

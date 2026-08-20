@@ -2,13 +2,24 @@ import type { MedusaContainer } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys, MedusaError } from "@medusajs/framework/utils"
 import { z } from "@medusajs/framework/zod"
 import { executeCatalogRead } from "./catalog-read-runtime"
+import { executeCatalogRealtimeStockCheck } from "./catalog-realtime-stock-runtime"
+import { executeFulfillmentRead } from "./fulfillment-read-runtime"
 import { ModelToolCall, ToolDefinition } from "./model-gateway"
 import { executeOrderRead } from "./order-read-runtime"
 import { executeKnowledgeSearchTool } from "./read-tool-runtime"
 import { CustomerOrderLookup } from "./customer-order-lookup"
-import { CATALOG_READ_TOOL } from "./tools/catalog-tools"
+import {
+  CATALOG_READ_TOOL,
+  CATALOG_REALTIME_STOCK_TOOL,
+  CatalogRealtimeStockInput,
+} from "./tools/catalog-tools"
 import { KNOWLEDGE_SEARCH_TOOL } from "./tools/platform-read-tools"
 import { ORDER_READ_TOOL } from "./tools/order-tools"
+import { FULFILLMENT_READ_TOOL } from "./tools/fulfillment-tools"
+import {
+  DraftCartCreateInput,
+  ReturnProposeInput,
+} from "./tools/platform-command-tools"
 import type {
   KnowledgeSearchInput,
   KnowledgeSearchOutput,
@@ -28,6 +39,11 @@ const NativeOrderStatusInput = z.strictObject({
     .transform((value) => Number(value)),
 })
 
+const NativeDraftCartProposalInput = DraftCartCreateInput
+const NativeReturnProposalInput = ReturnProposeInput
+const NativeRealtimeStockInput = CatalogRealtimeStockInput
+const NativeDeliveryStatusInput = NativeOrderStatusInput
+
 export const CUSTOMER_SUPPORT_NATIVE_TOOLS: ToolDefinition[] = [
   {
     description:
@@ -39,6 +55,48 @@ export const CUSTOMER_SUPPORT_NATIVE_TOOLS: ToolDefinition[] = [
         query: { description: "Customer product need in their own words.", type: "string" },
       },
       required: ["query"],
+      type: "object",
+    },
+  },
+  {
+    description:
+      "Create a human-review proposal for a return, exchange, or refund request on the authenticated customer's own order. Use only after the current customer explicitly requests it and gives the order code. This never creates a return or refund.",
+    name: "propose_return_review",
+    parameters: {
+      additionalProperties: false,
+      properties: {
+        conversation_id: { type: "string" },
+        customer_confirmation_message_id: { type: "string" },
+        order_code: { type: "string" },
+        reason: { type: "string" },
+        requested_resolution: {
+          enum: ["EXCHANGE", "REFUND", "RETURN"],
+          type: "string",
+        },
+      },
+      required: [
+        "conversation_id",
+        "customer_confirmation_message_id",
+        "order_code",
+        "reason",
+        "requested_resolution",
+      ],
+      type: "object",
+    },
+  },
+  {
+    description:
+      "Check live stock for a public product or exact variant immediately before promising availability or preparing a cart. Use an exact variant_id from search_catalog whenever one is available.",
+    name: "check_realtime_stock",
+    parameters: {
+      additionalProperties: false,
+      properties: {
+        color: { type: "string" },
+        product_id: { type: "string" },
+        quantity: { type: "integer" },
+        size: { type: "string" },
+        variant_id: { type: "string" },
+      },
       type: "object",
     },
   },
@@ -68,6 +126,53 @@ export const CUSTOMER_SUPPORT_NATIVE_TOOLS: ToolDefinition[] = [
       type: "object",
     },
   },
+  {
+    description:
+      "Read live delivery, carrier, and tracking facts for the authenticated customer's own order. Use this instead of estimating where a shipment is or when it will arrive.",
+    name: "check_delivery_status",
+    parameters: {
+      additionalProperties: false,
+      properties: {
+        order_code: { description: "The numeric order display code provided by the customer.", type: "string" },
+      },
+      required: ["order_code"],
+      type: "object",
+    },
+  },
+  {
+    description:
+      "Propose a customer draft cart for manager approval only after the authenticated customer explicitly confirms exact variant IDs in their current message. This never creates a cart. Use only when you have the exact confirmation message id, region id, sales channel id, and published variant ids from trusted tool context.",
+    name: "propose_draft_cart",
+    parameters: {
+      additionalProperties: false,
+      properties: {
+        conversation_id: { type: "string" },
+        customer_confirmation_message_id: { type: "string" },
+        items: {
+          items: {
+            additionalProperties: false,
+            properties: {
+              quantity: { type: "integer" },
+              variant_id: { type: "string" },
+            },
+            required: ["quantity", "variant_id"],
+            type: "object",
+          },
+          type: "array",
+        },
+        region_id: { type: "string" },
+        sales_channel_id: { type: "string" },
+      },
+      required: [
+        "conversation_id",
+        "customer_confirmation_message_id",
+        "items",
+        "region_id",
+        "sales_channel_id",
+      ],
+      type: "object",
+    },
+  },
 ]
 
 export const CUSTOMER_SUPPORT_NATIVE_TOOL_NAMES = new Set(
@@ -83,6 +188,17 @@ type CustomerSupportNativeToolService = {
     tool_name: string
     tool_version: string
   }): Promise<unknown>
+  proposeCustomerDraftCart(input: Record<string, unknown>): Promise<{
+    approval: { id: string } | null
+    duplicate: boolean
+    incident: { id: string } | null
+    recommendation: { id: string } | null
+  }>
+  proposeCustomerReturnReview(input: Record<string, unknown>): Promise<{
+    duplicate: boolean
+    incident: { id: string } | null
+    task: { id: string } | null
+  }>
   searchGovernedKnowledge(input: KnowledgeSearchInput): Promise<KnowledgeSearchOutput>
 }
 
@@ -94,6 +210,46 @@ export type CustomerSupportNativeToolContext = {
   locale: "en" | "vi"
   service: CustomerSupportNativeToolService
   tenant_id: string
+}
+
+export type CustomerDraftCartPurchaseContext = {
+  region_id: string
+  sales_channel_id: string
+}
+
+/**
+ * The model receives this server-resolved context with its invocation. It must
+ * never guess a region or sales channel from customer text.
+ */
+export async function resolveCustomerDraftCartPurchaseContext(
+  container: MedusaContainer,
+  locale: "en" | "vi"
+): Promise<CustomerDraftCartPurchaseContext | null> {
+  const query = container.resolve(ContainerRegistrationKeys.QUERY)
+  const [regionResult, salesChannelResult] = await Promise.all([
+    query.graph({
+      entity: "region",
+      fields: ["id", "currency_code"],
+      pagination: { skip: 0, take: 20 },
+    }),
+    query.graph({
+      entity: "sales_channel",
+      fields: ["id"],
+      pagination: { skip: 0, take: 2 },
+    }),
+  ])
+  const regions = regionResult.data as Array<{
+    currency_code?: string | null
+    id: string
+  }>
+  const preferredCurrency = locale === "vi" ? "vnd" : "usd"
+  const region =
+    regions.find(
+      (candidate) => candidate.currency_code?.toLocaleLowerCase() === preferredCurrency
+    ) ?? regions[0]
+  const salesChannel = salesChannelResult.data[0] as { id: string } | undefined
+  if (!region || !salesChannel) return null
+  return { region_id: region.id, sales_channel_id: salesChannel.id }
 }
 
 function toOrderLookupResult(
@@ -136,6 +292,32 @@ export function createCustomerSupportNativeToolDispatcher(
         tool_version: CATALOG_READ_TOOL.version,
       })
       return output
+    }
+
+    if (call.name === "check_realtime_stock") {
+      const parsed = NativeRealtimeStockInput.parse(call.arguments)
+      const result = await executeCatalogRealtimeStockCheck(
+        context.container,
+        parsed
+      )
+      await context.service.recordCustomerReadToolCall({
+        conversation_id: context.conversation_id,
+        inbound_message_id: context.inbound_message_id,
+        input: result.input,
+        output: {
+          product_id: result.output.product_id,
+          requested_quantity: result.output.requested_quantity,
+          status: result.output.status,
+          variants: result.output.variants.map((variant) => ({
+            availability: variant.availability,
+            available_quantity: variant.available_quantity,
+            id: variant.id,
+          })),
+        },
+        tool_name: CATALOG_REALTIME_STOCK_TOOL.name,
+        tool_version: CATALOG_REALTIME_STOCK_TOOL.version,
+      })
+      return result.output
     }
 
     if (call.name === "search_knowledge_base") {
@@ -234,6 +416,115 @@ export function createCustomerSupportNativeToolDispatcher(
         tool_version: ORDER_READ_TOOL.version,
       })
       return output
+    }
+
+    if (call.name === "check_delivery_status") {
+      const parsed = NativeDeliveryStatusInput.parse(call.arguments)
+      if (!context.customer_id) {
+        const output = toOrderLookupResult(
+          parsed.order_code,
+          "ACCOUNT_NOT_LINKED"
+        )
+        await context.service.recordCustomerReadToolCall({
+          conversation_id: context.conversation_id,
+          inbound_message_id: context.inbound_message_id,
+          input: { display_id: parsed.order_code },
+          output,
+          tool_name: FULFILLMENT_READ_TOOL.name,
+          tool_version: FULFILLMENT_READ_TOOL.version,
+        })
+        return output
+      }
+      const query = context.container.resolve(ContainerRegistrationKeys.QUERY)
+      const { data } = await query.graph({
+        entity: "order",
+        fields: ["id"],
+        filters: {
+          customer_id: context.customer_id,
+          display_id: String(parsed.order_code),
+        },
+        pagination: { skip: 0, take: 2 },
+      })
+      if (data.length !== 1) {
+        const output = toOrderLookupResult(parsed.order_code, "NOT_FOUND")
+        await context.service.recordCustomerReadToolCall({
+          conversation_id: context.conversation_id,
+          inbound_message_id: context.inbound_message_id,
+          input: { display_id: parsed.order_code },
+          output,
+          tool_name: FULFILLMENT_READ_TOOL.name,
+          tool_version: FULFILLMENT_READ_TOOL.version,
+        })
+        return output
+      }
+      const [order, fulfillment] = await Promise.all([
+        executeOrderRead(
+          context.container,
+          { order_id: data[0].id },
+          "customer-support-agent"
+        ),
+        executeFulfillmentRead(
+          context.container,
+          { order_id: data[0].id },
+          "customer-support-agent"
+        ),
+      ])
+      const output = {
+        display_id: parsed.order_code,
+        fulfillment: fulfillment.output,
+        order: order.output,
+        status: "FOUND",
+      }
+      await context.service.recordCustomerReadToolCall({
+        conversation_id: context.conversation_id,
+        inbound_message_id: context.inbound_message_id,
+        input: fulfillment.input,
+        output: fulfillment.output,
+        tool_name: FULFILLMENT_READ_TOOL.name,
+        tool_version: FULFILLMENT_READ_TOOL.version,
+      })
+      return output
+    }
+
+    if (call.name === "propose_draft_cart") {
+      const parsed = NativeDraftCartProposalInput.parse(call.arguments)
+      if (
+        parsed.conversation_id !== context.conversation_id ||
+        parsed.customer_confirmation_message_id !== context.inbound_message_id
+      ) {
+        throw new MedusaError(
+          MedusaError.Types.NOT_ALLOWED,
+          "Draft cart proposals must use the current conversation and inbound confirmation."
+        )
+      }
+      const proposal = await context.service.proposeCustomerDraftCart(parsed)
+      return {
+        approval_id: proposal.approval?.id ?? null,
+        duplicate: proposal.duplicate,
+        incident_id: proposal.incident?.id ?? null,
+        outcome: "PENDING_MANAGER_APPROVAL",
+        recommendation_id: proposal.recommendation?.id ?? null,
+      }
+    }
+
+    if (call.name === "propose_return_review") {
+      const parsed = NativeReturnProposalInput.parse(call.arguments)
+      if (
+        parsed.conversation_id !== context.conversation_id ||
+        parsed.customer_confirmation_message_id !== context.inbound_message_id
+      ) {
+        throw new MedusaError(
+          MedusaError.Types.NOT_ALLOWED,
+          "Return proposals must use the current conversation and inbound customer request."
+        )
+      }
+      const proposal = await context.service.proposeCustomerReturnReview(parsed)
+      return {
+        duplicate: proposal.duplicate,
+        incident_id: proposal.incident?.id ?? null,
+        outcome: "PENDING_HUMAN_REVIEW",
+        task_id: proposal.task?.id ?? null,
+      }
     }
 
     throw new MedusaError(

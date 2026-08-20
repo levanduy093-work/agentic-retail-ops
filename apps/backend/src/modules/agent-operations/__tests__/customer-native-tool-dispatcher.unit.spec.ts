@@ -6,6 +6,17 @@ import {
 
 function createService() {
   return {
+    proposeCustomerDraftCart: jest.fn(async () => ({
+      approval: { id: "agappr_1" },
+      duplicate: false,
+      incident: { id: "aginc_1" },
+      recommendation: { id: "agrec_1" },
+    })),
+    proposeCustomerReturnReview: jest.fn(async () => ({
+      duplicate: false,
+      incident: { id: "aginc_return_1" },
+      task: { id: "agtask_return_1" },
+    })),
     recordCustomerReadToolCall: jest.fn(async () => ({ duplicate: false })),
     searchGovernedKnowledge: jest.fn(async () => ({
       results: [
@@ -27,11 +38,15 @@ function createService() {
 }
 
 describe("customer native tool dispatcher", () => {
-  it("exposes only the three bounded read tools", () => {
+  it("exposes bounded read tools plus governed cart and return proposals", () => {
     expect(CUSTOMER_SUPPORT_NATIVE_TOOLS.map((tool) => tool.name)).toEqual([
       "search_catalog",
+      "propose_return_review",
+      "check_realtime_stock",
       "search_knowledge_base",
       "check_order_status",
+      "check_delivery_status",
+      "propose_draft_cart",
     ])
   })
 
@@ -102,6 +117,34 @@ describe("customer native tool dispatcher", () => {
     )
   })
 
+  it("never reads delivery details when the customer identity is not verified", async () => {
+    const service = createService()
+    const execute = createCustomerSupportNativeToolDispatcher({
+      container: {
+        resolve: jest.fn(() => {
+          throw new Error("Delivery query must not run")
+        }),
+      } as unknown as MedusaContainer,
+      conversation_id: "agconv_1",
+      customer_id: null,
+      inbound_message_id: "agmsg_1",
+      locale: "vi",
+      service,
+      tenant_id: "tenant_a",
+    })
+
+    await expect(
+      execute({
+        arguments: { order_code: "1024" },
+        id: "call_delivery_1",
+        name: "check_delivery_status",
+      })
+    ).resolves.toEqual({ display_id: 1024, status: "ACCOUNT_NOT_LINKED" })
+    expect(service.recordCustomerReadToolCall).toHaveBeenCalledWith(
+      expect.objectContaining({ tool_name: "fulfillment.read" })
+    )
+  })
+
   it("rejects tools that are not explicitly exposed to customer support", async () => {
     const execute = createCustomerSupportNativeToolDispatcher({
       container: {} as MedusaContainer,
@@ -120,5 +163,105 @@ describe("customer native tool dispatcher", () => {
         name: "create_draft_cart",
       })
     ).rejects.toThrow("is not available")
+  })
+
+  it("binds a draft-cart proposal to the current confirmation message", async () => {
+    const service = createService()
+    const execute = createCustomerSupportNativeToolDispatcher({
+      container: {} as MedusaContainer,
+      conversation_id: "agconv_1",
+      customer_id: "cus_1",
+      inbound_message_id: "agmsg_1",
+      locale: "vi",
+      service,
+      tenant_id: "tenant_a",
+    })
+
+    await expect(
+      execute({
+        arguments: {
+          conversation_id: "agconv_other",
+          customer_confirmation_message_id: "agmsg_1",
+          items: [{ quantity: 1, variant_id: "variant_1" }],
+          region_id: "reg_1",
+          sales_channel_id: "sc_1",
+        },
+        id: "call_3",
+        name: "propose_draft_cart",
+      })
+    ).rejects.toThrow("current conversation")
+
+    await expect(
+      execute({
+        arguments: {
+          conversation_id: "agconv_1",
+          customer_confirmation_message_id: "agmsg_1",
+          items: [{ quantity: 1, variant_id: "variant_1" }],
+          region_id: "reg_1",
+          sales_channel_id: "sc_1",
+        },
+        id: "call_4",
+        name: "propose_draft_cart",
+      })
+    ).resolves.toMatchObject({ outcome: "PENDING_MANAGER_APPROVAL" })
+    expect(service.proposeCustomerDraftCart).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversation_id: "agconv_1",
+        customer_confirmation_message_id: "agmsg_1",
+      })
+    )
+  })
+
+  it("binds a return proposal to the current verified customer request", async () => {
+    const service = createService()
+    const execute = createCustomerSupportNativeToolDispatcher({
+      container: {} as MedusaContainer,
+      conversation_id: "agconv_1",
+      customer_id: "cus_1",
+      inbound_message_id: "agmsg_1",
+      locale: "vi",
+      service,
+      tenant_id: "tenant_a",
+    })
+
+    await expect(
+      execute({
+        arguments: {
+          conversation_id: "agconv_1",
+          customer_confirmation_message_id: "agmsg_other",
+          order_code: "1024",
+          reason: "Sản phẩm giao không đúng màu đã đặt.",
+          requested_resolution: "EXCHANGE",
+        },
+        id: "call_return_1",
+        name: "propose_return_review",
+      })
+    ).rejects.toThrow("current conversation")
+
+    await expect(
+      execute({
+        arguments: {
+          conversation_id: "agconv_1",
+          customer_confirmation_message_id: "agmsg_1",
+          order_code: "1024",
+          reason: "Sản phẩm giao không đúng màu đã đặt.",
+          requested_resolution: "EXCHANGE",
+        },
+        id: "call_return_2",
+        name: "propose_return_review",
+      })
+    ).resolves.toEqual({
+      duplicate: false,
+      incident_id: "aginc_return_1",
+      outcome: "PENDING_HUMAN_REVIEW",
+      task_id: "agtask_return_1",
+    })
+    expect(service.proposeCustomerReturnReview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversation_id: "agconv_1",
+        customer_confirmation_message_id: "agmsg_1",
+        order_code: 1024,
+      })
+    )
   })
 })

@@ -5,7 +5,7 @@ describe("native tool loop status", () => {
     const status = summarizeNativeToolLoopStatus("ACTIVE", [
       {
         data: {
-          evaluation: { canary_eligible: true, score: 10_000 },
+          evaluation: { safe_to_use: true, score: 10_000 },
           mode: "ACTIVE",
           used_as_response_context: true,
         },
@@ -21,7 +21,7 @@ describe("native tool loop status", () => {
 
     expect(status).toMatchObject({
       counts: {
-        canary_eligible: 1,
+        safe_to_use: 1,
         completed: 1,
         failed: 1,
         used_as_response_context: 1,

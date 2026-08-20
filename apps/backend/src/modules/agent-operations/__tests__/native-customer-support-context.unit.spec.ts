@@ -37,6 +37,7 @@ describe("native customer support context", () => {
       display_id: 1024,
       status: "ACCOUNT_NOT_LINKED"
     })
+    expect(context.route).toBe("PRODUCT_DISCOVERY")
   })
 
   it("does not trust an invalid tool output as customer context", () => {
@@ -49,5 +50,106 @@ describe("native customer support context", () => {
         }
       ])
     ).toEqual({})
+  })
+
+  it("replaces catalog availability only with a matching realtime-stock result", () => {
+    const context = extractNativeCustomerSupportContext([
+      {
+        call_id: "call_catalog",
+        name: "search_catalog",
+        output: {
+          products: [
+            {
+              id: "prod_1",
+              variants: [
+                {
+                  availability: "IN_STOCK",
+                  available_quantity: 8,
+                  id: "variant_m",
+                  manage_inventory: true,
+                  title: "Size M",
+                },
+              ],
+            },
+          ],
+          query: "áo polo",
+          status: "READY",
+          total_count: 1,
+        },
+      },
+      {
+        call_id: "call_stock",
+        name: "check_realtime_stock",
+        output: {
+          product_id: "prod_1",
+          requested_quantity: 1,
+          status: "FOUND",
+          variants: [
+            {
+              availability: "OUT_OF_STOCK",
+              available_quantity: 0,
+              id: "variant_m",
+            },
+          ],
+        },
+      },
+    ])
+
+    expect(context.catalog_snapshot?.products[0].variants[0]).toMatchObject({
+      availability: "OUT_OF_STOCK",
+      available_quantity: 0,
+      id: "variant_m",
+    })
+  })
+
+  it("routes a knowledge-only native trace without using keyword intent routing", () => {
+    expect(
+      extractNativeCustomerSupportContext([
+        {
+          call_id: "call_knowledge",
+          name: "search_knowledge_base",
+          output: { results: [], total_candidates: 0 },
+        },
+      ])
+    ).toMatchObject({
+      route: "STORE_QUESTION",
+    })
+  })
+
+  it("keeps owned live fulfillment with its verified order result", () => {
+    expect(
+      extractNativeCustomerSupportContext([
+        {
+          call_id: "call_delivery",
+          name: "check_delivery_status",
+          output: {
+            display_id: 1024,
+            fulfillment: {
+              display_id: 1024,
+              fulfillment_status: "shipped",
+              fulfillments: [],
+              order_id: "order_1",
+              version: 1,
+            },
+            order: {
+              display_id: 1024,
+              fulfillment_status: "shipped",
+              order_id: "order_1",
+              order_status: "completed",
+              payment_status: "captured",
+              version: 1,
+            },
+            status: "FOUND",
+          },
+        },
+      ])
+    ).toMatchObject({
+      customer_order_lookup: {
+        display_id: 1024,
+        fulfillment: { fulfillment_status: "shipped" },
+        order: { order_id: "order_1" },
+        status: "FOUND",
+      },
+    })
   })
 })

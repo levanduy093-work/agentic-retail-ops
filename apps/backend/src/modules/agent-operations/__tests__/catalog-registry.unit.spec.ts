@@ -10,6 +10,7 @@ describe("agent catalog registry", () => {
       "customer-support-agent": "runtime-verified",
       "knowledge-curator-agent": "implemented-static",
       "order-exception-agent": "runtime-verified",
+      "returns-refund-agent": "implemented-static",
       "workforce-coordinator-agent": "implemented-static",
     })
     expect(statuses["fulfillment-agent"]).toBe("contracted")
@@ -25,8 +26,8 @@ describe("agent catalog registry", () => {
     )
 
     expect(totals).toEqual({
-      contracted: 9,
-      "implemented-static": 6,
+      contracted: 8,
+      "implemented-static": 7,
       "runtime-verified": 2,
     })
   })
