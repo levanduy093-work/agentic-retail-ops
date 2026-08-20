@@ -53,6 +53,29 @@ describe("facebook messenger channel foundation", () => {
     )
   })
 
+  it("signals advisory typing through Facebook Messenger", async () => {
+    const fetcher = jest.fn().mockResolvedValue({ ok: true, status: 200 })
+    const adapter = createChannelAdapter("MESSENGER", {
+      messenger: {
+        api_base_url: "https://graph.facebook.com/v19.0",
+        fetch: fetcher as typeof fetch,
+        page_access_token: "test-page-access-token",
+      },
+    })
+
+    await expect(adapter.signalTyping?.("psid_987654321")).resolves.toBeUndefined()
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://graph.facebook.com/v19.0/me/messages?access_token=test-page-access-token",
+      expect.objectContaining({
+        body: JSON.stringify({
+          recipient: { id: "psid_987654321" },
+          sender_action: "typing_on",
+        }),
+        method: "POST",
+      })
+    )
+  })
+
   it("fails closed when Facebook Messenger rejects a message delivery", async () => {
     const adapter = createChannelAdapter("MESSENGER", {
       messenger: {

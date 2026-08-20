@@ -2,6 +2,7 @@ import { MedusaError } from "@medusajs/framework/utils"
 
 export type ModelInvocation = {
   agent_id: string
+  image_urls?: string[]
   input: Record<string, unknown>
   max_tokens: number
   output_schema: Record<string, unknown>
@@ -64,6 +65,31 @@ export function assertModelInvocation(input: ModelInvocation) {
       "A system prompt is required for model runs."
     )
   }
+  if (input.image_urls) {
+    if (input.image_urls.length > 3) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "A model invocation can include at most three images."
+      )
+    }
+    for (const imageUrl of input.image_urls) {
+      try {
+        const url = new URL(imageUrl)
+        if (url.protocol !== "https:" || url.username || url.password) {
+          throw new MedusaError(
+            MedusaError.Types.INVALID_DATA,
+            "Model image inputs must be public HTTPS URLs without credentials."
+          )
+        }
+      } catch (error) {
+        if (error instanceof MedusaError) throw error
+        throw new MedusaError(
+          MedusaError.Types.INVALID_DATA,
+          "Model image inputs must be public HTTPS URLs without credentials."
+        )
+      }
+    }
+  }
   if (
     input.timeout_ms !== undefined &&
     (input.timeout_ms < 1_000 || input.timeout_ms > 30_000)
@@ -90,6 +116,62 @@ export class DisabledModelAdapter implements ModelGatewayAdapter {
 }
 
 type FetchLike = typeof fetch
+
+const GEMINI_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+])
+const MAX_MODEL_IMAGE_BYTES = 5 * 1024 * 1024
+
+async function readBoundedImage(
+  response: Response
+): Promise<Buffer> {
+  const contentLength = Number(response.headers.get("content-length"))
+  if (
+    !response.ok ||
+    !GEMINI_IMAGE_MIME_TYPES.has(
+      response.headers.get("content-type")?.split(";", 1)[0] ?? ""
+    ) ||
+    (Number.isFinite(contentLength) && contentLength > MAX_MODEL_IMAGE_BYTES)
+  ) {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      "Gemini image input is invalid or unsupported."
+    )
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      "Gemini image input has no readable content."
+    )
+  }
+
+  const chunks: Buffer[] = []
+  let size = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    size += value.byteLength
+    if (size > MAX_MODEL_IMAGE_BYTES) {
+      await reader.cancel()
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "Gemini image input exceeds the 5 MB limit."
+      )
+    }
+    chunks.push(Buffer.from(value))
+  }
+  if (!size) {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      "Gemini image input is empty."
+    )
+  }
+  return Buffer.concat(chunks)
+}
 
 export class OpenAIResponsesModelAdapter implements ModelGatewayAdapter {
   provider = "openai"
@@ -118,7 +200,17 @@ export class OpenAIResponsesModelAdapter implements ModelGatewayAdapter {
               role: "system",
             },
             {
-              content: JSON.stringify(redactModelInput(input.input)),
+              content: [
+                {
+                  text: JSON.stringify(redactModelInput(input.input)),
+                  type: "input_text",
+                },
+                ...(input.image_urls ?? []).map((imageUrl) => ({
+                  detail: "low",
+                  image_url: imageUrl,
+                  type: "input_image",
+                })),
+              ],
               role: "user",
             },
           ],
@@ -200,7 +292,8 @@ export class GeminiModelAdapter implements ModelGatewayAdapter {
     private readonly apiKey: string,
     public readonly model: string,
     private readonly baseUrl = "https://generativelanguage.googleapis.com/v1beta",
-    private readonly fetchImpl: FetchLike = fetch
+    private readonly fetchImpl: FetchLike = fetch,
+    private readonly imageFetchImpl: FetchLike = fetch
   ) {}
 
   async invoke(input: ModelInvocation): Promise<Record<string, unknown>> {
@@ -211,6 +304,21 @@ export class GeminiModelAdapter implements ModelGatewayAdapter {
       input.timeout_ms ?? 15_000
     )
     try {
+      const imageParts = await Promise.all(
+        (input.image_urls ?? []).map(async (imageUrl) => {
+          const response = await this.imageFetchImpl(imageUrl, {
+            signal: controller.signal,
+          })
+          const mimeType = response.headers.get("content-type")?.split(";", 1)[0]
+          const content = await readBoundedImage(response)
+          return {
+            inlineData: {
+              data: content.toString("base64"),
+              mimeType,
+            },
+          }
+        })
+      )
       const response = await this.fetchImpl(
         `${this.baseUrl}/models/${encodeURIComponent(this.model)}:generateContent`,
         {
@@ -219,6 +327,7 @@ export class GeminiModelAdapter implements ModelGatewayAdapter {
               {
                 parts: [
                   { text: JSON.stringify(redactModelInput(input.input)) },
+                  ...imageParts,
                 ],
                 role: "user",
               },

@@ -86,6 +86,10 @@ type SupportConversationResponse = {
     body: string
     direction: "INBOUND" | "OUTBOUND"
     id: string
+    image_attachments: Array<{
+      id: string
+      url: string
+    }>
     occurred_at: string
     sender_type: string
     status: string
@@ -1172,6 +1176,26 @@ export const CustomerSupportContent = ({
                             <Text size="small" leading="compact">
                               {message.body}
                             </Text>
+                            {message.image_attachments.length > 0 && (
+                              <div className="mt-3 grid grid-cols-3 gap-2">
+                                {message.image_attachments.map((attachment) => (
+                                  <a
+                                    href={attachment.url}
+                                    key={attachment.id}
+                                    rel="noreferrer"
+                                    target="_blank"
+                                    title={t("supportDesk.openAttachment", "Mở ảnh gốc")}
+                                  >
+                                    <img
+                                      alt={t("supportDesk.customerAttachment", "Ảnh khách gửi")}
+                                      className="h-24 w-24 rounded-md border border-ui-border-base object-cover transition-opacity hover:opacity-80"
+                                      loading="lazy"
+                                      src={attachment.url}
+                                    />
+                                  </a>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       )

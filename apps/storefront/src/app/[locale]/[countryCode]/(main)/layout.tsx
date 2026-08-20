@@ -9,8 +9,7 @@ import Footer from "@modules/layout/templates/footer"
 import Nav from "@modules/layout/templates/nav"
 import FreeShippingPriceNudge from "@modules/shipping/components/free-shipping-price-nudge"
 import NavigationProgress from "@modules/layout/components/navigation-progress"
-
-// import CustomerChatWidget from "@modules/customer-chat/components/chat-widget"
+import CustomerChatWidget from "@modules/customer-chat/components/chat-widget"
 
 export const metadata: Metadata = {
   metadataBase: new URL(getBaseURL()),
@@ -24,7 +23,7 @@ export default async function PageLayout(props: {
   children: React.ReactNode
   params: Promise<{ countryCode: string; locale: string }>
 }) {
-  const { countryCode: _countryCode, locale: _locale } = await props.params
+  const { countryCode, locale } = await props.params
   const [customer, cart] = await Promise.all([
     retrieveCustomer(),
     retrieveCart(),
@@ -53,11 +52,11 @@ export default async function PageLayout(props: {
         />
       )}
       {props.children}
-      {/* <CustomerChatWidget
+      <CustomerChatWidget
         customer={customer}
         countryCode={countryCode}
         locale={locale}
-      /> */}
+      />
       <Footer />
     </>
   )

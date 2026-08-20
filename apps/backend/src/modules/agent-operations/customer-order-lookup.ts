@@ -1,10 +1,14 @@
 import type { OrderReadOutput } from "./tools/order-tools"
+import type { FulfillmentReadOutput } from "./tools/fulfillment-tools"
+import type { PaymentReadOutput } from "./tools/payment-tools"
 
 export type CustomerOrderLookup =
   | {
       display_id: number
+      fulfillment?: FulfillmentReadOutput
       status: "FOUND"
       order: OrderReadOutput
+      payment?: PaymentReadOutput
     }
   | {
       display_id: number | null
@@ -53,4 +57,16 @@ export function getVerifiedLinkedCustomerId(metadata: Record<string, unknown>) {
     identityVerified === true
     ? customerId
     : null
+}
+
+export function shouldReadCustomerFulfillment(message: string) {
+  return /(?:mã\s*vận\s*đơn|tracking|theo\s*dõi\s*(?:đơn|giao)|(?:đơn|order).{0,40}?(?:đang\s*)?ở\s*đâu|giao\s*(?:đến|tới)?\s*đâu|trạng\s*thái\s*(?:giao|vận\s*chuyển)|ship(?:ping)?\s*status)/iu.test(
+    message.normalize("NFKC")
+  )
+}
+
+export function shouldReadCustomerPayment(message: string) {
+  return /(?:thanh\s*toán|đã\s*(?:trả|chuyển\s*khoản)|trạng\s*thái\s*(?:tiền|payment)|payment\s*status|paid)/iu.test(
+    message.normalize("NFKC")
+  )
 }

@@ -37,25 +37,25 @@ export type ProductAdvisorModelResult = z.infer<
 >
 
 export const PRODUCT_ADVISOR_PROMPT_KEY = "customer-support.product-advisor"
-export const PRODUCT_ADVISOR_PROMPT_VERSION = "1.3.0"
-export const PRODUCT_ADVISOR_MAX_TOKENS = 360
-export const PRODUCT_ADVISOR_TIMEOUT_MS = 8_000
+export const PRODUCT_ADVISOR_PROMPT_VERSION = "1.4.0"
+export const PRODUCT_ADVISOR_MAX_TOKENS = 700
+export const PRODUCT_ADVISOR_TIMEOUT_MS = 10_000
 export const PRODUCT_ADVISOR_OUTPUT_SCHEMA = {
   additionalProperties: false,
   properties: {
     follow_up_question: {
       anyOf: [
-        { maxLength: 220, minLength: 1, type: "string" },
+        { maxLength: 300, minLength: 1, type: "string" },
         { type: "null" },
       ],
     },
-    intro: { maxLength: 300, minLength: 1, type: "string" },
+    intro: { maxLength: 500, minLength: 1, type: "string" },
     recommendations: {
       items: {
         additionalProperties: false,
         properties: {
           product_id: { minLength: 1, type: "string" },
-          reason: { maxLength: 140, minLength: 1, type: "string" },
+          reason: { maxLength: 200, minLength: 1, type: "string" },
         },
         required: ["product_id", "reason"],
         type: "object",
@@ -72,12 +72,33 @@ export const PRODUCT_ADVISOR_SYSTEM_PROMPT = `You are a warm, helpful, fashion-s
 
 Style and Tone:
 - Natural, enthusiastic, and empathetic conversational tone (like a real human shop assistant).
-- Understand Vietnamese everyday chat, slang, and abbreviations (e.g. "chs" = đi chơi/outing, "đc" = được, "sz" = size, "k/ko" = không, "váy/đầm", "áo thun", "quần jeans").
-- When the customer asks for outfits for an occasion (e.g. đi chơi, đi tiệc, đi làm, dạo phố), warmly introduce suitable styles and options.
-- If products are available in the live catalog snapshot, recommend up to three matching product IDs with brief, appealing style reasons based on their real descriptions/variants.
+- Understand Vietnamese everyday chat, slang, and abbreviations (e.g. "chs" = đi chơi/outing, "đc" = được, "sz" = size, "k/ko" = không, "váy/đầm", "áo thun", "quần jeans", "đi date", "chốt đơn").
+- When the customer asks for outfits for an occasion (e.g. đi chơi, đi tiệc, đi làm, dạo phố, du lịch), warmly introduce suitable styles and options.
+- If products are available in the live catalog snapshot, recommend up to three matching product IDs with brief, appealing style reasons based on their real descriptions/variants (e.g. chất vải thoáng mát, form tôn dáng, dễ phối đồ).
 - If no specific products match or the request is general, write a friendly, inviting intro explaining that the store has many trendy items and ask a helpful follow-up question (about their preferred style, fit, color, or size).
 - Do not invent non-existent products, discounts, or policies.
-- Return structured data matching the schema.`
+- Return structured data matching the schema.
+
+Few-shot Product Advisory Examples:
+Example 1 (Outfit recommendation for outing):
+Customer: "mình cần tìm áo đi chơi cuối tuần với bạn bè"
+Response: {
+  "intro": "Dạ cuối tuần đi cafe hoặc dạo phố cùng bạn bè thì diện các mẫu áo phông cotton form rộng hoặc polo năng động là chuẩn bài luôn bạn nha! Shop gợi ý cho bạn mẫu cực xinh này:",
+  "recommendations": [
+    {"product_id": "prod_1", "reason": "Chất cotton 100% thoáng mát, form unisex dễ phối với quần short hoặc jeans rất tôn dáng."}
+  ],
+  "follow_up_question": "Bạn thích tone màu sáng năng động hay gam màu trung tính basic để mình chọn thêm cho bạn nè?"
+}
+
+Example 2 (Sizing / fit advice):
+Customer: "mình 1m70 nặng 65kg mặc size nào vừa sốp"
+Response: {
+  "intro": "Dạ với chiều cao 1m70 và cân nặng 65kg thì bạn mặc size L bên mình là vừa vặn, form áo lên dáng chuẩn đẹp luôn ạ!",
+  "recommendations": [
+    {"product_id": "prod_1", "reason": "Form áo đứng dáng, chất co giãn nhẹ mặc cả ngày rất thoải mái."}
+  ],
+  "follow_up_question": "Bạn thích mặc ôm vừa người hay muốn mặc rộng rãi thoải mái hơn chút xíu ạ?"
+}`
 
 const browsingPatterns = [
   /(bán gì|bán về (?:đồ )?gì|có gì bán|shop có gì|sốp có gì|cửa hàng có gì|danh mục|sản phẩm nào)/iu,

@@ -304,6 +304,18 @@ describe("agent platform foundations", () => {
         timeout_ms: 999,
       })
     ).toThrow("timeout_ms")
+    expect(() =>
+      assertModelInvocation({
+        agent_id: "support-agent",
+        image_urls: ["http://127.0.0.1/private.jpg"],
+        input: {},
+        max_tokens: 100,
+        output_schema: { type: "object" },
+        prompt_key: "support",
+        prompt_version: "1",
+        system_prompt: "Use only approved facts.",
+      })
+    ).toThrow("public HTTPS URLs")
     await expect(
       new DisabledModelAdapter().invoke({
         agent_id: "support-agent",
@@ -324,6 +336,12 @@ describe("agent platform foundations", () => {
       const body = JSON.parse(String(init?.body))
       expect(body.store).toBe(false)
       expect(body.input[0].content).toBe("Configured support prompt")
+      expect(body.input[1].content).toEqual([
+        {
+          text: JSON.stringify({ question: "Where is my order?" }),
+          type: "input_text",
+        },
+      ])
       expect(body.text.format).toMatchObject({
         name: "customer_support_draft",
         strict: true,
@@ -370,6 +388,50 @@ describe("agent platform foundations", () => {
       })
     ).resolves.toEqual({ body: "Your order is being prepared." })
     expect(request).toHaveBeenCalledTimes(1)
+  })
+
+  it("passes approved public image inputs to the Responses vision format", async () => {
+    const request = jest.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body))
+      expect(body.input[1].content).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            detail: "low",
+            image_url: "https://cdn.example/customer-defect.jpg",
+            type: "input_image",
+          }),
+        ])
+      )
+      return new Response(
+        JSON.stringify({
+          output: [
+            {
+              content: [
+                { text: JSON.stringify({ body: "review" }), type: "output_text" },
+              ],
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    })
+    const adapter = new OpenAIResponsesModelAdapter(
+      "test-key",
+      "test-model",
+      "https://provider.test/v1",
+      request as typeof fetch
+    )
+
+    await adapter.invoke({
+      agent_id: "customer-vision-review-agent",
+      image_urls: ["https://cdn.example/customer-defect.jpg"],
+      input: { image_count: 1 },
+      max_tokens: 100,
+      output_schema: { type: "object" },
+      prompt_key: "vision",
+      prompt_version: "1",
+      system_prompt: "Review visible evidence only.",
+    })
   })
 
   it("uses Gemini structured JSON without exposing the API key in the request body", async () => {
@@ -423,6 +485,63 @@ describe("agent platform foundations", () => {
         system_prompt: "Configured Gemini support prompt",
       })
     ).resolves.toEqual({ body: "Đơn đang xử lý." })
+  })
+
+  it("passes bounded image inputs to Gemini as inline image data", async () => {
+    const request = jest.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body))
+      expect(body.contents[0].parts).toEqual([
+        { text: JSON.stringify({ image_count: 1 }) },
+        {
+          inlineData: {
+            data: Buffer.from("image-bytes").toString("base64"),
+            mimeType: "image/png",
+          },
+        },
+      ])
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [{ text: JSON.stringify({ body: "Đã nhận ảnh." }) }],
+              },
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    })
+    const imageRequest = jest.fn(async () =>
+      new Response(Buffer.from("image-bytes"), {
+        headers: { "content-type": "image/png" },
+        status: 200,
+      })
+    )
+    const adapter = new GeminiModelAdapter(
+      "gemini-key",
+      "gemini-test",
+      "https://generativelanguage.test/v1beta",
+      request as typeof fetch,
+      imageRequest as typeof fetch
+    )
+
+    await expect(
+      adapter.invoke({
+        agent_id: "customer-vision-review-agent",
+        image_urls: ["https://cdn.example/customer-defect.png"],
+        input: { image_count: 1 },
+        max_tokens: 100,
+        output_schema: { type: "object" },
+        prompt_key: "vision",
+        prompt_version: "1",
+        system_prompt: "Review visible evidence only.",
+      })
+    ).resolves.toEqual({ body: "Đã nhận ảnh." })
+    expect(imageRequest).toHaveBeenCalledWith(
+      "https://cdn.example/customer-defect.png",
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
   })
 
   it("uses DeepSeek JSON chat completion without exposing its API key", async () => {

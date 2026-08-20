@@ -1,10 +1,11 @@
 /* eslint-disable @next/next/no-img-element */
 "use client"
 
-import { FormEvent, useEffect, useRef, useState } from "react"
-import { useCustomerChat, ProductMediaItem } from "../hooks/use-customer-chat"
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react"
 import { HttpTypes } from "@medusajs/types"
+
 import { useTranslation } from "@lib/i18n/client"
+import { ProductMediaItem, useCustomerChat } from "../hooks/use-customer-chat"
 
 type ChatWidgetProps = {
   countryCode?: string
@@ -20,6 +21,7 @@ export default function CustomerChatWidget({
   const t = useTranslation()
   const {
     clearChat,
+    errorMessage,
     isLoading,
     isLive,
     isOpen,
@@ -27,6 +29,10 @@ export default function CustomerChatWidget({
     sendMessage,
     setIsOpen,
   } = useCustomerChat(customer, locale)
+  const [input, setInput] = useState("")
+  const [pendingImages, setPendingImages] = useState<File[]>([])
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const quickPrompts = [
     t("chat.quick_prompts.jackets"),
@@ -34,77 +40,65 @@ export default function CustomerChatWidget({
     t("chat.quick_prompts.jeans"),
     t("chat.quick_prompts.policy"),
   ]
-
-  const [input, setInput] = useState("")
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-
+  const supportBenefits = [
+    t("chat.auth_benefit_orders"),
+    t("chat.auth_benefit_size"),
+    t("chat.auth_benefit_sync"),
+  ]
   const customerDisplayName = customer
     ? [customer.first_name, customer.last_name].filter(Boolean).join(" ") ||
       customer.email
     : null
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
-
   useEffect(() => {
     if (isOpen && customer) {
-      scrollToBottom()
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
     }
-  }, [messages, isOpen, isLoading, customer])
+  }, [customer, isLoading, isOpen, messages])
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault()
     if (!input.trim() || isLoading || !customer) return
+
     const text = input
+    const images = pendingImages
     setInput("")
-    sendMessage(text)
+    setPendingImages([])
+    sendMessage(text, images)
   }
 
-  const handlePromptClick = (promptText: string) => {
-    if (!customer) return
-    sendMessage(promptText)
+  const handleImagesSelected = (event: ChangeEvent<HTMLInputElement>) => {
+    setPendingImages(Array.from(event.target.files ?? []).slice(0, 3))
+    event.target.value = ""
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end font-sans">
-      {/* 1. Chat Window */}
+    <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end font-sans small:bottom-6 small:right-6">
       {isOpen && (
-        <div className="mb-3 flex h-[560px] w-[380px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl transition-all duration-200 ease-in-out dark:border-gray-800 dark:bg-gray-900">
-          {/* Header */}
-          <div className="flex items-center justify-between bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 px-4 py-3.5 text-white">
-            <div className="flex items-center gap-2.5">
-              <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 font-semibold text-white shadow">
-                <span>🤖</span>
-                {customer && (
-                  <span
-                    className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-gray-900 ${
-                      isLive ? "bg-green-500" : "bg-gray-400"
-                    }`}
-                    title={isLive ? t("chat.realtime_active") : t("chat.connecting")}
-                  />
-                )}
-              </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-semibold tracking-tight">
+        <aside
+          aria-label={t("chat.title")}
+          className="mb-3 flex h-[min(580px,calc(100dvh-7.5rem))] w-[min(390px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[22px] border border-[#12231d]/15 bg-[#fbfcfa] text-[#12231d] shadow-[0_20px_60px_rgba(17,49,39,0.16)]"
+        >
+          <header className="flex items-center justify-between border-b border-[#12231d]/10 bg-[#f2f6f1] px-5 py-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <StoreMark />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold tracking-[-0.02em] text-[#174b3d]">
                   {t("chat.title")}
-                </span>
-                <span className="flex items-center gap-1 text-[11px] text-gray-300">
-                  {customer ? (
-                    <>
-                      <span
-                        className={`inline-block h-1.5 w-1.5 rounded-full ${
-                          isLive ? "animate-pulse bg-green-400" : "bg-gray-400"
-                        }`}
-                      />
-                      {customerDisplayName
-                        ? t("chat.greeting", { name: customer.first_name || customerDisplayName })
-                        : t("chat.online")}
-                    </>
-                  ) : (
-                    t("chat.auth_required_badge")
+                </p>
+                <p className="mt-0.5 flex items-center gap-1.5 text-xs text-[#60716a]">
+                  {customer && (
+                    <span
+                      aria-label={isLive ? t("chat.online") : t("chat.connecting")}
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        isLive ? "bg-[#174b3d]" : "bg-[#9aa9a1]"
+                      }`}
+                    />
                   )}
-                </span>
+                  {customer
+                    ? customerDisplayName || t("chat.online")
+                    : t("chat.auth_required_badge")}
+                </p>
               </div>
             </div>
 
@@ -114,264 +108,289 @@ export default function CustomerChatWidget({
                   type="button"
                   onClick={clearChat}
                   title={t("chat.clear_chat")}
-                  className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-800 hover:text-white"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-[#60716a] transition hover:bg-white hover:text-[#174b3d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#174b3d]/35 active:scale-[0.96]"
                 >
-                  <svg
-                    className="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
+                  <RefreshIcon />
                 </button>
               )}
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
                 title={t("chat.close_chat")}
-                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-800 hover:text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-[#60716a] transition hover:bg-white hover:text-[#174b3d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#174b3d]/35 active:scale-[0.96]"
               >
-                <svg
-                  className="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
+                <CloseIcon />
               </button>
             </div>
-          </div>
+          </header>
 
-          {/* Body */}
-          {!customer ? (
-            /* REQUIRE LOGIN PROMPT */
-            <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
-              <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-100 to-indigo-100 text-2xl shadow-inner dark:from-blue-950 dark:to-indigo-950">
-                🔒
-              </div>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-                {t("chat.auth_required_title")}
-              </h3>
-              <p className="mt-2 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-                {t("chat.auth_required_desc")}
-              </p>
-
-              <div className="my-5 w-full rounded-xl border border-gray-100 bg-gray-50/80 p-3 text-left text-[11px] text-gray-600 dark:border-gray-800 dark:bg-gray-950/60 dark:text-gray-300">
-                <div className="flex items-center gap-2 py-1">
-                  <span className="text-blue-500">✓</span>
-                  <span>{t("chat.auth_benefit_sync")}</span>
-                </div>
-                <div className="flex items-center gap-2 py-1">
-                  <span className="text-blue-500">✓</span>
-                  <span>{t("chat.auth_benefit_size")}</span>
-                </div>
-                <div className="flex items-center gap-2 py-1">
-                  <span className="text-blue-500">✓</span>
-                  <span>{t("chat.auth_benefit_orders")}</span>
-                </div>
-              </div>
-
-              <a
-                href={`/${locale}/${countryCode}/account`}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-md transition hover:from-blue-700 hover:to-indigo-700 active:scale-98"
-              >
-                <span>{t("chat.sign_in_register")}</span>
-                <svg
-                  className="h-3.5 w-3.5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M14 5l7 7m0 0l-7 7m7-7H3"
-                  />
-                </svg>
-              </a>
-            </div>
+          {customer ? (
+            <AuthenticatedChat
+              countryCode={countryCode}
+              customerName={customer.first_name || customerDisplayName || ""}
+              errorMessage={errorMessage}
+              imageInputRef={imageInputRef}
+              input={input}
+              isLoading={isLoading}
+              locale={locale}
+              messages={messages}
+              messagesEndRef={messagesEndRef}
+              onImagesSelected={handleImagesSelected}
+              onInputChange={setInput}
+              onPromptClick={sendMessage}
+              onSubmit={handleSubmit}
+              pendingImages={pendingImages}
+              quickPrompts={quickPrompts}
+              removeImages={() => setPendingImages([])}
+              t={t}
+            />
           ) : (
-            /* AUTHENTICATED CHAT VIEW */
-            <>
-              {/* Message List */}
-              <div className="flex-1 space-y-3 overflow-y-auto bg-gray-50/50 p-4 dark:bg-gray-950/50">
-                {messages.length === 0 ? (
-                  <div className="flex h-full flex-col items-center justify-center text-center">
-                    <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-2xl dark:bg-blue-950/50">
-                      ✨
-                    </div>
-                    <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                      {t("account.hello", { name: customer.first_name || "" })}!
-                    </h4>
-                    <p className="mt-1 max-w-[260px] text-xs text-gray-500 dark:text-gray-400">
-                      {t("chat.welcome_message")}
-                    </p>
-
-                    {/* Quick Prompts */}
-                    <div className="mt-4 flex w-full flex-col gap-1.5">
-                      {quickPrompts.map((prompt) => (
-                        <button
-                          key={prompt}
-                          type="button"
-                          onClick={() => handlePromptClick(prompt)}
-                          className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-left text-xs font-medium text-gray-700 shadow-sm transition hover:border-blue-400 hover:bg-blue-50/50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:border-blue-700"
-                        >
-                          💬 {prompt}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {messages.map((msg) => {
-                      const isUser = msg.sender_type === "customer"
-                      return (
-                        <div
-                          key={msg.id}
-                          className={`flex flex-col ${
-                            isUser ? "items-end" : "items-start"
-                          }`}
-                        >
-                          <div
-                            className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-sm ${
-                              isUser
-                                ? "bg-blue-600 text-white"
-                                : "border border-gray-200/80 bg-white text-gray-800 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
-                            }`}
-                          >
-                            {msg.body}
-                          </div>
-
-                          {/* Product Preview Media Cards */}
-                          {msg.product_media && msg.product_media.length > 0 && (
-                            <div className="mt-2 flex max-w-[90%] flex-col gap-2">
-                              {msg.product_media.map((product) => (
-                                <ProductPreviewCard
-                                  key={product.product_id}
-                                  product={product}
-                                  countryCode={countryCode}
-                                  locale={locale}
-                                  viewDetailsLabel={t("chat.view_product")}
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-
-                    {isLoading && (
-                      <div className="flex items-center gap-1.5 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-500 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                        <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-blue-600 [animation-delay:-0.3s]" />
-                        <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-blue-600 [animation-delay:-0.15s]" />
-                        <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-blue-600" />
-                        <span className="ml-1 text-[11px]">
-                          {t("chat.typing")}
-                        </span>
-                      </div>
-                    )}
-                    <div ref={messagesEndRef} />
-                  </>
-                )}
-              </div>
-
-              {/* Chat Input Bar */}
-              <form
-                onSubmit={handleSubmit}
-                className="flex items-center gap-2 border-t border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900"
-              >
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder={t("chat.input_placeholder")}
-                  className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2 text-xs text-gray-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500 dark:border-gray-800 dark:bg-gray-950 dark:text-white"
-                />
-                <button
-                  type="submit"
-                  disabled={!input.trim() || isLoading}
-                  className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white shadow transition hover:bg-blue-700 disabled:opacity-40"
-                  title={t("chat.send")}
-                >
-                  <svg
-                    className="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                    />
-                  </svg>
-                </button>
-              </form>
-            </>
+            <GuestChat
+              countryCode={countryCode}
+              locale={locale}
+              supportBenefits={supportBenefits}
+              t={t}
+            />
           )}
-        </div>
+        </aside>
       )}
 
-      {/* 2. Floating Toggle Button */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="group relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-xl transition-all duration-200 hover:scale-105 hover:shadow-blue-500/25 active:scale-95"
+        className="flex h-14 w-14 items-center justify-center rounded-full border border-white/80 bg-[#174b3d] text-white shadow-[0_12px_26px_rgba(17,49,39,0.28)] transition hover:bg-[#103a2f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#174b3d] focus-visible:ring-offset-2 active:scale-[0.96]"
         aria-label={t("chat.button_label")}
       >
-        {isOpen ? (
-          <svg
-            className="h-6 w-6 transition duration-200"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
-        ) : (
-          <>
-            <svg
-              className="h-6 w-6 transition duration-200 group-hover:scale-110"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-              />
-            </svg>
-            <span className="absolute -top-1 -right-1 flex h-4 w-4">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
-              <span className="relative inline-flex h-4 w-4 rounded-full bg-blue-500 text-[9px] font-bold text-white items-center justify-center">
-                1
-              </span>
-            </span>
-          </>
-        )}
+        {isOpen ? <ChevronDownIcon /> : <ConversationIcon />}
       </button>
     </div>
+  )
+}
+
+function GuestChat({
+  countryCode,
+  locale,
+  supportBenefits,
+  t,
+}: {
+  countryCode: string
+  locale: string
+  supportBenefits: string[]
+  t: ReturnType<typeof useTranslation>
+}) {
+  return (
+    <section className="flex flex-1 flex-col px-6 py-7 text-center small:px-7">
+      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#e7efe9] text-[#174b3d]">
+        <StoreBagIcon />
+      </div>
+      <h2 className="mt-6 text-[25px] font-semibold leading-tight tracking-[-0.045em] text-[#12231d]">
+        {t("chat.auth_required_title")}
+      </h2>
+      <p className="mx-auto mt-3 max-w-[290px] text-sm leading-6 text-[#60716a]">
+        {t("chat.auth_required_desc")}
+      </p>
+
+      <ul className="mx-auto mt-7 w-full max-w-[310px] border-y border-[#12231d]/10 py-2 text-left">
+        {supportBenefits.map((benefit) => (
+          <li key={benefit} className="flex items-center gap-3 py-2.5 text-sm text-[#315248]">
+            <CheckIcon />
+            <span>{benefit}</span>
+          </li>
+        ))}
+      </ul>
+
+      <a
+        href={`/${locale}/${countryCode}/account`}
+        className="mt-auto inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#174b3d] px-5 text-sm font-semibold text-white transition hover:bg-[#103a2f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#174b3d] focus-visible:ring-offset-2 active:scale-[0.98]"
+      >
+        {t("chat.sign_in_register")}
+        <ArrowRightIcon />
+      </a>
+    </section>
+  )
+}
+
+function AuthenticatedChat({
+  countryCode,
+  customerName,
+  errorMessage,
+  imageInputRef,
+  input,
+  isLoading,
+  locale,
+  messages,
+  messagesEndRef,
+  onImagesSelected,
+  onInputChange,
+  onPromptClick,
+  onSubmit,
+  pendingImages,
+  quickPrompts,
+  removeImages,
+  t,
+}: {
+  countryCode: string
+  customerName: string
+  errorMessage: string | null
+  imageInputRef: React.RefObject<HTMLInputElement | null>
+  input: string
+  isLoading: boolean
+  locale: string
+  messages: ReturnType<typeof useCustomerChat>["messages"]
+  messagesEndRef: React.RefObject<HTMLDivElement | null>
+  onImagesSelected: (event: ChangeEvent<HTMLInputElement>) => void
+  onInputChange: (value: string) => void
+  onPromptClick: (prompt: string) => void
+  onSubmit: (event: FormEvent) => void
+  pendingImages: File[]
+  quickPrompts: string[]
+  removeImages: () => void
+  t: ReturnType<typeof useTranslation>
+}) {
+  return (
+    <>
+      <section aria-live="polite" className="flex-1 overflow-y-auto bg-[#f8faf8] px-4 py-5 small:px-5">
+        {errorMessage && (
+          <p role="alert" className="mb-4 border-l-2 border-red-500 bg-red-50 px-3 py-2 text-xs leading-5 text-red-800">
+            {errorMessage}
+          </p>
+        )}
+
+        {messages.length === 0 ? (
+          <div className="pt-4">
+            <p className="text-xs font-medium uppercase tracking-[0.14em] text-[#60716a]">
+              {t("chat.greeting", { name: customerName })}
+            </p>
+            <h2 className="mt-2 max-w-[260px] text-2xl font-semibold leading-tight tracking-[-0.045em] text-[#12231d]">
+              {t("chat.welcome_message")}
+            </h2>
+            <div className="mt-8 border-t border-[#12231d]/10">
+              {quickPrompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => onPromptClick(prompt)}
+                  className="group flex w-full items-center justify-between border-b border-[#12231d]/10 py-3.5 text-left text-sm font-medium text-[#315248] transition hover:text-[#174b3d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#174b3d]/35 focus-visible:ring-inset"
+                >
+                  <span>{prompt}</span>
+                  <ArrowRightIcon className="text-[#8a9a91] transition-transform group-hover:translate-x-0.5 group-hover:text-[#174b3d]" />
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {messages.map((message) => {
+              const isCustomer = message.sender_type === "customer"
+              return (
+                <article key={message.id} className={`flex ${isCustomer ? "justify-end" : "justify-start"}`}>
+                  <div className={`flex max-w-[84%] flex-col ${isCustomer ? "items-end" : "items-start"}`}>
+                    <div
+                      className={`whitespace-pre-wrap rounded-[18px] px-3.5 py-3 text-sm leading-6 ${
+                        isCustomer
+                          ? "rounded-br-md bg-[#174b3d] text-white"
+                          : "rounded-bl-md border border-[#12231d]/10 bg-white text-[#12231d]"
+                      }`}
+                    >
+                      {message.body}
+                    </div>
+                    {message.image_attachments && message.image_attachments.length > 0 && (
+                      <div className="mt-2 grid max-w-full grid-cols-3 gap-1.5">
+                        {message.image_attachments.map((attachment) => (
+                          <img
+                            key={attachment.id}
+                            src={attachment.url}
+                            alt="Ảnh được gửi trong cuộc trò chuyện"
+                            className="h-20 w-20 rounded-xl border border-[#12231d]/10 object-cover"
+                            loading="lazy"
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {message.product_media && message.product_media.length > 0 && (
+                      <div className="mt-2 flex w-full flex-col gap-2">
+                        {message.product_media.map((product) => (
+                          <ProductPreviewCard
+                            key={product.product_id}
+                            countryCode={countryCode}
+                            locale={locale}
+                            product={product}
+                            viewDetailsLabel={t("chat.view_product")}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        )}
+
+        {isLoading && (
+          <div className="mt-5 flex items-center gap-2 text-xs text-[#60716a]">
+            <span className="flex gap-1" aria-hidden="true">
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#174b3d] [animation-delay:-0.3s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#174b3d] [animation-delay:-0.15s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#174b3d]" />
+            </span>
+            {t("chat.typing")}
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </section>
+
+      <form onSubmit={onSubmit} className="border-t border-[#12231d]/10 bg-white px-4 py-3.5 small:px-5">
+        {pendingImages.length > 0 && (
+          <div className="mb-3 flex items-center justify-between gap-3 text-xs text-[#60716a]">
+            <span>{pendingImages.length} ảnh đã chọn</span>
+            <button
+              type="button"
+              onClick={removeImages}
+              className="font-semibold text-[#174b3d] underline decoration-[#174b3d]/35 underline-offset-4 transition hover:text-[#103a2f]"
+            >
+              Bỏ ảnh
+            </button>
+          </div>
+        )}
+        <div className="flex items-center gap-2 rounded-full border border-[#12231d]/15 bg-[#f8faf8] p-1.5 transition focus-within:border-[#174b3d]/45 focus-within:bg-white focus-within:ring-2 focus-within:ring-[#174b3d]/15">
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            className="sr-only"
+            onChange={onImagesSelected}
+          />
+          <button
+            type="button"
+            onClick={() => imageInputRef.current?.click()}
+            disabled={isLoading}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#60716a] transition hover:bg-[#e7efe9] hover:text-[#174b3d] disabled:opacity-40"
+            title="Gửi ảnh để cửa hàng kiểm tra"
+            aria-label="Gửi ảnh để cửa hàng kiểm tra"
+          >
+            <ImageIcon />
+          </button>
+          <input
+            type="text"
+            value={input}
+            onChange={(event) => onInputChange(event.target.value)}
+            placeholder={t("chat.input_placeholder")}
+            className="min-w-0 flex-1 bg-transparent px-1 text-sm text-[#12231d] outline-none placeholder:text-[#8a9a91]"
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || isLoading}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#174b3d] text-white transition hover:bg-[#103a2f] disabled:opacity-35"
+            title={t("chat.send")}
+            aria-label={t("chat.send")}
+          >
+            <SendIcon />
+          </button>
+        </div>
+      </form>
+    </>
   )
 }
 
@@ -386,50 +405,82 @@ function ProductPreviewCard({
   product: ProductMediaItem
   viewDetailsLabel: string
 }) {
-  const productUrl =
-    product.product_url ||
-    `/${locale}/${countryCode}/products/${product.product_id}`
+  const productUrl = product.product_url || `/${locale}/${countryCode}/products/${product.product_id}`
 
   return (
-    <div className="flex items-center gap-2.5 overflow-hidden rounded-xl border border-gray-200 bg-white p-2 shadow-sm transition hover:border-blue-300 dark:border-gray-800 dark:bg-gray-900">
+    <a
+      href={productUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex items-center gap-3 rounded-xl border border-[#12231d]/10 bg-white p-2.5 text-left transition hover:border-[#174b3d]/35"
+    >
       {product.image_url ? (
         <img
           src={product.image_url}
           alt={product.title}
-          className="h-14 w-14 rounded-lg object-cover bg-gray-100 dark:bg-gray-800"
+          className="h-14 w-14 rounded-lg object-cover"
           loading="lazy"
         />
       ) : (
-        <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-gray-100 text-lg dark:bg-gray-800">
-          👕
+        <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-[#edf3ef] text-[#174b3d]">
+          <StoreBagIcon />
         </div>
       )}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <span className="truncate text-xs font-semibold text-gray-900 dark:text-white">
-          {product.title}
-        </span>
-        <a
-          href={productUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:underline dark:text-blue-400"
-        >
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-[#12231d]">{product.title}</span>
+        <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-[#174b3d]">
           {viewDetailsLabel}
-          <svg
-            className="h-3 w-3"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-            />
-          </svg>
-        </a>
-      </div>
-    </div>
+          <ArrowRightIcon />
+        </span>
+      </span>
+    </a>
   )
+}
+
+function StoreMark() {
+  return (
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#dfeae3] text-base font-semibold tracking-[-0.16em] text-[#174b3d]" aria-hidden="true">
+      S
+    </span>
+  )
+}
+
+function Icon({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <svg className={`h-4 w-4 ${className}`} fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">{children}</svg>
+}
+
+function CloseIcon() {
+  return <Icon><path strokeLinecap="round" d="m7 7 10 10M17 7 7 17" /></Icon>
+}
+
+function RefreshIcon() {
+  return <Icon><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5A7.5 7.5 0 0 1 18 7.8M19.5 13.5A7.5 7.5 0 0 1 6 16.2M18 4.5v3.3h-3.3M6 19.5v-3.3h3.3" /></Icon>
+}
+
+function ConversationIcon() {
+  return <Icon className="h-[25px] w-[25px]"><path strokeLinecap="round" strokeLinejoin="round" d="M19.25 11.25A7.25 7.25 0 0 1 8.1 17.4L4.75 19l1.08-3.08A7.25 7.25 0 1 1 19.25 11.25Z" /></Icon>
+}
+
+function ChevronDownIcon() {
+  return <Icon className="h-6 w-6"><path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" /></Icon>
+}
+
+function StoreBagIcon() {
+  return <Icon className="h-7 w-7"><path strokeLinecap="round" strokeLinejoin="round" d="M6 8.5h12l.8 10.2a1.5 1.5 0 0 1-1.5 1.6H6.7a1.5 1.5 0 0 1-1.5-1.6L6 8.5ZM9 9V6.8a3 3 0 0 1 6 0V9" /></Icon>
+}
+
+function CheckIcon() {
+  return <Icon className="h-4 w-4 shrink-0 text-[#174b3d]"><path strokeLinecap="round" strokeLinejoin="round" d="m5 12 4.2 4L19 6.5" /></Icon>
+}
+
+function ArrowRightIcon({ className = "" }: { className?: string }) {
+  return <Icon className={`h-4 w-4 shrink-0 ${className}`}><path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-5-5 5 5-5 5" /></Icon>
+}
+
+function ImageIcon() {
+  return <Icon><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 6.5A2.5 2.5 0 0 1 7 4h10a2.5 2.5 0 0 1 2.5 2.5v11A2.5 2.5 0 0 1 17 20H7a2.5 2.5 0 0 1-2.5-2.5v-11ZM8 15l2.7-2.7a1.4 1.4 0 0 1 2 0l1.5 1.5 1-1a1.4 1.4 0 0 1 2 0l1.8 1.8M9 8.5h.01" /></Icon>
+}
+
+function SendIcon() {
+  return <Icon><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 5.2 15 6.1-15 6.5 2.2-5.4 5.3-1.1-5.3-1.1-2.2-5Z" /></Icon>
 }

@@ -29,6 +29,12 @@ import {
   CUSTOMER_CONVERSATION_PROMPT_VERSION,
   CUSTOMER_CONVERSATION_SYSTEM_PROMPT,
 } from "./customer-conversation-responder"
+import {
+  CUSTOMER_VISION_MAX_TOKENS,
+  CUSTOMER_VISION_PROMPT_KEY,
+  CUSTOMER_VISION_PROMPT_VERSION,
+  CUSTOMER_VISION_SYSTEM_PROMPT,
+} from "./customer-vision-processor"
 
 export const ASSISTANT_SETTINGS_PROMPT_KEY = "customer-support.assistant-settings"
 export const ASSISTANT_SETTINGS_VERSION = "1.0.0"
@@ -155,5 +161,14 @@ export const MANAGED_PROMPTS_REGISTRY: Record<string, ManagedPromptMetadata> = {
     prompt_key: CUSTOMER_CONVERSATION_PROMPT_KEY,
     title: "Small Talk & Clarify (Chào hỏi & Làm rõ hội thoại)",
     version: CUSTOMER_CONVERSATION_PROMPT_VERSION,
+  },
+  [CUSTOMER_VISION_PROMPT_KEY]: {
+    default_max_tokens: CUSTOMER_VISION_MAX_TOKENS,
+    default_system_prompt: CUSTOMER_VISION_SYSTEM_PROMPT,
+    description:
+      "Hướng dẫn AI nhận diện bằng chứng trực quan từ ảnh khách gửi để nhân viên CSKH thẩm định, không tự duyệt đổi trả hay hoàn tiền.",
+    prompt_key: CUSTOMER_VISION_PROMPT_KEY,
+    title: "Vision Review (Thẩm định ảnh CSKH)",
+    version: CUSTOMER_VISION_PROMPT_VERSION,
   },
 }

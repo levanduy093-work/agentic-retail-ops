@@ -88,6 +88,55 @@ describe("grounded knowledge answers", () => {
     expect(answer.body).not.toContain("thanh toán:")
   })
 
+  it("includes only verified tracking facts and never invents an ETA", () => {
+    const answer = buildCustomerOrderLookupReply(
+      {
+        display_id: 123,
+        fulfillment: {
+          display_id: 123,
+          fulfillment_status: "fulfilled",
+          fulfillments: [
+            {
+              carrier: "ghn_ghn",
+              current_status: "shipping",
+              delivered_at: null,
+              fulfillment_id: "ful_123",
+              shipped_at: "2026-08-20T00:00:00.000Z",
+              tracking_number: "GHN_123",
+              tracking_url: "https://donhang.ghn.vn/?order_code=GHN_123",
+            },
+          ],
+          order_id: "order_123",
+          version: 1,
+        },
+        order: {
+          canceled_at: null,
+          created_at: "2026-08-20T00:00:00.000Z",
+          currency_code: "vnd",
+          customer_id: "cus_123",
+          display_id: 123,
+          fulfillment_count: 1,
+          fulfillment_status: "fulfilled",
+          item_count: 1,
+          order_id: "order_123",
+          order_status: "completed",
+          payment_collection_count: 1,
+          payment_status: "captured",
+          total: 250000,
+          updated_at: "2026-08-20T00:00:00.000Z",
+          version: 1,
+        },
+        status: "FOUND",
+      },
+      "vi"
+    )
+
+    expect(answer.body).toContain("GHN_123")
+    expect(answer.body).toContain("shipping")
+    expect(answer.body).toContain("chưa thể xác nhận")
+    expect(answer.body).not.toContain("https://")
+  })
+
   it("skips semantic embedding when lexical evidence is already strong", () => {
     expect(shouldUseSemanticKnowledgeSearch(knowledge)).toBe(false)
     expect(
@@ -409,4 +458,3 @@ describe("grounded knowledge answers", () => {
     })
   })
 })
-

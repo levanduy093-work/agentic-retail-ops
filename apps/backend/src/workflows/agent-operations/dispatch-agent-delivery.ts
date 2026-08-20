@@ -131,6 +131,7 @@ const deliverAgentMessageStep = createStep<
             }
           : undefined,
     })
+    await adapter.signalTyping?.(conversation.external_thread_id)
     const receipt = await adapter.deliver({
       body: message.body,
       idempotency_key: delivery.idempotency_key,

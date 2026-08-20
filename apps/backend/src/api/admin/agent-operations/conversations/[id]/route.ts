@@ -12,6 +12,29 @@ const memoryItems = (value: unknown) =>
     ? (value as { items: string[] }).items
     : []
 
+const imageAttachments = (value: unknown) => {
+  if (!value || typeof value !== "object") return []
+  const attachments = (value as { image_attachments?: unknown })
+    .image_attachments
+  if (!Array.isArray(attachments)) return []
+  return attachments.flatMap((attachment) => {
+    if (
+      attachment &&
+      typeof attachment === "object" &&
+      typeof (attachment as { id?: unknown }).id === "string" &&
+      typeof (attachment as { url?: unknown }).url === "string"
+    ) {
+      return [
+        {
+          id: (attachment as { id: string }).id,
+          url: (attachment as { url: string }).url,
+        },
+      ]
+    }
+    return []
+  })
+}
+
 export async function GET(
   req: AuthenticatedMedusaRequest,
   res: MedusaResponse
@@ -48,7 +71,15 @@ export async function GET(
           resolved_topics: memoryItems(memory.resolved_topics),
         }
       : null,
-    messages,
+    messages: messages.map((message) => ({
+      body: message.body,
+      direction: message.direction,
+      id: message.id,
+      image_attachments: imageAttachments(message.structured_content),
+      occurred_at: message.occurred_at,
+      sender_type: message.sender_type,
+      status: message.status,
+    })),
     support_tasks: supportTasks,
   })
 }

@@ -22,6 +22,8 @@ import {
 } from "./tools/platform-command-tools"
 import { ORDER_READ_TOOL } from "./tools/order-tools"
 import { CATALOG_READ_TOOL } from "./tools/catalog-tools"
+import { FULFILLMENT_READ_TOOL } from "./tools/fulfillment-tools"
+import { PAYMENT_READ_TOOL } from "./tools/payment-tools"
 import { RESPONSE_DRAFT_TOOL } from "./tools/response-tools"
 import { AgentToolDefinition, toAgentToolMetadata } from "./tool-contract"
 import { AGENT_CATALOG } from "./catalog-registry"
@@ -31,6 +33,7 @@ export const AGENT_TOOL_REGISTRY = {
   [APPROVAL_REQUEST_TOOL.name]: APPROVAL_REQUEST_TOOL,
   [AUDIT_SEARCH_TOOL.name]: AUDIT_SEARCH_TOOL,
   [CATALOG_READ_TOOL.name]: CATALOG_READ_TOOL,
+  [FULFILLMENT_READ_TOOL.name]: FULFILLMENT_READ_TOOL,
   [INVENTORY_GET_POSITION_TOOL.name]: INVENTORY_GET_POSITION_TOOL,
   [INVENTORY_EXECUTE_TRANSFER_TOOL.name]: INVENTORY_EXECUTE_TRANSFER_TOOL,
   [INCIDENT_CREATE_TOOL.name]: INCIDENT_CREATE_TOOL,
@@ -39,6 +42,7 @@ export const AGENT_TOOL_REGISTRY = {
   [KNOWLEDGE_PROPOSE_TOOL.name]: KNOWLEDGE_PROPOSE_TOOL,
   [MESSAGE_SEND_TOOL.name]: MESSAGE_SEND_TOOL,
   [ORDER_READ_TOOL.name]: ORDER_READ_TOOL,
+  [PAYMENT_READ_TOOL.name]: PAYMENT_READ_TOOL,
   [RESPONSE_DRAFT_TOOL.name]: RESPONSE_DRAFT_TOOL,
   [TASK_ASSIGN_TOOL.name]: TASK_ASSIGN_TOOL,
   [TASK_CREATE_TOOL.name]: TASK_CREATE_TOOL,

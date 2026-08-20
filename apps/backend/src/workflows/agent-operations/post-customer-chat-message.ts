@@ -4,10 +4,13 @@ import {
   StepResponse,
   WorkflowResponse,
 } from "@medusajs/framework/workflows-sdk"
+import { MedusaError, Modules } from "@medusajs/framework/utils"
 import { AGENT_OPERATIONS_MODULE } from "../../modules/agent-operations"
 import AgentOperationsModuleService from "../../modules/agent-operations/service"
+import { assertCustomerChatConversationOwnership } from "../../modules/agent-operations/customer-chat-ownership"
 
 export type PostCustomerChatMessageInput = {
+  attachment_ids?: string[]
   client_message_id?: string
   conversation_id?: string
   customer_email?: string
@@ -24,8 +27,35 @@ export const postCustomerChatMessageStep = createStep(
     const service = container.resolve<AgentOperationsModuleService>(
       AGENT_OPERATIONS_MODULE
     )
-    const customerId = input.customer_id || "guest"
+    const customerId = input.customer_id
+    if (!customerId) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        "Customer chat messages require an authenticated customer."
+      )
+    }
     const now = new Date()
+    const attachmentIds = Array.from(new Set(input.attachment_ids ?? []))
+    if (attachmentIds.length > 3) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "A customer-support message can include at most three images."
+      )
+    }
+    const imageAttachments = await Promise.all(
+      attachmentIds.map(async (attachmentId) => {
+        const file = await container.resolve(Modules.FILE).retrieveFile(
+          attachmentId
+        )
+        if (!file.url) {
+          throw new MedusaError(
+            MedusaError.Types.INVALID_DATA,
+            "A customer-support attachment is unavailable."
+          )
+        }
+        return { id: file.id, url: file.url }
+      })
+    )
 
     const existingConnections = await service.listAgentChannelConnections(
       { account_ref: "default-admin", channel: "IN_APP", tenant_id: "default" },
@@ -43,11 +73,8 @@ export const postCustomerChatMessageStep = createStep(
 
     let conversation: any = null
     if (input.conversation_id) {
-      try {
-        conversation = await service.retrieveAgentConversation(input.conversation_id)
-      } catch {
-        conversation = null
-      }
+      conversation = await service.retrieveAgentConversation(input.conversation_id)
+      assertCustomerChatConversationOwnership(conversation, customerId)
     }
 
     // If no specific conversation was provided, look for existing OPEN conversation for this customer
@@ -138,6 +165,7 @@ export const postCustomerChatMessageStep = createStep(
         client_message_id: clientMessageId,
         customer_email: input.customer_email ?? null,
         customer_name: input.customer_name ?? null,
+        image_attachments: imageAttachments,
         locale: input.locale ?? "vi",
       },
     })

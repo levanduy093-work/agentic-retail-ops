@@ -145,23 +145,8 @@ export default async function verifyCustomerChatOrderLookup({
   }
 
   const ownerConversation = await createConversation(ownerCustomerId, "owner")
-  const orderPrompt = await createInboundAndAnswer({
-    body: "Thời gian giao hàng bao lâu vậy sốp?",
-    container,
-    conversation_id: ownerConversation.id,
-    idempotency_key: `${verificationId}:owner:delivery-question`,
-    sender_id: ownerCustomerId,
-    service,
-  })
-  const promptStructured = (orderPrompt.structured_content ?? {}) as Record<
-    string,
-    unknown
-  >
-  assert.equal(promptStructured.pending_customer_input, "ORDER_REFERENCE")
-  assert.match(orderPrompt.body, /mã đơn/iu)
-
   const ownerOrderAnswer = await createInboundAndAnswer({
-    body: `#${order.display_id}`,
+    body: `Kiểm tra giúp em trạng thái đơn #${order.display_id}.`,
     container,
     conversation_id: ownerConversation.id,
     idempotency_key: `${verificationId}:owner:order-reference`,
@@ -176,17 +161,47 @@ export default async function verifyCustomerChatOrderLookup({
   assert.match(ownerOrderAnswer.body, new RegExp(`#${order.display_id}`))
   assert.match(ownerOrderAnswer.body, /thanh toán.*giao hàng/iu)
 
-  const otherConversation = await createConversation(otherCustomerId, "other")
-  await createInboundAndAnswer({
-    body: "Thời gian giao hàng bao lâu vậy sốp?",
+  const ownerPaymentAnswer = await createInboundAndAnswer({
+    body: `Đơn #${order.display_id} của em đã thanh toán chưa?`,
     container,
-    conversation_id: otherConversation.id,
-    idempotency_key: `${verificationId}:other:delivery-question`,
-    sender_id: otherCustomerId,
+    conversation_id: ownerConversation.id,
+    idempotency_key: `${verificationId}:owner:payment-status`,
+    sender_id: ownerCustomerId,
     service,
   })
+  assert.match(ownerPaymentAnswer.body, /thanh toán:/iu)
+
+  const ownerTrackingAnswer = await createInboundAndAnswer({
+    body: `Đơn #${order.display_id} của em đang ở đâu, cho em mã vận đơn nhé.`,
+    container,
+    conversation_id: ownerConversation.id,
+    idempotency_key: `${verificationId}:owner:tracking-status`,
+    sender_id: ownerCustomerId,
+    service,
+  })
+  assert.match(ownerTrackingAnswer.body, /giao hàng:/iu)
+  const readToolCalls = await service.listAgentToolCalls(
+    { conversation_id: ownerConversation.id },
+    { order: { created_at: "ASC" }, take: 20 }
+  )
+  const readToolNames = readToolCalls.map((toolCall) => toolCall.tool_name)
+  assert.ok(readToolNames.includes("order.read"))
+  assert.ok(readToolNames.includes("payment.read"))
+  assert.ok(readToolNames.includes("fulfillment.read"))
+  assert.ok(
+    readToolCalls
+      .filter((toolCall) =>
+        ["order.read", "payment.read", "fulfillment.read"].includes(
+          toolCall.tool_name
+        )
+      )
+      .every((toolCall) => toolCall.action_request_id === null),
+    "Customer read tools must not create an Action Gateway command request."
+  )
+
+  const otherConversation = await createConversation(otherCustomerId, "other")
   const rejectedOrderAnswer = await createInboundAndAnswer({
-    body: `#${order.display_id}`,
+    body: `Kiểm tra giúp em trạng thái đơn #${order.display_id}.`,
     container,
     conversation_id: otherConversation.id,
     idempotency_key: `${verificationId}:other:order-reference`,
@@ -205,8 +220,11 @@ export default async function verifyCustomerChatOrderLookup({
     JSON.stringify(
       {
         owner_answer: ownerOrderAnswer.body,
+        owner_payment_answer: ownerPaymentAnswer.body,
+        owner_tracking_answer: ownerTrackingAnswer.body,
         order_display_id: order.display_id,
         rejected_answer: rejectedOrderAnswer.body,
+        read_tools: readToolNames,
         status: "CUSTOMER_CHAT_ORDER_LOOKUP_VERIFIED",
       },
       null,

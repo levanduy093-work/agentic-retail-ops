@@ -84,3 +84,14 @@ export function verifyFacebookWebhookSignature(options: {
     return false
   }
 }
+
+export function buildFacebookSenderActionPayload(
+  psid: string,
+  senderAction: "typing_on" | "typing_off" | "mark_seen" = "typing_on"
+) {
+  return {
+    recipient: { id: psid },
+    sender_action: senderAction,
+  }
+}
+

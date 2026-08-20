@@ -1,12 +1,13 @@
 import {
-  MedusaRequest,
+  AuthenticatedMedusaRequest,
   MedusaResponse,
 } from "@medusajs/framework/http"
 import { AGENT_OPERATIONS_MODULE } from "../../../../../modules/agent-operations"
 import AgentOperationsModuleService from "../../../../../modules/agent-operations/service"
+import { assertCustomerChatConversationOwnership } from "../../../../../modules/agent-operations/customer-chat-ownership"
 
 export async function GET(
-  req: MedusaRequest,
+  req: AuthenticatedMedusaRequest,
   res: MedusaResponse
 ) {
   const service = req.scope.resolve<AgentOperationsModuleService>(
@@ -14,6 +15,10 @@ export async function GET(
   )
 
   const conversation = await service.retrieveAgentConversation(req.params.id)
+  assertCustomerChatConversationOwnership(
+    conversation,
+    req.auth_context.actor_id
+  )
   const messages = await service.listAgentMessages(
     { conversation_id: conversation.id },
     { order: { occurred_at: "ASC" }, take: 100 }
@@ -34,6 +39,9 @@ export async function GET(
       id: m.id,
       message_type: m.message_type,
       occurred_at: m.occurred_at,
+      image_attachments: (
+        m.structured_content as Record<string, unknown> | null
+      )?.image_attachments ?? [],
       product_media: (
         m.structured_content as Record<string, unknown> | null
       )?.product_media ?? [],

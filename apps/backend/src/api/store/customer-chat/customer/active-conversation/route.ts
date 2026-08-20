@@ -1,29 +1,19 @@
 import {
-  MedusaRequest,
+  AuthenticatedMedusaRequest,
   MedusaResponse,
 } from "@medusajs/framework/http"
 import { AGENT_OPERATIONS_MODULE } from "../../../../../modules/agent-operations"
 import AgentOperationsModuleService from "../../../../../modules/agent-operations/service"
 
 export async function GET(
-  req: MedusaRequest,
+  req: AuthenticatedMedusaRequest,
   res: MedusaResponse
 ) {
   const service = req.scope.resolve<AgentOperationsModuleService>(
     AGENT_OPERATIONS_MODULE
   )
 
-  const customerId =
-    (req as unknown as { auth_context?: { actor_id?: string } })
-      .auth_context?.actor_id || (req.query.customer_id as string)
-
-  if (!customerId || customerId === "guest") {
-    res.json({
-      conversation: null,
-      messages: [],
-    })
-    return
-  }
+  const customerId = req.auth_context.actor_id
 
   const openConvs = await service.listAgentConversations(
     {
@@ -68,6 +58,9 @@ export async function GET(
     product_media: (
       msg.structured_content as Record<string, unknown> | null
     )?.product_media as any,
+    image_attachments: (
+      msg.structured_content as Record<string, unknown> | null
+    )?.image_attachments ?? [],
     sender_type: msg.sender_type,
   }))
 

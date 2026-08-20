@@ -43,6 +43,26 @@ describe("telegram channel foundation", () => {
     )
   })
 
+  it("signals advisory typing without affecting delivery control flow", async () => {
+    const fetcher = jest.fn().mockResolvedValue({ ok: true, status: 200 })
+    const adapter = createChannelAdapter("TELEGRAM", {
+      telegram: {
+        api_base_url: "https://telegram.test",
+        bot_token: "test-token",
+        fetch: fetcher as typeof fetch,
+      },
+    })
+
+    await expect(adapter.signalTyping?.("123456")).resolves.toBeUndefined()
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://telegram.test/bottest-token/sendChatAction",
+      expect.objectContaining({
+        body: JSON.stringify({ action: "typing", chat_id: "123456" }),
+        method: "POST",
+      })
+    )
+  })
+
   it("fails closed when Telegram rejects a delivery", async () => {
     const adapter = createChannelAdapter("TELEGRAM", {
       telegram: {

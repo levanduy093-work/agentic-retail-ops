@@ -17,6 +17,7 @@ export type ChannelDeliveryReceipt = {
 export type ChannelAdapter = {
   channel: ConversationChannel
   deliver(input: ChannelDeliveryInput): Promise<ChannelDeliveryReceipt>
+  signalTyping?(recipientRef: string): Promise<void>
 }
 
 export type TelegramChannelAdapterOptions = {
@@ -126,6 +127,22 @@ export class TelegramChannelAdapter implements ChannelAdapter {
     ).replace(/\/$/, "")
     this.botToken = options.bot_token
     this.fetcher = options.fetch ?? fetch
+  }
+
+  async signalTyping(recipientRef: string): Promise<void> {
+    try {
+      await this.fetcher(
+        `${this.apiBaseUrl}/bot${this.botToken}/sendChatAction`,
+        {
+          body: JSON.stringify({ action: "typing", chat_id: recipientRef }),
+          headers: { "content-type": "application/json" },
+          method: "POST",
+          signal: AbortSignal.timeout(3_000),
+        }
+      )
+    } catch {
+      // Typing is advisory. It must never block a customer response.
+    }
   }
 
   private async sendProductMedia(input: ChannelDeliveryInput) {
@@ -269,6 +286,25 @@ export class FacebookMessengerChannelAdapter implements ChannelAdapter {
     this.fetcher = options.fetch ?? fetch
   }
 
+  async signalTyping(recipientRef: string): Promise<void> {
+    try {
+      await this.fetcher(
+        `${this.apiBaseUrl}/me/messages?access_token=${encodeURIComponent(this.pageAccessToken)}`,
+        {
+          body: JSON.stringify({
+            recipient: { id: recipientRef },
+            sender_action: "typing_on",
+          }),
+          headers: { "content-type": "application/json" },
+          method: "POST",
+          signal: AbortSignal.timeout(3_000),
+        }
+      )
+    } catch {
+      // Typing is advisory. It must never block a customer response.
+    }
+  }
+
   async deliver(input: ChannelDeliveryInput): Promise<ChannelDeliveryReceipt> {
     const response = await this.fetcher(
       `${this.apiBaseUrl}/me/messages?access_token=${encodeURIComponent(this.pageAccessToken)}`,
@@ -343,7 +379,7 @@ export function createChannelAdapter(
     telegram?: TelegramChannelAdapterOptions
     zalo?: ZaloChannelAdapterOptions
   }
-) {
+): ChannelAdapter {
   if (channel === "IN_APP") {
     return new InAppChannelAdapter()
   }

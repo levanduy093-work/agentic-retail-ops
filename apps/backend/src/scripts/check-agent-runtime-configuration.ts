@@ -121,6 +121,9 @@ export default async function checkAgentRuntimeConfiguration({
           checks.generation_provider_selected_in_admin &&
           checks.qdrant_url_configured,
         ready_for_production_telegram:
+          checks.telegram_bot_token_configured &&
+          checks.telegram_public_url_configured &&
+          checks.telegram_webhook_secret_configured &&
           checks.telegram_channel_active &&
           checks.telegram_security_controls_enabled &&
           checks.telegram_security_policy_persisted &&

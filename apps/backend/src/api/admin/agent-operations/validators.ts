@@ -126,6 +126,18 @@ export const TelegramWebhookUpdate = z.object({
         })
         .optional(),
       message_id: z.number().int(),
+      caption: z.string().trim().max(4_000).optional(),
+      photo: z
+        .array(
+          z.object({
+            file_id: z.string().min(1),
+            file_size: z.number().int().nonnegative().optional(),
+            height: z.number().int().nonnegative().optional(),
+            width: z.number().int().nonnegative().optional(),
+          })
+        )
+        .max(10)
+        .optional(),
       text: z.string().trim().min(1).max(4_000).optional(),
     })
     .optional(),
@@ -517,6 +529,15 @@ export const MessengerWebhookPayload = z.object({
               message: z
                 .object({
                   is_echo: z.boolean().optional(),
+                  attachments: z
+                    .array(
+                      z.object({
+                        payload: z.object({ url: z.string().url().optional() }).optional(),
+                        type: z.string().optional(),
+                      })
+                    )
+                    .max(10)
+                    .optional(),
                   mid: z.string().optional(),
                   text: z.string().optional(),
                 })
@@ -594,6 +615,5 @@ export const AdminDisconnectMessengerChannel = z.object({
 export type AdminDisconnectMessengerChannelType = z.infer<
   typeof AdminDisconnectMessengerChannel
 >
-
 
 

@@ -5,7 +5,7 @@ const AgentCustomerPreference = model
     id: model.id({ prefix: "agpref" }).primaryKey(),
     tenant_id: model.text().default("default"),
     customer_id: model.text(),
-    preference_type: model.enum(["SIZE"]),
+    preference_type: model.enum(["SIZE", "STYLE", "MEASUREMENTS"]),
     value: model.text(),
     status: model.enum(["CUSTOMER_STATED", "CONFIRMED"]),
     source_conversation_id: model.text(),

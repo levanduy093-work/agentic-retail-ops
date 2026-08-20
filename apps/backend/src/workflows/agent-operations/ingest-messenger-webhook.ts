@@ -8,7 +8,8 @@ import type {
   IEventBusModuleService,
   ILockingModule,
 } from "@medusajs/framework/types"
-import { Modules } from "@medusajs/framework/utils"
+import { MedusaError, Modules } from "@medusajs/framework/utils"
+import { uploadFilesWorkflow } from "@medusajs/core-flows"
 import { AGENT_OPERATIONS_MODULE } from "../../modules/agent-operations"
 import AgentOperationsModuleService from "../../modules/agent-operations/service"
 import {
@@ -28,6 +29,10 @@ export type IngestMessengerWebhookInput = {
       id?: string
       messaging?: Array<{
         message?: {
+          attachments?: Array<{
+            payload?: { url?: string }
+            type?: string
+          }>
           is_echo?: boolean
           mid?: string
           text?: string
@@ -60,6 +65,21 @@ export type IngestMessengerWebhookResult = {
     | "MESSAGE_TOO_LONG"
     | "RATE_LIMITED"
     | "STALE_UPDATE"
+}
+
+const isTrustedMessengerImageUrl = (value: string): boolean => {
+  try {
+    const url = new URL(value)
+    return (
+      url.protocol === "https:" &&
+      (url.hostname === "lookaside.fbsbx.com" ||
+        url.hostname.endsWith(".fbsbx.com") ||
+        url.hostname.endsWith(".fbcdn.net") ||
+        url.hostname.endsWith(".facebook.com"))
+    )
+  } catch {
+    return false
+  }
 }
 
 const ingestMessengerWebhookStep = createStep<
@@ -112,7 +132,7 @@ const ingestMessengerWebhookStep = createStep<
     if (
       !messaging ||
       messaging.message?.is_echo ||
-      !messaging.message?.text ||
+      !(messaging.message?.text || messaging.message?.attachments?.length) ||
       !messaging.sender?.id ||
       messaging.sender.id === entry?.id ||
       messaging.sender.id === config.page_id
@@ -124,7 +144,8 @@ const ingestMessengerWebhookStep = createStep<
     }
 
     const psid = String(messaging.sender.id)
-    const messageText = messaging.message.text
+    const messageText =
+      messaging.message.text ?? "Khách đã gửi ảnh để shop kiểm tra."
     const principal = resolveFacebookPrincipal(config, psid)
     if (!principal) {
       return new StepResponse<IngestMessengerWebhookResult>({
@@ -291,6 +312,78 @@ const ingestMessengerWebhookStep = createStep<
           })
         }
 
+        let imageAttachments: Array<{ id: string; url: string }> = []
+        const imageUrls = (messaging.message?.attachments ?? [])
+          .filter((attachment) => attachment.type === "image")
+          .flatMap((attachment) =>
+            typeof attachment.payload?.url === "string" &&
+            isTrustedMessengerImageUrl(attachment.payload.url)
+              ? [attachment.payload.url]
+              : []
+          )
+          .slice(0, 3)
+        if (imageUrls.length) {
+          try {
+            const pageToken = await service.resolveChannelBotToken(connection)
+            const uploadedFiles = await Promise.all(
+              imageUrls.map(async (url, index) => {
+                const response = await fetch(url, {
+                  headers: { Authorization: `Bearer ${pageToken}` },
+                })
+                const contentType = response.headers
+                  .get("content-type")
+                  ?.split(";", 1)[0]
+                const contentLength = Number(response.headers.get("content-length"))
+                if (
+                  !response.ok ||
+                  !contentType ||
+                  !["image/jpeg", "image/png", "image/webp"].includes(contentType) ||
+                  (Number.isFinite(contentLength) && contentLength > 5 * 1024 * 1024)
+                ) {
+                  throw new MedusaError(
+                    MedusaError.Types.INVALID_DATA,
+                    "Messenger image is invalid or unsupported."
+                  )
+                }
+                const content = Buffer.from(await response.arrayBuffer())
+                if (
+                  !content.length ||
+                  content.length > 5 * 1024 * 1024
+                ) {
+                  throw new MedusaError(
+                    MedusaError.Types.INVALID_DATA,
+                    "Messenger image is invalid or unsupported."
+                  )
+                }
+                return {
+                  access: "public" as const,
+                  content: content.toString("base64"),
+                  filename: `messenger-${msgId}-${index}.${contentType.split("/")[1]}`,
+                  mimeType: contentType,
+                }
+              })
+            )
+            const { result: uploaded } = await uploadFilesWorkflow(container).run({
+              input: { files: uploadedFiles },
+            })
+            imageAttachments = uploaded.map((file) => ({ id: file.id, url: file.url }))
+          } catch (error) {
+            await service.createAgentAuditEvents({
+              action: "messenger-image-ingestion-failed",
+              actor_id: principal.principal_id,
+              actor_type: "user",
+              correlation_id: `messenger:${connection.id}:${msgId}`,
+              data: {
+                error: error instanceof Error ? error.message.slice(0, 300) : "unknown",
+              },
+              event_type: "agent.channel.image-ingestion-failed",
+              recorded_at: new Date(),
+              resource_id: connection.id,
+              resource_type: "agent_channel_connection",
+            })
+          }
+        }
+
         const message = await service.createAgentMessages({
           body: messageText,
           channel: "MESSENGER",
@@ -310,6 +403,7 @@ const ingestMessengerWebhookStep = createStep<
             facebook_page_id: config.page_id || entry?.id,
             facebook_psid: psid,
             principal_role: principal.role,
+            image_attachments: imageAttachments,
           },
         })
         await service.updateAgentConversations({

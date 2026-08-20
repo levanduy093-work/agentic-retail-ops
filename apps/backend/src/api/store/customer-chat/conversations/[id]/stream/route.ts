@@ -1,17 +1,28 @@
 import {
-  MedusaRequest,
+  AuthenticatedMedusaRequest,
   MedusaResponse,
 } from "@medusajs/framework/http"
 import {
   agentRealtimeHub,
   RealtimeChatEvent,
 } from "../../../../../../modules/agent-operations/realtime-hub"
+import { AGENT_OPERATIONS_MODULE } from "../../../../../../modules/agent-operations"
+import AgentOperationsModuleService from "../../../../../../modules/agent-operations/service"
+import { assertCustomerChatConversationOwnership } from "../../../../../../modules/agent-operations/customer-chat-ownership"
 
 export async function GET(
-  req: MedusaRequest,
+  req: AuthenticatedMedusaRequest,
   res: MedusaResponse
 ) {
   const conversationId = req.params.id
+  const service = req.scope.resolve<AgentOperationsModuleService>(
+    AGENT_OPERATIONS_MODULE
+  )
+  const conversation = await service.retrieveAgentConversation(conversationId)
+  assertCustomerChatConversationOwnership(
+    conversation,
+    req.auth_context.actor_id
+  )
 
   res.setHeader("Content-Type", "text/event-stream")
   res.setHeader("Cache-Control", "no-cache, no-transform")

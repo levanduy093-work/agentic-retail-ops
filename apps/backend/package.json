@@ -30,6 +30,7 @@
     "agent:verify-order-sla-assignment": "medusa exec ./src/scripts/verify-order-sla-assignment.ts",
     "agent:verify-inventory-contention": "medusa exec ./src/scripts/verify-inventory-action-contention.ts",
     "agent:verify-customer-support": "medusa exec ./src/scripts/verify-customer-support-agent.ts",
+    "agent:verify-customer-order-lookup": "medusa exec ./src/scripts/verify-customer-chat-order-lookup.ts",
     "agent:verify-customer-support-staff-flow": "medusa exec ./src/scripts/verify-customer-support-staff-flow.ts",
     "agent:verify-support-simulator": "medusa exec ./src/scripts/verify-support-simulator.ts",
     "agent:assign-support-staff": "medusa exec ./src/scripts/assign-support-staff-role.ts",
@@ -82,8 +83,10 @@
     "@medusajs/medusa": "2.18.0",
     "@medusajs/ui": "4.2.0",
     "@tanstack/react-query": "5.64.2",
+    "@types/multer": "^2.2.0",
     "google-auth-library": "11.0.0",
     "mammoth": "^1.12.1",
+    "multer": "^2.2.0",
     "react-i18next": "13.5.0",
     "react-router-dom": "6.30.4",
     "zod": "4.2.0"

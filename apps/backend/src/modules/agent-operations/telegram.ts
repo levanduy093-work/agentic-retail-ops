@@ -62,3 +62,14 @@ export function findTelegramIdentity(
 ) {
   return config.identities.find((identity) => identity.chat_id === chatId)
 }
+
+export function buildTelegramChatActionPayload(
+  chatId: string,
+  action: "typing" | "upload_photo" | "find_location" = "typing"
+) {
+  return {
+    action,
+    chat_id: chatId,
+  }
+}
+

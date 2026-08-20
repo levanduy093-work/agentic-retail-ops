@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { sdk } from "@lib/config"
+import Medusa from "@medusajs/js-sdk"
 import { HttpTypes } from "@medusajs/types"
 
 export type ProductMediaItem = {
@@ -11,10 +11,16 @@ export type ProductMediaItem = {
   title: string
 }
 
+export type ChatImageAttachment = {
+  id: string
+  url: string
+}
+
 export type ChatMessage = {
   body: string
   id: string
   occurred_at: string
+  image_attachments?: ChatImageAttachment[]
   product_media?: ProductMediaItem[]
   sender_type: "customer" | "agent" | "system"
 }
@@ -23,6 +29,10 @@ type StoreMessageResponse = {
   conversation_id: string
   inbound_message: ChatMessage
   response_message?: ChatMessage | null
+}
+
+type StoreCustomerChatUploadResponse = {
+  files: ChatImageAttachment[]
 }
 
 type ConversationDetailResponse = {
@@ -35,6 +45,55 @@ type ConversationDetailResponse = {
 
 const STORAGE_KEY = "synapse_storefront_chat_conversation_id"
 
+let customerChatSdk: Medusa | null = null
+
+function getCustomerChatSdk() {
+  if (!customerChatSdk) {
+    customerChatSdk = new Medusa({
+      baseUrl: window.location.origin,
+      publishableKey: process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY,
+    })
+  }
+
+  return customerChatSdk
+}
+
+function normalizeChatMessage(message: ChatMessage & {
+  structured_content?: Record<string, unknown> | null
+}) {
+  const structured = message.structured_content
+  return {
+    ...message,
+    image_attachments:
+      message.image_attachments ??
+      (Array.isArray(structured?.image_attachments)
+        ? (structured.image_attachments as ChatImageAttachment[])
+        : []),
+    product_media:
+      message.product_media ??
+      (Array.isArray(structured?.product_media)
+        ? (structured.product_media as ProductMediaItem[])
+        : []),
+  }
+}
+
+function getChatErrorMessage(error: unknown) {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    if (/unauthorized|forbidden/i.test(error.message)) {
+      return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để chat với cửa hàng."
+    }
+
+    return error.message
+  }
+
+  return "Không thể gửi tin nhắn lúc này. Bạn thử lại giúp shop nhé."
+}
+
 export function useCustomerChat(
   customer?: HttpTypes.StoreCustomer | null,
   locale: string = "vi"
@@ -44,6 +103,7 @@ export function useCustomerChat(
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isLive, setIsLive] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
 
   // 1. Fetch active conversation for logged-in customer
@@ -51,11 +111,10 @@ export function useCustomerChat(
     let isMounted = true
 
     if (customer?.id) {
-      sdk.client
+      getCustomerChatSdk()
+        .client
         .fetch<ConversationDetailResponse>(
-          `/store/customer-chat/customer/active-conversation?customer_id=${encodeURIComponent(
-            customer.id
-          )}`
+          "/api/customer-chat/active-conversation"
         )
         .then((data) => {
           if (isMounted) {
@@ -71,10 +130,15 @@ export function useCustomerChat(
             }
           }
         })
-        .catch(() => {})
+        .catch((error) => {
+          if (isMounted) {
+            setErrorMessage(getChatErrorMessage(error))
+          }
+        })
     } else {
       setConversationId(null)
       setMessages([])
+      setErrorMessage(null)
     }
 
     return () => {
@@ -93,13 +157,9 @@ export function useCustomerChat(
       return
     }
 
-    const backendUrl =
-      process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || "http://127.0.0.1:9000"
-    const publishableKey =
-      process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY || ""
-    const streamUrl = `${backendUrl}/store/customer-chat/conversations/${conversationId}/stream?publishable_key=${encodeURIComponent(
-      publishableKey
-    )}`
+    const streamUrl = `/api/customer-chat/conversations/${encodeURIComponent(
+      conversationId
+    )}/stream`
 
     const es = new EventSource(streamUrl)
     eventSourceRef.current = es
@@ -110,7 +170,11 @@ export function useCustomerChat(
 
     es.addEventListener("message.created", (event) => {
       try {
-        const msg = JSON.parse(event.data) as ChatMessage
+        const msg = normalizeChatMessage(
+          JSON.parse(event.data) as ChatMessage & {
+            structured_content?: Record<string, unknown> | null
+          }
+        )
         setMessages((prev) => {
           if (prev.some((existing) => existing.id === msg.id)) {
             return prev
@@ -134,38 +198,44 @@ export function useCustomerChat(
 
   // 3. Send message action
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, images: File[] = []) => {
       const trimmed = text.trim()
-      if (!trimmed || isLoading) return
+      if (!trimmed || isLoading || images.length > 3) return
 
       const clientMsgId = `temp-${Date.now()}`
       const optimisticMsg: ChatMessage = {
         body: trimmed,
         id: clientMsgId,
+        image_attachments: images.map((file, index) => ({
+          id: `${clientMsgId}:image:${index}`,
+          url: URL.createObjectURL(file),
+        })),
         occurred_at: new Date().toISOString(),
         sender_type: "customer",
       }
 
       setMessages((prev) => [...prev, optimisticMsg])
       setIsLoading(true)
-
-      const customerName = customer
-        ? [customer.first_name, customer.last_name]
-            .filter(Boolean)
-            .join(" ") || undefined
-        : undefined
+      setErrorMessage(null)
 
       try {
-        const res = await sdk.client.fetch<StoreMessageResponse>(
-          "/store/customer-chat/messages",
+        let attachmentIds: string[] = []
+        if (images.length) {
+          const formData = new FormData()
+          images.forEach((image) => formData.append("files", image))
+          const uploaded = await getCustomerChatSdk().client.fetch<StoreCustomerChatUploadResponse>(
+            "/api/customer-chat/uploads",
+            { body: formData, method: "POST" }
+          )
+          attachmentIds = uploaded.files.map((file) => file.id)
+        }
+        const res = await getCustomerChatSdk().client.fetch<StoreMessageResponse>(
+          "/api/customer-chat/messages",
           {
             body: {
+              attachment_ids: attachmentIds,
               client_message_id: clientMsgId,
               conversation_id: conversationId ?? undefined,
-              customer_email: customer?.email || undefined,
-              customer_id: customer?.id || undefined,
-              customer_name: customerName,
-              customer_phone: customer?.phone || undefined,
               locale: locale.startsWith("vi") ? "vi" : "en",
               message: trimmed,
             },
@@ -183,17 +253,21 @@ export function useCustomerChat(
         // Replace optimistic msg with confirmed inbound message
         setMessages((prev) => {
           const filtered = prev.filter((m) => m.id !== clientMsgId)
-          const updated = [...filtered, res.inbound_message]
+          const updated = [
+            ...filtered,
+            normalizeChatMessage(res.inbound_message),
+          ]
           if (
             res.response_message &&
             !updated.some((m) => m.id === res.response_message?.id)
           ) {
-            updated.push(res.response_message)
+            updated.push(normalizeChatMessage(res.response_message))
           }
           return updated
         })
       } catch (err) {
-        console.error("Failed to send chat message:", err)
+        setMessages((prev) => prev.filter((message) => message.id !== clientMsgId))
+        setErrorMessage(getChatErrorMessage(err))
       } finally {
         setIsLoading(false)
       }
@@ -211,6 +285,7 @@ export function useCustomerChat(
 
   return {
     clearChat,
+    errorMessage,
     conversationId,
     isLoading,
     isLive,

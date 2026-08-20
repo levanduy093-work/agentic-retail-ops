@@ -4,7 +4,9 @@ import { TOOL_CALL_KINDS, TOOL_CALL_STATUSES } from "../types"
 const AgentToolCall = model
   .define("agent_tool_call", {
     id: model.id({ prefix: "agtcall" }).primaryKey(),
-    action_request_id: model.text(),
+    action_request_id: model.text().nullable(),
+    agent_id: model.text().nullable(),
+    conversation_id: model.text().nullable(),
     incident_id: model.text().nullable(),
     tool_name: model.text(),
     tool_version: model.text(),

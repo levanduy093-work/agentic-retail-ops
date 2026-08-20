@@ -5,6 +5,7 @@ import {
   validateAndTransformQuery,
 } from "@medusajs/framework/http"
 import type { MiddlewareRoute } from "@medusajs/framework/http"
+import multer from "multer"
 import {
   AdminCreateAgentTask,
   AdminCreateKnowledgeDocument,
@@ -43,6 +44,11 @@ import {
 } from "./admin/agent-operations/validators"
 import { StoreCreateCustomerChatMessage } from "./store/customer-chat/validators"
 import { shippingHubMiddlewares } from "./admin/shipping/middlewares"
+
+const customerChatUpload = multer({
+  limits: { fileSize: 5 * 1024 * 1024, files: 3 },
+  storage: multer.memoryStorage(),
+})
 import { paymentHubMiddlewares } from "./admin/payments/providers/middlewares"
 import { getGhnSettings } from "../modules/shipping-hub/ghn-connection"
 import { getPayosSettings } from "../modules/payment-hub/payos-connection"
@@ -92,41 +98,35 @@ import { getSepaySettings } from "../modules/payment-hub/sepay-connection"
       middlewares: [validateAndTransformBody(TelegramWebhookUpdate)],
     },
     {
+      matcher: "/store/customer-chat/uploads",
+      method: "POST",
+      middlewares: [
+        authenticate("customer", ["session", "bearer"]),
+        customerChatUpload.array("files", 3),
+      ],
+    },
+    {
       matcher: "/store/customer-chat/messages",
       method: "POST",
       middlewares: [
-        authenticate("customer", ["session", "bearer"], {
-          allowUnauthenticated: true,
-        }),
+        authenticate("customer", ["session", "bearer"]),
         validateAndTransformBody(StoreCreateCustomerChatMessage),
       ],
     },
     {
       matcher: "/store/customer-chat/customer/active-conversation",
       method: "GET",
-      middlewares: [
-        authenticate("customer", ["session", "bearer"], {
-          allowUnauthenticated: true,
-        }),
-      ],
+      middlewares: [authenticate("customer", ["session", "bearer"])],
     },
     {
       matcher: "/store/customer-chat/conversations/:id",
       method: "GET",
-      middlewares: [
-        authenticate("customer", ["session", "bearer"], {
-          allowUnauthenticated: true,
-        }),
-      ],
+      middlewares: [authenticate("customer", ["session", "bearer"])],
     },
     {
       matcher: "/store/customer-chat/conversations/:id/stream",
       method: "GET",
-      middlewares: [
-        authenticate("customer", ["session", "bearer"], {
-          allowUnauthenticated: true,
-        }),
-      ],
+      middlewares: [authenticate("customer", ["session", "bearer"])],
     },
     {
       matcher: "/store/customers/link-google",
@@ -524,5 +524,3 @@ import { getSepaySettings } from "../modules/payment-hub/sepay-connection"
 ]
 
 export default defineMiddlewares({ routes })
-
-

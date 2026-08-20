@@ -21,6 +21,14 @@ import {
   redactModelInput,
 } from "./model-gateway"
 import {
+  CUSTOMER_VISION_OUTPUT_SCHEMA,
+  CUSTOMER_VISION_PROMPT_KEY,
+  CUSTOMER_VISION_PROMPT_VERSION,
+  CUSTOMER_VISION_SYSTEM_PROMPT,
+  CUSTOMER_VISION_TIMEOUT_MS,
+  VisionDefectAnalysisOutput,
+} from "./customer-vision-processor"
+import {
   AiProviderPurpose,
   sortAiProvidersByPriority,
 } from "./ai-provider-routing"
@@ -211,6 +219,13 @@ import {
   CUSTOMER_CONVERSATION_TIMEOUT_MS,
   isSafeCustomerConversationBody,
 } from "./customer-conversation-responder"
+import {
+  detectHybridIntent,
+  runCustomerSupportReadToolLoop,
+  synthesizeHybridAnswer,
+} from "./customer-react-engine"
+import { analyzeCustomerSentiment } from "./customer-sentiment-analyzer"
+import { evaluateConversationQuality } from "./customer-csat-evaluator"
 import {
   CustomerChatSecurityConfig,
   isExplicitPromptAttack,
@@ -4957,6 +4972,127 @@ class AgentOperationsModuleService extends MedusaService({
   }
 
   @InjectManager()
+  async analyzeCustomerSupportImages(
+    input: {
+      caption: string
+      image_urls: string[]
+      inbound_message_id: string
+      tenant_id: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ): Promise<VisionDefectAnalysisOutput | null> {
+    const imageUrls = input.image_urls.filter((value) => {
+      try {
+        const url = new URL(value)
+        return url.protocol === "https:" && !url.username && !url.password
+      } catch {
+        return false
+      }
+    })
+    if (!imageUrls.length) return null
+
+    const idempotencyKey = `customer-vision:${input.inbound_message_id}`
+    const existingRuns = await this.listAgentModelRuns(
+      { idempotency_key: idempotencyKey },
+      { take: 1 },
+      sharedContext
+    )
+    const existing = existingRuns[0]
+    if (existing?.status === "SUCCEEDED" && existing.output) {
+      const parsed = VisionDefectAnalysisOutput.safeParse(existing.output)
+      return parsed.success ? parsed.data : null
+    }
+    if (existing) return null
+
+    let credentials
+    try {
+      credentials = await this.getActiveAiProviderCredentials(
+        "generation",
+        input.tenant_id
+      )
+    } catch {
+      return null
+    }
+    const credential = credentials.find(
+      (candidate) =>
+        candidate.provider === "gemini" || candidate.provider === "openai"
+    )
+    if (!credential) return null
+
+    const prompt = await this.getPromptConfiguration(
+      CUSTOMER_VISION_PROMPT_KEY,
+      sharedContext
+    )
+    const adapter = createModelAdapter({
+      apiKey: credential.api_key,
+      model: credential.model,
+      provider: credential.provider,
+    })
+    const safeInput = {
+      customer_caption: input.caption.slice(0, 1_000),
+      image_count: imageUrls.length,
+      task: "Assess only visible product-defect evidence for human support review.",
+    }
+    const modelRun = await this.createAgentModelRuns(
+      {
+        agent_id: "customer-vision-review-agent",
+        agent_version: "1.0.0",
+        idempotency_key: idempotencyKey,
+        input: redactModelInput(safeInput) as Record<string, unknown>,
+        model: adapter.model,
+        prompt_key: prompt.prompt_key,
+        prompt_version: prompt.version,
+        provider: adapter.provider,
+        redacted: true,
+        started_at: new Date(),
+        status: "RUNNING",
+      },
+      sharedContext
+    )
+    const startedAt = Date.now()
+    try {
+      const generated = await adapter.invoke({
+        agent_id: "customer-vision-review-agent",
+        image_urls: imageUrls,
+        input: safeInput,
+        max_tokens: prompt.max_tokens,
+        output_schema: CUSTOMER_VISION_OUTPUT_SCHEMA,
+        prompt_key: prompt.prompt_key,
+        prompt_version: prompt.version,
+        system_prompt: prompt.system_prompt || CUSTOMER_VISION_SYSTEM_PROMPT,
+        timeout_ms: CUSTOMER_VISION_TIMEOUT_MS,
+      })
+      const output = VisionDefectAnalysisOutput.parse(generated)
+      await this.updateAgentModelRuns(
+        {
+          completed_at: new Date(),
+          id: modelRun.id,
+          latency_ms: Date.now() - startedAt,
+          output,
+          status: "SUCCEEDED",
+        },
+        sharedContext
+      )
+      return output
+    } catch (error) {
+      await this.updateAgentModelRuns(
+        {
+          completed_at: new Date(),
+          error:
+            error instanceof Error
+              ? error.message.slice(0, 1_000)
+              : "Customer image analysis failed",
+          id: modelRun.id,
+          latency_ms: Date.now() - startedAt,
+          status: "FAILED",
+        },
+        sharedContext
+      )
+      return null
+    }
+  }
+
+  @InjectManager()
   async processCustomerKnowledgeQuestion(
     input: ProcessCustomerKnowledgeQuestionInput & {
       catalog_snapshot?: CustomerCatalogSnapshot
@@ -5292,10 +5428,75 @@ class AgentOperationsModuleService extends MedusaService({
           sharedContext
         )
     const routedIntent = resolveCustomerMessageIntent(intent)
+    const sentiment = analyzeCustomerSentiment(question)
     let reviewRouted = false
     let supportTaskId: string | null = null
+    let toolTrace: Array<Record<string, unknown>> = []
+    const recordKnowledgeSearchTool = async (
+      query: string,
+      knowledge: KnowledgeSearchOutput
+    ) => {
+      const output = {
+        document_ids: knowledge.results.map((result) => result.document_id),
+        result_count: knowledge.results.length,
+        total_candidates: knowledge.total_candidates,
+      }
+      await this.recordCustomerReadToolCall(
+        {
+          conversation_id: conversation.id,
+          inbound_message_id: inbound.id,
+          input: {
+            locale,
+            query: query.slice(0, 500),
+            scope: "customer_support",
+          },
+          output,
+          tool_name: "knowledge.search",
+          tool_version: "1.0.0",
+        },
+        sharedContext
+      )
+      toolTrace.push({
+        input: { query: query.slice(0, 500), scope: "customer_support" },
+        output,
+        tool_name: "knowledge.search",
+      })
+    }
     let answer: KnowledgeAnswer
-    if (routedIntent === "HUMAN_ACTION") {
+    if (sentiment.needs_immediate_escalation) {
+      const escalation = await this.createCustomerKnowledgeEscalation(
+        {
+          conversation_id: conversation.id,
+          inbound_message_id: inbound.id,
+          locale,
+          question,
+          reason: "CUSTOMER_DISTRESS",
+        },
+        sharedContext
+      )
+      reviewRouted = true
+      supportTaskId = escalation.task?.id ?? null
+      answer = {
+        body:
+          sentiment.empathetic_response ??
+          buildCustomerReviewAcknowledgement(
+            locale,
+            "NEEDS_STAFF_AUTHORITY",
+            locale === "vi"
+              ? settings.review_ack_message_vi
+              : settings.review_ack_message_en
+          ).body,
+        citations: [],
+        disposition: "ANSWER",
+        grounded: false,
+        locale,
+        optimization: {
+          ai_invoked: false,
+          cache_hit: false,
+          path: "SENTIMENT_CRITICAL_HANDOFF",
+        },
+      }
+    } else if (routedIntent === "HUMAN_ACTION") {
       const escalation = await this.createCustomerKnowledgeEscalation(
         {
           conversation_id: conversation.id,
@@ -5346,9 +5547,14 @@ class AgentOperationsModuleService extends MedusaService({
         status: "UNAVAILABLE" as const,
         total_count: 0 as const,
       }
-      answer = await this.draftCustomerProductAdvice(
+      const toolLoop = runCustomerSupportReadToolLoop({
+        catalog,
+        question,
+      })
+      toolTrace = toolLoop.trace
+      const productAnswer = await this.draftCustomerProductAdvice(
         {
-          catalog,
+          catalog: toolLoop.catalog,
           conversation_memory: memorySummary,
           idempotency_key: `customer-product-advisor:${inbound.id}`,
           locale,
@@ -5358,6 +5564,54 @@ class AgentOperationsModuleService extends MedusaService({
         },
         sharedContext
       )
+      const hybridKind = detectHybridIntent(question, toolLoop.catalog)
+      if (
+        (hybridKind === "PRODUCT_AND_SHIPPING" ||
+          hybridKind === "PRODUCT_AND_POLICY") &&
+        question.length >= 4
+      ) {
+        const retrievedKnowledge = await this.searchGovernedKnowledge(
+          {
+            limit: 3,
+            locale,
+            query: question.slice(0, 500),
+            scope: "customer_support",
+            tenant_id: conversation.tenant_id,
+          },
+          sharedContext
+        )
+        await recordKnowledgeSearchTool(question, retrievedKnowledge)
+        const relevantKnowledge = filterKnowledgeEvidenceForQuestion(
+          question,
+          retrievedKnowledge
+        )
+        if (hasSufficientKnowledgeEvidence(relevantKnowledge)) {
+          const knowledgeSubAnswer = await this.draftGovernedKnowledgeAnswer(
+            {
+              conversation_memory: memorySummary,
+              idempotency_key: `customer-hybrid-knowledge:${inbound.id}`,
+              knowledge: relevantKnowledge,
+              locale,
+              question,
+              recent_messages: mapRecentMessagesWithTime(
+                contextMessages,
+                inbound.id
+              ),
+              tenant_id: conversation.tenant_id,
+            },
+            sharedContext
+          )
+          answer = synthesizeHybridAnswer(
+            { locale, question },
+            productAnswer,
+            knowledgeSubAnswer
+          )
+        } else {
+          answer = productAnswer
+        }
+      } else {
+        answer = productAnswer
+      }
     } else if (routedIntent === "OUT_OF_SCOPE" || routedIntent === "UNSAFE") {
       answer = buildScopedCustomerReply(routedIntent, locale)
     } else {
@@ -5386,6 +5640,9 @@ class AgentOperationsModuleService extends MedusaService({
               sharedContext
             )
           : { results: [], total_candidates: 0 }
+      if (question.length >= 2) {
+        await recordKnowledgeSearchTool(contextualQuery, retrievedKnowledge)
+      }
       const relevantKnowledge = filterKnowledgeEvidenceForQuestion(
         contextualQuery,
         retrievedKnowledge
@@ -5451,6 +5708,9 @@ class AgentOperationsModuleService extends MedusaService({
           intent: routedIntent,
           intent_confidence: intent.confidence,
           locale,
+          sentiment: sentiment.sentiment,
+          sentiment_urgency: sentiment.urgency,
+          tool_trace: toolTrace,
           optimization: answer.optimization ?? {
             ai_invoked: false,
             cache_hit: false,
@@ -5513,8 +5773,32 @@ class AgentOperationsModuleService extends MedusaService({
           },
           product_ids: answer.product_ids ?? [],
           response_message_id: response.id,
+          tool_trace: toolTrace,
         },
         event_type: "agent.knowledge.answer-created",
+        recorded_at: now,
+        resource_id: response.id,
+        resource_type: "agent_message",
+      },
+      sharedContext
+    )
+    const quality = evaluateConversationQuality(
+      question,
+      response.body,
+      answer.grounded
+    )
+    await this.createAgentAuditEvents(
+      {
+        action: "customer-response-quality-evaluated",
+        actor_id: "customer-knowledge-agent",
+        actor_type: "agent",
+        correlation_id: `${conversation.channel.toLowerCase()}:${connection.id}:${inbound.id}`,
+        data: {
+          inbound_message_id: inbound.id,
+          response_message_id: response.id,
+          ...quality,
+        },
+        event_type: "agent.customer-support.quality-evaluated",
         recorded_at: now,
         resource_id: response.id,
         resource_type: "agent_message",
@@ -5538,7 +5822,12 @@ class AgentOperationsModuleService extends MedusaService({
       inbound_message_id: string
       locale: "en" | "vi"
       question: string
-      reason: "NEEDS_STAFF_AUTHORITY" | "NO_APPROVED_KNOWLEDGE"
+      reason:
+        | "NEEDS_STAFF_AUTHORITY"
+        | "NO_APPROVED_KNOWLEDGE"
+        | "CUSTOMER_DISTRESS"
+        | "VISION_REVIEW"
+      vision_analysis?: VisionDefectAnalysisOutput
     },
     @MedusaContext() sharedContext: Context = {}
   ) {
@@ -5552,7 +5841,12 @@ class AgentOperationsModuleService extends MedusaService({
       inbound_message_id: string
       locale: "en" | "vi"
       question: string
-      reason: "NEEDS_STAFF_AUTHORITY" | "NO_APPROVED_KNOWLEDGE"
+      reason:
+        | "NEEDS_STAFF_AUTHORITY"
+        | "NO_APPROVED_KNOWLEDGE"
+        | "CUSTOMER_DISTRESS"
+        | "VISION_REVIEW"
+      vision_analysis?: VisionDefectAnalysisOutput
     },
     @MedusaContext() sharedContext: Context = {}
   ) {
@@ -5647,9 +5941,13 @@ class AgentOperationsModuleService extends MedusaService({
         correlation_id: correlationId,
         event_id: inbound.id,
         event_type:
-          input.reason === "NEEDS_STAFF_AUTHORITY"
-            ? "support.staff-action-requested"
-            : "support.knowledge-unanswered",
+          input.reason === "NO_APPROVED_KNOWLEDGE"
+            ? "support.knowledge-unanswered"
+            : input.reason === "CUSTOMER_DISTRESS"
+              ? "support.customer-distress"
+              : input.reason === "VISION_REVIEW"
+                ? "support.customer-image-review"
+              : "support.staff-action-requested",
         event_version: 1,
         occurred_at: inbound.occurred_at,
         payload: {
@@ -5658,6 +5956,7 @@ class AgentOperationsModuleService extends MedusaService({
           locale: input.locale,
           question: input.question,
           reason: input.reason,
+          vision_analysis: input.vision_analysis ?? null,
         },
         processed_at: now,
         received_at: now,
@@ -5679,14 +5978,19 @@ class AgentOperationsModuleService extends MedusaService({
         },
         correlation_id: correlationId,
         incident_type: "CUSTOMER_SUPPORT",
-        priority: "MEDIUM",
+        priority:
+          input.reason === "CUSTOMER_DISTRESS" ? "CRITICAL" : "MEDIUM",
         status: "ESCALATED",
         subject_id: conversation.id,
         subject_type: "conversation",
         summary: input.question,
         tenant_id: conversation.tenant_id,
         title:
-          input.reason === "NEEDS_STAFF_AUTHORITY"
+          input.reason === "CUSTOMER_DISTRESS"
+            ? `${conversation.channel} customer distress requires urgent staff response`
+            : input.reason === "VISION_REVIEW"
+              ? `${conversation.channel} customer image requires staff review`
+            : input.reason === "NEEDS_STAFF_AUTHORITY"
             ? `${conversation.channel} customer request requiring staff action`
             : `Unanswered ${conversation.channel} customer question`,
         trigger_event_id: event.id,
@@ -5699,10 +6003,15 @@ class AgentOperationsModuleService extends MedusaService({
         created_by_type: "agent",
         conversation_id: conversation.id,
         description:
-          input.reason === "NEEDS_STAFF_AUTHORITY"
+          input.reason === "CUSTOMER_DISTRESS"
+            ? "Contact the customer urgently, assess the complaint, and send a verified response through the original channel."
+            : input.reason === "NEEDS_STAFF_AUTHORITY"
             ? "Review the customer's request, make the authorized decision or action, and send a verified response through the original channel."
             : "Review the customer's question, write a verified response, and send it back through the original channel.",
-        due_at: new Date(now.getTime() + 30 * 60 * 1_000),
+        due_at: new Date(
+          now.getTime() +
+            (input.reason === "CUSTOMER_DISTRESS" ? 5 : 30) * 60 * 1_000
+        ),
         idempotency_key: taskIdempotencyKey,
         incident_id: incident.id,
         input: {
@@ -5715,8 +6024,9 @@ class AgentOperationsModuleService extends MedusaService({
           question: input.question,
           routing_reason: input.reason,
           requires_human_review: true,
+          vision_analysis: input.vision_analysis ?? null,
         },
-        priority: "MEDIUM",
+        priority: input.reason === "CUSTOMER_DISTRESS" ? "CRITICAL" : "MEDIUM",
         status: "TODO",
         task_type: "SUPPORT_RESPONSE_REVIEW",
         tenant_id: conversation.tenant_id,
@@ -6047,6 +6357,90 @@ class AgentOperationsModuleService extends MedusaService({
     )
 
     return { duplicate: false, run }
+  }
+
+  @InjectManager()
+  async recordCustomerReadToolCall(
+    input: {
+      conversation_id: string
+      inbound_message_id: string
+      input: Record<string, unknown>
+      output: Record<string, unknown>
+      tool_name: string
+      tool_version: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.recordCustomerReadToolCall_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async recordCustomerReadToolCall_(
+    input: {
+      conversation_id: string
+      inbound_message_id: string
+      input: Record<string, unknown>
+      output: Record<string, unknown>
+      tool_name: string
+      tool_version: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const idempotencyKey = [
+      "customer-read-tool",
+      input.inbound_message_id,
+      input.tool_name,
+      input.tool_version,
+    ].join(":")
+    const existing = (
+      await this.listAgentToolCalls(
+        { idempotency_key: idempotencyKey },
+        { take: 1 },
+        sharedContext
+      )
+    )[0]
+    if (existing) return { duplicate: true, tool_call: existing }
+
+    const now = new Date()
+    const toolCall = await this.createAgentToolCalls(
+      {
+        action_request_id: null,
+        agent_id: "customer-support-agent",
+        completed_at: now,
+        conversation_id: input.conversation_id,
+        error: null,
+        idempotency_key: idempotencyKey,
+        incident_id: null,
+        input: input.input,
+        kind: "READ",
+        output: input.output,
+        started_at: now,
+        status: "SUCCEEDED",
+        tool_name: input.tool_name,
+        tool_version: input.tool_version,
+      },
+      sharedContext
+    )
+    await this.createAgentAuditEvents(
+      {
+        action: "customer-read-tool-executed",
+        actor_id: "customer-support-agent",
+        actor_type: "agent",
+        correlation_id: `customer-tool:${input.conversation_id}:${input.inbound_message_id}`,
+        data: {
+          inbound_message_id: input.inbound_message_id,
+          tool_call_id: toolCall.id,
+          tool_name: input.tool_name,
+          tool_version: input.tool_version,
+        },
+        event_type: "agent.customer-support.read-tool-executed",
+        recorded_at: now,
+        resource_id: toolCall.id,
+        resource_type: "agent_tool_call",
+      },
+      sharedContext
+    )
+    return { duplicate: false, tool_call: toolCall }
   }
 
   @InjectManager()

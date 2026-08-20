@@ -21,8 +21,12 @@ import {
   extractCustomerOrderDisplayId,
   getVerifiedLinkedCustomerId,
   isAwaitingCustomerOrderReference,
+  shouldReadCustomerFulfillment,
+  shouldReadCustomerPayment,
 } from "../../modules/agent-operations/customer-order-lookup"
+import { executeFulfillmentRead } from "../../modules/agent-operations/fulfillment-read-runtime"
 import { executeOrderRead } from "../../modules/agent-operations/order-read-runtime"
+import { executePaymentRead } from "../../modules/agent-operations/payment-read-runtime"
 
 const answerCustomerKnowledgeQuestionStep = createStep(
   "answer-customer-knowledge-question",
@@ -103,7 +107,10 @@ const answerCustomerKnowledgeQuestionStep = createStep(
             const { data: ordersByDisplayId } = await query.graph({
               entity: "order",
               fields: ["id"],
-              filters: { display_id: String(displayId) },
+              filters: {
+                customer_id: customerId,
+                display_id: String(displayId),
+              },
               pagination: { skip: 0, take: 2 },
             })
             if (ordersByDisplayId.length !== 1) {
@@ -114,10 +121,61 @@ const answerCustomerKnowledgeQuestionStep = createStep(
                 { order_id: ordersByDisplayId[0].id },
                 "customer-knowledge-agent"
               )
-              customerOrderLookup =
-                read.output.customer_id === customerId
-                  ? { display_id: displayId, order: read.output, status: "FOUND" }
-                  : { display_id: displayId, status: "NOT_OWNER" }
+              await service.recordCustomerReadToolCall({
+                conversation_id: conversation.id,
+                inbound_message_id: inbound.id,
+                input: read.input,
+                output: {
+                  display_id: read.output.display_id,
+                  fulfillment_status: read.output.fulfillment_status,
+                  order_status: read.output.order_status,
+                  payment_status: read.output.payment_status,
+                  version: read.output.version,
+                },
+                tool_name: read.definition.name,
+                tool_version: read.definition.version,
+              })
+              const fulfillment = shouldReadCustomerFulfillment(inbound.body)
+                ? await executeFulfillmentRead(
+                    container,
+                    { order_id: read.output.order_id },
+                    "customer-knowledge-agent"
+                  )
+                : null
+              if (fulfillment) {
+                await service.recordCustomerReadToolCall({
+                  conversation_id: conversation.id,
+                  inbound_message_id: inbound.id,
+                  input: fulfillment.input,
+                  output: fulfillment.output,
+                  tool_name: fulfillment.definition.name,
+                  tool_version: fulfillment.definition.version,
+                })
+              }
+              const payment = shouldReadCustomerPayment(inbound.body)
+                ? await executePaymentRead(
+                    container,
+                    { order_id: read.output.order_id },
+                    "customer-knowledge-agent"
+                  )
+                : null
+              if (payment) {
+                await service.recordCustomerReadToolCall({
+                  conversation_id: conversation.id,
+                  inbound_message_id: inbound.id,
+                  input: payment.input,
+                  output: payment.output,
+                  tool_name: payment.definition.name,
+                  tool_version: payment.definition.version,
+                })
+              }
+              customerOrderLookup = {
+                display_id: displayId,
+                fulfillment: fulfillment?.output,
+                order: read.output,
+                payment: payment?.output,
+                status: "FOUND",
+              }
             }
           }
         }
@@ -154,6 +212,18 @@ const answerCustomerKnowledgeQuestionStep = createStep(
               { tenant_id: conversation.tenant_id }
             )
           }
+          await service.recordCustomerReadToolCall({
+            conversation_id: conversation.id,
+            inbound_message_id: inbound.id,
+            input: catalogRead.input,
+            output: {
+              cache_status: catalogRead.cache_status,
+              product_ids: catalogRead.output.products.map((product) => product.id),
+              total_count: catalogRead.output.total_count,
+            },
+            tool_name: catalogRead.definition.name,
+            tool_version: catalogRead.definition.version,
+          })
           catalogSnapshot = catalogRead.output
         }
       } catch {
@@ -177,6 +247,35 @@ const answerCustomerKnowledgeQuestionStep = createStep(
           customer_order_lookup_locale: customerOrderLookupLocale,
         })
     )
+    const imageAttachments = (
+      (inbound.structured_content ?? {}) as Record<string, unknown>
+    ).image_attachments
+    const imageUrls = Array.isArray(imageAttachments)
+      ? imageAttachments.flatMap((attachment) => {
+          if (!attachment || typeof attachment !== "object") return []
+          const url = (attachment as Record<string, unknown>).url
+          return typeof url === "string" ? [url] : []
+        })
+      : []
+    const visionAnalysis = await service.analyzeCustomerSupportImages({
+      caption: inbound.body,
+      image_urls: imageUrls,
+      inbound_message_id: inbound.id,
+      tenant_id: (
+        await service.retrieveAgentConversation(inbound.conversation_id)
+      ).tenant_id,
+    })
+    if (visionAnalysis && visionAnalysis.defect_type !== "NONE") {
+      const escalation = await service.createCustomerKnowledgeEscalation({
+        conversation_id: inbound.conversation_id,
+        inbound_message_id: inbound.id,
+        locale: detectKnowledgeQuestionLocale(inbound.body),
+        question: inbound.body,
+        reason: "VISION_REVIEW",
+        vision_analysis: visionAnalysis,
+      })
+      result.support_task_id = escalation.task?.id ?? result.support_task_id
+    }
 
     return new StepResponse({
       ...result,

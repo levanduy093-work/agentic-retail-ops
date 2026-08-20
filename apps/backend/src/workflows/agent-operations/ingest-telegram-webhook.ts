@@ -8,7 +8,8 @@ import type {
   IEventBusModuleService,
   ILockingModule,
 } from "@medusajs/framework/types"
-import { Modules } from "@medusajs/framework/utils"
+import { MedusaError, Modules } from "@medusajs/framework/utils"
+import { uploadFilesWorkflow } from "@medusajs/core-flows"
 import { AGENT_OPERATIONS_MODULE } from "../../modules/agent-operations"
 import AgentOperationsModuleService from "../../modules/agent-operations/service"
 import { resolveSecretReference } from "../../modules/agent-operations/secret-reference"
@@ -38,6 +39,8 @@ export type IngestTelegramWebhookInput = {
         username?: string
       }
       message_id: number
+      caption?: string
+      photo?: Array<{ file_id: string; file_size?: number }>
       text?: string
     }
     update_id: number
@@ -92,7 +95,7 @@ const ingestTelegramWebhookStep = createStep<
 
     const telegramMessage = input.update.message
     if (
-      !telegramMessage?.text ||
+      !(telegramMessage?.text || telegramMessage?.photo?.length) ||
       telegramMessage.chat.type !== "private" ||
       telegramMessage.from?.is_bot === true
     ) {
@@ -103,7 +106,10 @@ const ingestTelegramWebhookStep = createStep<
     }
 
     const chatId = String(telegramMessage.chat.id)
-    const messageText = telegramMessage.text
+    const messageText =
+      telegramMessage.text ??
+      telegramMessage.caption ??
+      "Khách đã gửi ảnh để shop kiểm tra."
     const principal = resolveTelegramPrincipal(config, chatId)
     if (!principal) {
       return new StepResponse<IngestTelegramWebhookResult>({
@@ -236,6 +242,92 @@ const ingestTelegramWebhookStep = createStep<
           })
         }
 
+        let imageAttachments: Array<{ id: string; url: string }> = []
+        if (telegramMessage.photo?.length) {
+          try {
+            const photo = telegramMessage.photo
+              .slice()
+              .sort((left, right) => (right.file_size ?? 0) - (left.file_size ?? 0))[0]
+            if (photo.file_size && photo.file_size > 5 * 1024 * 1024) {
+              throw new MedusaError(
+                MedusaError.Types.INVALID_DATA,
+                "Telegram image exceeds 5 MB."
+              )
+            }
+            const token = await service.resolveChannelBotToken(connection)
+            const fileResponse = await fetch(
+              `https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(photo.file_id)}`
+            )
+            const filePayload = (await fileResponse.json()) as {
+              ok?: boolean
+              result?: { file_path?: string }
+            }
+            if (!fileResponse.ok || !filePayload.ok || !filePayload.result?.file_path) {
+              throw new MedusaError(
+                MedusaError.Types.INVALID_DATA,
+                "Telegram image file could not be resolved."
+              )
+            }
+            const contentResponse = await fetch(
+              `https://api.telegram.org/file/bot${token}/${filePayload.result.file_path}`
+            )
+            const contentType = contentResponse.headers
+              .get("content-type")
+              ?.split(";", 1)[0]
+            const contentLength = Number(
+              contentResponse.headers.get("content-length")
+            )
+            if (
+              !contentResponse.ok ||
+              !contentType ||
+              !["image/jpeg", "image/png", "image/webp"].includes(contentType) ||
+              (Number.isFinite(contentLength) && contentLength > 5 * 1024 * 1024)
+            ) {
+              throw new MedusaError(
+                MedusaError.Types.INVALID_DATA,
+                "Telegram image is invalid or unsupported."
+              )
+            }
+            const content = Buffer.from(await contentResponse.arrayBuffer())
+            if (
+              !content.length ||
+              content.length > 5 * 1024 * 1024
+            ) {
+              throw new MedusaError(
+                MedusaError.Types.INVALID_DATA,
+                "Telegram image is invalid or unsupported."
+              )
+            }
+            const { result: uploaded } = await uploadFilesWorkflow(container).run({
+              input: {
+                files: [
+                  {
+                    access: "public",
+                    content: content.toString("base64"),
+                    filename: `telegram-${telegramMessage.message_id}.${contentType.split("/")[1]}`,
+                    mimeType: contentType,
+                  },
+                ],
+              },
+            })
+            imageAttachments = uploaded.map((file) => ({ id: file.id, url: file.url }))
+          } catch (error) {
+            await service.createAgentAuditEvents({
+              action: "telegram-image-ingestion-failed",
+              actor_id: principal.principal_id,
+              actor_type: "user",
+              correlation_id: `telegram:${connection.id}:${input.update.update_id}`,
+              data: {
+                error: error instanceof Error ? error.message.slice(0, 300) : "unknown",
+              },
+              event_type: "agent.channel.image-ingestion-failed",
+              recorded_at: new Date(),
+              resource_id: connection.id,
+              resource_type: "agent_channel_connection",
+            })
+          }
+        }
+
         const message = await service.createAgentMessages({
       body: messageText,
       channel: "TELEGRAM",
@@ -253,6 +345,7 @@ const ingestTelegramWebhookStep = createStep<
         principal_role: principal.role,
         telegram_from_id: String(telegramMessage.from?.id ?? ""),
         telegram_update_id: input.update.update_id,
+        image_attachments: imageAttachments,
       },
         })
         await service.updateAgentConversations({
