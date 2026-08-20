@@ -109,6 +109,49 @@ export const MessageSendInput = z.strictObject({
   structured_content: z.record(z.string(), z.unknown()).optional(),
 })
 
+export const DraftCartCreateInput = z.strictObject({
+  conversation_id: z.string().trim().min(1),
+  customer_confirmation_message_id: z.string().trim().min(1),
+  items: z
+    .array(
+      z.strictObject({
+        quantity: z.number().int().min(1).max(10),
+        variant_id: z.string().trim().min(1),
+      })
+    )
+    .min(1)
+    .max(10),
+  region_id: z.string().trim().min(1),
+  sales_channel_id: z.string().trim().min(1),
+})
+
+export const CartHandoffSendInput = z.strictObject({
+  body: z.string().trim().min(1).max(4_000),
+  cart_id: z.string().trim().min(1),
+  conversation_id: z.string().trim().min(1),
+})
+
+const DraftCartCreateOutput = z.union([
+  z.strictObject({
+    cart_id: z.string(),
+    duplicate: z.boolean(),
+    outcome: z.literal("SUCCEEDED"),
+    status: z.literal("DRAFT"),
+  }),
+  CommandConflict,
+])
+
+const CartHandoffSendOutput = z.union([
+  z.strictObject({
+    cart_id: z.string(),
+    duplicate: z.boolean(),
+    message_id: z.string(),
+    outcome: z.literal("SUCCEEDED"),
+    status: z.literal("AVAILABLE"),
+  }),
+  CommandConflict,
+])
+
 const MessageSendOutput = z.union([
   z.strictObject({
     delivery_id: z.string().optional(),
@@ -217,9 +260,54 @@ export const MESSAGE_SEND_TOOL = defineAgentTool({
   risk_level: "LOW",
 })
 
+export const DRAFT_CART_CREATE_TOOL = defineAgentTool({
+  ...commandDefaults,
+  approval_required: true,
+  audit_fields: [
+    "conversation_id",
+    "customer_confirmation_message_id",
+    "region_id",
+    "sales_channel_id",
+  ],
+  description:
+    "Create a Medusa draft cart only after the authenticated customer confirms the selected variants and an operations manager approves the request.",
+  error_codes: [
+    "ACTION_GATE_REJECTED",
+    "CUSTOMER_CONFIRMATION_REQUIRED",
+    "DRAFT_CART_CREATE_FAILED",
+  ],
+  input_schema: DraftCartCreateInput,
+  name: "cart.create-draft",
+  output_schema: DraftCartCreateOutput,
+  permission: "agent_action:create",
+  required_role: "operations_manager",
+  risk_level: "MEDIUM",
+})
+
+export const CART_HANDOFF_SEND_TOOL = defineAgentTool({
+  ...commandDefaults,
+  approval_required: false,
+  audit_fields: ["conversation_id", "cart_id"],
+  description:
+    "Deliver an approved draft cart only to the verified customer who owns it in the current in-app conversation.",
+  error_codes: [
+    "ACTION_GATE_REJECTED",
+    "CART_HANDOFF_NOT_AVAILABLE",
+    "CUSTOMER_CONFIRMATION_REQUIRED",
+  ],
+  input_schema: CartHandoffSendInput,
+  name: "cart.send-handoff",
+  output_schema: CartHandoffSendOutput,
+  permission: "agent_message:create",
+  required_role: null,
+  risk_level: "LOW",
+})
+
 export type PlatformCommandOutput = z.infer<
   | typeof IncidentCommandOutput
   | typeof ApprovalCommandOutput
   | typeof KnowledgeProposeOutput
   | typeof MessageSendOutput
+  | typeof DraftCartCreateOutput
+  | typeof CartHandoffSendOutput
 >

@@ -5,7 +5,11 @@ import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react"
 import { HttpTypes } from "@medusajs/types"
 
 import { useTranslation } from "@lib/i18n/client"
-import { ProductMediaItem, useCustomerChat } from "../hooks/use-customer-chat"
+import {
+  CartHandoff,
+  ProductMediaItem,
+  useCustomerChat,
+} from "../hooks/use-customer-chat"
 
 type ChatWidgetProps = {
   countryCode?: string
@@ -320,6 +324,13 @@ function AuthenticatedChat({
                         ))}
                       </div>
                     )}
+                    {message.cart_handoff && (
+                      <CartHandoffCard
+                        cartHandoff={message.cart_handoff}
+                        countryCode={countryCode}
+                        locale={locale}
+                      />
+                    )}
                   </div>
                 </article>
               )
@@ -391,6 +402,31 @@ function AuthenticatedChat({
         </div>
       </form>
     </>
+  )
+}
+
+function CartHandoffCard({
+  cartHandoff,
+  countryCode,
+  locale,
+}: {
+  cartHandoff: CartHandoff
+  countryCode: string
+  locale: string
+}) {
+  const href = `/${locale}/${countryCode}/cart/agent-handoff?cart_id=${encodeURIComponent(
+    cartHandoff.cart_id
+  )}`
+
+  return (
+    <a
+      href={href}
+      className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#174b3d] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#103a2f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#174b3d] focus-visible:ring-offset-2"
+    >
+      <StoreBagIcon />
+      Mở giỏ hàng đã chuẩn bị
+      <ArrowRightIcon />
+    </a>
   )
 }
 

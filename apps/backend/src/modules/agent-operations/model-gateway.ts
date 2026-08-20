@@ -1,12 +1,22 @@
 import { MedusaError } from "@medusajs/framework/utils"
 
-export type ToolDefinition = { name: string; description: string; parameters: Record<string, unknown>; };
+export type ToolDefinition = {
+  description: string
+  name: string
+  parameters: Record<string, unknown>
+}
+
+export type ModelToolCall = {
+  arguments: Record<string, unknown>
+  id: string
+  name: string
+}
 
 export type ModelInvocation = {
   agent_id: string
   image_urls?: string[]
-  input: Record<string, unknown> | any[];
-  tools?: ToolDefinition[];
+  input: Record<string, unknown> | any[]
+  tools?: ToolDefinition[]
   max_tokens: number
   output_schema?: Record<string, unknown>
   prompt_key: string
@@ -16,9 +26,13 @@ export type ModelInvocation = {
 }
 
 export type ModelGatewayAdapter = {
-  invoke(input: ModelInvocation): Promise<Record<string, unknown>>
+  invoke(input: ModelInvocation): Promise<ModelInvocationResult>
   model: string
   provider: string
+}
+
+export type ModelInvocationResult = Record<string, unknown> & {
+  tool_calls?: ModelToolCall[]
 }
 
 const SENSITIVE_KEYS = new Set([
@@ -62,6 +76,24 @@ export function assertModelInvocation(input: ModelInvocation) {
       "A structured output schema is required for model runs."
     )
   }
+  if (input.tools) {
+    const names = new Set<string>()
+    for (const tool of input.tools) {
+      if (!/^[A-Za-z0-9_-]{1,128}$/.test(tool.name) || names.has(tool.name)) {
+        throw new MedusaError(
+          MedusaError.Types.INVALID_DATA,
+          "Model tool names must be unique and contain only letters, numbers, underscores, or dashes."
+        )
+      }
+      if (!tool.description.trim() || tool.parameters.type !== "object") {
+        throw new MedusaError(
+          MedusaError.Types.INVALID_DATA,
+          `Model tool ${tool.name} requires a description and an object parameter schema.`
+        )
+      }
+      names.add(tool.name)
+    }
+  }
   if (!input.system_prompt.trim()) {
     throw new MedusaError(
       MedusaError.Types.INVALID_DATA,
@@ -104,13 +136,40 @@ export function assertModelInvocation(input: ModelInvocation) {
   }
 }
 
+function parseToolArguments(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  if (typeof value !== "string") {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      "The model provider returned invalid tool arguments."
+    )
+  }
+  try {
+    const parsed = JSON.parse(value)
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "The model provider returned invalid tool arguments."
+      )
+    }
+    return parsed as Record<string, unknown>
+  } catch {
+    throw new MedusaError(
+      MedusaError.Types.INVALID_DATA,
+      "The model provider returned invalid tool arguments."
+    )
+  }
+}
+
 export class DisabledModelAdapter implements ModelGatewayAdapter {
   model = "disabled"
   provider = "disabled"
 
   async invoke(
     _input: ModelInvocation
-  ): Promise<Record<string, unknown>> {
+  ): Promise<ModelInvocationResult> {
     throw new MedusaError(
       MedusaError.Types.NOT_ALLOWED,
       "No model provider is enabled. Configure an approved provider before model execution."
@@ -186,7 +245,7 @@ export class OpenAIResponsesModelAdapter implements ModelGatewayAdapter {
     private readonly fetchImpl: FetchLike = fetch
   ) {}
 
-  async invoke(input: ModelInvocation): Promise<Record<string, unknown>> {
+  async invoke(input: ModelInvocation): Promise<ModelInvocationResult> {
     assertModelInvocation(input)
     const controller = new AbortController()
     const timeout = setTimeout(
@@ -220,14 +279,29 @@ export class OpenAIResponsesModelAdapter implements ModelGatewayAdapter {
           max_output_tokens: input.max_tokens,
           model: this.model,
           store: false,
-          text: {
-            format: {
-              name: "customer_support_draft",
-              schema: input.output_schema,
-              strict: true,
-              type: "json_schema",
-            },
-          },
+          ...(input.tools?.length
+            ? {
+                tools: input.tools.map((tool) => ({
+                  description: tool.description,
+                  name: tool.name,
+                  parameters: tool.parameters,
+                  strict: true,
+                  type: "function",
+                })),
+              }
+            : {}),
+          ...(input.output_schema
+            ? {
+                text: {
+                  format: {
+                    name: "customer_support_draft",
+                    schema: input.output_schema,
+                    strict: true,
+                    type: "json_schema",
+                  },
+                },
+              }
+            : {}),
         }),
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
@@ -246,9 +320,29 @@ export class OpenAIResponsesModelAdapter implements ModelGatewayAdapter {
 
       const payload = (await response.json()) as {
         output?: Array<{
+          arguments?: string
+          call_id?: string
           content?: Array<{ refusal?: string; text?: string; type?: string }>
+          name?: string
+          type?: string
         }>
       }
+      const toolCalls = (payload.output ?? [])
+        .filter((item) => item.type === "function_call")
+        .map((item, index) => {
+          if (!item.name) {
+            throw new MedusaError(
+              MedusaError.Types.INVALID_DATA,
+              "The model provider returned a function call without a name."
+            )
+          }
+          return {
+            arguments: parseToolArguments(item.arguments),
+            id: item.call_id ?? `model-call-${index + 1}`,
+            name: item.name,
+          }
+        })
+      if (toolCalls.length) return { tool_calls: toolCalls }
       const content = payload.output?.flatMap((item) => item.content ?? []) ?? []
       const refusal = content.find((item) => item.type === "refusal")?.refusal
       if (refusal) {
@@ -267,7 +361,7 @@ export class OpenAIResponsesModelAdapter implements ModelGatewayAdapter {
         )
       }
 
-      return JSON.parse(outputText) as Record<string, unknown>
+      return JSON.parse(outputText) as ModelInvocationResult
     } catch (error) {
       if (error instanceof SyntaxError) {
         throw new MedusaError(
@@ -299,7 +393,7 @@ export class GeminiModelAdapter implements ModelGatewayAdapter {
     private readonly imageFetchImpl: FetchLike = fetch
   ) {}
 
-  async invoke(input: ModelInvocation): Promise<Record<string, unknown>> {
+  async invoke(input: ModelInvocation): Promise<ModelInvocationResult> {
     assertModelInvocation(input)
     const controller = new AbortController()
     const timeout = setTimeout(
@@ -337,8 +431,12 @@ export class GeminiModelAdapter implements ModelGatewayAdapter {
             ],
             generationConfig: {
               maxOutputTokens: input.max_tokens,
-              responseJsonSchema: input.output_schema,
-              responseMimeType: "application/json",
+              ...(input.output_schema && !input.tools?.length
+                ? {
+                    responseJsonSchema: input.output_schema,
+                    responseMimeType: "application/json",
+                  }
+                : {}),
             },
             system_instruction: {
               parts: [
@@ -347,6 +445,19 @@ export class GeminiModelAdapter implements ModelGatewayAdapter {
                 },
               ],
             },
+            ...(input.tools?.length
+              ? {
+                  tools: [
+                    {
+                      functionDeclarations: input.tools.map((tool) => ({
+                        description: tool.description,
+                        name: tool.name,
+                        parameters: tool.parameters,
+                      })),
+                    },
+                  ],
+                }
+              : {}),
           }),
           headers: {
             "Content-Type": "application/json",
@@ -364,10 +475,29 @@ export class GeminiModelAdapter implements ModelGatewayAdapter {
       }
       const payload = (await response.json()) as {
         candidates?: Array<{
-          content?: { parts?: Array<{ text?: string }> }
+          content?: {
+            parts?: Array<{
+              functionCall?: {
+                args?: Record<string, unknown>
+                id?: string
+                name?: string
+              }
+              text?: string
+            }>
+          }
         }>
       }
-      const outputText = payload.candidates?.[0]?.content?.parts
+      const parts = payload.candidates?.[0]?.content?.parts ?? []
+      const toolCalls = parts.flatMap((part, index) => {
+        if (!part.functionCall?.name) return []
+        return [{
+          arguments: parseToolArguments(part.functionCall.args ?? {}),
+          id: part.functionCall.id ?? `model-call-${index + 1}`,
+          name: part.functionCall.name,
+        }]
+      })
+      if (toolCalls.length) return { tool_calls: toolCalls }
+      const outputText = parts
         ?.map((part) => part.text ?? "")
         .join("")
       if (!outputText) {
@@ -376,7 +506,7 @@ export class GeminiModelAdapter implements ModelGatewayAdapter {
           "The model provider returned no structured output."
         )
       }
-      return JSON.parse(outputText) as Record<string, unknown>
+      return JSON.parse(outputText) as ModelInvocationResult
     } catch (error) {
       if (error instanceof SyntaxError) {
         throw new MedusaError(
@@ -407,7 +537,7 @@ export class DeepSeekChatModelAdapter implements ModelGatewayAdapter {
     private readonly fetchImpl: FetchLike = fetch
   ) {}
 
-  async invoke(input: ModelInvocation): Promise<Record<string, unknown>> {
+  async invoke(input: ModelInvocation): Promise<ModelInvocationResult> {
     assertModelInvocation(input)
     const controller = new AbortController()
     const timeout = setTimeout(
@@ -431,7 +561,18 @@ export class DeepSeekChatModelAdapter implements ModelGatewayAdapter {
             },
           ],
           model: this.model,
-          response_format: { type: "json_object" },
+          ...(input.tools?.length
+            ? {
+                tools: input.tools.map((tool) => ({
+                  function: {
+                    description: tool.description,
+                    name: tool.name,
+                    parameters: tool.parameters,
+                  },
+                  type: "function",
+                })),
+              }
+            : { response_format: { type: "json_object" } }),
           stream: false,
           thinking: { type: "disabled" },
         }),
@@ -457,8 +598,32 @@ export class DeepSeekChatModelAdapter implements ModelGatewayAdapter {
         )
       }
       const payload = (await response.json()) as {
-        choices?: Array<{ message?: { content?: string | null } }>
+        choices?: Array<{
+          message?: {
+            content?: string | null
+            tool_calls?: Array<{
+              function?: { arguments?: string; name?: string }
+              id?: string
+            }>
+          }
+        }>
       }
+      const toolCalls = (payload.choices?.[0]?.message?.tool_calls ?? []).map(
+        (toolCall, index) => {
+          if (!toolCall.function?.name) {
+            throw new MedusaError(
+              MedusaError.Types.INVALID_DATA,
+              "The model provider returned a function call without a name."
+            )
+          }
+          return {
+            arguments: parseToolArguments(toolCall.function.arguments),
+            id: toolCall.id ?? `model-call-${index + 1}`,
+            name: toolCall.function.name,
+          }
+        }
+      )
+      if (toolCalls.length) return { tool_calls: toolCalls }
       const outputText = payload.choices?.[0]?.message?.content
       if (!outputText) {
         throw new MedusaError(
@@ -466,7 +631,7 @@ export class DeepSeekChatModelAdapter implements ModelGatewayAdapter {
           "The model provider returned no structured output."
         )
       }
-      return JSON.parse(outputText) as Record<string, unknown>
+      return JSON.parse(outputText) as ModelInvocationResult
     } catch (error) {
       if (error instanceof SyntaxError) {
         throw new MedusaError(

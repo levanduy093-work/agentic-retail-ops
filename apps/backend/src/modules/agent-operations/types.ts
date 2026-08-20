@@ -11,7 +11,7 @@ export const INCIDENT_STATUSES = [
   "REJECTED",
   "CANCELLED",
   "FAILED",
-  "ESCALATED",
+  "ESCALATED"
 ] as const
 
 export const AGENT_RUN_STATUSES = INCIDENT_STATUSES
@@ -23,7 +23,7 @@ export const RECOMMENDATION_STATUSES = [
   "REJECTED",
   "EXPIRED",
   "EXECUTED",
-  "FAILED",
+  "FAILED"
 ] as const
 
 export const APPROVAL_STATUSES = [
@@ -31,24 +31,12 @@ export const APPROVAL_STATUSES = [
   "APPROVED",
   "REJECTED",
   "EXPIRED",
-  "CANCELLED",
+  "CANCELLED"
 ] as const
 
-export const RISK_LEVELS = [
-  "READ_ONLY",
-  "LOW",
-  "MEDIUM",
-  "HIGH",
-  "PROHIBITED",
-] as const
+export const RISK_LEVELS = ["READ_ONLY", "LOW", "MEDIUM", "HIGH", "PROHIBITED"] as const
 
-export const OUTBOX_STATUSES = [
-  "PENDING",
-  "PROCESSING",
-  "DELIVERED",
-  "FAILED",
-  "DEAD",
-] as const
+export const OUTBOX_STATUSES = ["PENDING", "PROCESSING", "DELIVERED", "FAILED", "DEAD"] as const
 
 export const ACTION_REQUEST_STATUSES = [
   "PENDING",
@@ -57,17 +45,12 @@ export const ACTION_REQUEST_STATUSES = [
   "CONFLICT",
   "FAILED",
   "DEAD",
-  "CANCELLED",
+  "CANCELLED"
 ] as const
 
 export const TOOL_CALL_KINDS = ["READ", "COMMAND"] as const
 
-export const TOOL_CALL_STATUSES = [
-  "RUNNING",
-  "SUCCEEDED",
-  "CONFLICT",
-  "FAILED",
-] as const
+export const TOOL_CALL_STATUSES = ["RUNNING", "SUCCEEDED", "CONFLICT", "FAILED"] as const
 
 export const CONVERSATION_CHANNELS = [
   "IN_APP",
@@ -77,26 +60,16 @@ export const CONVERSATION_CHANNELS = [
   "MESSENGER",
   "EMAIL",
   "SLACK",
-  "TEAMS",
+  "TEAMS"
 ] as const
 
 export const CONVERSATION_STATUSES = ["OPEN", "CLOSED"] as const
 
 export const MESSAGE_DIRECTIONS = ["INBOUND", "OUTBOUND"] as const
 
-export const MESSAGE_TYPES = [
-  "NOTIFICATION",
-  "COMMAND",
-  "COMMAND_RESULT",
-  "TEXT",
-] as const
+export const MESSAGE_TYPES = ["NOTIFICATION", "COMMAND", "COMMAND_RESULT", "TEXT"] as const
 
-export const MESSAGE_STATUSES = [
-  "RECEIVED",
-  "AVAILABLE",
-  "PROCESSED",
-  "REJECTED",
-] as const
+export const MESSAGE_STATUSES = ["RECEIVED", "AVAILABLE", "PROCESSED", "REJECTED"] as const
 
 export const AGENT_TASK_STATUSES = [
   "TODO",
@@ -106,41 +79,20 @@ export const AGENT_TASK_STATUSES = [
   "COMPLETED",
   "CANCELLED",
   "FAILED",
-  "DEAD",
+  "DEAD"
 ] as const
 
 export const LIFECYCLE_STATUSES = ["DRAFT", "ACTIVE", "RETIRED"] as const
 
 export const KNOWLEDGE_STATUSES = ["DRAFT", "APPROVED", "RETIRED"] as const
 
-export const MODEL_RUN_STATUSES = [
-  "PENDING",
-  "RUNNING",
-  "SUCCEEDED",
-  "FAILED",
-  "REJECTED",
-] as const
+export const MODEL_RUN_STATUSES = ["PENDING", "RUNNING", "SUCCEEDED", "FAILED", "REJECTED"] as const
 
-export const EVALUATION_RUN_STATUSES = [
-  "RUNNING",
-  "PASSED",
-  "FAILED",
-  "ERROR",
-] as const
+export const EVALUATION_RUN_STATUSES = ["RUNNING", "PASSED", "FAILED", "ERROR"] as const
 
-export const CHANNEL_CONNECTION_STATUSES = [
-  "ACTIVE",
-  "PAUSED",
-  "DISABLED",
-] as const
+export const CHANNEL_CONNECTION_STATUSES = ["ACTIVE", "PAUSED", "DISABLED"] as const
 
-export const DELIVERY_STATUSES = [
-  "PENDING",
-  "PROCESSING",
-  "DELIVERED",
-  "FAILED",
-  "DEAD",
-] as const
+export const DELIVERY_STATUSES = ["PENDING", "PROCESSING", "DELIVERED", "FAILED", "DEAD"] as const
 
 export type AgentEventStatus = (typeof AGENT_EVENT_STATUSES)[number]
 export type IncidentStatus = (typeof INCIDENT_STATUSES)[number]
@@ -162,8 +114,7 @@ export type LifecycleStatus = (typeof LIFECYCLE_STATUSES)[number]
 export type KnowledgeStatus = (typeof KNOWLEDGE_STATUSES)[number]
 export type ModelRunStatus = (typeof MODEL_RUN_STATUSES)[number]
 export type EvaluationRunStatus = (typeof EVALUATION_RUN_STATUSES)[number]
-export type ChannelConnectionStatus =
-  (typeof CHANNEL_CONNECTION_STATUSES)[number]
+export type ChannelConnectionStatus = (typeof CHANNEL_CONNECTION_STATUSES)[number]
 export type DeliveryStatus = (typeof DELIVERY_STATUSES)[number]
 
 export type PolicyCondition = {
@@ -345,10 +296,7 @@ export type InventoryLowEventInput = {
   tenant_id: string
 }
 
-export type OrderExceptionType =
-  | "FULFILLMENT_OVERDUE"
-  | "MANUAL_REVIEW"
-  | "PAYMENT_STUCK"
+export type OrderExceptionType = "FULFILLMENT_OVERDUE" | "MANUAL_REVIEW" | "PAYMENT_STUCK"
 
 export type OrderExceptionPayload = {
   details?: Record<string, unknown>
@@ -425,13 +373,14 @@ export type ProcessAgentConversationMessageInput = {
 }
 
 export type ProcessCustomerKnowledgeQuestionInput = {
+  catalog_snapshot?: import("./customer-product-advisor").CustomerCatalogSnapshot
   customer_order_lookup?: import("./customer-order-lookup").CustomerOrderLookup
   customer_order_lookup_locale?: "en" | "vi"
   inbound_message_id: string
+  knowledge_snapshot?: import("./tools/platform-read-tools").KnowledgeSearchOutput
 }
 
-export type ProcessTelegramKnowledgeQuestionInput =
-  ProcessCustomerKnowledgeQuestionInput
+export type ProcessTelegramKnowledgeQuestionInput = ProcessCustomerKnowledgeQuestionInput
 
 export type ClaimAgentOutboxEventInput = {
   claimed_at: string

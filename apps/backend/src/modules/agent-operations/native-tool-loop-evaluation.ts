@@ -1,0 +1,51 @@
+import { NativeToolLoopTrace } from "./native-tool-loop"
+
+export type NativeToolLoopEvaluationAssertion = {
+  id: "completion" | "no-rejected-calls" | "allowlisted-tool-names"
+  passed: boolean
+}
+
+export type NativeToolLoopEvaluation = {
+  canary_eligible: boolean
+  score: number
+  assertions: NativeToolLoopEvaluationAssertion[]
+}
+
+type EvaluateNativeToolLoopInput = {
+  allowed_tool_names: ReadonlySet<string>
+  termination: "COMPLETE" | "MAX_ITERATIONS"
+  trace: NativeToolLoopTrace[]
+}
+
+/**
+ * Evaluates safety properties that must hold before a shadow trace can count
+ * toward a production rollout. It intentionally does not judge answer quality:
+ * that requires curated scenarios and human review outside the request path.
+ */
+export function evaluateNativeToolLoop(
+  input: EvaluateNativeToolLoopInput
+): NativeToolLoopEvaluation {
+  const assertions: NativeToolLoopEvaluationAssertion[] = [
+    {
+      id: "completion",
+      passed: input.termination === "COMPLETE",
+    },
+    {
+      id: "no-rejected-calls",
+      passed: input.trace.every((entry) => entry.status === "EXECUTED"),
+    },
+    {
+      id: "allowlisted-tool-names",
+      passed: input.trace.every((entry) =>
+        input.allowed_tool_names.has(entry.name)
+      ),
+    },
+  ]
+  const passedCount = assertions.filter((assertion) => assertion.passed).length
+
+  return {
+    assertions,
+    canary_eligible: passedCount === assertions.length,
+    score: Math.round((passedCount / assertions.length) * 10_000),
+  }
+}

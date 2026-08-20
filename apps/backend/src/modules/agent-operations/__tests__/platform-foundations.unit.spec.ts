@@ -632,6 +632,192 @@ describe("agent platform foundations", () => {
     )
   })
 
+  it("passes native function definitions to OpenAI and returns structured tool calls", async () => {
+    const request = jest.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body))
+      expect(body.tools).toEqual([
+        expect.objectContaining({
+          name: "search_catalog",
+          parameters: { properties: {}, type: "object" },
+          strict: true,
+          type: "function",
+        }),
+      ])
+      return new Response(
+        JSON.stringify({
+          output: [
+            {
+              arguments: JSON.stringify({ query: "áo polo" }),
+              call_id: "call_catalog_1",
+              name: "search_catalog",
+              type: "function_call",
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    })
+    const adapter = new OpenAIResponsesModelAdapter(
+      "test-key",
+      "test-model",
+      "https://provider.test/v1",
+      request as typeof fetch
+    )
+
+    await expect(
+      adapter.invoke({
+        agent_id: "customer-support-agent",
+        input: { question: "Tìm áo polo" },
+        max_tokens: 100,
+        prompt_key: "support-tool-loop",
+        prompt_version: "1",
+        system_prompt: "Use approved tools when needed.",
+        tools: [
+          {
+            description: "Searches the approved product catalog.",
+            name: "search_catalog",
+            parameters: { properties: {}, type: "object" },
+          },
+        ],
+      })
+    ).resolves.toEqual({
+      tool_calls: [
+        {
+          arguments: { query: "áo polo" },
+          id: "call_catalog_1",
+          name: "search_catalog",
+        },
+      ],
+    })
+  })
+
+  it("passes native function declarations to Gemini and returns structured tool calls", async () => {
+    const request = jest.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body))
+      expect(body.tools[0].functionDeclarations).toEqual([
+        expect.objectContaining({ name: "search_knowledge_base" }),
+      ])
+      expect(body.generationConfig.responseMimeType).toBeUndefined()
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    functionCall: {
+                      args: { query: "chính sách đổi trả" },
+                      id: "gemini-call-1",
+                      name: "search_knowledge_base",
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    })
+    const adapter = new GeminiModelAdapter(
+      "gemini-key",
+      "gemini-test",
+      "https://generativelanguage.test/v1beta",
+      request as typeof fetch
+    )
+
+    await expect(
+      adapter.invoke({
+        agent_id: "customer-support-agent",
+        input: { question: "Đổi trả thế nào?" },
+        max_tokens: 100,
+        prompt_key: "support-tool-loop",
+        prompt_version: "1",
+        system_prompt: "Use approved tools when needed.",
+        tools: [
+          {
+            description: "Searches approved support knowledge.",
+            name: "search_knowledge_base",
+            parameters: { properties: {}, type: "object" },
+          },
+        ],
+      })
+    ).resolves.toEqual({
+      tool_calls: [
+        {
+          arguments: { query: "chính sách đổi trả" },
+          id: "gemini-call-1",
+          name: "search_knowledge_base",
+        },
+      ],
+    })
+  })
+
+  it("passes native function definitions to DeepSeek and returns structured tool calls", async () => {
+    const request = jest.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body))
+      expect(body.response_format).toBeUndefined()
+      expect(body.tools[0]).toEqual(
+        expect.objectContaining({
+          function: expect.objectContaining({ name: "check_order_status" }),
+          type: "function",
+        })
+      )
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                tool_calls: [
+                  {
+                    function: {
+                      arguments: JSON.stringify({ order_code: "1024" }),
+                      name: "check_order_status",
+                    },
+                    id: "deepseek-call-1",
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    })
+    const adapter = new DeepSeekChatModelAdapter(
+      "deepseek-key",
+      "deepseek-test",
+      "https://api.deepseek.test",
+      request as typeof fetch
+    )
+
+    await expect(
+      adapter.invoke({
+        agent_id: "customer-support-agent",
+        input: { question: "Đơn 1024 đang ở đâu?" },
+        max_tokens: 100,
+        prompt_key: "support-tool-loop",
+        prompt_version: "1",
+        system_prompt: "Use approved tools when needed.",
+        tools: [
+          {
+            description: "Reads the authenticated customer's order status.",
+            name: "check_order_status",
+            parameters: { properties: {}, type: "object" },
+          },
+        ],
+      })
+    ).resolves.toEqual({
+      tool_calls: [
+        {
+          arguments: { order_code: "1024" },
+          id: "deepseek-call-1",
+          name: "check_order_status",
+        },
+      ],
+    })
+  })
+
   it("scores structured evaluation assertions", () => {
     expect(
       evaluateAssertions(

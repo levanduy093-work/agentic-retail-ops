@@ -264,6 +264,11 @@ import { getSepaySettings } from "../modules/payment-hub/sepay-connection"
       policies: [{ resource: "agent_platform", operation: "read" }],
     },
     {
+      matcher: "/admin/agent-operations/ai/native-tool-loop/status",
+      method: "GET",
+      policies: [{ resource: "agent_platform", operation: "read" }],
+    },
+    {
       matcher: "/admin/agent-operations/platform/bootstrap",
       method: "POST",
       policies: [{ resource: "agent_platform", operation: "configure" }],

@@ -1,7 +1,7 @@
 import {
   AssistantSettingsSchema,
   DEFAULT_ASSISTANT_SETTINGS,
-  MANAGED_PROMPTS_REGISTRY,
+  MANAGED_PROMPTS_REGISTRY
 } from "../assistant-settings"
 import { CUSTOMER_MESSAGE_INTENT_PROMPT_KEY } from "../customer-message-intent"
 import { KNOWLEDGE_ANSWER_PROMPT_KEY } from "../knowledge-answer"
@@ -14,6 +14,7 @@ describe("assistant settings and managed prompts registry", () => {
     expect(parsed.brand_name).toBe("Synapse")
     expect(parsed.bot_role).toBe("nhân viên CSKH")
     expect(parsed.greeting_message_vi).toContain("Synapse")
+    expect(parsed.native_tool_loop_mode).toBe("ACTIVE")
     expect(parsed.review_ack_message_vi).toContain("shop cần kiểm tra lại")
   })
 
@@ -21,15 +22,30 @@ describe("assistant settings and managed prompts registry", () => {
     const custom = {
       brand_name: "Duy Fashion",
       bot_role: "chuyên viên tư vấn",
-      greeting_message_vi: "Dạ em chào anh/chị, em là tư vấn viên của Duy Fashion ạ!",
+      greeting_message_vi: "Dạ em chào anh/chị, em là tư vấn viên của Duy Fashion ạ!"
     }
     const merged = AssistantSettingsSchema.parse({
       ...DEFAULT_ASSISTANT_SETTINGS,
-      ...custom,
+      ...custom
     })
     expect(merged.brand_name).toBe("Duy Fashion")
     expect(merged.bot_role).toBe("chuyên viên tư vấn")
     expect(merged.greeting_message_vi).toContain("Duy Fashion")
+  })
+
+  it("permits active and shadow native tool rollouts", () => {
+    expect(
+      AssistantSettingsSchema.parse({
+        ...DEFAULT_ASSISTANT_SETTINGS,
+        native_tool_loop_mode: "SHADOW"
+      }).native_tool_loop_mode
+    ).toBe("SHADOW")
+    expect(
+      AssistantSettingsSchema.parse({
+        ...DEFAULT_ASSISTANT_SETTINGS,
+        native_tool_loop_mode: "ACTIVE"
+      }).native_tool_loop_mode
+    ).toBe("ACTIVE")
   })
 
   it("contains all core managed prompt keys in the registry", () => {
@@ -41,8 +57,8 @@ describe("assistant settings and managed prompts registry", () => {
     expect(
       MANAGED_PROMPTS_REGISTRY[CUSTOMER_MESSAGE_INTENT_PROMPT_KEY].default_system_prompt
     ).toContain("intent router")
-    expect(
-      MANAGED_PROMPTS_REGISTRY[KNOWLEDGE_ANSWER_PROMPT_KEY].default_system_prompt
-    ).toContain("customer service advisor")
+    expect(MANAGED_PROMPTS_REGISTRY[KNOWLEDGE_ANSWER_PROMPT_KEY].default_system_prompt).toContain(
+      "customer service advisor"
+    )
   })
 })

@@ -1,5 +1,6 @@
-import { randomBytes } from "node:crypto"
-import { Context, ICachingModuleService } from "@medusajs/framework/types"
+import { createHash, randomBytes } from "node:crypto"
+import { Context, ICachingModuleService, MedusaContainer } from "@medusajs/framework/types"
+import { createCartWorkflow } from "@medusajs/medusa/core-flows"
 import {
   InjectTransactionManager,
   InjectManager,
@@ -7,57 +8,43 @@ import {
   MedusaError,
   MedusaService,
   Modules,
+  ContainerRegistrationKeys
 } from "@medusajs/framework/utils"
 import { calculateActionRetry, isAgentActionClaimable } from "./action-policy"
 import {
   buildApprovalDecisionResultMessage,
   buildApprovalRequestedMessage,
-  isApprovalDecisionCommandTarget,
+  isApprovalDecisionCommandTarget
 } from "./communication"
 import { analyzeInventoryLow } from "./inventory-low-analyzer"
 import { analyzeOrderException } from "./order-exception-analyzer"
-import {
-  createModelAdapter,
-  redactModelInput,
-} from "./model-gateway"
+import { createModelAdapter, redactModelInput } from "./model-gateway"
+import { summarizeNativeToolLoopStatus } from "./native-tool-loop-status"
 import {
   CUSTOMER_VISION_OUTPUT_SCHEMA,
   CUSTOMER_VISION_PROMPT_KEY,
   CUSTOMER_VISION_PROMPT_VERSION,
   CUSTOMER_VISION_SYSTEM_PROMPT,
   CUSTOMER_VISION_TIMEOUT_MS,
-  VisionDefectAnalysisOutput,
+  VisionDefectAnalysisOutput
 } from "./customer-vision-processor"
-import {
-  AiProviderPurpose,
-  sortAiProvidersByPriority,
-} from "./ai-provider-routing"
-import {
-  decryptConnectorSecret,
-  encryptConnectorSecret,
-} from "./credential-vault"
+import { AiProviderPurpose, sortAiProvidersByPriority } from "./ai-provider-routing"
+import { decryptConnectorSecret, encryptConnectorSecret } from "./credential-vault"
 import {
   isVaultSecretReference,
   parseVaultSecretReference,
-  resolveSecretReference,
+  resolveSecretReference
 } from "./secret-reference"
-import type {
-  TelegramChannelConfig,
-  TelegramChannelIdentity,
-} from "./telegram"
-import type {
-  ZaloChannelConfig,
-  ZaloChannelIdentity,
-  ZaloStoredCredentialPayload,
-} from "./zalo"
+import type { TelegramChannelConfig, TelegramChannelIdentity } from "./telegram"
+import type { ZaloChannelConfig, ZaloChannelIdentity, ZaloStoredCredentialPayload } from "./zalo"
 import type {
   FacebookMessengerChannelConfig,
   FacebookMessengerIdentity,
-  FacebookStoredCredentialPayload,
+  FacebookStoredCredentialPayload
 } from "./facebook"
 import {
   createGoogleKnowledgeAccessToken,
-  getGoogleKnowledgeOAuthPlatformStatus,
+  getGoogleKnowledgeOAuthPlatformStatus
 } from "./google-knowledge-oauth"
 import type { GoogleDriveKnowledgeFetchResult } from "./google-drive-knowledge-connector"
 import AgentActionRequest from "./models/agent-action-request"
@@ -87,20 +74,10 @@ import AgentRecommendation from "./models/agent-recommendation"
 import AgentRun from "./models/agent-run"
 import AgentTask from "./models/agent-task"
 import AgentToolCall from "./models/agent-tool-call"
-import {
-  calculateOutboxRetry,
-  isOutboxEventClaimable,
-  sanitizeOutboxError,
-} from "./outbox-policy"
-import {
-  calculateDeliveryRetry,
-  isAgentDeliveryClaimable,
-} from "./delivery-policy"
+import { calculateOutboxRetry, isOutboxEventClaimable, sanitizeOutboxError } from "./outbox-policy"
+import { calculateDeliveryRetry, isAgentDeliveryClaimable } from "./delivery-policy"
 import { conditionMatches, evaluatePolicies } from "./policy-engine"
-import {
-  assertIncidentTransition,
-  canTransitionIncident,
-} from "./state-machine"
+import { assertIncidentTransition, canTransitionIncident } from "./state-machine"
 import { assertSupportOrderAccess } from "./support-request-policy"
 import { AGENT_TOOL_REGISTRY } from "./tool-registry"
 import { executeAgentTool, prepareAgentCommand } from "./tool-executor"
@@ -142,14 +119,14 @@ import {
   RetireKnowledgeDocumentInput,
   SupportRequestEventInput,
   SyncKnowledgeSourceInput,
-  TransitionAgentTaskInput,
+  TransitionAgentTaskInput
 } from "./types"
 import { evaluateAssertions } from "./evaluation"
 import {
   checksumKnowledgeContent,
   chunkKnowledgeContent,
   isKnowledgeEligible,
-  isKnowledgeReadyForVectorPreparation,
+  isKnowledgeReadyForVectorPreparation
 } from "./knowledge"
 import {
   buildCustomerSmallTalkReply,
@@ -174,7 +151,7 @@ import {
   KNOWLEDGE_ANSWER_SYSTEM_PROMPT,
   KNOWLEDGE_ANSWER_TIMEOUT_MS,
   resolveGovernedKnowledgeModelOutput,
-  shouldUseSemanticKnowledgeSearch,
+  shouldUseSemanticKnowledgeSearch
 } from "./knowledge-answer"
 import {
   buildCatalogOverviewReply,
@@ -191,7 +168,7 @@ import {
   PRODUCT_ADVISOR_PROMPT_VERSION,
   PRODUCT_ADVISOR_SYSTEM_PROMPT,
   PRODUCT_ADVISOR_TIMEOUT_MS,
-  resolveProductAdvisorModelOutput,
+  resolveProductAdvisorModelOutput
 } from "./customer-product-advisor"
 import {
   buildCustomerIntentReply,
@@ -205,7 +182,7 @@ import {
   CUSTOMER_MESSAGE_INTENT_TIMEOUT_MS,
   defaultCustomerMessageIntent,
   isCustomerAddressingShop,
-  resolveCustomerMessageIntent,
+  resolveCustomerMessageIntent
 } from "./customer-message-intent"
 import {
   CustomerConversationIntent,
@@ -217,19 +194,19 @@ import {
   CUSTOMER_CONVERSATION_PROMPT_VERSION,
   CUSTOMER_CONVERSATION_SYSTEM_PROMPT,
   CUSTOMER_CONVERSATION_TIMEOUT_MS,
-  isSafeCustomerConversationBody,
+  isSafeCustomerConversationBody
 } from "./customer-conversation-responder"
 import {
   detectHybridIntent,
   runCustomerSupportReadToolLoop,
-  synthesizeHybridAnswer,
+  synthesizeHybridAnswer
 } from "./customer-react-engine"
 import { analyzeCustomerSentiment } from "./customer-sentiment-analyzer"
 import { evaluateConversationQuality } from "./customer-csat-evaluator"
 import {
   CustomerChatSecurityConfig,
   isExplicitPromptAttack,
-  normalizeCustomerChatSecurityConfig,
+  normalizeCustomerChatSecurityConfig
 } from "./customer-chat-security"
 import { isCustomerSupportConversation } from "./channel-principal"
 import {
@@ -237,16 +214,10 @@ import {
   AssistantSettingsSchema,
   ASSISTANT_SETTINGS_PROMPT_KEY,
   DEFAULT_ASSISTANT_SETTINGS,
-  MANAGED_PROMPTS_REGISTRY,
+  MANAGED_PROMPTS_REGISTRY
 } from "./assistant-settings"
-import {
-  createKnowledgeRagEngine,
-  deleteKnowledgeDocumentVectors,
-} from "./knowledge-rag-engine"
-import {
-  assertAgentTaskRelease,
-  assertAgentTaskTransition,
-} from "./task-state-machine"
+import { createKnowledgeRagEngine, deleteKnowledgeDocumentVectors } from "./knowledge-rag-engine"
+import { assertAgentTaskRelease, assertAgentTaskTransition } from "./task-state-machine"
 import {
   AuditSearchInput,
   AuditSearchOutput,
@@ -258,7 +229,7 @@ import {
   searchKnowledgeChunksHybrid,
   TraceReplayInput,
   TraceReplayOutput,
-  TraceTimelineEntry,
+  TraceTimelineEntry
 } from "./tools/platform-read-tools"
 import {
   TASK_ASSIGN_TOOL,
@@ -268,16 +239,18 @@ import {
   TaskCommandOutput,
   TaskCreateInput,
   TaskEscalateInput,
-  toGovernedTaskSnapshot,
+  toGovernedTaskSnapshot
 } from "./tools/task-tools"
 import {
   APPROVAL_DECIDE_TOOL,
   APPROVAL_REQUEST_TOOL,
+  CART_HANDOFF_SEND_TOOL,
+  DRAFT_CART_CREATE_TOOL,
   INCIDENT_CREATE_TOOL,
   INCIDENT_UPDATE_TOOL,
   KNOWLEDGE_PROPOSE_TOOL,
   MESSAGE_SEND_TOOL,
-  PlatformCommandOutput,
+  PlatformCommandOutput
 } from "./tools/platform-command-tools"
 
 type IndexableKnowledgeDocument = {
@@ -301,7 +274,7 @@ import { OrderReadOutput } from "./tools/order-tools"
 import {
   draftCustomerResponse,
   ResponseDraftInput,
-  ResponseDraftOutput,
+  ResponseDraftOutput
 } from "./tools/response-tools"
 import {
   CUSTOMER_SUPPORT_DEFAULT_INPUT_SCHEMA,
@@ -309,7 +282,7 @@ import {
   CUSTOMER_SUPPORT_DEFAULT_OUTPUT_SCHEMA,
   CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT,
   CUSTOMER_SUPPORT_PROMPT_KEY,
-  CUSTOMER_SUPPORT_PROMPT_VERSION,
+  CUSTOMER_SUPPORT_PROMPT_VERSION
 } from "./customer-support-prompt"
 import { listAiProviderModels } from "./ai-provider-models"
 import {
@@ -328,20 +301,20 @@ import {
   hasExplicitHistoricalCustomerReference,
   mergeConversationMemoryOutput,
   startsExplicitNewProductTopic,
-  shouldRefreshConversationMemoryWithAi,
+  shouldRefreshConversationMemoryWithAi
 } from "./conversation-memory"
 import {
   addDays,
   CUSTOMER_PREFERENCE_EXPIRY_DAYS,
   extractExplicitCustomerPreferences,
-  formatCustomerProfilePreferences,
+  formatCustomerProfilePreferences
 } from "./customer-preferences"
 import {
   buildCustomerAssistantCacheKey,
   CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS,
   normalizeCustomerCacheText,
   readCustomerAssistantCache,
-  writeCustomerAssistantCache,
+  writeCustomerAssistantCache
 } from "./customer-assistant-cache"
 import { agentRealtimeHub } from "./realtime-hub"
 
@@ -372,7 +345,7 @@ class AgentOperationsModuleService extends MedusaService({
   AgentRecommendation,
   AgentRun,
   AgentTask,
-  AgentToolCall,
+  AgentToolCall
 }) {
   @InjectManager()
   async processCustomerMessageAgentic(
@@ -408,14 +381,12 @@ class AgentOperationsModuleService extends MedusaService({
       id: msg.id,
       message_type: msg.message_type,
       occurred_at:
-        msg.occurred_at instanceof Date
-          ? msg.occurred_at.toISOString()
-          : String(msg.occurred_at),
+        msg.occurred_at instanceof Date ? msg.occurred_at.toISOString() : String(msg.occurred_at),
       product_media: msg.product_media,
       sender_id: msg.sender_id,
       sender_type: msg.sender_type,
       status: msg.status,
-      structured_content: msg.structured_content,
+      structured_content: msg.structured_content
     })
   }
 
@@ -434,10 +405,8 @@ class AgentOperationsModuleService extends MedusaService({
         conv.last_message_at instanceof Date
           ? conv.last_message_at.toISOString()
           : String(conv.last_message_at),
-      requires_human_attention: Boolean(
-        conv.metadata?.requires_human_attention
-      ),
-      title: conv.title ?? "Customer Support",
+      requires_human_attention: Boolean(conv.metadata?.requires_human_attention),
+      title: conv.title ?? "Customer Support"
     })
   }
 
@@ -455,7 +424,7 @@ class AgentOperationsModuleService extends MedusaService({
       priority: task.priority,
       status: task.status,
       support_conversation_id: task.support_conversation_id,
-      task_type: task.task_type,
+      task_type: task.task_type
     })
   }
   protected getCustomerAssistantCaching() {
@@ -467,17 +436,12 @@ class AgentOperationsModuleService extends MedusaService({
   }
 
   @InjectManager()
-  async getPromptConfiguration(
-    promptKey: string,
-    @MedusaContext() sharedContext: Context = {}
-  ) {
+  async getPromptConfiguration(promptKey: string, @MedusaContext() sharedContext: Context = {}) {
     const metadata = MANAGED_PROMPTS_REGISTRY[promptKey]
-    const defaultMaxTokens =
-      metadata?.default_max_tokens ?? CUSTOMER_SUPPORT_DEFAULT_MAX_TOKENS
+    const defaultMaxTokens = metadata?.default_max_tokens ?? CUSTOMER_SUPPORT_DEFAULT_MAX_TOKENS
     const defaultSystemPrompt =
       metadata?.default_system_prompt ?? CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT
-    const defaultVersion =
-      metadata?.version ?? CUSTOMER_SUPPORT_PROMPT_VERSION
+    const defaultVersion = metadata?.version ?? CUSTOMER_SUPPORT_PROMPT_VERSION
     const title = metadata?.title ?? promptKey
     const description = metadata?.description ?? ""
 
@@ -489,9 +453,7 @@ class AgentOperationsModuleService extends MedusaService({
     const active = prompts[0]
 
     return {
-      customized: Boolean(
-        active && active.system_prompt !== defaultSystemPrompt
-      ),
+      customized: Boolean(active && active.system_prompt !== defaultSystemPrompt),
       default_max_tokens: defaultMaxTokens,
       default_system_prompt: defaultSystemPrompt,
       description,
@@ -500,18 +462,13 @@ class AgentOperationsModuleService extends MedusaService({
       system_prompt: active?.system_prompt ?? defaultSystemPrompt,
       title,
       updated_at: active?.updated_at ?? null,
-      version: active?.version ?? defaultVersion,
+      version: active?.version ?? defaultVersion
     }
   }
 
   @InjectManager()
-  async getCustomerSupportPromptConfiguration(
-    @MedusaContext() sharedContext: Context = {}
-  ) {
-    return this.getPromptConfiguration(
-      CUSTOMER_SUPPORT_PROMPT_KEY,
-      sharedContext
-    )
+  async getCustomerSupportPromptConfiguration(@MedusaContext() sharedContext: Context = {}) {
+    return this.getPromptConfiguration(CUSTOMER_SUPPORT_PROMPT_KEY, sharedContext)
   }
 
   @InjectManager()
@@ -550,7 +507,7 @@ class AgentOperationsModuleService extends MedusaService({
     const current = await this.getAssistantSettings(sharedContext)
     const merged = AssistantSettingsSchema.parse({
       ...current,
-      ...input.settings,
+      ...input.settings
     })
     const activePrompts = await this.listAgentPromptTemplates(
       { prompt_key: ASSISTANT_SETTINGS_PROMPT_KEY, status: "ACTIVE" },
@@ -570,16 +527,13 @@ class AgentOperationsModuleService extends MedusaService({
         prompt_key: ASSISTANT_SETTINGS_PROMPT_KEY,
         status: "ACTIVE",
         system_prompt: JSON.stringify(merged),
-        version,
+        version
       },
       sharedContext
     )
 
     for (const active of activePrompts) {
-      await this.updateAgentPromptTemplates(
-        { id: active.id, status: "RETIRED" },
-        sharedContext
-      )
+      await this.updateAgentPromptTemplates({ id: active.id, status: "RETIRED" }, sharedContext)
     }
 
     await this.createAgentAuditEvents(
@@ -589,6 +543,10 @@ class AgentOperationsModuleService extends MedusaService({
         actor_type: "user",
         correlation_id: prompt.id,
         data: merged,
+        event_type: "agent.customer-support.assistant-settings-updated",
+        recorded_at: now,
+        resource_id: prompt.id,
+        resource_type: "agent_prompt_template"
       },
       sharedContext
     )
@@ -597,9 +555,7 @@ class AgentOperationsModuleService extends MedusaService({
   }
 
   @InjectManager()
-  async listAllPromptsAndSettings(
-    @MedusaContext() sharedContext: Context = {}
-  ) {
+  async listAllPromptsAndSettings(@MedusaContext() sharedContext: Context = {}) {
     const settings = await this.getAssistantSettings(sharedContext)
     const promptKeys = Object.keys(MANAGED_PROMPTS_REGISTRY)
     const prompts = await Promise.all(
@@ -633,9 +589,7 @@ class AgentOperationsModuleService extends MedusaService({
   ) {
     const metadata = MANAGED_PROMPTS_REGISTRY[input.prompt_key]
     const maxTokens =
-      input.max_tokens ??
-      metadata?.default_max_tokens ??
-      CUSTOMER_SUPPORT_DEFAULT_MAX_TOKENS
+      input.max_tokens ?? metadata?.default_max_tokens ?? CUSTOMER_SUPPORT_DEFAULT_MAX_TOKENS
 
     const activePrompts = await this.listAgentPromptTemplates(
       { prompt_key: input.prompt_key, status: "ACTIVE" },
@@ -655,16 +609,13 @@ class AgentOperationsModuleService extends MedusaService({
         prompt_key: input.prompt_key,
         status: "ACTIVE",
         system_prompt: input.system_prompt.trim(),
-        version,
+        version
       },
       sharedContext
     )
 
     for (const active of activePrompts) {
-      await this.updateAgentPromptTemplates(
-        { id: active.id, status: "RETIRED" },
-        sharedContext
-      )
+      await this.updateAgentPromptTemplates({ id: active.id, status: "RETIRED" }, sharedContext)
     }
 
     await this.createAgentAuditEvents(
@@ -676,8 +627,8 @@ class AgentOperationsModuleService extends MedusaService({
         data: {
           max_tokens: prompt.max_tokens,
           prompt_key: prompt.prompt_key,
-          version: prompt.version,
-        },
+          version: prompt.version
+        }
       },
       sharedContext
     )
@@ -700,10 +651,7 @@ class AgentOperationsModuleService extends MedusaService({
   ) {
     const keysToReset =
       input.prompt_key === "all"
-        ? [
-            ...Object.keys(MANAGED_PROMPTS_REGISTRY),
-            ASSISTANT_SETTINGS_PROMPT_KEY,
-          ]
+        ? [...Object.keys(MANAGED_PROMPTS_REGISTRY), ASSISTANT_SETTINGS_PROMPT_KEY]
         : [input.prompt_key]
 
     for (const key of keysToReset) {
@@ -713,10 +661,7 @@ class AgentOperationsModuleService extends MedusaService({
         sharedContext
       )
       for (const active of activePrompts) {
-        await this.updateAgentPromptTemplates(
-          { id: active.id, status: "RETIRED" },
-          sharedContext
-        )
+        await this.updateAgentPromptTemplates({ id: active.id, status: "RETIRED" }, sharedContext)
       }
     }
 
@@ -726,7 +671,7 @@ class AgentOperationsModuleService extends MedusaService({
         actor_id: input.actor_id ?? "admin",
         actor_type: "user",
         correlation_id: input.prompt_key,
-        data: { prompt_key: input.prompt_key },
+        data: { prompt_key: input.prompt_key }
       },
       sharedContext
     )
@@ -744,7 +689,7 @@ class AgentOperationsModuleService extends MedusaService({
         actor_id: input.actor_id,
         max_tokens: input.max_tokens,
         prompt_key: CUSTOMER_SUPPORT_PROMPT_KEY,
-        system_prompt: input.system_prompt,
+        system_prompt: input.system_prompt
       },
       sharedContext
     )
@@ -755,9 +700,7 @@ class AgentOperationsModuleService extends MedusaService({
       { tenant_id: tenantId },
       { order: { provider: "ASC" } }
     )
-    const byProvider = new Map(
-      credentials.map((credential) => [credential.provider, credential])
-    )
+    const byProvider = new Map(credentials.map((credential) => [credential.provider, credential]))
 
     return (["OPENAI", "GEMINI", "DEEPSEEK"] as const).map((provider) => {
       const credential = byProvider.get(provider)
@@ -765,31 +708,29 @@ class AgentOperationsModuleService extends MedusaService({
         provider === "OPENAI"
           ? {
               embedding_model: "text-embedding-3-small",
-              generation_model: "gpt-4.1-mini",
+              generation_model: "gpt-4.1-mini"
             }
           : provider === "GEMINI"
             ? {
                 embedding_model: "gemini-embedding-001",
-                generation_model: "gemini-2.5-flash",
+                generation_model: "gemini-2.5-flash"
               }
             : {
                 embedding_model: "unsupported",
-                generation_model: "deepseek-v4-flash",
+                generation_model: "deepseek-v4-flash"
               }
       return {
         configured: Boolean(credential),
         embedding_dimensions: credential?.embedding_dimensions ?? null,
         embedding_enabled: credential?.embedding_enabled ?? false,
-        embedding_model:
-          credential?.embedding_model ?? defaults.embedding_model,
+        embedding_model: credential?.embedding_model ?? defaults.embedding_model,
         generation_enabled: credential?.generation_enabled ?? false,
-        generation_model:
-          credential?.generation_model ?? defaults.generation_model,
+        generation_model: credential?.generation_model ?? defaults.generation_model,
         provider,
         secret_hint: credential?.secret_hint ?? null,
         supports_embedding: provider !== "DEEPSEEK",
         supports_generation: true,
-        updated_at: credential?.updated_at ?? null,
+        updated_at: credential?.updated_at ?? null
       }
     })
   }
@@ -804,7 +745,7 @@ class AgentOperationsModuleService extends MedusaService({
       const credentials = await this.listAgentAiProviderCredentials(
         {
           provider: input.provider,
-          tenant_id: input.tenant_id ?? "default",
+          tenant_id: input.tenant_id ?? "default"
         },
         { take: 1 }
       )
@@ -814,7 +755,7 @@ class AgentOperationsModuleService extends MedusaService({
           encrypted_secret: credential.encrypted_secret,
           encryption_iv: credential.encryption_iv,
           encryption_tag: credential.encryption_tag,
-          key_version: credential.key_version,
+          key_version: credential.key_version
         })
       }
     }
@@ -827,54 +768,38 @@ class AgentOperationsModuleService extends MedusaService({
     return listAiProviderModels({ api_key: apiKey, provider: input.provider })
   }
 
-  async getActiveAiProviderCredentials(
-    purpose: AiProviderPurpose,
-    tenantId = "default"
-  ) {
+  async getActiveAiProviderCredentials(purpose: AiProviderPurpose, tenantId = "default") {
     const filter =
       purpose === "embedding"
         ? { embedding_enabled: true, tenant_id: tenantId }
         : { generation_enabled: true, tenant_id: tenantId }
     const credentials = await this.listAgentAiProviderCredentials(filter, {
-      take: 10,
+      take: 10
     })
-    return sortAiProvidersByPriority(credentials, purpose).flatMap(
-      (credential) => {
-        try {
-          return [
-            {
-              api_key: decryptConnectorSecret({
-                encrypted_secret: credential.encrypted_secret,
-                encryption_iv: credential.encryption_iv,
-                encryption_tag: credential.encryption_tag,
-                key_version: credential.key_version,
-              }),
-              dimensions: credential.embedding_dimensions ?? undefined,
-              model:
-                purpose === "embedding"
-                  ? credential.embedding_model
-                  : credential.generation_model,
-              provider: credential.provider.toLowerCase() as
-                | "deepseek"
-                | "gemini"
-                | "openai",
-            },
-          ]
-        } catch {
-          return []
-        }
+    return sortAiProvidersByPriority(credentials, purpose).flatMap((credential) => {
+      try {
+        return [
+          {
+            api_key: decryptConnectorSecret({
+              encrypted_secret: credential.encrypted_secret,
+              encryption_iv: credential.encryption_iv,
+              encryption_tag: credential.encryption_tag,
+              key_version: credential.key_version
+            }),
+            dimensions: credential.embedding_dimensions ?? undefined,
+            model:
+              purpose === "embedding" ? credential.embedding_model : credential.generation_model,
+            provider: credential.provider.toLowerCase() as "deepseek" | "gemini" | "openai"
+          }
+        ]
+      } catch {
+        return []
       }
-    )
+    })
   }
 
-  async getActiveAiProviderCredential(
-    purpose: AiProviderPurpose,
-    tenantId = "default"
-  ) {
-    const credentials = await this.getActiveAiProviderCredentials(
-      purpose,
-      tenantId
-    )
+  async getActiveAiProviderCredential(purpose: AiProviderPurpose, tenantId = "default") {
+    const credentials = await this.getActiveAiProviderCredentials(purpose, tenantId)
     return credentials[0] ?? null
   }
 
@@ -891,11 +816,7 @@ class AgentOperationsModuleService extends MedusaService({
     conversationId: string,
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const conversation = await this.retrieveAgentConversation(
-      conversationId,
-      {},
-      sharedContext
-    )
+    const conversation = await this.retrieveAgentConversation(conversationId, {}, sharedContext)
     const [messages, messageCount] = await this.listAndCountAgentMessages(
       { conversation_id: conversation.id },
       { order: { occurred_at: "DESC" }, take: 6 },
@@ -917,15 +838,13 @@ class AgentOperationsModuleService extends MedusaService({
 
     const orderedMessages = messages.slice().reverse()
     const previousMessageIndex = existing
-      ? orderedMessages.findIndex(
-          (message) => message.id === existing.last_message_id
-        )
+      ? orderedMessages.findIndex((message) => message.id === existing.last_message_id)
       : -1
     const unsummarizedMessages = orderedMessages
       .slice(previousMessageIndex >= 0 ? previousMessageIndex + 1 : -4)
       .map((message) => ({
         body: message.body.slice(0, 800),
-        direction: message.direction as "INBOUND" | "OUTBOUND",
+        direction: message.direction as "INBOUND" | "OUTBOUND"
       }))
     const safeInput = {
       previous_memory: existing
@@ -933,126 +852,118 @@ class AgentOperationsModuleService extends MedusaService({
             customer_facts: readMemoryItems(existing.customer_facts),
             open_questions: readMemoryItems(existing.open_questions),
             resolved_topics: readMemoryItems(existing.resolved_topics),
-            summary: existing.summary,
+            summary: existing.summary
           }
         : null,
-      recent_messages: unsummarizedMessages,
+      recent_messages: unsummarizedMessages
     }
     let output = buildConversationMemoryFallback({
-      previous_customer_facts: existing
-        ? readMemoryItems(existing.customer_facts)
-        : [],
-      previous_open_questions: existing
-        ? readMemoryItems(existing.open_questions)
-        : [],
-      previous_resolved_topics: existing
-        ? readMemoryItems(existing.resolved_topics)
-        : [],
+      previous_customer_facts: existing ? readMemoryItems(existing.customer_facts) : [],
+      previous_open_questions: existing ? readMemoryItems(existing.open_questions) : [],
+      previous_resolved_topics: existing ? readMemoryItems(existing.resolved_topics) : [],
       previous_summary: existing?.summary,
-      recent_messages: unsummarizedMessages,
+      recent_messages: unsummarizedMessages
     })
 
     if (
       shouldRefreshConversationMemoryWithAi({
         has_existing_memory: Boolean(existing),
-        message_count: messageCount,
+        message_count: messageCount
       })
     ) {
       try {
-      const credentials = await this.getActiveAiProviderCredentials(
-        "generation",
-        conversation.tenant_id
-      )
-      for (const credential of credentials) {
-        const adapter = createModelAdapter({
-          apiKey: credential.api_key,
-          model: credential.model,
-          provider: credential.provider,
-        })
-        const attemptKey =
-          `conversation-memory:${conversation.id}:${latestMessage.id}` +
-          `:provider:${adapter.provider}`
-        const priorRun = (
-          await this.listAgentModelRuns(
-            { idempotency_key: attemptKey },
-            { take: 1 },
+        const credentials = await this.getActiveAiProviderCredentials(
+          "generation",
+          conversation.tenant_id
+        )
+        for (const credential of credentials) {
+          const adapter = createModelAdapter({
+            apiKey: credential.api_key,
+            model: credential.model,
+            provider: credential.provider
+          })
+          const attemptKey =
+            `conversation-memory:${conversation.id}:${latestMessage.id}` +
+            `:provider:${adapter.provider}`
+          const priorRun = (
+            await this.listAgentModelRuns(
+              { idempotency_key: attemptKey },
+              { take: 1 },
+              sharedContext
+            )
+          )[0]
+          if (priorRun?.status === "SUCCEEDED" && priorRun.output) {
+            const cached = ConversationMemoryModelOutput.safeParse(priorRun.output)
+            if (cached.success) {
+              output = mergeConversationMemoryOutput(output, cached.data)
+              break
+            }
+          }
+          if (priorRun) continue
+
+          const startedAt = new Date()
+          const modelRun = await this.createAgentModelRuns(
+            {
+              agent_id: "conversation-memory-agent",
+              agent_version: "1.0.0",
+              idempotency_key: attemptKey,
+              input: redactModelInput(safeInput) as Record<string, unknown>,
+              model: adapter.model,
+              prompt_key: CONVERSATION_MEMORY_PROMPT_KEY,
+              prompt_version: CONVERSATION_MEMORY_PROMPT_VERSION,
+              provider: adapter.provider,
+              redacted: true,
+              started_at: startedAt,
+              status: "RUNNING"
+            },
             sharedContext
           )
-        )[0]
-        if (priorRun?.status === "SUCCEEDED" && priorRun.output) {
-          const cached = ConversationMemoryModelOutput.safeParse(
-            priorRun.output
-          )
-          if (cached.success) {
-            output = mergeConversationMemoryOutput(output, cached.data)
+          try {
+            const generated = await adapter.invoke({
+              agent_id: "conversation-memory-agent",
+              input: safeInput,
+              max_tokens: CONVERSATION_MEMORY_MAX_TOKENS,
+              output_schema: CONVERSATION_MEMORY_OUTPUT_SCHEMA,
+              prompt_key: CONVERSATION_MEMORY_PROMPT_KEY,
+              prompt_version: CONVERSATION_MEMORY_PROMPT_VERSION,
+              system_prompt: CONVERSATION_MEMORY_SYSTEM_PROMPT,
+              timeout_ms: CONVERSATION_MEMORY_TIMEOUT_MS
+            })
+            const parsedOutput = ConversationMemoryModelOutput.parse(generated)
+            if (!isSafeConversationMemoryOutput(parsedOutput)) {
+              throw new MedusaError(
+                MedusaError.Types.NOT_ALLOWED,
+                "Conversation memory contained unsafe content."
+              )
+            }
+            output = mergeConversationMemoryOutput(output, parsedOutput)
+            await this.updateAgentModelRuns(
+              {
+                completed_at: new Date(),
+                id: modelRun.id,
+                latency_ms: Date.now() - startedAt.getTime(),
+                output,
+                status: "SUCCEEDED"
+              },
+              sharedContext
+            )
             break
-          }
-        }
-        if (priorRun) continue
-
-        const startedAt = new Date()
-        const modelRun = await this.createAgentModelRuns(
-          {
-            agent_id: "conversation-memory-agent",
-            agent_version: "1.0.0",
-            idempotency_key: attemptKey,
-            input: redactModelInput(safeInput) as Record<string, unknown>,
-            model: adapter.model,
-            prompt_key: CONVERSATION_MEMORY_PROMPT_KEY,
-            prompt_version: CONVERSATION_MEMORY_PROMPT_VERSION,
-            provider: adapter.provider,
-            redacted: true,
-            started_at: startedAt,
-            status: "RUNNING",
-          },
-          sharedContext
-        )
-        try {
-          const generated = await adapter.invoke({
-            agent_id: "conversation-memory-agent",
-            input: safeInput,
-            max_tokens: CONVERSATION_MEMORY_MAX_TOKENS,
-            output_schema: CONVERSATION_MEMORY_OUTPUT_SCHEMA,
-            prompt_key: CONVERSATION_MEMORY_PROMPT_KEY,
-            prompt_version: CONVERSATION_MEMORY_PROMPT_VERSION,
-            system_prompt: CONVERSATION_MEMORY_SYSTEM_PROMPT,
-            timeout_ms: CONVERSATION_MEMORY_TIMEOUT_MS,
-          })
-          const parsedOutput = ConversationMemoryModelOutput.parse(generated)
-          if (!isSafeConversationMemoryOutput(parsedOutput)) {
-            throw new MedusaError(
-              MedusaError.Types.NOT_ALLOWED,
-              "Conversation memory contained unsafe content."
+          } catch (error) {
+            await this.updateAgentModelRuns(
+              {
+                completed_at: new Date(),
+                error:
+                  error instanceof Error
+                    ? error.message.slice(0, 1_000)
+                    : "Conversation memory update failed",
+                id: modelRun.id,
+                latency_ms: Date.now() - startedAt.getTime(),
+                status: "FAILED"
+              },
+              sharedContext
             )
           }
-          output = mergeConversationMemoryOutput(output, parsedOutput)
-          await this.updateAgentModelRuns(
-            {
-              completed_at: new Date(),
-              id: modelRun.id,
-              latency_ms: Date.now() - startedAt.getTime(),
-              output,
-              status: "SUCCEEDED",
-            },
-            sharedContext
-          )
-          break
-        } catch (error) {
-          await this.updateAgentModelRuns(
-            {
-              completed_at: new Date(),
-              error:
-                error instanceof Error
-                  ? error.message.slice(0, 1_000)
-                  : "Conversation memory update failed",
-              id: modelRun.id,
-              latency_ms: Date.now() - startedAt.getTime(),
-              status: "FAILED",
-            },
-            sharedContext
-          )
         }
-      }
       } catch {
         // The bounded deterministic memory remains available if all models fail.
       }
@@ -1068,13 +979,10 @@ class AgentOperationsModuleService extends MedusaService({
       summarized_at: now,
       summary: output.summary,
       tenant_id: conversation.tenant_id,
-      version: (existing?.version ?? 0) + 1,
+      version: (existing?.version ?? 0) + 1
     }
     const memory = existing
-      ? await this.updateAgentConversationMemories(
-          { ...data, id: existing.id },
-          sharedContext
-        )
+      ? await this.updateAgentConversationMemories({ ...data, id: existing.id }, sharedContext)
       : await this.createAgentConversationMemories(
           { ...data, conversation_id: conversation.id },
           sharedContext
@@ -1090,12 +998,12 @@ class AgentOperationsModuleService extends MedusaService({
           conversation_id: conversation.id,
           last_message_id: latestMessage.id,
           source_message_count: messageCount,
-          version: memory.version,
+          version: memory.version
         },
         event_type: "agent.conversation.memory-updated",
         recorded_at: now,
         resource_id: memory.id,
-        resource_type: "agent_conversation_memory",
+        resource_type: "agent_conversation_memory"
       },
       sharedContext
     )
@@ -1125,7 +1033,7 @@ class AgentOperationsModuleService extends MedusaService({
             customer_id: input.customer_id,
             preference_type: candidate.preference_type,
             tenant_id: input.tenant_id,
-            value: candidate.value,
+            value: candidate.value
           },
           { order: { last_confirmed_at: "DESC" }, take: 1 },
           sharedContext
@@ -1140,7 +1048,7 @@ class AgentOperationsModuleService extends MedusaService({
         last_confirmed_at: now,
         source_conversation_id: input.conversation_id,
         source_message_id: input.message_id,
-        status,
+        status
       }
       if (existing) {
         await this.updateAgentCustomerPreferences(
@@ -1154,7 +1062,7 @@ class AgentOperationsModuleService extends MedusaService({
             customer_id: input.customer_id,
             preference_type: candidate.preference_type,
             tenant_id: input.tenant_id,
-            value: candidate.value,
+            value: candidate.value
           },
           sharedContext
         )
@@ -1207,7 +1115,7 @@ class AgentOperationsModuleService extends MedusaService({
       encrypted_secret: current!.encrypted_secret,
       encryption_iv: current!.encryption_iv,
       encryption_tag: current!.encryption_tag,
-      key_version: current!.key_version,
+      key_version: current!.key_version
     }
     const secretHint = input.secret_hint ?? current?.secret_hint
     if (!secretHint) {
@@ -1225,18 +1133,15 @@ class AgentOperationsModuleService extends MedusaService({
       generation_enabled: input.generation_enabled,
       generation_model: input.generation_model,
       secret_hint: secretHint,
-      updated_by_id: input.actor_id,
+      updated_by_id: input.actor_id
     }
     const credential = current
-      ? await this.updateAgentAiProviderCredentials(
-          { ...data, id: current.id },
-          sharedContext
-        )
+      ? await this.updateAgentAiProviderCredentials({ ...data, id: current.id }, sharedContext)
       : await this.createAgentAiProviderCredentials(
           {
             ...data,
             provider: input.provider,
-            tenant_id: tenantId,
+            tenant_id: tenantId
           },
           sharedContext
         )
@@ -1252,12 +1157,12 @@ class AgentOperationsModuleService extends MedusaService({
           embedding_model: credential.embedding_model,
           generation_enabled: credential.generation_enabled,
           generation_model: credential.generation_model,
-          provider: credential.provider,
+          provider: credential.provider
         },
         event_type: "agent.ai-provider.configured",
         recorded_at: new Date(),
         resource_id: credential.id,
-        resource_type: "agent_ai_provider_credential",
+        resource_type: "agent_ai_provider_credential"
       },
       sharedContext
     )
@@ -1267,7 +1172,7 @@ class AgentOperationsModuleService extends MedusaService({
       embedding_enabled: credential.embedding_enabled,
       generation_enabled: credential.generation_enabled,
       provider: credential.provider,
-      secret_hint: credential.secret_hint,
+      secret_hint: credential.secret_hint
     }
   }
 
@@ -1304,7 +1209,7 @@ class AgentOperationsModuleService extends MedusaService({
         event_type: "agent.ai-provider.disconnected",
         recorded_at: new Date(),
         resource_id: credential.id,
-        resource_type: "agent_ai_provider_credential",
+        resource_type: "agent_ai_provider_credential"
       },
       sharedContext
     )
@@ -1323,7 +1228,7 @@ class AgentOperationsModuleService extends MedusaService({
       account_email: credential?.account_email ?? null,
       connected: Boolean(platform.platform_ready && credential),
       platform_ready: platform.platform_ready,
-      uses_dedicated_encryption_key: platform.uses_dedicated_encryption_key,
+      uses_dedicated_encryption_key: platform.uses_dedicated_encryption_key
     }
   }
 
@@ -1343,14 +1248,12 @@ class AgentOperationsModuleService extends MedusaService({
       encrypted_secret: credential.encrypted_secret,
       encryption_iv: credential.encryption_iv,
       encryption_tag: credential.encryption_tag,
-      key_version: credential.key_version,
+      key_version: credential.key_version
     })
   }
 
   async getGoogleKnowledgePickerToken(tenantId = "default") {
-    return createGoogleKnowledgeAccessToken(
-      await this.getGoogleKnowledgeRefreshToken(tenantId)
-    )
+    return createGoogleKnowledgeAccessToken(await this.getGoogleKnowledgeRefreshToken(tenantId))
   }
 
   @InjectManager()
@@ -1381,7 +1284,7 @@ class AgentOperationsModuleService extends MedusaService({
             account_email: input.account_email,
             id: current.id,
             scopes: { values: input.scopes },
-            updated_by_id: input.actor_id,
+            updated_by_id: input.actor_id
           },
           sharedContext
         )
@@ -1392,35 +1295,33 @@ class AgentOperationsModuleService extends MedusaService({
             connector_type: "GOOGLE_DRIVE",
             scopes: { values: input.scopes },
             tenant_id: tenantId,
-            updated_by_id: input.actor_id,
+            updated_by_id: input.actor_id
           },
           sharedContext
         )
 
     await this.createAgentAuditEvents(
       {
-        action: current
-          ? "google-oauth-connection-replaced"
-          : "google-oauth-connected",
+        action: current ? "google-oauth-connection-replaced" : "google-oauth-connected",
         actor_id: input.actor_id,
         actor_type: "user",
         correlation_id: credential.id,
         data: {
           account_email: credential.account_email,
           connector_type: credential.connector_type,
-          scopes: input.scopes,
+          scopes: input.scopes
         },
         event_type: "agent.connector.oauth.connected",
         recorded_at: new Date(),
         resource_id: credential.id,
-        resource_type: "agent_connector_credential",
+        resource_type: "agent_connector_credential"
       },
       sharedContext
     )
 
     return {
       account_email: credential.account_email,
-      connected: true,
+      connected: true
     }
   }
 
@@ -1455,12 +1356,12 @@ class AgentOperationsModuleService extends MedusaService({
         correlation_id: credential.id,
         data: {
           account_email: credential.account_email,
-          connector_type: credential.connector_type,
+          connector_type: credential.connector_type
         },
         event_type: "agent.connector.oauth.disconnected",
         recorded_at: new Date(),
         resource_id: credential.id,
-        resource_type: "agent_connector_credential",
+        resource_type: "agent_connector_credential"
       },
       sharedContext
     )
@@ -1477,11 +1378,13 @@ class AgentOperationsModuleService extends MedusaService({
       this.listAgentChannelCredentials(
         { tenant_id: tenantId },
         { order: { updated_at: "DESC" }, take: 50 }
-      ),
+      )
     ])
 
     const telegramConn =
-      connections.find((c) => c.channel === "TELEGRAM" && c.account_ref === "primary" && c.status === "ACTIVE") ??
+      connections.find(
+        (c) => c.channel === "TELEGRAM" && c.account_ref === "primary" && c.status === "ACTIVE"
+      ) ??
       connections.find((c) => c.channel === "TELEGRAM" && c.account_ref === "primary") ??
       connections.find((c) => c.channel === "TELEGRAM" && c.status === "ACTIVE") ??
       connections.find((c) => c.channel === "TELEGRAM")
@@ -1497,9 +1400,7 @@ class AgentOperationsModuleService extends MedusaService({
     const envBotToken = process.env.TELEGRAM_BOT_TOKEN?.trim()
     const telegramSecretHint =
       telegramCred?.secret_hint ??
-      (envBotToken
-        ? `${envBotToken.slice(0, 4)}...${envBotToken.slice(-4)}`
-        : null)
+      (envBotToken ? `${envBotToken.slice(0, 4)}...${envBotToken.slice(-4)}` : null)
     const telegramPublicUrl =
       telegramCred?.public_base_url ??
       telegramConfig?.webhook_url ??
@@ -1507,7 +1408,9 @@ class AgentOperationsModuleService extends MedusaService({
       null
 
     const zaloConn =
-      connections.find((c) => c.channel === "ZALO" && c.account_ref === "primary" && c.status === "ACTIVE") ??
+      connections.find(
+        (c) => c.channel === "ZALO" && c.account_ref === "primary" && c.status === "ACTIVE"
+      ) ??
       connections.find((c) => c.channel === "ZALO" && c.account_ref === "primary") ??
       connections.find((c) => c.channel === "ZALO" && c.status === "ACTIVE") ??
       connections.find((c) => c.channel === "ZALO")
@@ -1517,14 +1420,21 @@ class AgentOperationsModuleService extends MedusaService({
       credentials.find((c) => c.channel === "ZALO")
 
     const zaloConfig = zaloConn?.config as
-      | (ZaloChannelConfig & { app_id?: string; oa_avatar?: string; oa_id?: string; oa_name?: string })
+      | (ZaloChannelConfig & {
+          app_id?: string
+          oa_avatar?: string
+          oa_id?: string
+          oa_name?: string
+        })
       | undefined
 
     const zaloSecretHint = zaloCred?.secret_hint ?? null
     const zaloPublicUrl = zaloCred?.public_base_url ?? zaloConfig?.webhook_url ?? null
 
     const fbConn =
-      connections.find((c) => c.channel === "MESSENGER" && c.account_ref === "primary" && c.status === "ACTIVE") ??
+      connections.find(
+        (c) => c.channel === "MESSENGER" && c.account_ref === "primary" && c.status === "ACTIVE"
+      ) ??
       connections.find((c) => c.channel === "MESSENGER" && c.account_ref === "primary") ??
       connections.find((c) => c.channel === "MESSENGER" && c.status === "ACTIVE") ??
       connections.find((c) => c.channel === "MESSENGER")
@@ -1534,7 +1444,12 @@ class AgentOperationsModuleService extends MedusaService({
       credentials.find((c) => c.channel === "MESSENGER")
 
     const fbConfig = fbConn?.config as
-      | (FacebookMessengerChannelConfig & { app_id?: string; page_avatar?: string; page_id?: string; page_name?: string })
+      | (FacebookMessengerChannelConfig & {
+          app_id?: string
+          page_avatar?: string
+          page_id?: string
+          page_name?: string
+        })
       | undefined
 
     const fbSecretHint = fbCred?.secret_hint ?? null
@@ -1554,9 +1469,8 @@ class AgentOperationsModuleService extends MedusaService({
         secret_hint: telegramSecretHint,
         security: telegramConfig?.security ?? null,
         status: telegramConn?.status ?? "DISABLED",
-        updated_at:
-          telegramCred?.updated_at ?? telegramConn?.updated_at ?? null,
-        webhook_url: telegramConfig?.webhook_url ?? null,
+        updated_at: telegramCred?.updated_at ?? telegramConn?.updated_at ?? null,
+        webhook_url: telegramConfig?.webhook_url ?? null
       },
       {
         account_ref: zaloConn?.account_ref ?? "primary",
@@ -1571,9 +1485,8 @@ class AgentOperationsModuleService extends MedusaService({
         secret_hint: zaloSecretHint,
         security: zaloConfig?.security ?? null,
         status: zaloConn?.status ?? "DISABLED",
-        updated_at:
-          zaloCred?.updated_at ?? zaloConn?.updated_at ?? null,
-        webhook_url: zaloConfig?.webhook_url ?? null,
+        updated_at: zaloCred?.updated_at ?? zaloConn?.updated_at ?? null,
+        webhook_url: zaloConfig?.webhook_url ?? null
       },
       {
         account_ref: fbConn?.account_ref ?? "primary",
@@ -1588,10 +1501,9 @@ class AgentOperationsModuleService extends MedusaService({
         secret_hint: fbSecretHint,
         security: fbConfig?.security ?? null,
         status: fbConn?.status ?? "DISABLED",
-        updated_at:
-          fbCred?.updated_at ?? fbConn?.updated_at ?? null,
-        webhook_url: fbConfig?.webhook_url ?? null,
-      },
+        updated_at: fbCred?.updated_at ?? fbConn?.updated_at ?? null,
+        webhook_url: fbConfig?.webhook_url ?? null
+      }
     ]
   }
 
@@ -1611,7 +1523,7 @@ class AgentOperationsModuleService extends MedusaService({
             encrypted_secret: credential.encrypted_secret,
             encryption_iv: credential.encryption_iv,
             encryption_tag: credential.encryption_tag,
-            key_version: credential.key_version,
+            key_version: credential.key_version
           })
         }
       }
@@ -1619,14 +1531,14 @@ class AgentOperationsModuleService extends MedusaService({
         const credentials = await this.listAgentChannelCredentials({
           account_ref: connection.account_ref ?? "primary",
           channel: "MESSENGER",
-          tenant_id: connection.tenant_id ?? "default",
+          tenant_id: connection.tenant_id ?? "default"
         })
         if (credentials.length > 0) {
           raw = decryptConnectorSecret({
             encrypted_secret: credentials[0].encrypted_secret,
             encryption_iv: credentials[0].encryption_iv,
             encryption_tag: credentials[0].encryption_tag,
-            key_version: credentials[0].key_version,
+            key_version: credentials[0].key_version
           })
         }
       }
@@ -1651,7 +1563,7 @@ class AgentOperationsModuleService extends MedusaService({
             encrypted_secret: credential.encrypted_secret,
             encryption_iv: credential.encryption_iv,
             encryption_tag: credential.encryption_tag,
-            key_version: credential.key_version,
+            key_version: credential.key_version
           })
         }
       }
@@ -1659,14 +1571,14 @@ class AgentOperationsModuleService extends MedusaService({
         const credentials = await this.listAgentChannelCredentials({
           account_ref: connection.account_ref ?? "primary",
           channel: "ZALO",
-          tenant_id: connection.tenant_id ?? "default",
+          tenant_id: connection.tenant_id ?? "default"
         })
         if (credentials.length > 0) {
           raw = decryptConnectorSecret({
             encrypted_secret: credentials[0].encrypted_secret,
             encryption_iv: credentials[0].encryption_iv,
             encryption_tag: credentials[0].encryption_tag,
-            key_version: credentials[0].key_version,
+            key_version: credentials[0].key_version
           })
         }
       }
@@ -1703,7 +1615,7 @@ class AgentOperationsModuleService extends MedusaService({
           encrypted_secret: credential.encrypted_secret,
           encryption_iv: credential.encryption_iv,
           encryption_tag: credential.encryption_tag,
-          key_version: credential.key_version,
+          key_version: credential.key_version
         })
       }
     }
@@ -1711,7 +1623,7 @@ class AgentOperationsModuleService extends MedusaService({
     const credentials = await this.listAgentChannelCredentials({
       account_ref: connection.account_ref ?? "primary",
       channel: connection.channel as any,
-      tenant_id: connection.tenant_id ?? "default",
+      tenant_id: connection.tenant_id ?? "default"
     })
     if (credentials.length > 0) {
       const credential = credentials[0]
@@ -1719,7 +1631,7 @@ class AgentOperationsModuleService extends MedusaService({
         encrypted_secret: credential.encrypted_secret,
         encryption_iv: credential.encryption_iv,
         encryption_tag: credential.encryption_tag,
-        key_version: credential.key_version,
+        key_version: credential.key_version
       })
     }
 
@@ -1759,7 +1671,7 @@ class AgentOperationsModuleService extends MedusaService({
             encrypted_secret: credential.encrypted_webhook_secret,
             encryption_iv: credential.webhook_secret_iv,
             encryption_tag: credential.webhook_secret_tag,
-            key_version: credential.key_version,
+            key_version: credential.key_version
           })
         }
       }
@@ -1768,7 +1680,7 @@ class AgentOperationsModuleService extends MedusaService({
     const credentials = await this.listAgentChannelCredentials({
       account_ref: connection.account_ref ?? "primary",
       channel: connection.channel as any,
-      tenant_id: connection.tenant_id ?? "default",
+      tenant_id: connection.tenant_id ?? "default"
     })
     if (
       credentials.length > 0 &&
@@ -1780,7 +1692,7 @@ class AgentOperationsModuleService extends MedusaService({
         encrypted_secret: credentials[0].encrypted_webhook_secret,
         encryption_iv: credentials[0].webhook_secret_iv,
         encryption_tag: credentials[0].webhook_secret_tag,
-        key_version: credentials[0].key_version,
+        key_version: credentials[0].key_version
       })
     }
 
@@ -1798,27 +1710,26 @@ class AgentOperationsModuleService extends MedusaService({
     )
   }
 
-  async testTelegramBotToken(
-    botToken: string,
-    apiBaseUrl = "https://api.telegram.org"
-  ) {
+  async testTelegramBotToken(botToken: string, apiBaseUrl = "https://api.telegram.org") {
     if (!botToken?.trim()) {
-      throw new MedusaError(
-        MedusaError.Types.INVALID_DATA,
-        "Telegram Bot Token is required."
-      )
+      throw new MedusaError(MedusaError.Types.INVALID_DATA, "Telegram Bot Token is required.")
     }
     const cleanToken = botToken.trim()
     const url = `${apiBaseUrl.replace(/\/$/, "")}/bot${cleanToken}/getMe`
     const response = await fetch(url, {
       headers: { "content-type": "application/json" },
       method: "POST",
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(10_000)
     })
     const payload = (await response.json()) as {
       description?: string
       ok: boolean
-      result?: { first_name: string; id: number; is_bot: boolean; username?: string }
+      result?: {
+        first_name: string
+        id: number
+        is_bot: boolean
+        username?: string
+      }
     }
     if (!response.ok || !payload.ok || !payload.result) {
       throw new MedusaError(
@@ -1891,15 +1802,12 @@ class AgentOperationsModuleService extends MedusaService({
         encrypted_secret: existingCred.encrypted_secret,
         encryption_iv: existingCred.encryption_iv,
         encryption_tag: existingCred.encryption_tag,
-        key_version: existingCred.key_version,
+        key_version: existingCred.key_version
       })
     } else if (process.env.TELEGRAM_BOT_TOKEN?.trim()) {
       resolvedBotToken = process.env.TELEGRAM_BOT_TOKEN.trim()
     } else {
-      throw new MedusaError(
-        MedusaError.Types.INVALID_DATA,
-        "Telegram Bot Token is required."
-      )
+      throw new MedusaError(MedusaError.Types.INVALID_DATA, "Telegram Bot Token is required.")
     }
 
     const bot = await this.testTelegramBotToken(resolvedBotToken, apiBaseUrl)
@@ -1916,7 +1824,7 @@ class AgentOperationsModuleService extends MedusaService({
         encrypted_secret: existingCred.encrypted_webhook_secret,
         encryption_iv: existingCred.webhook_secret_iv,
         encryption_tag: existingCred.webhook_secret_tag,
-        key_version: existingCred.key_version,
+        key_version: existingCred.key_version
       })
     } else if (process.env.TELEGRAM_WEBHOOK_SECRET?.trim()) {
       resolvedWebhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET.trim()
@@ -1944,7 +1852,7 @@ class AgentOperationsModuleService extends MedusaService({
       tenant_id: tenantId,
       updated_by_id: input.actor_id,
       webhook_secret_iv: encryptedSecret.encryption_iv,
-      webhook_secret_tag: encryptedSecret.encryption_tag,
+      webhook_secret_tag: encryptedSecret.encryption_tag
     }
 
     const credential = existingCred
@@ -1968,7 +1876,7 @@ class AgentOperationsModuleService extends MedusaService({
       bot_username: bot.username,
       identities: input.identities ?? [],
       security: normalizeCustomerChatSecurityConfig(input.security),
-      webhook_secret_ref: `vault:${credential.id}`,
+      webhook_secret_ref: `vault:${credential.id}`
     }
 
     const connection = existingConn
@@ -1977,7 +1885,7 @@ class AgentOperationsModuleService extends MedusaService({
             config: configData,
             id: existingConn.id,
             secret_ref: `vault:${credential.id}`,
-            status: "DISABLED",
+            status: "DISABLED"
           },
           sharedContext
         )
@@ -1988,7 +1896,7 @@ class AgentOperationsModuleService extends MedusaService({
             config: configData,
             secret_ref: `vault:${credential.id}`,
             status: "DISABLED",
-            tenant_id: tenantId,
+            tenant_id: tenantId
           },
           sharedContext
         )
@@ -2002,11 +1910,11 @@ class AgentOperationsModuleService extends MedusaService({
         drop_pending_updates: false,
         max_connections: 20,
         secret_token: resolvedWebhookSecret,
-        url: webhookUrl,
+        url: webhookUrl
       }),
       headers: { "content-type": "application/json" },
       method: "POST",
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(10_000)
     })
     const webhookPayload = (await setWebhookRes.json()) as {
       description?: string
@@ -2023,10 +1931,10 @@ class AgentOperationsModuleService extends MedusaService({
       {
         config: {
           ...configData,
-          webhook_url: webhookUrl,
+          webhook_url: webhookUrl
         },
         id: connection.id,
-        status: "ACTIVE",
+        status: "ACTIVE"
       },
       sharedContext
     )
@@ -2042,12 +1950,12 @@ class AgentOperationsModuleService extends MedusaService({
           bot_username: bot.username,
           identity_count: (input.identities ?? []).length,
           public_questions_enabled: input.allow_unmapped_users ?? true,
-          webhook_url: webhookUrl,
+          webhook_url: webhookUrl
         },
         event_type: "agent.channel.configured",
         recorded_at: new Date(),
         resource_id: activeConnection.id,
-        resource_type: "agent_channel_connection",
+        resource_type: "agent_channel_connection"
       },
       sharedContext
     )
@@ -2056,7 +1964,7 @@ class AgentOperationsModuleService extends MedusaService({
       bot_username: bot.username,
       connection: activeConnection,
       secret_hint: secretHint,
-      webhook_url: webhookUrl,
+      webhook_url: webhookUrl
     }
   }
 
@@ -2085,39 +1993,29 @@ class AgentOperationsModuleService extends MedusaService({
     if (conn) {
       try {
         const botToken = await this.resolveChannelBotToken(conn)
-        const apiBaseUrl =
-          (conn.config as any)?.api_base_url ?? "https://api.telegram.org"
-        await fetch(
-          `${apiBaseUrl.replace(/\/$/, "")}/bot${botToken}/deleteWebhook`,
-          {
-            headers: { "content-type": "application/json" },
-            method: "POST",
-            signal: AbortSignal.timeout(5_000),
-          }
-        )
+        const apiBaseUrl = (conn.config as any)?.api_base_url ?? "https://api.telegram.org"
+        await fetch(`${apiBaseUrl.replace(/\/$/, "")}/bot${botToken}/deleteWebhook`, {
+          headers: { "content-type": "application/json" },
+          method: "POST",
+          signal: AbortSignal.timeout(5_000)
+        })
       } catch {
         // ignore deleteWebhook failure on disconnect
       }
 
-      await this.updateAgentChannelConnections(
-        { id: conn.id, status: "DISABLED" },
-        sharedContext
-      )
+      await this.updateAgentChannelConnections({ id: conn.id, status: "DISABLED" }, sharedContext)
     }
 
     return { disconnected: true }
   }
 
-  async testZaloOaToken(
-    accessToken: string,
-    apiBaseUrl = "https://openapi.zalo.me"
-  ) {
+  async testZaloOaToken(accessToken: string, apiBaseUrl = "https://openapi.zalo.me") {
     const base = apiBaseUrl.replace(/\/$/, "")
     let res = await fetch(`${base}/v2.0/oa/getoa`, {
       headers: {
-        access_token: accessToken,
+        access_token: accessToken
       },
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(10_000)
     })
     let payload = (await res.json()) as {
       data?: {
@@ -2143,32 +2041,26 @@ class AgentOperationsModuleService extends MedusaService({
       avatar: payload.data?.avatar ?? "",
       description: payload.data?.description ?? "",
       name: payload.data?.name ?? "",
-      oa_id: oaId,
+      oa_id: oaId
     }
   }
 
-  async refreshZaloOaAccessToken(
-    accountRef = "primary",
-    tenantId = "default"
-  ): Promise<string> {
+  async refreshZaloOaAccessToken(accountRef = "primary", tenantId = "default"): Promise<string> {
     const credentials = await this.listAgentChannelCredentials({
       account_ref: accountRef,
       channel: "ZALO",
-      tenant_id: tenantId,
+      tenant_id: tenantId
     })
     const cred = credentials[0]
     if (!cred) {
-      throw new MedusaError(
-        MedusaError.Types.NOT_FOUND,
-        "No Zalo OA credential found to refresh."
-      )
+      throw new MedusaError(MedusaError.Types.NOT_FOUND, "No Zalo OA credential found to refresh.")
     }
 
     const decrypted = decryptConnectorSecret({
       encrypted_secret: cred.encrypted_secret,
       encryption_iv: cred.encryption_iv,
       encryption_tag: cred.encryption_tag,
-      key_version: cred.key_version,
+      key_version: cred.key_version
     })
 
     let payload: ZaloStoredCredentialPayload
@@ -2186,14 +2078,14 @@ class AgentOperationsModuleService extends MedusaService({
       body: new URLSearchParams({
         app_id: payload.app_id,
         grant_type: "refresh_token",
-        refresh_token: payload.refresh_token,
+        refresh_token: payload.refresh_token
       }),
       headers: {
         "content-type": "application/x-www-form-urlencoded",
-        secret_key: payload.secret_key,
+        secret_key: payload.secret_key
       },
       method: "POST",
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(10_000)
     })
     const data = (await refreshRes.json()) as {
       access_token?: string
@@ -2216,7 +2108,7 @@ class AgentOperationsModuleService extends MedusaService({
       ...payload,
       access_token: data.access_token,
       expires_at: Date.now() + (Number(data.expires_in) || 90000) * 1000,
-      refresh_token: data.refresh_token || payload.refresh_token,
+      refresh_token: data.refresh_token || payload.refresh_token
     }
 
     const encryptedToken = encryptConnectorSecret(JSON.stringify(newPayload))
@@ -2225,7 +2117,7 @@ class AgentOperationsModuleService extends MedusaService({
       encryption_iv: encryptedToken.encryption_iv,
       encryption_tag: encryptedToken.encryption_tag,
       id: cred.id,
-      key_version: encryptedToken.key_version,
+      key_version: encryptedToken.key_version
     })
 
     return data.access_token
@@ -2278,10 +2170,7 @@ class AgentOperationsModuleService extends MedusaService({
     const publicBaseUrl = input.public_base_url.replace(/\/$/, "")
 
     if (!publicBaseUrl.startsWith("https://")) {
-      throw new MedusaError(
-        MedusaError.Types.INVALID_DATA,
-        "Zalo public_base_url must use HTTPS."
-      )
+      throw new MedusaError(MedusaError.Types.INVALID_DATA, "Zalo public_base_url must use HTTPS.")
     }
 
     const existingCredentials = await this.listAgentChannelCredentials(
@@ -2298,7 +2187,7 @@ class AgentOperationsModuleService extends MedusaService({
           encrypted_secret: existingCred.encrypted_secret,
           encryption_iv: existingCred.encryption_iv,
           encryption_tag: existingCred.encryption_tag,
-          key_version: existingCred.key_version,
+          key_version: existingCred.key_version
         })
         existingPayload = JSON.parse(raw)
       } catch {
@@ -2306,21 +2195,14 @@ class AgentOperationsModuleService extends MedusaService({
       }
     }
 
-    const resolvedAccessToken =
-      input.access_token?.trim() || existingPayload?.access_token || ""
-    const resolvedRefreshToken =
-      input.refresh_token?.trim() || existingPayload?.refresh_token || ""
+    const resolvedAccessToken = input.access_token?.trim() || existingPayload?.access_token || ""
+    const resolvedRefreshToken = input.refresh_token?.trim() || existingPayload?.refresh_token || ""
     const resolvedAppId = input.app_id?.trim() || existingPayload?.app_id || ""
-    const resolvedSecretKey =
-      input.secret_key?.trim() || existingPayload?.secret_key || ""
-    const resolvedOaSecretKey =
-      input.oa_secret_key?.trim() || existingPayload?.oa_secret_key || ""
+    const resolvedSecretKey = input.secret_key?.trim() || existingPayload?.secret_key || ""
+    const resolvedOaSecretKey = input.oa_secret_key?.trim() || existingPayload?.oa_secret_key || ""
 
     if (!resolvedAccessToken) {
-      throw new MedusaError(
-        MedusaError.Types.INVALID_DATA,
-        "Zalo OA Access Token is required."
-      )
+      throw new MedusaError(MedusaError.Types.INVALID_DATA, "Zalo OA Access Token is required.")
     }
 
     const oaInfo = await this.testZaloOaToken(resolvedAccessToken, apiBaseUrl)
@@ -2334,19 +2216,15 @@ class AgentOperationsModuleService extends MedusaService({
       oa_name: oaInfo.name,
       oa_secret_key: resolvedOaSecretKey,
       refresh_token: resolvedRefreshToken,
-      secret_key: resolvedSecretKey,
+      secret_key: resolvedSecretKey
     }
 
-    const encryptedToken = encryptConnectorSecret(
-      JSON.stringify(credentialPayload)
-    )
+    const encryptedToken = encryptConnectorSecret(JSON.stringify(credentialPayload))
     const encryptedOaSecret = resolvedOaSecretKey
       ? encryptConnectorSecret(resolvedOaSecretKey)
       : null
 
-    const secretHint = oaInfo.name
-      ? `OA: ${oaInfo.name} (${oaInfo.oa_id})`
-      : `OA: ${oaInfo.oa_id}`
+    const secretHint = oaInfo.name ? `OA: ${oaInfo.name} (${oaInfo.oa_id})` : `OA: ${oaInfo.oa_id}`
 
     const credData = {
       account_ref: accountRef,
@@ -2361,7 +2239,7 @@ class AgentOperationsModuleService extends MedusaService({
       tenant_id: tenantId,
       updated_by_id: input.actor_id,
       webhook_secret_iv: encryptedOaSecret?.encryption_iv ?? null,
-      webhook_secret_tag: encryptedOaSecret?.encryption_tag ?? null,
+      webhook_secret_tag: encryptedOaSecret?.encryption_tag ?? null
     }
 
     const credential = existingCred
@@ -2387,7 +2265,7 @@ class AgentOperationsModuleService extends MedusaService({
       oa_id: oaInfo.oa_id,
       oa_name: oaInfo.name,
       security: normalizeCustomerChatSecurityConfig(input.security),
-      webhook_secret_ref: `vault:${credential.id}`,
+      webhook_secret_ref: `vault:${credential.id}`
     }
 
     const connection = existingConn
@@ -2396,7 +2274,7 @@ class AgentOperationsModuleService extends MedusaService({
             config: configData,
             id: existingConn.id,
             secret_ref: `vault:${credential.id}`,
-            status: "DISABLED",
+            status: "DISABLED"
           },
           sharedContext
         )
@@ -2407,7 +2285,7 @@ class AgentOperationsModuleService extends MedusaService({
             config: configData,
             secret_ref: `vault:${credential.id}`,
             status: "DISABLED",
-            tenant_id: tenantId,
+            tenant_id: tenantId
           },
           sharedContext
         )
@@ -2418,10 +2296,10 @@ class AgentOperationsModuleService extends MedusaService({
       {
         config: {
           ...configData,
-          webhook_url: webhookUrl,
+          webhook_url: webhookUrl
         },
         id: connection.id,
-        status: "ACTIVE",
+        status: "ACTIVE"
       },
       sharedContext
     )
@@ -2436,12 +2314,12 @@ class AgentOperationsModuleService extends MedusaService({
           account_ref: activeConnection.account_ref,
           oa_id: oaInfo.oa_id,
           oa_name: oaInfo.name,
-          webhook_url: webhookUrl,
+          webhook_url: webhookUrl
         },
         event_type: "agent.channel.configured",
         recorded_at: new Date(),
         resource_id: activeConnection.id,
-        resource_type: "agent_channel_connection",
+        resource_type: "agent_channel_connection"
       },
       sharedContext
     )
@@ -2452,7 +2330,7 @@ class AgentOperationsModuleService extends MedusaService({
       oa_id: oaInfo.oa_id,
       oa_name: oaInfo.name,
       secret_hint: secretHint,
-      webhook_url: webhookUrl,
+      webhook_url: webhookUrl
     }
   }
 
@@ -2479,19 +2357,13 @@ class AgentOperationsModuleService extends MedusaService({
     )
     const conn = connections[0]
     if (conn) {
-      await this.updateAgentChannelConnections(
-        { id: conn.id, status: "DISABLED" },
-        sharedContext
-      )
+      await this.updateAgentChannelConnections({ id: conn.id, status: "DISABLED" }, sharedContext)
     }
 
     return { disconnected: true }
   }
 
-  async testFacebookPageToken(
-    pageToken: string,
-    apiBaseUrl = "https://graph.facebook.com/v19.0"
-  ) {
+  async testFacebookPageToken(pageToken: string, apiBaseUrl = "https://graph.facebook.com/v19.0") {
     if (!pageToken?.trim()) {
       throw new MedusaError(
         MedusaError.Types.INVALID_DATA,
@@ -2507,7 +2379,7 @@ class AgentOperationsModuleService extends MedusaService({
       {
         headers: { "content-type": "application/json" },
         method: "GET",
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(10_000)
       }
     )
     let payload = (await response.json()) as {
@@ -2524,7 +2396,7 @@ class AgentOperationsModuleService extends MedusaService({
         {
           headers: { "content-type": "application/json" },
           method: "GET",
-          signal: AbortSignal.timeout(10_000),
+          signal: AbortSignal.timeout(10_000)
         }
       )
       const res1 = (await fallback1.json()) as {
@@ -2545,7 +2417,7 @@ class AgentOperationsModuleService extends MedusaService({
         {
           headers: { "content-type": "application/json" },
           method: "GET",
-          signal: AbortSignal.timeout(10_000),
+          signal: AbortSignal.timeout(10_000)
         }
       )
       const res2 = (await fallback2.json()) as {
@@ -2566,7 +2438,7 @@ class AgentOperationsModuleService extends MedusaService({
         {
           headers: { "content-type": "application/json" },
           method: "GET",
-          signal: AbortSignal.timeout(10_000),
+          signal: AbortSignal.timeout(10_000)
         }
       )
       const debugPayload = (await debugRes.json()) as {
@@ -2581,11 +2453,8 @@ class AgentOperationsModuleService extends MedusaService({
       if (debugRes.ok && debugPayload.data?.is_valid) {
         return {
           avatar: undefined,
-          page_id:
-            debugPayload.data.target_id ||
-            debugPayload.data.profile_id ||
-            "facebook-page",
-          page_name: debugPayload.data.application || "Facebook Fanpage",
+          page_id: debugPayload.data.target_id || debugPayload.data.profile_id || "facebook-page",
+          page_name: debugPayload.data.application || "Facebook Fanpage"
         }
       }
     }
@@ -2597,22 +2466,18 @@ class AgentOperationsModuleService extends MedusaService({
         {
           headers: { "content-type": "application/json" },
           method: "GET",
-          signal: AbortSignal.timeout(10_000),
+          signal: AbortSignal.timeout(10_000)
         }
       )
       const permPayload = (await permRes.json()) as {
         data?: Array<{ permission: string; status: string }>
         error?: { message?: string }
       }
-      if (
-        permRes.ok &&
-        Array.isArray(permPayload.data) &&
-        permPayload.data.length > 0
-      ) {
+      if (permRes.ok && Array.isArray(permPayload.data) && permPayload.data.length > 0) {
         return {
           avatar: undefined,
           page_id: "facebook-page",
-          page_name: "Facebook Fanpage (Token hợp lệ)",
+          page_name: "Facebook Fanpage (Token hợp lệ)"
         }
       }
     }
@@ -2627,7 +2492,7 @@ class AgentOperationsModuleService extends MedusaService({
     return {
       avatar: (payload as any).picture?.data?.url ?? undefined,
       page_id: payload.id,
-      page_name: payload.name ?? `Page ${payload.id}`,
+      page_name: payload.name ?? `Page ${payload.id}`
     }
   }
 
@@ -2696,7 +2561,7 @@ class AgentOperationsModuleService extends MedusaService({
           encrypted_secret: existingCred.encrypted_secret,
           encryption_iv: existingCred.encryption_iv,
           encryption_tag: existingCred.encryption_tag,
-          key_version: existingCred.key_version,
+          key_version: existingCred.key_version
         })
         existingPayload = JSON.parse(raw)
       } catch {
@@ -2706,13 +2571,10 @@ class AgentOperationsModuleService extends MedusaService({
 
     const resolvedAccessToken =
       input.page_access_token?.trim() || existingPayload?.page_access_token || ""
-    const resolvedAppSecret =
-      input.app_secret?.trim() || existingPayload?.app_secret || ""
+    const resolvedAppSecret = input.app_secret?.trim() || existingPayload?.app_secret || ""
     const resolvedAppId = input.app_id?.trim() || existingPayload?.app_id || ""
     const resolvedVerifyToken =
-      input.verify_token?.trim() ||
-      existingPayload?.verify_token ||
-      randomBytes(16).toString("hex")
+      input.verify_token?.trim() || existingPayload?.verify_token || randomBytes(16).toString("hex")
 
     if (!resolvedAccessToken) {
       throw new MedusaError(
@@ -2730,15 +2592,11 @@ class AgentOperationsModuleService extends MedusaService({
       page_avatar: pageInfo.avatar,
       page_id: pageInfo.page_id,
       page_name: pageInfo.page_name,
-      verify_token: resolvedVerifyToken,
+      verify_token: resolvedVerifyToken
     }
 
-    const encryptedToken = encryptConnectorSecret(
-      JSON.stringify(credentialPayload)
-    )
-    const encryptedAppSecret = resolvedAppSecret
-      ? encryptConnectorSecret(resolvedAppSecret)
-      : null
+    const encryptedToken = encryptConnectorSecret(JSON.stringify(credentialPayload))
+    const encryptedAppSecret = resolvedAppSecret ? encryptConnectorSecret(resolvedAppSecret) : null
 
     const secretHint = pageInfo.page_name
       ? `Page: ${pageInfo.page_name} (${pageInfo.page_id})`
@@ -2757,7 +2615,7 @@ class AgentOperationsModuleService extends MedusaService({
       tenant_id: tenantId,
       updated_by_id: input.actor_id,
       webhook_secret_iv: encryptedAppSecret?.encryption_iv ?? null,
-      webhook_secret_tag: encryptedAppSecret?.encryption_tag ?? null,
+      webhook_secret_tag: encryptedAppSecret?.encryption_tag ?? null
     }
 
     const credential = existingCred
@@ -2784,7 +2642,7 @@ class AgentOperationsModuleService extends MedusaService({
       page_name: pageInfo.page_name,
       security: normalizeCustomerChatSecurityConfig(input.security),
       verify_token: resolvedVerifyToken,
-      webhook_secret_ref: `vault:${credential.id}`,
+      webhook_secret_ref: `vault:${credential.id}`
     }
 
     const connection = existingConn
@@ -2793,7 +2651,7 @@ class AgentOperationsModuleService extends MedusaService({
             config: configData,
             id: existingConn.id,
             secret_ref: `vault:${credential.id}`,
-            status: "DISABLED",
+            status: "DISABLED"
           },
           sharedContext
         )
@@ -2804,7 +2662,7 @@ class AgentOperationsModuleService extends MedusaService({
             config: configData,
             secret_ref: `vault:${credential.id}`,
             status: "DISABLED",
-            tenant_id: tenantId,
+            tenant_id: tenantId
           },
           sharedContext
         )
@@ -2815,10 +2673,10 @@ class AgentOperationsModuleService extends MedusaService({
       {
         config: {
           ...configData,
-          webhook_url: webhookUrl,
+          webhook_url: webhookUrl
         },
         id: connection.id,
-        status: "ACTIVE",
+        status: "ACTIVE"
       },
       sharedContext
     )
@@ -2826,7 +2684,10 @@ class AgentOperationsModuleService extends MedusaService({
     // Automatically subscribe the Facebook Page to this App's Webhook events
     try {
       const subUrl = `${apiBaseUrl.replace(/\/$/, "")}/me/subscribed_apps?subscribed_fields=messages,messaging_postbacks&access_token=${encodeURIComponent(resolvedAccessToken)}`
-      await fetch(subUrl, { method: "POST", signal: AbortSignal.timeout(5_000) })
+      await fetch(subUrl, {
+        method: "POST",
+        signal: AbortSignal.timeout(5_000)
+      })
     } catch {
       // Non-blocking if offline
     }
@@ -2841,12 +2702,12 @@ class AgentOperationsModuleService extends MedusaService({
           account_ref: activeConnection.account_ref,
           page_id: pageInfo.page_id,
           page_name: pageInfo.page_name,
-          webhook_url: webhookUrl,
+          webhook_url: webhookUrl
         },
         event_type: "agent.channel.configured",
         recorded_at: new Date(),
         resource_id: activeConnection.id,
-        resource_type: "agent_channel_connection",
+        resource_type: "agent_channel_connection"
       },
       sharedContext
     )
@@ -2858,7 +2719,7 @@ class AgentOperationsModuleService extends MedusaService({
       page_name: pageInfo.page_name,
       secret_hint: secretHint,
       verify_token: resolvedVerifyToken,
-      webhook_url: webhookUrl,
+      webhook_url: webhookUrl
     }
   }
 
@@ -2885,10 +2746,7 @@ class AgentOperationsModuleService extends MedusaService({
     )
     const conn = connections[0]
     if (conn) {
-      await this.updateAgentChannelConnections(
-        { id: conn.id, status: "DISABLED" },
-        sharedContext
-      )
+      await this.updateAgentChannelConnections({ id: conn.id, status: "DISABLED" }, sharedContext)
     }
 
     return { disconnected: true }
@@ -2931,7 +2789,7 @@ class AgentOperationsModuleService extends MedusaService({
         status: "TODO",
         task_type: input.task_type,
         tenant_id: input.tenant_id ?? "default",
-        title: input.title,
+        title: input.title
       },
       sharedContext
     )
@@ -2947,7 +2805,7 @@ class AgentOperationsModuleService extends MedusaService({
         incident_id: input.incident_id,
         recorded_at: new Date(),
         resource_id: task.id,
-        resource_type: "agent_task",
+        resource_type: "agent_task"
       },
       sharedContext
     )
@@ -2991,7 +2849,7 @@ class AgentOperationsModuleService extends MedusaService({
         id: task.id,
         result: input.result,
         started_at: input.status === "IN_PROGRESS" ? now : task.started_at,
-        status: input.status,
+        status: input.status
       },
       sharedContext
     )
@@ -3007,7 +2865,7 @@ class AgentOperationsModuleService extends MedusaService({
         incident_id: task.incident_id,
         recorded_at: now,
         resource_id: task.id,
-        resource_type: "agent_task",
+        resource_type: "agent_task"
       },
       sharedContext
     )
@@ -3040,7 +2898,7 @@ class AgentOperationsModuleService extends MedusaService({
         claimed_at: null,
         id: task.id,
         started_at: null,
-        status: "TODO",
+        status: "TODO"
       },
       sharedContext
     )
@@ -3056,7 +2914,7 @@ class AgentOperationsModuleService extends MedusaService({
         incident_id: task.incident_id,
         recorded_at: now,
         resource_id: task.id,
-        resource_type: "agent_task",
+        resource_type: "agent_task"
       },
       sharedContext
     )
@@ -3084,7 +2942,7 @@ class AgentOperationsModuleService extends MedusaService({
         code: "TASK_STATE_CONFLICT" as const,
         message: `Task ${task.id} is ${task.status}, expected ${input.expected_status}.`,
         outcome: "CONFLICT" as const,
-        task,
+        task
       }
     }
 
@@ -3093,7 +2951,7 @@ class AgentOperationsModuleService extends MedusaService({
         code: "TASK_TERMINAL" as const,
         message: `Task ${task.id} is terminal and cannot be escalated.`,
         outcome: "CONFLICT" as const,
-        task,
+        task
       }
     }
 
@@ -3106,7 +2964,7 @@ class AgentOperationsModuleService extends MedusaService({
         escalated_by_id: input.actor_id,
         escalation_reason: input.reason,
         id: task.id,
-        priority: input.priority,
+        priority: input.priority
       },
       sharedContext
     )
@@ -3122,13 +2980,13 @@ class AgentOperationsModuleService extends MedusaService({
           assigned_to_type: input.assigned_to_type,
           from_priority: task.priority,
           reason: input.reason,
-          to_priority: input.priority,
+          to_priority: input.priority
         },
         event_type: "agent.task.escalated",
         incident_id: task.incident_id,
         recorded_at: now,
         resource_id: task.id,
-        resource_type: "agent_task",
+        resource_type: "agent_task"
       },
       sharedContext
     )
@@ -3155,7 +3013,7 @@ class AgentOperationsModuleService extends MedusaService({
         locale: input.locale,
         scope: input.scope,
         source_url: input.source_url,
-        tenant_id: tenantId,
+        tenant_id: tenantId
       },
       { take: 1 },
       sharedContext
@@ -3171,7 +3029,7 @@ class AgentOperationsModuleService extends MedusaService({
         source_type: input.source_type,
         source_url: input.source_url,
         status: "ACTIVE",
-        tenant_id: tenantId,
+        tenant_id: tenantId
       },
       sharedContext
     )
@@ -3185,7 +3043,7 @@ class AgentOperationsModuleService extends MedusaService({
         event_type: "agent.knowledge-source.connected",
         recorded_at: new Date(),
         resource_id: source.id,
-        resource_type: "agent_knowledge_source",
+        resource_type: "agent_knowledge_source"
       },
       sharedContext
     )
@@ -3217,11 +3075,7 @@ class AgentOperationsModuleService extends MedusaService({
     input: DeleteKnowledgeSourceInput,
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const source = await this.retrieveAgentKnowledgeSource(
-      input.source_id,
-      {},
-      sharedContext
-    )
+    const source = await this.retrieveAgentKnowledgeSource(input.source_id, {}, sharedContext)
     const documents = await this.listAgentKnowledgeDocuments(
       { document_key: `source-${source.id}` },
       { take: 10_000 },
@@ -3246,12 +3100,12 @@ class AgentOperationsModuleService extends MedusaService({
           chunk_count: chunks.length,
           document_count: documents.length,
           source_name: source.name,
-          source_type: source.source_type,
+          source_type: source.source_type
         },
         event_type: "agent.knowledge-source.deleted",
         recorded_at: new Date(),
         resource_id: source.id,
-        resource_type: "agent_knowledge_source",
+        resource_type: "agent_knowledge_source"
       },
       sharedContext
     )
@@ -3271,7 +3125,7 @@ class AgentOperationsModuleService extends MedusaService({
       chunk_count: chunks.length,
       deleted: true as const,
       document_count: documents.length,
-      source_id: source.id,
+      source_id: source.id
     }
   }
 
@@ -3283,11 +3137,7 @@ class AgentOperationsModuleService extends MedusaService({
     },
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const source = await this.retrieveAgentKnowledgeSource(
-      input.source_id,
-      {},
-      sharedContext
-    )
+    const source = await this.retrieveAgentKnowledgeSource(input.source_id, {}, sharedContext)
     if (source.status !== "ACTIVE") {
       throw new MedusaError(
         MedusaError.Types.NOT_ALLOWED,
@@ -3302,7 +3152,7 @@ class AgentOperationsModuleService extends MedusaService({
           id: source.id,
           last_checked_at: now,
           last_error: input.failure ?? "Knowledge source sync failed.",
-          last_sync_status: "FAILED",
+          last_sync_status: "FAILED"
         },
         sharedContext
       )
@@ -3316,7 +3166,7 @@ class AgentOperationsModuleService extends MedusaService({
           last_checked_at: now,
           last_error: null,
           last_etag: input.fetch_result.etag,
-          last_sync_status: "UNCHANGED",
+          last_sync_status: "UNCHANGED"
         },
         sharedContext
       )
@@ -3330,7 +3180,7 @@ class AgentOperationsModuleService extends MedusaService({
           last_checked_at: now,
           last_error: null,
           last_etag: input.fetch_result.etag,
-          last_sync_status: "UNCHANGED",
+          last_sync_status: "UNCHANGED"
         },
         sharedContext
       )
@@ -3349,7 +3199,7 @@ class AgentOperationsModuleService extends MedusaService({
         scope: source.scope,
         tenant_id: source.tenant_id,
         title: source.name,
-        version,
+        version
       },
       sharedContext
     )
@@ -3362,7 +3212,7 @@ class AgentOperationsModuleService extends MedusaService({
         last_error: null,
         last_etag: input.fetch_result.etag,
         last_synced_at: now,
-        last_sync_status: "SUCCEEDED",
+        last_sync_status: "SUCCEEDED"
       },
       sharedContext
     )
@@ -3375,12 +3225,12 @@ class AgentOperationsModuleService extends MedusaService({
         data: {
           checksum: input.fetch_result.checksum,
           document_id: created.document.id,
-          version,
+          version
         },
         event_type: "agent.knowledge-source.synchronized",
         recorded_at: now,
         resource_id: source.id,
-        resource_type: "agent_knowledge_source",
+        resource_type: "agent_knowledge_source"
       },
       sharedContext
     )
@@ -3388,7 +3238,7 @@ class AgentOperationsModuleService extends MedusaService({
     return {
       document: created.document,
       source: updated,
-      status: "SUCCEEDED" as const,
+      status: "SUCCEEDED" as const
     }
   }
 
@@ -3429,7 +3279,7 @@ class AgentOperationsModuleService extends MedusaService({
         status: "DRAFT",
         tenant_id: input.tenant_id ?? "default",
         title: input.title,
-        version: input.version,
+        version: input.version
       },
       sharedContext
     )
@@ -3438,7 +3288,7 @@ class AgentOperationsModuleService extends MedusaService({
     await this.createAgentKnowledgeChunks(
       chunks.map((chunk) => ({
         ...chunk,
-        document_id: document.id,
+        document_id: document.id
       })),
       sharedContext
     )
@@ -3468,15 +3318,8 @@ class AgentOperationsModuleService extends MedusaService({
       return { chunk_count: existing.length, created: false }
     }
 
-    const document = await this.retrieveAgentKnowledgeDocument(
-      documentId,
-      {},
-      sharedContext
-    )
-    const chunks = chunkKnowledgeContent(
-      document.content,
-      document.citation_locator
-    )
+    const document = await this.retrieveAgentKnowledgeDocument(documentId, {}, sharedContext)
+    const chunks = chunkKnowledgeContent(document.content, document.citation_locator)
     await this.createAgentKnowledgeChunks(
       chunks.map((chunk) => ({ ...chunk, document_id: document.id })),
       sharedContext
@@ -3498,11 +3341,7 @@ class AgentOperationsModuleService extends MedusaService({
     input: ApproveKnowledgeDocumentInput,
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const document = await this.retrieveAgentKnowledgeDocument(
-      input.document_id,
-      {},
-      sharedContext
-    )
+    const document = await this.retrieveAgentKnowledgeDocument(input.document_id, {}, sharedContext)
 
     if (document.status === "APPROVED") {
       return { document, duplicate: true }
@@ -3538,7 +3377,7 @@ class AgentOperationsModuleService extends MedusaService({
         approved_at: new Date(),
         approved_by: input.actor_id,
         id: document.id,
-        status: "APPROVED",
+        status: "APPROVED"
       },
       sharedContext
     )
@@ -3553,7 +3392,7 @@ class AgentOperationsModuleService extends MedusaService({
         event_type: "agent.knowledge.approved",
         recorded_at: new Date(),
         resource_id: document.id,
-        resource_type: "agent_knowledge_document",
+        resource_type: "agent_knowledge_document"
       },
       sharedContext
     )
@@ -3574,11 +3413,7 @@ class AgentOperationsModuleService extends MedusaService({
     input: RetireKnowledgeDocumentInput,
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const document = await this.retrieveAgentKnowledgeDocument(
-      input.document_id,
-      {},
-      sharedContext
-    )
+    const document = await this.retrieveAgentKnowledgeDocument(input.document_id, {}, sharedContext)
 
     if (document.status === "RETIRED") {
       return { document, duplicate: true }
@@ -3604,7 +3439,7 @@ class AgentOperationsModuleService extends MedusaService({
         event_type: "agent.knowledge.retired",
         recorded_at: new Date(),
         resource_id: document.id,
-        resource_type: "agent_knowledge_document",
+        resource_type: "agent_knowledge_document"
       },
       sharedContext
     )
@@ -3617,16 +3452,12 @@ class AgentOperationsModuleService extends MedusaService({
     documentId: string,
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const document = await this.retrieveAgentKnowledgeDocument(
-      documentId,
-      {},
-      sharedContext
-    )
+    const document = await this.retrieveAgentKnowledgeDocument(documentId, {}, sharedContext)
     if (!isKnowledgeEligible(document)) {
       return {
         indexed_chunks: 0,
         provider: "disabled",
-        status: "SKIPPED" as const,
+        status: "SKIPPED" as const
       }
     }
 
@@ -3638,11 +3469,7 @@ class AgentOperationsModuleService extends MedusaService({
     input: PrepareKnowledgeSourceInput,
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const source = await this.retrieveAgentKnowledgeSource(
-      input.source_id,
-      {},
-      sharedContext
-    )
+    const source = await this.retrieveAgentKnowledgeSource(input.source_id, {}, sharedContext)
     if (!source.last_document_id) {
       throw new MedusaError(
         MedusaError.Types.INVALID_DATA,
@@ -3662,19 +3489,17 @@ class AgentOperationsModuleService extends MedusaService({
           error: `Knowledge document ${document.id} cannot be indexed from ${document.status}.`,
           indexed_chunks: 0,
           provider: "disabled",
-          status: "SKIPPED" as const,
+          status: "SKIPPED" as const
         }
 
     if (ragIndex.status !== "INDEXED") {
       const failure =
-        "error" in ragIndex
-          ? ragIndex.error
-          : "Vector indexing is not configured for this store."
+        "error" in ragIndex ? ragIndex.error : "Vector indexing is not configured for this store."
       const updatedSource = await this.updateAgentKnowledgeSources(
         {
           id: source.id,
           last_error: failure,
-          last_sync_status: "FAILED",
+          last_sync_status: "FAILED"
         },
         sharedContext
       )
@@ -3687,7 +3512,7 @@ class AgentOperationsModuleService extends MedusaService({
             {
               actor_id: input.actor_id,
               actor_type: input.actor_type,
-              document_id: document.id,
+              document_id: document.id
             },
             sharedContext
           )
@@ -3706,7 +3531,7 @@ class AgentOperationsModuleService extends MedusaService({
           actor_id: input.actor_id,
           actor_type: input.actor_type,
           document_id: superseded.id,
-          reason: `Superseded by synchronized source version ${document.version}.`,
+          reason: `Superseded by synchronized source version ${document.version}.`
         },
         sharedContext
       )
@@ -3729,17 +3554,21 @@ class AgentOperationsModuleService extends MedusaService({
           provider: ragIndex.provider,
           auto_approved: approval.document.status === "APPROVED",
           status: approval.document.status,
-          superseded_document_count: supersededDocuments.length,
+          superseded_document_count: supersededDocuments.length
         },
         event_type: "agent.knowledge-source.prepared",
         recorded_at: new Date(),
         resource_id: source.id,
-        resource_type: "agent_knowledge_source",
+        resource_type: "agent_knowledge_source"
       },
       sharedContext
     )
 
-    return { document: approval.document, rag_index: ragIndex, source: updatedSource }
+    return {
+      document: approval.document,
+      rag_index: ragIndex,
+      source: updatedSource
+    }
   }
 
   @InjectTransactionManager()
@@ -3754,10 +3583,7 @@ class AgentOperationsModuleService extends MedusaService({
     )
 
     try {
-      const credentials = await this.getActiveAiProviderCredentials(
-        "embedding",
-        document.tenant_id
-      )
+      const credentials = await this.getActiveAiProviderCredentials("embedding", document.tenant_id)
       if (!credentials.length) {
         return createKnowledgeRagEngine(process.env).indexDocuments([])
       }
@@ -3773,17 +3599,16 @@ class AgentOperationsModuleService extends MedusaService({
         scope: document.scope,
         tenant_id: document.tenant_id,
         title: document.title,
-        version: document.version,
+        version: document.version
       }))
       let primaryResult
       let lastError: unknown
 
       for (const credential of credentials) {
         try {
-          const result = await createKnowledgeRagEngine(
-            process.env,
-            credential
-          ).indexDocuments(vectorDocuments)
+          const result = await createKnowledgeRagEngine(process.env, credential).indexDocuments(
+            vectorDocuments
+          )
           primaryResult ??= result
           if (result.status === "INDEXED") {
             await this.createAgentAuditEvents(
@@ -3795,12 +3620,12 @@ class AgentOperationsModuleService extends MedusaService({
                 data: {
                   embedding_provider: credential.provider,
                   indexed_chunks: result.indexed_chunks,
-                  provider: result.provider,
+                  provider: result.provider
                 },
                 event_type: "agent.knowledge.vector-indexed",
                 recorded_at: new Date(),
                 resource_id: document.id,
-                resource_type: "agent_knowledge_document",
+                resource_type: "agent_knowledge_document"
               },
               sharedContext
             )
@@ -3822,7 +3647,7 @@ class AgentOperationsModuleService extends MedusaService({
             : "Knowledge vector indexing failed.",
         indexed_chunks: 0,
         provider: "langchain-qdrant",
-        status: "FAILED" as const,
+        status: "FAILED" as const
       }
     }
   }
@@ -3837,15 +3662,13 @@ class AgentOperationsModuleService extends MedusaService({
       { take: 10_000 },
       sharedContext
     )
-    const eligibleDocuments = documents.filter((document) =>
-      isKnowledgeEligible(document)
-    )
+    const eligibleDocuments = documents.filter((document) => isKnowledgeEligible(document))
     if (!eligibleDocuments.length) {
       return {
         indexed_chunks: 0,
         indexed_documents: 0,
         provider: "disabled",
-        status: "SKIPPED" as const,
+        status: "SKIPPED" as const
       }
     }
     const chunks = await this.listAgentKnowledgeChunks(
@@ -3853,19 +3676,12 @@ class AgentOperationsModuleService extends MedusaService({
       { order: { chunk_index: "ASC" }, take: 50_000 },
       sharedContext
     )
-    const documentsById = new Map(
-      eligibleDocuments.map((document) => [document.id, document])
-    )
+    const documentsById = new Map(eligibleDocuments.map((document) => [document.id, document]))
 
     try {
-      const credentials = await this.getActiveAiProviderCredentials(
-        "embedding",
-        tenantId
-      )
+      const credentials = await this.getActiveAiProviderCredentials("embedding", tenantId)
       if (!credentials.length) {
-        const result = await createKnowledgeRagEngine(
-          process.env
-        ).indexDocuments([])
+        const result = await createKnowledgeRagEngine(process.env).indexDocuments([])
         return { ...result, indexed_documents: 0 }
       }
       const vectorDocuments = chunks.flatMap((chunk) => {
@@ -3883,18 +3699,17 @@ class AgentOperationsModuleService extends MedusaService({
             scope: document.scope,
             tenant_id: document.tenant_id,
             title: document.title,
-            version: document.version,
-          },
+            version: document.version
+          }
         ]
       })
       let primaryResult
       let lastError: unknown
       for (const credential of credentials) {
         try {
-          const result = await createKnowledgeRagEngine(
-            process.env,
-            credential
-          ).indexDocuments(vectorDocuments)
+          const result = await createKnowledgeRagEngine(process.env, credential).indexDocuments(
+            vectorDocuments
+          )
           primaryResult ??= result
         } catch (error) {
           lastError = error
@@ -3905,18 +3720,15 @@ class AgentOperationsModuleService extends MedusaService({
       }
       return {
         ...primaryResult,
-        indexed_documents: eligibleDocuments.length,
+        indexed_documents: eligibleDocuments.length
       }
     } catch (error) {
       return {
-        error:
-          error instanceof Error
-            ? error.message.slice(0, 1_000)
-            : "Knowledge reindex failed.",
+        error: error instanceof Error ? error.message.slice(0, 1_000) : "Knowledge reindex failed.",
         indexed_chunks: 0,
         indexed_documents: 0,
         provider: "langchain-qdrant",
-        status: "FAILED" as const,
+        status: "FAILED" as const
       }
     }
   }
@@ -3936,7 +3748,7 @@ class AgentOperationsModuleService extends MedusaService({
             ? error.message.slice(0, 1_000)
             : "Knowledge vector deletion failed.",
         provider: "langchain-qdrant",
-        status: "FAILED" as const,
+        status: "FAILED" as const
       }
     }
   }
@@ -3951,13 +3763,13 @@ class AgentOperationsModuleService extends MedusaService({
       locale: parsed.locale,
       scope: parsed.scope,
       status: "APPROVED",
-      tenant_id: parsed.tenant_id,
+      tenant_id: parsed.tenant_id
     }
     const documents = await this.listAgentKnowledgeDocuments(
       filters,
       {
         order: { effective_at: "DESC" },
-        take: Math.min(Math.max(parsed.limit * 20, 100), 500),
+        take: Math.min(Math.max(parsed.limit * 20, 100), 500)
       },
       sharedContext
     )
@@ -3966,22 +3778,19 @@ class AgentOperationsModuleService extends MedusaService({
       return { results: [], total_candidates: 0 }
     }
 
-    const knowledgeCacheKey = buildCustomerAssistantCacheKey(
-      "knowledge-search",
-      {
-        documents: documents.map((document) => ({
-          id: document.id,
-          updated_at: new Date(document.updated_at).toISOString(),
-          version: document.version,
-        })),
-        retrieval_strategy: "topic-aware-v3",
-        limit: parsed.limit,
-        locale: parsed.locale ?? "",
-        query: normalizeCustomerCacheText(parsed.query),
-        scope: parsed.scope ?? "",
-        tenant_id: parsed.tenant_id,
-      }
-    )
+    const knowledgeCacheKey = buildCustomerAssistantCacheKey("knowledge-search", {
+      documents: documents.map((document) => ({
+        id: document.id,
+        updated_at: new Date(document.updated_at).toISOString(),
+        version: document.version
+      })),
+      retrieval_strategy: "topic-aware-v3",
+      limit: parsed.limit,
+      locale: parsed.locale ?? "",
+      query: normalizeCustomerCacheText(parsed.query),
+      scope: parsed.scope ?? "",
+      tenant_id: parsed.tenant_id
+    })
     const caching = this.getCustomerAssistantCaching()
     const cachedKnowledge = await readCustomerAssistantCache(
       caching,
@@ -4002,41 +3811,29 @@ class AgentOperationsModuleService extends MedusaService({
     )
 
     const lexicalOutput = searchKnowledgeChunks(parsed, documents, chunks)
-    const relevantLexicalOutput = filterKnowledgeEvidenceForQuestion(
-      parsed.query,
-      lexicalOutput
-    )
+    const relevantLexicalOutput = filterKnowledgeEvidenceForQuestion(parsed.query, lexicalOutput)
     if (!shouldUseSemanticKnowledgeSearch(relevantLexicalOutput)) {
       await writeCustomerAssistantCache(caching, {
         key: knowledgeCacheKey,
-        tags: [
-          "customer-assistant:knowledge",
-          `customer-assistant:tenant:${parsed.tenant_id}`,
-        ],
+        tags: ["customer-assistant:knowledge", `customer-assistant:tenant:${parsed.tenant_id}`],
         ttl: CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS.knowledge_search,
-        value: relevantLexicalOutput,
+        value: relevantLexicalOutput
       })
       return relevantLexicalOutput
     }
 
     let semanticScores = new Map<string, number>()
     try {
-      const credentials = await this.getActiveAiProviderCredentials(
-        "embedding",
-        parsed.tenant_id
-      )
+      const credentials = await this.getActiveAiProviderCredentials("embedding", parsed.tenant_id)
       const eligibleChunkIds = new Set(chunks.map((chunk) => chunk.id))
       for (const credential of credentials) {
         try {
-          const results = await createKnowledgeRagEngine(
-            process.env,
-            credential
-          ).search({
+          const results = await createKnowledgeRagEngine(process.env, credential).search({
             candidate_limit: Math.min(Math.max(parsed.limit * 10, 20), 100),
             locale: parsed.locale,
             query: parsed.query,
             scope: parsed.scope,
-            tenant_id: parsed.tenant_id,
+            tenant_id: parsed.tenant_id
           })
           semanticScores = new Map(
             results
@@ -4055,18 +3852,12 @@ class AgentOperationsModuleService extends MedusaService({
     const output = semanticScores.size
       ? searchKnowledgeChunksHybrid(parsed, documents, chunks, semanticScores)
       : searchKnowledgeChunks(parsed, documents, chunks)
-    const relevantOutput = filterKnowledgeEvidenceForQuestion(
-      parsed.query,
-      output
-    )
+    const relevantOutput = filterKnowledgeEvidenceForQuestion(parsed.query, output)
     await writeCustomerAssistantCache(caching, {
       key: knowledgeCacheKey,
-      tags: [
-        "customer-assistant:knowledge",
-        `customer-assistant:tenant:${parsed.tenant_id}`,
-      ],
+      tags: ["customer-assistant:knowledge", `customer-assistant:tenant:${parsed.tenant_id}`],
       ttl: CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS.knowledge_search,
-      value: relevantOutput,
+      value: relevantOutput
     })
     return relevantOutput
   }
@@ -4079,7 +3870,10 @@ class AgentOperationsModuleService extends MedusaService({
       knowledge: KnowledgeSearchOutput
       locale: "en" | "vi"
       question: string
-      recent_messages?: Array<{ body: string; direction: "INBOUND" | "OUTBOUND" }>
+      recent_messages?: Array<{
+        body: string
+        direction: "INBOUND" | "OUTBOUND"
+      }>
       tenant_id: string
     },
     @MedusaContext() sharedContext: Context = {}
@@ -4095,8 +3889,8 @@ class AgentOperationsModuleService extends MedusaService({
         optimization: {
           ai_invoked: false,
           cache_hit: false,
-          path: "DETERMINISTIC_DELIVERY_TIME_GUIDANCE",
-        },
+          path: "DETERMINISTIC_DELIVERY_TIME_GUIDANCE"
+        }
       }
     }
     const reviewFallback = buildKnowledgeReviewFallback(input.locale)
@@ -4111,16 +3905,12 @@ class AgentOperationsModuleService extends MedusaService({
       const cached = KnowledgeAnswerModelOutput.safeParse(legacyRun.output)
       if (!cached.success) return reviewFallback
       return {
-        ...resolveGovernedKnowledgeModelOutput(
-          cached.data,
-          input.knowledge,
-          input.locale
-        ),
+        ...resolveGovernedKnowledgeModelOutput(cached.data, input.knowledge, input.locale),
         optimization: {
           ai_invoked: false,
           cache_hit: true,
-          path: "MESSAGE_IDEMPOTENCY",
-        },
+          path: "MESSAGE_IDEMPOTENCY"
+        }
       }
     }
 
@@ -4129,7 +3919,7 @@ class AgentOperationsModuleService extends MedusaService({
         excerpt: result.excerpt.slice(0, 650),
         locator: result.citation_locator,
         title: result.title,
-        version: result.version,
+        version: result.version
       })),
       locale: input.locale,
       conversation_memory: input.conversation_memory?.slice(-900) ?? "",
@@ -4137,15 +3927,12 @@ class AgentOperationsModuleService extends MedusaService({
       recent_conversation:
         input.recent_messages?.slice(-4).map((m) => ({
           body: m.body.slice(0, 400),
-          direction: m.direction,
-        })) ?? [],
+          direction: m.direction
+        })) ?? []
     }
     let credentials
     try {
-      credentials = await this.getActiveAiProviderCredentials(
-        "generation",
-        input.tenant_id
-      )
+      credentials = await this.getActiveAiProviderCredentials("generation", input.tenant_id)
     } catch {
       if (input.knowledge.results.length > 0) {
         return {
@@ -4153,8 +3940,8 @@ class AgentOperationsModuleService extends MedusaService({
           optimization: {
             ai_invoked: false,
             cache_hit: false,
-            path: "GROUNDED_KNOWLEDGE_FALLBACK",
-          },
+            path: "GROUNDED_KNOWLEDGE_FALLBACK"
+          }
         }
       }
       return reviewFallback
@@ -4164,19 +3951,16 @@ class AgentOperationsModuleService extends MedusaService({
       const adapter = createModelAdapter({
         apiKey: credential.api_key,
         model: credential.model,
-        provider: credential.provider,
+        provider: credential.provider
       })
-      const responseCacheKey = buildCustomerAssistantCacheKey(
-        "knowledge-answer",
-        {
-          input: safeInput,
-          model: adapter.model,
-          prompt_key: KNOWLEDGE_ANSWER_PROMPT_KEY,
-          prompt_version: KNOWLEDGE_ANSWER_PROMPT_VERSION,
-          provider: adapter.provider,
-          tenant_id: input.tenant_id,
-        }
-      )
+      const responseCacheKey = buildCustomerAssistantCacheKey("knowledge-answer", {
+        input: safeInput,
+        model: adapter.model,
+        prompt_key: KNOWLEDGE_ANSWER_PROMPT_KEY,
+        prompt_version: KNOWLEDGE_ANSWER_PROMPT_VERSION,
+        provider: adapter.provider,
+        tenant_id: input.tenant_id
+      })
       const cachedResponse = await readCustomerAssistantCache(
         this.getCustomerAssistantCaching(),
         responseCacheKey,
@@ -4187,34 +3971,22 @@ class AgentOperationsModuleService extends MedusaService({
       )
       if (cachedResponse) {
         return {
-          ...resolveGovernedKnowledgeModelOutput(
-            cachedResponse,
-            input.knowledge,
-            input.locale
-          ),
+          ...resolveGovernedKnowledgeModelOutput(cachedResponse, input.knowledge, input.locale),
           optimization: {
             ai_invoked: false,
             cache_hit: true,
-            path: "AI_RESPONSE_CACHE",
-          },
+            path: "AI_RESPONSE_CACHE"
+          }
         }
       }
       const attemptKey = `${input.idempotency_key}:provider:${adapter.provider}`
       const existing = (
-        await this.listAgentModelRuns(
-          { idempotency_key: attemptKey },
-          { take: 1 },
-          sharedContext
-        )
+        await this.listAgentModelRuns({ idempotency_key: attemptKey }, { take: 1 }, sharedContext)
       )[0]
       if (existing?.status === "SUCCEEDED" && existing.output) {
         const cached = KnowledgeAnswerModelOutput.safeParse(existing.output)
         if (cached.success) {
-          return resolveGovernedKnowledgeModelOutput(
-            cached.data,
-            input.knowledge,
-            input.locale
-          )
+          return resolveGovernedKnowledgeModelOutput(cached.data, input.knowledge, input.locale)
         }
       }
       if (existing?.status === "RUNNING") return reviewFallback
@@ -4233,7 +4005,7 @@ class AgentOperationsModuleService extends MedusaService({
           provider: adapter.provider,
           redacted: true,
           started_at: startedAt,
-          status: "RUNNING",
+          status: "RUNNING"
         },
         sharedContext
       )
@@ -4251,17 +4023,17 @@ class AgentOperationsModuleService extends MedusaService({
           prompt_key: KNOWLEDGE_ANSWER_PROMPT_KEY,
           prompt_version: promptConfig.version,
           system_prompt: promptConfig.system_prompt,
-          timeout_ms: KNOWLEDGE_ANSWER_TIMEOUT_MS,
+          timeout_ms: KNOWLEDGE_ANSWER_TIMEOUT_MS
         })
         const output = KnowledgeAnswerModelOutput.parse(generated)
         await writeCustomerAssistantCache(this.getCustomerAssistantCaching(), {
           key: responseCacheKey,
           tags: [
             "customer-assistant:knowledge-answer",
-            `customer-assistant:tenant:${input.tenant_id}`,
+            `customer-assistant:tenant:${input.tenant_id}`
           ],
           ttl: CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS.knowledge_answer,
-          value: output,
+          value: output
         })
         await this.updateAgentModelRuns(
           {
@@ -4269,21 +4041,17 @@ class AgentOperationsModuleService extends MedusaService({
             id: modelRun.id,
             latency_ms: Date.now() - startedAt.getTime(),
             output,
-            status: "SUCCEEDED",
+            status: "SUCCEEDED"
           },
           sharedContext
         )
         return {
-          ...resolveGovernedKnowledgeModelOutput(
-            output,
-            input.knowledge,
-            input.locale
-          ),
+          ...resolveGovernedKnowledgeModelOutput(output, input.knowledge, input.locale),
           optimization: {
             ai_invoked: true,
             cache_hit: false,
-            path: "AI_MODEL",
-          },
+            path: "AI_MODEL"
+          }
         }
       } catch (error) {
         await this.updateAgentModelRuns(
@@ -4295,7 +4063,7 @@ class AgentOperationsModuleService extends MedusaService({
                 : "Customer knowledge answer failed",
             id: modelRun.id,
             latency_ms: Date.now() - startedAt.getTime(),
-            status: "FAILED",
+            status: "FAILED"
           },
           sharedContext
         )
@@ -4308,8 +4076,8 @@ class AgentOperationsModuleService extends MedusaService({
         optimization: {
           ai_invoked: false,
           cache_hit: false,
-          path: "GROUNDED_KNOWLEDGE_FALLBACK",
-        },
+          path: "GROUNDED_KNOWLEDGE_FALLBACK"
+        }
       }
     }
 
@@ -4332,40 +4100,26 @@ class AgentOperationsModuleService extends MedusaService({
     },
     @MedusaContext() sharedContext: Context = {}
   ): Promise<KnowledgeAnswer> {
-    const fallbackOutput = buildProductAdvisorFallback(
-      input.catalog,
-      input.locale,
-      input.question
-    )
-    const fallback = formatProductAdvisorReply(
-      fallbackOutput,
-      input.catalog,
-      input.locale
-    )
+    const fallbackOutput = buildProductAdvisorFallback(input.catalog, input.locale, input.question)
+    const fallback = formatProductAdvisorReply(fallbackOutput, input.catalog, input.locale)
     const toAnswer = (
       result: { body: string; product_ids: string[] },
       optimization = {
         ai_invoked: false,
         cache_hit: false,
-        path: "DETERMINISTIC_FALLBACK",
+        path: "DETERMINISTIC_FALLBACK"
       }
     ) => {
       const productIds = new Set(result.product_ids)
-      const catalogProducts =
-        input.catalog.status === "READY" ? input.catalog.products : []
+      const catalogProducts = input.catalog.status === "READY" ? input.catalog.products : []
       const productMedia = catalogProducts
-        .filter(
-          (product) =>
-            productIds.has(product.id) && isPublicCustomerUrl(product.thumbnail)
-        )
+        .filter((product) => productIds.has(product.id) && isPublicCustomerUrl(product.thumbnail))
         .slice(0, 3)
         .map((product) => ({
           image_url: product.thumbnail as string,
           product_id: product.id,
-          product_url: isPublicCustomerUrl(product.product_url)
-            ? product.product_url
-            : null,
-          title: product.title,
+          product_url: isPublicCustomerUrl(product.product_url) ? product.product_url : null,
+          title: product.title
         }))
       return {
         body: result.body,
@@ -4375,20 +4129,17 @@ class AgentOperationsModuleService extends MedusaService({
         locale: input.locale,
         optimization,
         product_ids: result.product_ids,
-        product_media: productMedia,
+        product_media: productMedia
       }
     }
-    if (
-      input.catalog.status === "UNAVAILABLE" ||
-      !input.catalog.products.length
-    ) {
+    if (input.catalog.status === "UNAVAILABLE" || !input.catalog.products.length) {
       return toAnswer(fallback)
     }
     if (isCatalogOverviewRequest(input.question)) {
       return toAnswer(buildCatalogOverviewReply(input.catalog, input.locale, input.question), {
         ai_invoked: false,
         cache_hit: false,
-        path: "DETERMINISTIC_CATALOG",
+        path: "DETERMINISTIC_CATALOG"
       })
     }
 
@@ -4412,7 +4163,7 @@ class AgentOperationsModuleService extends MedusaService({
           {
             ai_invoked: false,
             cache_hit: true,
-            path: "MESSAGE_IDEMPOTENCY",
+            path: "MESSAGE_IDEMPOTENCY"
           }
         )
       }
@@ -4432,24 +4183,21 @@ class AgentOperationsModuleService extends MedusaService({
           currency_code: variant.currency_code,
           id: variant.id,
           price: variant.price,
-          title: variant.title,
-        })),
+          title: variant.title
+        }))
       })),
       conversation_memory: input.conversation_memory?.slice(-900) ?? "",
       current_message: input.question.slice(0, 1_000),
       locale: input.locale,
       recent_conversation: input.recent_messages.slice(-4).map((message) => ({
         body: message.body.slice(0, 400),
-        direction: message.direction,
+        direction: message.direction
       })),
-      shopping_preferences: extractCustomerProductPreferences(input.question),
+      shopping_preferences: extractCustomerProductPreferences(input.question)
     }
     let credentials
     try {
-      credentials = await this.getActiveAiProviderCredentials(
-        "generation",
-        input.tenant_id
-      )
+      credentials = await this.getActiveAiProviderCredentials("generation", input.tenant_id)
     } catch {
       return toAnswer(fallback)
     }
@@ -4458,19 +4206,16 @@ class AgentOperationsModuleService extends MedusaService({
       const adapter = createModelAdapter({
         apiKey: credential.api_key,
         model: credential.model,
-        provider: credential.provider,
+        provider: credential.provider
       })
-      const responseCacheKey = buildCustomerAssistantCacheKey(
-        "product-advice",
-        {
-          input: safeInput,
-          model: adapter.model,
-          prompt_key: PRODUCT_ADVISOR_PROMPT_KEY,
-          prompt_version: PRODUCT_ADVISOR_PROMPT_VERSION,
-          provider: adapter.provider,
-          tenant_id: input.tenant_id,
-        }
-      )
+      const responseCacheKey = buildCustomerAssistantCacheKey("product-advice", {
+        input: safeInput,
+        model: adapter.model,
+        prompt_key: PRODUCT_ADVISOR_PROMPT_KEY,
+        prompt_version: PRODUCT_ADVISOR_PROMPT_VERSION,
+        provider: adapter.provider,
+        tenant_id: input.tenant_id
+      })
       const cachedResponse = await readCustomerAssistantCache(
         this.getCustomerAssistantCaching(),
         responseCacheKey,
@@ -4490,17 +4235,13 @@ class AgentOperationsModuleService extends MedusaService({
           {
             ai_invoked: false,
             cache_hit: true,
-            path: "AI_RESPONSE_CACHE",
+            path: "AI_RESPONSE_CACHE"
           }
         )
       }
       const attemptKey = `${input.idempotency_key}:provider:${adapter.provider}`
       const existing = (
-        await this.listAgentModelRuns(
-          { idempotency_key: attemptKey },
-          { take: 1 },
-          sharedContext
-        )
+        await this.listAgentModelRuns({ idempotency_key: attemptKey }, { take: 1 }, sharedContext)
       )[0]
       if (existing?.status === "SUCCEEDED" && existing.output) {
         const cached = ProductAdvisorModelOutput.safeParse(existing.output)
@@ -4531,7 +4272,7 @@ class AgentOperationsModuleService extends MedusaService({
           provider: adapter.provider,
           redacted: true,
           started_at: startedAt,
-          status: "RUNNING",
+          status: "RUNNING"
         },
         sharedContext
       )
@@ -4548,17 +4289,17 @@ class AgentOperationsModuleService extends MedusaService({
           prompt_key: PRODUCT_ADVISOR_PROMPT_KEY,
           prompt_version: promptConfig.version,
           system_prompt: promptConfig.system_prompt,
-          timeout_ms: PRODUCT_ADVISOR_TIMEOUT_MS,
+          timeout_ms: PRODUCT_ADVISOR_TIMEOUT_MS
         })
         const output = ProductAdvisorModelOutput.parse(generated)
         await writeCustomerAssistantCache(this.getCustomerAssistantCaching(), {
           key: responseCacheKey,
           tags: [
             "customer-assistant:product-advice",
-            `customer-assistant:tenant:${input.tenant_id}`,
+            `customer-assistant:tenant:${input.tenant_id}`
           ],
           ttl: CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS.product_advice,
-          value: output,
+          value: output
         })
         await this.updateAgentModelRuns(
           {
@@ -4566,21 +4307,16 @@ class AgentOperationsModuleService extends MedusaService({
             id: modelRun.id,
             latency_ms: Date.now() - startedAt.getTime(),
             output,
-            status: "SUCCEEDED",
+            status: "SUCCEEDED"
           },
           sharedContext
         )
         return toAnswer(
-          resolveProductAdvisorModelOutput(
-            output,
-            input.catalog,
-            input.locale,
-            input.question
-          ),
+          resolveProductAdvisorModelOutput(output, input.catalog, input.locale, input.question),
           {
             ai_invoked: true,
             cache_hit: false,
-            path: "AI_MODEL",
+            path: "AI_MODEL"
           }
         )
       } catch (error) {
@@ -4593,7 +4329,7 @@ class AgentOperationsModuleService extends MedusaService({
                 : "Customer product advice failed",
             id: modelRun.id,
             latency_ms: Date.now() - startedAt.getTime(),
-            status: "FAILED",
+            status: "FAILED"
           },
           sharedContext
         )
@@ -4637,15 +4373,12 @@ class AgentOperationsModuleService extends MedusaService({
       locale: input.locale,
       recent_conversation: input.recent_messages.slice(-3).map((message) => ({
         body: message.body.slice(0, 320),
-        direction: message.direction,
-      })),
+        direction: message.direction
+      }))
     }
     let credentials
     try {
-      credentials = await this.getActiveAiProviderCredentials(
-        "generation",
-        input.tenant_id
-      )
+      credentials = await this.getActiveAiProviderCredentials("generation", input.tenant_id)
     } catch {
       return fallback
     }
@@ -4654,7 +4387,7 @@ class AgentOperationsModuleService extends MedusaService({
       const adapter = createModelAdapter({
         apiKey: credential.api_key,
         model: credential.model,
-        provider: credential.provider,
+        provider: credential.provider
       })
       const intentCacheKey = buildCustomerAssistantCacheKey("intent", {
         input: safeInput,
@@ -4662,7 +4395,7 @@ class AgentOperationsModuleService extends MedusaService({
         prompt_key: CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
         prompt_version: CUSTOMER_MESSAGE_INTENT_PROMPT_VERSION,
         provider: adapter.provider,
-        tenant_id: input.tenant_id,
+        tenant_id: input.tenant_id
       })
       const cachedIntent = await readCustomerAssistantCache(
         this.getCustomerAssistantCaching(),
@@ -4675,16 +4408,10 @@ class AgentOperationsModuleService extends MedusaService({
       if (cachedIntent) return cachedIntent
       const attemptKey = `${input.idempotency_key}:provider:${adapter.provider}`
       const existing = (
-        await this.listAgentModelRuns(
-          { idempotency_key: attemptKey },
-          { take: 1 },
-          sharedContext
-        )
+        await this.listAgentModelRuns({ idempotency_key: attemptKey }, { take: 1 }, sharedContext)
       )[0]
       if (existing?.status === "SUCCEEDED" && existing.output) {
-        const cached = CustomerMessageIntentModelOutput.safeParse(
-          existing.output
-        )
+        const cached = CustomerMessageIntentModelOutput.safeParse(existing.output)
         if (cached.success) return cached.data
       }
       if (existing?.status === "RUNNING") return fallback
@@ -4703,7 +4430,7 @@ class AgentOperationsModuleService extends MedusaService({
           provider: adapter.provider,
           redacted: true,
           started_at: startedAt,
-          status: "RUNNING",
+          status: "RUNNING"
         },
         sharedContext
       )
@@ -4721,17 +4448,14 @@ class AgentOperationsModuleService extends MedusaService({
           prompt_key: CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
           prompt_version: promptConfig.version,
           system_prompt: promptConfig.system_prompt,
-          timeout_ms: CUSTOMER_MESSAGE_INTENT_TIMEOUT_MS,
+          timeout_ms: CUSTOMER_MESSAGE_INTENT_TIMEOUT_MS
         })
         const output = CustomerMessageIntentModelOutput.parse(generated)
         await writeCustomerAssistantCache(this.getCustomerAssistantCaching(), {
           key: intentCacheKey,
-          tags: [
-            "customer-assistant:intent",
-            `customer-assistant:tenant:${input.tenant_id}`,
-          ],
+          tags: ["customer-assistant:intent", `customer-assistant:tenant:${input.tenant_id}`],
           ttl: CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS.intent,
-          value: output,
+          value: output
         })
         await this.updateAgentModelRuns(
           {
@@ -4739,7 +4463,7 @@ class AgentOperationsModuleService extends MedusaService({
             id: modelRun.id,
             latency_ms: Date.now() - startedAt.getTime(),
             output,
-            status: "SUCCEEDED",
+            status: "SUCCEEDED"
           },
           sharedContext
         )
@@ -4754,7 +4478,7 @@ class AgentOperationsModuleService extends MedusaService({
                 : "Customer intent classification failed",
             id: modelRun.id,
             latency_ms: Date.now() - startedAt.getTime(),
-            status: "FAILED",
+            status: "FAILED"
           },
           sharedContext
         )
@@ -4781,17 +4505,19 @@ class AgentOperationsModuleService extends MedusaService({
     },
     @MedusaContext() sharedContext: Context = {}
   ): Promise<KnowledgeAnswer> {
-    const fallback = (optimization = {
-      ai_invoked: false,
-      cache_hit: false,
-      path: "DETERMINISTIC_FALLBACK",
-    }): KnowledgeAnswer => ({
+    const fallback = (
+      optimization = {
+        ai_invoked: false,
+        cache_hit: false,
+        path: "DETERMINISTIC_FALLBACK"
+      }
+    ): KnowledgeAnswer => ({
       body: input.fallback_body,
       citations: [],
       disposition: input.intent,
       grounded: false,
       locale: input.locale,
-      optimization,
+      optimization
     })
     const toAnswer = (
       output: CustomerConversationModelResult,
@@ -4804,7 +4530,7 @@ class AgentOperationsModuleService extends MedusaService({
             disposition: input.intent,
             grounded: false,
             locale: input.locale,
-            optimization,
+            optimization
           }
         : fallback()
 
@@ -4821,7 +4547,7 @@ class AgentOperationsModuleService extends MedusaService({
         ? toAnswer(cached.data, {
             ai_invoked: false,
             cache_hit: true,
-            path: "MESSAGE_IDEMPOTENCY",
+            path: "MESSAGE_IDEMPOTENCY"
           })
         : fallback()
     }
@@ -4833,15 +4559,12 @@ class AgentOperationsModuleService extends MedusaService({
       locale: input.locale,
       recent_conversation: input.recent_messages.slice(-4).map((message) => ({
         body: message.body.slice(0, 320),
-        direction: message.direction,
-      })),
+        direction: message.direction
+      }))
     }
     let credentials
     try {
-      credentials = await this.getActiveAiProviderCredentials(
-        "generation",
-        input.tenant_id
-      )
+      credentials = await this.getActiveAiProviderCredentials("generation", input.tenant_id)
     } catch {
       return fallback()
     }
@@ -4850,19 +4573,16 @@ class AgentOperationsModuleService extends MedusaService({
       const adapter = createModelAdapter({
         apiKey: credential.api_key,
         model: credential.model,
-        provider: credential.provider,
+        provider: credential.provider
       })
-      const responseCacheKey = buildCustomerAssistantCacheKey(
-        "conversation-reply",
-        {
-          input: safeInput,
-          model: adapter.model,
-          prompt_key: CUSTOMER_CONVERSATION_PROMPT_KEY,
-          prompt_version: CUSTOMER_CONVERSATION_PROMPT_VERSION,
-          provider: adapter.provider,
-          tenant_id: input.tenant_id,
-        }
-      )
+      const responseCacheKey = buildCustomerAssistantCacheKey("conversation-reply", {
+        input: safeInput,
+        model: adapter.model,
+        prompt_key: CUSTOMER_CONVERSATION_PROMPT_KEY,
+        prompt_version: CUSTOMER_CONVERSATION_PROMPT_VERSION,
+        provider: adapter.provider,
+        tenant_id: input.tenant_id
+      })
       const cachedResponse = await readCustomerAssistantCache(
         this.getCustomerAssistantCaching(),
         responseCacheKey,
@@ -4877,17 +4597,13 @@ class AgentOperationsModuleService extends MedusaService({
         return toAnswer(cachedResponse, {
           ai_invoked: false,
           cache_hit: true,
-          path: "AI_RESPONSE_CACHE",
+          path: "AI_RESPONSE_CACHE"
         })
       }
 
       const attemptKey = `${input.idempotency_key}:provider:${adapter.provider}`
       const existing = (
-        await this.listAgentModelRuns(
-          { idempotency_key: attemptKey },
-          { take: 1 },
-          sharedContext
-        )
+        await this.listAgentModelRuns({ idempotency_key: attemptKey }, { take: 1 }, sharedContext)
       )[0]
       if (existing?.status === "SUCCEEDED" && existing.output) {
         const cached = CustomerConversationModelOutput.safeParse(existing.output)
@@ -4895,7 +4611,7 @@ class AgentOperationsModuleService extends MedusaService({
           return toAnswer(cached.data, {
             ai_invoked: false,
             cache_hit: true,
-            path: "MESSAGE_IDEMPOTENCY",
+            path: "MESSAGE_IDEMPOTENCY"
           })
         }
       }
@@ -4915,7 +4631,7 @@ class AgentOperationsModuleService extends MedusaService({
           provider: adapter.provider,
           redacted: true,
           started_at: startedAt,
-          status: "RUNNING",
+          status: "RUNNING"
         },
         sharedContext
       )
@@ -4933,7 +4649,7 @@ class AgentOperationsModuleService extends MedusaService({
           prompt_key: CUSTOMER_CONVERSATION_PROMPT_KEY,
           prompt_version: promptConfig.version,
           system_prompt: promptConfig.system_prompt,
-          timeout_ms: CUSTOMER_CONVERSATION_TIMEOUT_MS,
+          timeout_ms: CUSTOMER_CONVERSATION_TIMEOUT_MS
         })
         const output = CustomerConversationModelOutput.parse(generated)
         if (!isSafeCustomerConversationBody(output.body)) {
@@ -4946,10 +4662,10 @@ class AgentOperationsModuleService extends MedusaService({
           key: responseCacheKey,
           tags: [
             "customer-assistant:conversation-reply",
-            `customer-assistant:tenant:${input.tenant_id}`,
+            `customer-assistant:tenant:${input.tenant_id}`
           ],
           ttl: CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS.conversation_reply,
-          value: output,
+          value: output
         })
         await this.updateAgentModelRuns(
           {
@@ -4957,14 +4673,14 @@ class AgentOperationsModuleService extends MedusaService({
             id: modelRun.id,
             latency_ms: Date.now() - startedAt.getTime(),
             output,
-            status: "SUCCEEDED",
+            status: "SUCCEEDED"
           },
           sharedContext
         )
         return toAnswer(output, {
           ai_invoked: true,
           cache_hit: false,
-          path: "AI_MODEL",
+          path: "AI_MODEL"
         })
       } catch (error) {
         await this.updateAgentModelRuns(
@@ -4976,7 +4692,7 @@ class AgentOperationsModuleService extends MedusaService({
                 : "Customer conversation reply failed",
             id: modelRun.id,
             latency_ms: Date.now() - startedAt.getTime(),
-            status: "FAILED",
+            status: "FAILED"
           },
           sharedContext
         )
@@ -5021,32 +4737,25 @@ class AgentOperationsModuleService extends MedusaService({
 
     let credentials
     try {
-      credentials = await this.getActiveAiProviderCredentials(
-        "generation",
-        input.tenant_id
-      )
+      credentials = await this.getActiveAiProviderCredentials("generation", input.tenant_id)
     } catch {
       return null
     }
     const credential = credentials.find(
-      (candidate) =>
-        candidate.provider === "gemini" || candidate.provider === "openai"
+      (candidate) => candidate.provider === "gemini" || candidate.provider === "openai"
     )
     if (!credential) return null
 
-    const prompt = await this.getPromptConfiguration(
-      CUSTOMER_VISION_PROMPT_KEY,
-      sharedContext
-    )
+    const prompt = await this.getPromptConfiguration(CUSTOMER_VISION_PROMPT_KEY, sharedContext)
     const adapter = createModelAdapter({
       apiKey: credential.api_key,
       model: credential.model,
-      provider: credential.provider,
+      provider: credential.provider
     })
     const safeInput = {
       customer_caption: input.caption.slice(0, 1_000),
       image_count: imageUrls.length,
-      task: "Assess only visible product-defect evidence for human support review.",
+      task: "Assess only visible product-defect evidence for human support review."
     }
     const modelRun = await this.createAgentModelRuns(
       {
@@ -5060,7 +4769,7 @@ class AgentOperationsModuleService extends MedusaService({
         provider: adapter.provider,
         redacted: true,
         started_at: new Date(),
-        status: "RUNNING",
+        status: "RUNNING"
       },
       sharedContext
     )
@@ -5075,7 +4784,7 @@ class AgentOperationsModuleService extends MedusaService({
         prompt_key: prompt.prompt_key,
         prompt_version: prompt.version,
         system_prompt: prompt.system_prompt || CUSTOMER_VISION_SYSTEM_PROMPT,
-        timeout_ms: CUSTOMER_VISION_TIMEOUT_MS,
+        timeout_ms: CUSTOMER_VISION_TIMEOUT_MS
       })
       const output = VisionDefectAnalysisOutput.parse(generated)
       await this.updateAgentModelRuns(
@@ -5084,7 +4793,7 @@ class AgentOperationsModuleService extends MedusaService({
           id: modelRun.id,
           latency_ms: Date.now() - startedAt,
           output,
-          status: "SUCCEEDED",
+          status: "SUCCEEDED"
         },
         sharedContext
       )
@@ -5099,7 +4808,7 @@ class AgentOperationsModuleService extends MedusaService({
               : "Customer image analysis failed",
           id: modelRun.id,
           latency_ms: Date.now() - startedAt,
-          status: "FAILED",
+          status: "FAILED"
         },
         sharedContext
       )
@@ -5114,15 +4823,8 @@ class AgentOperationsModuleService extends MedusaService({
     },
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const inbound = await this.retrieveAgentMessage(
-      input.inbound_message_id,
-      {},
-      sharedContext
-    )
-    if (
-      inbound.direction !== "INBOUND" ||
-      inbound.message_type !== "TEXT"
-    ) {
+    const inbound = await this.retrieveAgentMessage(input.inbound_message_id, {}, sharedContext)
+    if (inbound.direction !== "INBOUND" || inbound.message_type !== "TEXT") {
       throw new MedusaError(
         MedusaError.Types.INVALID_DATA,
         `Message ${inbound.id} is not a customer knowledge question.`
@@ -5139,11 +4841,7 @@ class AgentOperationsModuleService extends MedusaService({
     )[0]
     if (existing) {
       let delivery = (
-        await this.listAgentDeliveries(
-          { message_id: existing.id },
-          { take: 1 },
-          sharedContext
-        )
+        await this.listAgentDeliveries({ message_id: existing.id }, { take: 1 }, sharedContext)
       )[0]
       if (!delivery) {
         const existingConversation = await this.retrieveAgentConversation(
@@ -5151,8 +4849,7 @@ class AgentOperationsModuleService extends MedusaService({
           {},
           sharedContext
         )
-        const existingMetadata = (existingConversation.metadata ??
-          {}) as Record<string, unknown>
+        const existingMetadata = (existingConversation.metadata ?? {}) as Record<string, unknown>
         if (typeof existingMetadata.connection_id === "string") {
           delivery = await this.createAgentDeliveries(
             {
@@ -5162,7 +4859,7 @@ class AgentOperationsModuleService extends MedusaService({
               connection_id: existingMetadata.connection_id,
               idempotency_key: `message:${existing.id}:delivery`,
               message_id: existing.id,
-              status: "PENDING",
+              status: "PENDING"
             },
             sharedContext
           )
@@ -5172,17 +4869,16 @@ class AgentOperationsModuleService extends MedusaService({
         delivery_id: delivery?.id ?? null,
         duplicate: true,
         grounded: Boolean(
-          (existing.structured_content as Record<string, unknown> | null)
-            ?.grounded
+          (existing.structured_content as Record<string, unknown> | null)?.grounded
         ),
-        response_message_id: existing.id,
+        response_message_id: existing.id
       }
     }
 
     const existingEscalation = (
       await this.listAgentTasks(
         {
-          idempotency_key: `customer-knowledge-escalation:${inbound.id}`,
+          idempotency_key: `customer-knowledge-escalation:${inbound.id}`
         },
         { take: 1 },
         sharedContext
@@ -5194,7 +4890,7 @@ class AgentOperationsModuleService extends MedusaService({
         duplicate: true,
         grounded: false,
         response_message_id: null,
-        support_task_id: existingEscalation.id,
+        support_task_id: existingEscalation.id
       }
     }
 
@@ -5211,35 +4907,29 @@ class AgentOperationsModuleService extends MedusaService({
         duplicate: false,
         grounded: false,
         response_message_id: null,
-        support_task_id: null,
+        support_task_id: null
       }
     }
-    if (!isCustomerSupportConversation({
-      metadata,
-      topic_type: conversation.topic_type,
-    })) {
+    if (
+      !isCustomerSupportConversation({
+        metadata,
+        topic_type: conversation.topic_type
+      })
+    ) {
       throw new MedusaError(
         MedusaError.Types.NOT_ALLOWED,
         `Conversation ${conversation.id} is not authorized for customer knowledge answers.`
       )
     }
-    const connectionId =
-      typeof metadata.connection_id === "string" ? metadata.connection_id : null
+    const connectionId = typeof metadata.connection_id === "string" ? metadata.connection_id : null
     if (!connectionId || conversation.status !== "OPEN") {
       throw new MedusaError(
         MedusaError.Types.UNEXPECTED_STATE,
         `Customer conversation ${conversation.id} cannot deliver a response.`
       )
     }
-    const connection = await this.retrieveAgentChannelConnection(
-      connectionId,
-      {},
-      sharedContext
-    )
-    if (
-      connection.channel !== conversation.channel ||
-      connection.status !== "ACTIVE"
-    ) {
+    const connection = await this.retrieveAgentChannelConnection(connectionId, {}, sharedContext)
+    if (connection.channel !== conversation.channel || connection.status !== "ACTIVE") {
       throw new MedusaError(
         MedusaError.Types.UNEXPECTED_STATE,
         `Channel connection ${connection.id} is inactive or mismatched.`
@@ -5259,12 +4949,12 @@ class AgentOperationsModuleService extends MedusaService({
         ? this.listAgentCustomerPreferences(
             {
               customer_id: inbound.sender_id,
-              tenant_id: conversation.tenant_id,
+              tenant_id: conversation.tenant_id
             },
             { order: { last_confirmed_at: "DESC" }, take: 12 },
             sharedContext
           )
-        : Promise.resolve([]),
+        : Promise.resolve([])
     ])
     await this.recordExplicitCustomerPreferences(
       {
@@ -5272,14 +4962,13 @@ class AgentOperationsModuleService extends MedusaService({
         customer_id: inbound.sender_id,
         message: question,
         message_id: inbound.id,
-        tenant_id: conversation.tenant_id,
+        tenant_id: conversation.tenant_id
       },
       sharedContext
     )
     const profileContextNow = new Date()
     const activeProfilePreferences = customerProfilePreferences.filter(
-      (preference) =>
-        new Date(preference.expires_at).getTime() > profileContextNow.getTime()
+      (preference) => new Date(preference.expires_at).getTime() > profileContextNow.getTime()
     )
     const memorySummary = buildCustomerConversationContext({
       current_message_at: inbound.occurred_at,
@@ -5290,7 +4979,7 @@ class AgentOperationsModuleService extends MedusaService({
       profile_preferences: referencesPriorContext
         ? formatCustomerProfilePreferences(activeProfilePreferences)
         : [],
-      resolved_topics: readMemoryItems(conversationMemory?.resolved_topics),
+      resolved_topics: readMemoryItems(conversationMemory?.resolved_topics)
     })
 
     const explicitAttack = isExplicitPromptAttack(question)
@@ -5315,13 +5004,10 @@ class AgentOperationsModuleService extends MedusaService({
             (message.direction === "INBOUND" || message.direction === "OUTBOUND")
         )
         .map((message) => {
-          const relativeTime = formatRelativeTime(
-            message.occurred_at,
-            inbound.occurred_at
-          )
+          const relativeTime = formatRelativeTime(message.occurred_at, inbound.occurred_at)
           return {
             body: `[${relativeTime}] ${message.body}`,
-            direction: message.direction as "INBOUND" | "OUTBOUND",
+            direction: message.direction as "INBOUND" | "OUTBOUND"
           }
         })
     }
@@ -5330,10 +5016,7 @@ class AgentOperationsModuleService extends MedusaService({
       resolveCustomerConversationLocale(question, recentMessages)
 
     if (input.customer_order_lookup) {
-      const answer = buildCustomerOrderLookupReply(
-        input.customer_order_lookup,
-        locale
-      )
+      const answer = buildCustomerOrderLookupReply(input.customer_order_lookup, locale)
       const now = new Date()
       const response = await this.createAgentMessages(
         {
@@ -5352,9 +5035,7 @@ class AgentOperationsModuleService extends MedusaService({
             disposition: answer.disposition,
             grounded: answer.grounded,
             grounding_source:
-              input.customer_order_lookup.status === "FOUND"
-                ? "LIVE_ORDER"
-                : "CONVERSATION",
+              input.customer_order_lookup.status === "FOUND" ? "LIVE_ORDER" : "CONVERSATION",
             inbound_message_id: inbound.id,
             intent: "STORE_QUESTION",
             intent_confidence: 1,
@@ -5363,11 +5044,11 @@ class AgentOperationsModuleService extends MedusaService({
             optimization: {
               ai_invoked: false,
               cache_hit: false,
-              path: "VERIFIED_CUSTOMER_ORDER_LOOKUP",
+              path: "VERIFIED_CUSTOMER_ORDER_LOOKUP"
             },
             product_ids: [],
-            product_media: [],
-          },
+            product_media: []
+          }
         },
         sharedContext
       )
@@ -5379,7 +5060,7 @@ class AgentOperationsModuleService extends MedusaService({
           connection_id: connection.id,
           idempotency_key: `message:${response.id}:delivery`,
           message_id: response.id,
-          status: "PENDING",
+          status: "PENDING"
         },
         sharedContext
       )
@@ -5392,24 +5073,23 @@ class AgentOperationsModuleService extends MedusaService({
         channel: conversation.channel,
         id: conversation.id,
         last_message_at: now,
-        title: conversation.title,
+        title: conversation.title
       })
       await this.createAgentAuditEvents(
         {
           action: "customer-order-lookup-response-created",
           actor_id: "customer-knowledge-agent",
           actor_type: "agent",
-          correlation_id:
-            `${conversation.channel.toLowerCase()}:${connection.id}:${inbound.id}`,
+          correlation_id: `${conversation.channel.toLowerCase()}:${connection.id}:${inbound.id}`,
           data: {
             display_id: input.customer_order_lookup.display_id,
             lookup_status: input.customer_order_lookup.status,
-            response_message_id: response.id,
+            response_message_id: response.id
           },
           event_type: "agent.customer-order.lookup-response-created",
           recorded_at: now,
           resource_id: response.id,
-          resource_type: "agent_message",
+          resource_type: "agent_message"
         },
         sharedContext
       )
@@ -5418,7 +5098,7 @@ class AgentOperationsModuleService extends MedusaService({
         duplicate: false,
         grounded: answer.grounded,
         response_message_id: response.id,
-        support_task_id: null,
+        support_task_id: null
       }
     }
     const settings = await this.getAssistantSettings(sharedContext)
@@ -5429,7 +5109,7 @@ class AgentOperationsModuleService extends MedusaService({
       ? {
           confidence: 1,
           intent: "UNSAFE" as const,
-          reason: "Matched a backend security rule.",
+          reason: "Matched a backend security rule."
         }
       : await this.classifyCustomerMessageIntent(
           {
@@ -5438,7 +5118,7 @@ class AgentOperationsModuleService extends MedusaService({
             locale,
             message: question,
             recent_messages: mapRecentMessagesWithTime(contextMessages),
-            tenant_id: conversation.tenant_id,
+            tenant_id: conversation.tenant_id
           },
           sharedContext
         )
@@ -5447,14 +5127,11 @@ class AgentOperationsModuleService extends MedusaService({
     let reviewRouted = false
     let supportTaskId: string | null = null
     let toolTrace: Array<Record<string, unknown>> = []
-    const recordKnowledgeSearchTool = async (
-      query: string,
-      knowledge: KnowledgeSearchOutput
-    ) => {
+    const recordKnowledgeSearchTool = async (query: string, knowledge: KnowledgeSearchOutput) => {
       const output = {
         document_ids: knowledge.results.map((result) => result.document_id),
         result_count: knowledge.results.length,
-        total_candidates: knowledge.total_candidates,
+        total_candidates: knowledge.total_candidates
       }
       await this.recordCustomerReadToolCall(
         {
@@ -5463,18 +5140,18 @@ class AgentOperationsModuleService extends MedusaService({
           input: {
             locale,
             query: query.slice(0, 500),
-            scope: "customer_support",
+            scope: "customer_support"
           },
           output,
           tool_name: "knowledge.search",
-          tool_version: "1.0.0",
+          tool_version: "1.0.0"
         },
         sharedContext
       )
       toolTrace.push({
         input: { query: query.slice(0, 500), scope: "customer_support" },
         output,
-        tool_name: "knowledge.search",
+        tool_name: "knowledge.search"
       })
     }
     let answer: KnowledgeAnswer
@@ -5485,7 +5162,7 @@ class AgentOperationsModuleService extends MedusaService({
           inbound_message_id: inbound.id,
           locale,
           question,
-          reason: "CUSTOMER_DISTRESS",
+          reason: "CUSTOMER_DISTRESS"
         },
         sharedContext
       )
@@ -5497,9 +5174,7 @@ class AgentOperationsModuleService extends MedusaService({
           buildCustomerReviewAcknowledgement(
             locale,
             "NEEDS_STAFF_AUTHORITY",
-            locale === "vi"
-              ? settings.review_ack_message_vi
-              : settings.review_ack_message_en
+            locale === "vi" ? settings.review_ack_message_vi : settings.review_ack_message_en
           ).body,
         citations: [],
         disposition: "ANSWER",
@@ -5508,8 +5183,8 @@ class AgentOperationsModuleService extends MedusaService({
         optimization: {
           ai_invoked: false,
           cache_hit: false,
-          path: "SENTIMENT_CRITICAL_HANDOFF",
-        },
+          path: "SENTIMENT_CRITICAL_HANDOFF"
+        }
       }
     } else if (routedIntent === "HUMAN_ACTION") {
       const escalation = await this.createCustomerKnowledgeEscalation(
@@ -5518,7 +5193,7 @@ class AgentOperationsModuleService extends MedusaService({
           inbound_message_id: inbound.id,
           locale,
           question,
-          reason: "NEEDS_STAFF_AUTHORITY",
+          reason: "NEEDS_STAFF_AUTHORITY"
         },
         sharedContext
       )
@@ -5527,9 +5202,7 @@ class AgentOperationsModuleService extends MedusaService({
       answer = buildCustomerReviewAcknowledgement(
         locale,
         "NEEDS_STAFF_AUTHORITY",
-        locale === "vi"
-          ? settings.review_ack_message_vi
-          : settings.review_ack_message_en
+        locale === "vi" ? settings.review_ack_message_vi : settings.review_ack_message_en
       )
     } else if (routedIntent === "SMALL_TALK" || routedIntent === "CLARIFY") {
       answer = await this.draftCustomerConversationReply(
@@ -5547,11 +5220,8 @@ class AgentOperationsModuleService extends MedusaService({
           intent: routedIntent,
           locale,
           message: question,
-          recent_messages: mapRecentMessagesWithTime(
-            contextMessages,
-            inbound.id
-          ),
-          tenant_id: conversation.tenant_id,
+          recent_messages: mapRecentMessagesWithTime(contextMessages, inbound.id),
+          tenant_id: conversation.tenant_id
         },
         sharedContext
       )
@@ -5560,11 +5230,11 @@ class AgentOperationsModuleService extends MedusaService({
         products: [] as [],
         query: question,
         status: "UNAVAILABLE" as const,
-        total_count: 0 as const,
+        total_count: 0 as const
       }
       const toolLoop = runCustomerSupportReadToolLoop({
         catalog,
-        question,
+        question
       })
       toolTrace = toolLoop.trace
       const productAnswer = await this.draftCustomerProductAdvice(
@@ -5575,14 +5245,13 @@ class AgentOperationsModuleService extends MedusaService({
           locale,
           question,
           recent_messages: mapRecentMessagesWithTime(contextMessages),
-          tenant_id: conversation.tenant_id,
+          tenant_id: conversation.tenant_id
         },
         sharedContext
       )
       const hybridKind = detectHybridIntent(question, toolLoop.catalog)
       if (
-        (hybridKind === "PRODUCT_AND_SHIPPING" ||
-          hybridKind === "PRODUCT_AND_POLICY") &&
+        (hybridKind === "PRODUCT_AND_SHIPPING" || hybridKind === "PRODUCT_AND_POLICY") &&
         question.length >= 4
       ) {
         const retrievedKnowledge = await this.searchGovernedKnowledge(
@@ -5591,15 +5260,12 @@ class AgentOperationsModuleService extends MedusaService({
             locale,
             query: question.slice(0, 500),
             scope: "customer_support",
-            tenant_id: conversation.tenant_id,
+            tenant_id: conversation.tenant_id
           },
           sharedContext
         )
         await recordKnowledgeSearchTool(question, retrievedKnowledge)
-        const relevantKnowledge = filterKnowledgeEvidenceForQuestion(
-          question,
-          retrievedKnowledge
-        )
+        const relevantKnowledge = filterKnowledgeEvidenceForQuestion(question, retrievedKnowledge)
         if (hasSufficientKnowledgeEvidence(relevantKnowledge)) {
           const knowledgeSubAnswer = await this.draftGovernedKnowledgeAnswer(
             {
@@ -5608,19 +5274,12 @@ class AgentOperationsModuleService extends MedusaService({
               knowledge: relevantKnowledge,
               locale,
               question,
-              recent_messages: mapRecentMessagesWithTime(
-                contextMessages,
-                inbound.id
-              ),
-              tenant_id: conversation.tenant_id,
+              recent_messages: mapRecentMessagesWithTime(contextMessages, inbound.id),
+              tenant_id: conversation.tenant_id
             },
             sharedContext
           )
-          answer = synthesizeHybridAnswer(
-            { locale, question },
-            productAnswer,
-            knowledgeSubAnswer
-          )
+          answer = synthesizeHybridAnswer({ locale, question }, productAnswer, knowledgeSubAnswer)
         } else {
           answer = productAnswer
         }
@@ -5635,27 +5294,26 @@ class AgentOperationsModuleService extends MedusaService({
         .slice(0, 2)
         .map((m) => m.body)
         .join(" ")
-      const contextualContext = [recentInboundBodies, memorySummary]
-        .filter(Boolean)
-        .join(" ")
+      const contextualContext = [recentInboundBodies, memorySummary].filter(Boolean).join(" ")
       const contextualQuery =
         isContextDependentKnowledgeQuestion(question) && contextualContext
           ? `${contextualContext} ${question}`
           : question
       const retrievedKnowledge =
-        question.length >= 2
+        input.knowledge_snapshot ??
+        (question.length >= 2
           ? await this.searchGovernedKnowledge(
               {
                 limit: 5,
                 locale,
                 query: contextualQuery.slice(0, 500),
                 scope: "customer_support",
-                tenant_id: conversation.tenant_id,
+                tenant_id: conversation.tenant_id
               },
               sharedContext
             )
-          : { results: [], total_candidates: 0 }
-      if (question.length >= 2) {
+          : { results: [], total_candidates: 0 })
+      if (question.length >= 2 && !input.knowledge_snapshot) {
         await recordKnowledgeSearchTool(contextualQuery, retrievedKnowledge)
       }
       const relevantKnowledge = filterKnowledgeEvidenceForQuestion(
@@ -5672,11 +5330,8 @@ class AgentOperationsModuleService extends MedusaService({
           knowledge,
           locale,
           question,
-          recent_messages: mapRecentMessagesWithTime(
-            contextMessages,
-            inbound.id
-          ),
-          tenant_id: conversation.tenant_id,
+          recent_messages: mapRecentMessagesWithTime(contextMessages, inbound.id),
+          tenant_id: conversation.tenant_id
         },
         sharedContext
       )
@@ -5688,7 +5343,7 @@ class AgentOperationsModuleService extends MedusaService({
           inbound_message_id: inbound.id,
           locale,
           question,
-          reason: "NO_APPROVED_KNOWLEDGE",
+          reason: "NO_APPROVED_KNOWLEDGE"
         },
         sharedContext
       )
@@ -5696,9 +5351,7 @@ class AgentOperationsModuleService extends MedusaService({
       answer = buildCustomerReviewAcknowledgement(
         locale,
         "NO_APPROVED_KNOWLEDGE",
-        locale === "vi"
-          ? settings.review_ack_message_vi
-          : settings.review_ack_message_en
+        locale === "vi" ? settings.review_ack_message_vi : settings.review_ack_message_en
       )
     }
 
@@ -5729,7 +5382,7 @@ class AgentOperationsModuleService extends MedusaService({
           optimization: answer.optimization ?? {
             ai_invoked: false,
             cache_hit: false,
-            path: "DETERMINISTIC_OR_REVIEW",
+            path: "DETERMINISTIC_OR_REVIEW"
           },
           product_ids: answer.product_ids ?? [],
           product_media: answer.product_media ?? [],
@@ -5738,10 +5391,10 @@ class AgentOperationsModuleService extends MedusaService({
             ? "LIVE_CATALOG"
             : answer.live_order
               ? "LIVE_ORDER"
-            : answer.grounded
-              ? "APPROVED_KNOWLEDGE"
-              : "CONVERSATION",
-        },
+              : answer.grounded
+                ? "APPROVED_KNOWLEDGE"
+                : "CONVERSATION"
+        }
       },
       sharedContext
     )
@@ -5753,7 +5406,7 @@ class AgentOperationsModuleService extends MedusaService({
         connection_id: connection.id,
         idempotency_key: `message:${response.id}:delivery`,
         message_id: response.id,
-        status: "PENDING",
+        status: "PENDING"
       },
       sharedContext
     )
@@ -5766,7 +5419,7 @@ class AgentOperationsModuleService extends MedusaService({
       channel: conversation.channel,
       id: conversation.id,
       last_message_at: now,
-      title: conversation.title,
+      title: conversation.title
     })
     await this.createAgentAuditEvents(
       {
@@ -5784,24 +5437,20 @@ class AgentOperationsModuleService extends MedusaService({
           optimization: answer.optimization ?? {
             ai_invoked: false,
             cache_hit: false,
-            path: "DETERMINISTIC_OR_REVIEW",
+            path: "DETERMINISTIC_OR_REVIEW"
           },
           product_ids: answer.product_ids ?? [],
           response_message_id: response.id,
-          tool_trace: toolTrace,
+          tool_trace: toolTrace
         },
         event_type: "agent.knowledge.answer-created",
         recorded_at: now,
         resource_id: response.id,
-        resource_type: "agent_message",
+        resource_type: "agent_message"
       },
       sharedContext
     )
-    const quality = evaluateConversationQuality(
-      question,
-      response.body,
-      answer.grounded
-    )
+    const quality = evaluateConversationQuality(question, response.body, answer.grounded)
     await this.createAgentAuditEvents(
       {
         action: "customer-response-quality-evaluated",
@@ -5811,12 +5460,12 @@ class AgentOperationsModuleService extends MedusaService({
         data: {
           inbound_message_id: inbound.id,
           response_message_id: response.id,
-          ...quality,
+          ...quality
         },
         event_type: "agent.customer-support.quality-evaluated",
         recorded_at: now,
         resource_id: response.id,
-        resource_type: "agent_message",
+        resource_type: "agent_message"
       },
       sharedContext
     )
@@ -5826,7 +5475,7 @@ class AgentOperationsModuleService extends MedusaService({
       duplicate: false,
       grounded: answer.grounded,
       response_message_id: response.id,
-      support_task_id: supportTaskId,
+      support_task_id: supportTaskId
     }
   }
 
@@ -5865,39 +5514,30 @@ class AgentOperationsModuleService extends MedusaService({
     },
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const taskIdempotencyKey =
-      `customer-knowledge-escalation:${input.inbound_message_id}`
+    const taskIdempotencyKey = `customer-knowledge-escalation:${input.inbound_message_id}`
     const existingTask = (
-      await this.listAgentTasks(
-        { idempotency_key: taskIdempotencyKey },
-        { take: 1 },
-        sharedContext
-      )
+      await this.listAgentTasks({ idempotency_key: taskIdempotencyKey }, { take: 1 }, sharedContext)
     )[0]
     if (existingTask) {
       return {
         duplicate: true,
         incident: existingTask.incident_id
-          ? await this.retrieveAgentIncident(
-              existingTask.incident_id,
-              {},
-              sharedContext
-            )
+          ? await this.retrieveAgentIncident(existingTask.incident_id, {}, sharedContext)
           : null,
-        task: existingTask,
+        task: existingTask
       }
     }
 
     const [conversation, inbound] = await Promise.all([
       this.retrieveAgentConversation(input.conversation_id, {}, sharedContext),
-      this.retrieveAgentMessage(input.inbound_message_id, {}, sharedContext),
+      this.retrieveAgentMessage(input.inbound_message_id, {}, sharedContext)
     ])
     const metadata = (conversation.metadata ?? {}) as Record<string, unknown>
     if (
       inbound.conversation_id !== conversation.id ||
       !isCustomerSupportConversation({
         metadata,
-        topic_type: conversation.topic_type,
+        topic_type: conversation.topic_type
       })
     ) {
       throw new MedusaError(
@@ -5906,8 +5546,7 @@ class AgentOperationsModuleService extends MedusaService({
       )
     }
 
-    const connectionId =
-      typeof metadata.connection_id === "string" ? metadata.connection_id : null
+    const connectionId = typeof metadata.connection_id === "string" ? metadata.connection_id : null
     const connection = connectionId
       ? await this.retrieveAgentChannelConnection(connectionId, {}, sharedContext)
       : null
@@ -5920,7 +5559,7 @@ class AgentOperationsModuleService extends MedusaService({
       {
         conversation_id: conversation.id,
         status: ["TODO", "CLAIMED", "IN_PROGRESS", "WAITING"],
-        task_type: "SUPPORT_RESPONSE_REVIEW",
+        task_type: "SUPPORT_RESPONSE_REVIEW"
       },
       { take: security.max_open_escalations },
       sharedContext
@@ -5936,12 +5575,12 @@ class AgentOperationsModuleService extends MedusaService({
             conversation_id: conversation.id,
             limit: security.max_open_escalations,
             open_task_ids: openTasks.map((task) => task.id),
-            reason: "OPEN_ESCALATION_LIMIT",
+            reason: "OPEN_ESCALATION_LIMIT"
           },
           event_type: "agent.support-response.escalation-suppressed",
           recorded_at: new Date(),
           resource_id: conversation.id,
-          resource_type: "agent_conversation",
+          resource_type: "agent_conversation"
         },
         sharedContext
       )
@@ -5949,8 +5588,7 @@ class AgentOperationsModuleService extends MedusaService({
     }
 
     const now = new Date()
-    const correlationId =
-      `${conversation.channel.toLowerCase()}:knowledge-escalation:` + inbound.id
+    const correlationId = `${conversation.channel.toLowerCase()}:knowledge-escalation:` + inbound.id
     const event = await this.createAgentEvents(
       {
         correlation_id: correlationId,
@@ -5962,7 +5600,7 @@ class AgentOperationsModuleService extends MedusaService({
               ? "support.customer-distress"
               : input.reason === "VISION_REVIEW"
                 ? "support.customer-image-review"
-              : "support.staff-action-requested",
+                : "support.staff-action-requested",
         event_version: 1,
         occurred_at: inbound.occurred_at,
         payload: {
@@ -5971,7 +5609,7 @@ class AgentOperationsModuleService extends MedusaService({
           locale: input.locale,
           question: input.question,
           reason: input.reason,
-          vision_analysis: input.vision_analysis ?? null,
+          vision_analysis: input.vision_analysis ?? null
         },
         processed_at: now,
         received_at: now,
@@ -5979,7 +5617,7 @@ class AgentOperationsModuleService extends MedusaService({
         status: "PROCESSED",
         subject_id: conversation.id,
         subject_type: "conversation",
-        tenant_id: conversation.tenant_id,
+        tenant_id: conversation.tenant_id
       },
       sharedContext
     )
@@ -5989,12 +5627,11 @@ class AgentOperationsModuleService extends MedusaService({
           channel: conversation.channel,
           customer_id: inbound.sender_id,
           locale: input.locale,
-          reason: input.reason,
+          reason: input.reason
         },
         correlation_id: correlationId,
         incident_type: "CUSTOMER_SUPPORT",
-        priority:
-          input.reason === "CUSTOMER_DISTRESS" ? "CRITICAL" : "MEDIUM",
+        priority: input.reason === "CUSTOMER_DISTRESS" ? "CRITICAL" : "MEDIUM",
         status: "ESCALATED",
         subject_id: conversation.id,
         subject_type: "conversation",
@@ -6005,10 +5642,10 @@ class AgentOperationsModuleService extends MedusaService({
             ? `${conversation.channel} customer distress requires urgent staff response`
             : input.reason === "VISION_REVIEW"
               ? `${conversation.channel} customer image requires staff review`
-            : input.reason === "NEEDS_STAFF_AUTHORITY"
-            ? `${conversation.channel} customer request requiring staff action`
-            : `Unanswered ${conversation.channel} customer question`,
-        trigger_event_id: event.id,
+              : input.reason === "NEEDS_STAFF_AUTHORITY"
+                ? `${conversation.channel} customer request requiring staff action`
+                : `Unanswered ${conversation.channel} customer question`,
+        trigger_event_id: event.id
       },
       sharedContext
     )
@@ -6021,11 +5658,10 @@ class AgentOperationsModuleService extends MedusaService({
           input.reason === "CUSTOMER_DISTRESS"
             ? "Contact the customer urgently, assess the complaint, and send a verified response through the original channel."
             : input.reason === "NEEDS_STAFF_AUTHORITY"
-            ? "Review the customer's request, make the authorized decision or action, and send a verified response through the original channel."
-            : "Review the customer's question, write a verified response, and send it back through the original channel.",
+              ? "Review the customer's request, make the authorized decision or action, and send a verified response through the original channel."
+              : "Review the customer's question, write a verified response, and send it back through the original channel.",
         due_at: new Date(
-          now.getTime() +
-            (input.reason === "CUSTOMER_DISTRESS" ? 5 : 30) * 60 * 1_000
+          now.getTime() + (input.reason === "CUSTOMER_DISTRESS" ? 5 : 30) * 60 * 1_000
         ),
         idempotency_key: taskIdempotencyKey,
         incident_id: incident.id,
@@ -6039,13 +5675,13 @@ class AgentOperationsModuleService extends MedusaService({
           question: input.question,
           routing_reason: input.reason,
           requires_human_review: true,
-          vision_analysis: input.vision_analysis ?? null,
+          vision_analysis: input.vision_analysis ?? null
         },
         priority: input.reason === "CUSTOMER_DISTRESS" ? "CRITICAL" : "MEDIUM",
         status: "TODO",
         task_type: "SUPPORT_RESPONSE_REVIEW",
         tenant_id: conversation.tenant_id,
-        title: `Answer ${conversation.channel} customer question`,
+        title: `Answer ${conversation.channel} customer question`
       },
       sharedContext
     )
@@ -6055,14 +5691,14 @@ class AgentOperationsModuleService extends MedusaService({
       priority: task.priority,
       status: task.status,
       support_conversation_id: conversation.id,
-      task_type: task.task_type,
+      task_type: task.task_type
     })
     this.broadcastConversationUpdated({
       channel: conversation.channel,
       id: conversation.id,
       last_message_at: now,
       metadata: { requires_human_attention: true },
-      title: conversation.title,
+      title: conversation.title
     })
     await this.createAgentAuditEvents(
       {
@@ -6074,13 +5710,13 @@ class AgentOperationsModuleService extends MedusaService({
           channel: conversation.channel,
           conversation_id: conversation.id,
           reason: input.reason,
-          task_id: task.id,
+          task_id: task.id
         },
         event_type: "agent.support-response.escalated",
         incident_id: incident.id,
         recorded_at: now,
         resource_id: task.id,
-        resource_type: "agent_task",
+        resource_type: "agent_task"
       },
       sharedContext
     )
@@ -6113,6 +5749,34 @@ class AgentOperationsModuleService extends MedusaService({
   }
 
   @InjectManager()
+  async getNativeToolLoopStatus(
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const eventTypes = [
+      "agent.customer-support.native-tool-loop-active-completed",
+      "agent.customer-support.native-tool-loop-active-failed",
+      "agent.customer-support.native-tool-loop-shadow-completed",
+      "agent.customer-support.native-tool-loop-shadow-failed",
+    ]
+    const [settings, eventGroups] = await Promise.all([
+      this.getAssistantSettings(sharedContext),
+      Promise.all(
+        eventTypes.map((event_type) =>
+          this.listAgentAuditEvents(
+            { event_type },
+            { order: { recorded_at: "DESC" }, take: 50 },
+            sharedContext
+          )
+        )
+      ),
+    ])
+    return summarizeNativeToolLoopStatus(
+      settings.native_tool_loop_mode,
+      eventGroups.flat()
+    )
+  }
+
+  @InjectManager()
   async replayAgentTrace(
     input: TraceReplayInput,
     @MedusaContext() sharedContext: Context = {}
@@ -6122,11 +5786,7 @@ class AgentOperationsModuleService extends MedusaService({
     const incidentIds = new Set<string>()
 
     if (parsed.incident_id) {
-      const incident = await this.retrieveAgentIncident(
-        parsed.incident_id,
-        {},
-        sharedContext
-      )
+      const incident = await this.retrieveAgentIncident(parsed.incident_id, {}, sharedContext)
       incidentIds.add(incident.id)
       correlationId = incident.correlation_id
     } else if (correlationId) {
@@ -6149,7 +5809,7 @@ class AgentOperationsModuleService extends MedusaService({
             { correlation_id: correlationId },
             { order: { recorded_at: "ASC" }, take: parsed.limit },
             sharedContext
-          ),
+          )
         ])
       : [[], []]
 
@@ -6164,12 +5824,12 @@ class AgentOperationsModuleService extends MedusaService({
         payload: event.payload,
         source: event.source,
         subject_id: event.subject_id,
-        subject_type: event.subject_type,
+        subject_type: event.subject_type
       },
       entry_id: event.id,
       name: event.event_type,
       occurred_at: new Date(event.occurred_at).toISOString(),
-      status: event.status,
+      status: event.status
     }))
 
     timeline.push(
@@ -6179,39 +5839,38 @@ class AgentOperationsModuleService extends MedusaService({
         entry_id: event.id,
         name: event.event_type,
         occurred_at: new Date(event.recorded_at).toISOString(),
-        status: null,
+        status: null
       }))
     )
 
     for (const incidentId of incidentIds) {
-      const [runs, actions, toolCalls, auditEvents, outboxEvents] =
-        await Promise.all([
-          this.listAgentRuns(
-            { incident_id: incidentId },
-            { order: { started_at: "ASC" }, take: parsed.limit },
-            sharedContext
-          ),
-          this.listAgentActionRequests(
-            { incident_id: incidentId },
-            { order: { requested_at: "ASC" }, take: parsed.limit },
-            sharedContext
-          ),
-          this.listAgentToolCalls(
-            { incident_id: incidentId },
-            { order: { started_at: "ASC" }, take: parsed.limit },
-            sharedContext
-          ),
-          this.listAgentAuditEvents(
-            { incident_id: incidentId },
-            { order: { recorded_at: "ASC" }, take: parsed.limit },
-            sharedContext
-          ),
-          this.listAgentOutboxEvents(
-            { aggregate_id: incidentId, aggregate_type: "agent_incident" },
-            { order: { created_at: "ASC" }, take: parsed.limit },
-            sharedContext
-          ),
-        ])
+      const [runs, actions, toolCalls, auditEvents, outboxEvents] = await Promise.all([
+        this.listAgentRuns(
+          { incident_id: incidentId },
+          { order: { started_at: "ASC" }, take: parsed.limit },
+          sharedContext
+        ),
+        this.listAgentActionRequests(
+          { incident_id: incidentId },
+          { order: { requested_at: "ASC" }, take: parsed.limit },
+          sharedContext
+        ),
+        this.listAgentToolCalls(
+          { incident_id: incidentId },
+          { order: { started_at: "ASC" }, take: parsed.limit },
+          sharedContext
+        ),
+        this.listAgentAuditEvents(
+          { incident_id: incidentId },
+          { order: { recorded_at: "ASC" }, take: parsed.limit },
+          sharedContext
+        ),
+        this.listAgentOutboxEvents(
+          { aggregate_id: incidentId, aggregate_type: "agent_incident" },
+          { order: { created_at: "ASC" }, take: parsed.limit },
+          sharedContext
+        )
+      ])
 
       timeline.push(
         ...runs.map((run) => ({
@@ -6220,12 +5879,12 @@ class AgentOperationsModuleService extends MedusaService({
             agent_id: run.agent_id,
             agent_version: run.agent_version,
             error: run.error,
-            output: run.output,
+            output: run.output
           },
           entry_id: run.id,
           name: run.agent_id,
           occurred_at: new Date(run.started_at).toISOString(),
-          status: run.status,
+          status: run.status
         })),
         ...actions.map((action) => ({
           category: "ACTION" as const,
@@ -6234,12 +5893,12 @@ class AgentOperationsModuleService extends MedusaService({
             attempt_count: action.attempt_count,
             last_error: action.last_error,
             risk_level: action.risk_level,
-            tool_version: action.tool_version,
+            tool_version: action.tool_version
           },
           entry_id: action.id,
           name: action.tool_name,
           occurred_at: new Date(action.requested_at).toISOString(),
-          status: action.status,
+          status: action.status
         })),
         ...toolCalls.map((toolCall) => ({
           category: "TOOL_CALL" as const,
@@ -6248,12 +5907,12 @@ class AgentOperationsModuleService extends MedusaService({
             error: toolCall.error,
             kind: toolCall.kind,
             output: toolCall.output,
-            tool_version: toolCall.tool_version,
+            tool_version: toolCall.tool_version
           },
           entry_id: toolCall.id,
           name: toolCall.tool_name,
           occurred_at: new Date(toolCall.started_at).toISOString(),
-          status: toolCall.status,
+          status: toolCall.status
         })),
         ...auditEvents.map((event) => ({
           category: "AUDIT" as const,
@@ -6261,34 +5920,32 @@ class AgentOperationsModuleService extends MedusaService({
           entry_id: event.id,
           name: event.event_type,
           occurred_at: new Date(event.recorded_at).toISOString(),
-          status: null,
+          status: null
         })),
         ...outboxEvents.map((event) => ({
           category: "OUTBOX" as const,
           data: {
             attempt_count: event.attempt_count,
             idempotency_key: event.idempotency_key,
-            last_error: event.last_error,
+            last_error: event.last_error
           },
           entry_id: event.id,
           name: event.event_type,
           occurred_at: new Date(event.created_at).toISOString(),
-          status: event.status,
+          status: event.status
         }))
       )
     }
 
     const uniqueTimeline = [
-      ...new Map(
-        timeline.map((entry) => [`${entry.category}:${entry.entry_id}`, entry])
-      ).values(),
+      ...new Map(timeline.map((entry) => [`${entry.category}:${entry.entry_id}`, entry])).values()
     ]
 
     return buildTraceReplayOutput({
       correlation_id: correlationId,
       incident_ids: [...incidentIds],
       limit: parsed.limit,
-      timeline: uniqueTimeline,
+      timeline: uniqueTimeline
     })
   }
 
@@ -6322,11 +5979,7 @@ class AgentOperationsModuleService extends MedusaService({
       return { duplicate: true, run: existing[0] }
     }
 
-    const scenario = await this.retrieveAgentEvaluationCase(
-      input.scenario_id,
-      {},
-      sharedContext
-    )
+    const scenario = await this.retrieveAgentEvaluationCase(input.scenario_id, {}, sharedContext)
     if (scenario.status !== "ACTIVE") {
       throw new MedusaError(
         MedusaError.Types.UNEXPECTED_STATE,
@@ -6355,18 +6008,16 @@ class AgentOperationsModuleService extends MedusaService({
           expected: expected.results,
           forbidden: forbidden.results.map((result) => ({
             ...result,
-            passed: !result.passed,
-          })),
+            passed: !result.passed
+          }))
         },
         completed_at: now,
         idempotency_key: input.idempotency_key,
         observed: input.observed,
         scenario_id: scenario.id,
-        score: resultCount
-          ? Math.round((passedCount / resultCount) * 10_000)
-          : 10_000,
+        score: resultCount ? Math.round((passedCount / resultCount) * 10_000) : 10_000,
         started_at: now,
-        status: passed ? "PASSED" : "FAILED",
+        status: passed ? "PASSED" : "FAILED"
       },
       sharedContext
     )
@@ -6401,18 +6052,19 @@ class AgentOperationsModuleService extends MedusaService({
     },
     @MedusaContext() sharedContext: Context = {}
   ) {
+    const inputFingerprint = createHash("sha256")
+      .update(JSON.stringify(input.input))
+      .digest("hex")
+      .slice(0, 16)
     const idempotencyKey = [
       "customer-read-tool",
       input.inbound_message_id,
       input.tool_name,
       input.tool_version,
+      inputFingerprint
     ].join(":")
     const existing = (
-      await this.listAgentToolCalls(
-        { idempotency_key: idempotencyKey },
-        { take: 1 },
-        sharedContext
-      )
+      await this.listAgentToolCalls({ idempotency_key: idempotencyKey }, { take: 1 }, sharedContext)
     )[0]
     if (existing) return { duplicate: true, tool_call: existing }
 
@@ -6432,7 +6084,7 @@ class AgentOperationsModuleService extends MedusaService({
         started_at: now,
         status: "SUCCEEDED",
         tool_name: input.tool_name,
-        tool_version: input.tool_version,
+        tool_version: input.tool_version
       },
       sharedContext
     )
@@ -6446,12 +6098,12 @@ class AgentOperationsModuleService extends MedusaService({
           inbound_message_id: input.inbound_message_id,
           tool_call_id: toolCall.id,
           tool_name: input.tool_name,
-          tool_version: input.tool_version,
+          tool_version: input.tool_version
         },
         event_type: "agent.customer-support.read-tool-executed",
         recorded_at: now,
         resource_id: toolCall.id,
-        resource_type: "agent_tool_call",
+        resource_type: "agent_tool_call"
       },
       sharedContext
     )
@@ -6474,7 +6126,7 @@ class AgentOperationsModuleService extends MedusaService({
     const existingEvents = await this.listAgentEvents(
       {
         event_id: input.event_id,
-        source: input.source,
+        source: input.source
       },
       { take: 1 },
       sharedContext
@@ -6489,17 +6141,11 @@ class AgentOperationsModuleService extends MedusaService({
       )
 
       return {
-        approval: await this.findApprovalForIncident(
-          incidents[0]?.id,
-          sharedContext
-        ),
+        approval: await this.findApprovalForIncident(incidents[0]?.id, sharedContext),
         duplicate: true,
         event: existingEvent,
         incident: incidents[0],
-        recommendation: await this.findRecommendationForIncident(
-          incidents[0]?.id,
-          sharedContext
-        ),
+        recommendation: await this.findRecommendationForIncident(incidents[0]?.id, sharedContext)
       }
     }
 
@@ -6508,15 +6154,13 @@ class AgentOperationsModuleService extends MedusaService({
     const activePolicyRecords = await this.listAgentPolicyDefinitions(
       {
         action_type: recommendation.action_type,
-        status: "ACTIVE",
+        status: "ACTIVE"
       },
       {},
       sharedContext
     )
     const activePolicies = activePolicyRecords.filter(
-      (policy) =>
-        policy.effective_at <= now &&
-        (!policy.expires_at || policy.expires_at > now)
+      (policy) => policy.effective_at <= now && (!policy.expires_at || policy.expires_at > now)
     )
     const policyDecision = evaluatePolicies(
       activePolicies.map((policy) => ({
@@ -6526,16 +6170,13 @@ class AgentOperationsModuleService extends MedusaService({
         policy_version: policy.version,
         required_role: policy.required_role,
         requires_approval: policy.requires_approval,
-        risk_level: policy.risk_level,
+        risk_level: policy.risk_level
       })),
       recommendation.action_type,
       {
         available_quantity: input.payload.available_quantity,
         required_quantity: input.payload.required_quantity,
-        shortfall: Math.max(
-          input.payload.required_quantity - input.payload.available_quantity,
-          0
-        ),
+        shortfall: Math.max(input.payload.required_quantity - input.payload.available_quantity, 0)
       }
     )
     const matchedPolicy = activePolicies.find(
@@ -6546,9 +6187,7 @@ class AgentOperationsModuleService extends MedusaService({
     const requiresApproval = matchedPolicy
       ? policyDecision.requires_approval
       : recommendation.requires_approval
-    const riskLevel = matchedPolicy
-      ? policyDecision.risk_level
-      : recommendation.risk_level
+    const riskLevel = matchedPolicy ? policyDecision.risk_level : recommendation.risk_level
     const event = await this.createAgentEvents(
       {
         causation_id: input.causation_id,
@@ -6564,7 +6203,7 @@ class AgentOperationsModuleService extends MedusaService({
         status: "PROCESSED",
         subject_id: input.subject_id,
         subject_type: input.subject_type,
-        tenant_id: input.tenant_id,
+        tenant_id: input.tenant_id
       },
       sharedContext
     )
@@ -6573,7 +6212,7 @@ class AgentOperationsModuleService extends MedusaService({
       {
         context: {
           event_id: event.id,
-          event_type: event.event_type,
+          event_type: event.event_type
         },
         correlation_id: input.correlation_id,
         incident_type: "INVENTORY_RISK",
@@ -6584,7 +6223,7 @@ class AgentOperationsModuleService extends MedusaService({
         summary: recommendation.summary,
         tenant_id: input.tenant_id,
         title: `Inventory risk for ${input.payload.inventory_item_id}`,
-        trigger_event_id: event.id,
+        trigger_event_id: event.id
       },
       sharedContext
     )
@@ -6597,17 +6236,12 @@ class AgentOperationsModuleService extends MedusaService({
         input: input.payload,
         started_at: now,
         status: "RECEIVED",
-        trigger_event_id: event.id,
+        trigger_event_id: event.id
       },
       sharedContext
     )
 
-    await this.transitionIncident(
-      incident.id,
-      "RECEIVED",
-      "INVESTIGATING",
-      sharedContext
-    )
+    await this.transitionIncident(incident.id, "RECEIVED", "INVESTIGATING", sharedContext)
 
     const recommendationRecord = await this.createAgentRecommendations(
       {
@@ -6619,23 +6253,16 @@ class AgentOperationsModuleService extends MedusaService({
         risk_level: riskLevel,
         run_id: run.id,
         status: requiresApproval ? "PENDING_APPROVAL" : "PROPOSED",
-        summary: recommendation.summary,
+        summary: recommendation.summary
       },
       sharedContext
     )
 
-    let approval: Awaited<
-      ReturnType<typeof this.retrieveAgentApproval>
-    > | null = null
+    let approval: Awaited<ReturnType<typeof this.retrieveAgentApproval>> | null = null
     let finalStatus: IncidentStatus
 
     if (requiresApproval) {
-      await this.transitionIncident(
-        incident.id,
-        "INVESTIGATING",
-        "OPTIONS_READY",
-        sharedContext
-      )
+      await this.transitionIncident(incident.id, "INVESTIGATING", "OPTIONS_READY", sharedContext)
       await this.transitionIncident(
         incident.id,
         "OPTIONS_READY",
@@ -6648,29 +6275,21 @@ class AgentOperationsModuleService extends MedusaService({
         {
           expires_at: expiresAt,
           incident_id: incident.id,
-          policy_key:
-            matchedPolicy?.policy_key ??
-            "inventory.transfer.requires-operations-manager",
+          policy_key: matchedPolicy?.policy_key ?? "inventory.transfer.requires-operations-manager",
           policy_version: matchedPolicy?.version ?? "1.0.0",
           recommendation_id: recommendationRecord.id,
           requested_at: now,
           requested_by_id: run.id,
           requested_by_type: "agent_run",
-          required_role:
-            policyDecision.required_roles[0] ?? "operations_manager",
-          status: "PENDING",
+          required_role: policyDecision.required_roles[0] ?? "operations_manager",
+          status: "PENDING"
         },
         sharedContext
       )
       finalStatus = "AWAITING_APPROVAL"
     } else {
       finalStatus = recommendation.terminal_status ?? "ESCALATED"
-      await this.transitionIncident(
-        incident.id,
-        "INVESTIGATING",
-        finalStatus,
-        sharedContext
-      )
+      await this.transitionIncident(incident.id, "INVESTIGATING", finalStatus, sharedContext)
     }
 
     await this.updateAgentRuns(
@@ -6678,7 +6297,7 @@ class AgentOperationsModuleService extends MedusaService({
         id: run.id,
         completed_at: now,
         output: recommendation,
-        status: finalStatus,
+        status: finalStatus
       },
       sharedContext
     )
@@ -6692,14 +6311,14 @@ class AgentOperationsModuleService extends MedusaService({
         data: {
           approval_id: approval?.id,
           recommendation_id: recommendationRecord.id,
-          risk_level: riskLevel,
+          risk_level: riskLevel
         },
         event_type: "agent.recommendation.created",
         incident_id: incident.id,
         recorded_at: now,
         resource_id: recommendationRecord.id,
         resource_type: "agent_recommendation",
-        run_id: run.id,
+        run_id: run.id
       },
       sharedContext
     )
@@ -6709,9 +6328,7 @@ class AgentOperationsModuleService extends MedusaService({
         aggregate_id: incident.id,
         aggregate_type: "agent_incident",
         available_at: now,
-        event_type: approval
-          ? "agent.approval.requested"
-          : "agent.recommendation.created",
+        event_type: approval ? "agent.approval.requested" : "agent.recommendation.created",
         event_version: 1,
         idempotency_key: `${input.source}:${input.event_id}:recommendation`,
         payload: {
@@ -6719,9 +6336,9 @@ class AgentOperationsModuleService extends MedusaService({
           incident_id: incident.id,
           recommendation_id: recommendationRecord.id,
           run_id: run.id,
-          status: finalStatus,
+          status: finalStatus
         },
-        status: "PENDING",
+        status: "PENDING"
       },
       sharedContext
     )
@@ -6730,12 +6347,8 @@ class AgentOperationsModuleService extends MedusaService({
       approval,
       duplicate: false,
       event,
-      incident: await this.retrieveAgentIncident(
-        incident.id,
-        {},
-        sharedContext
-      ),
-      recommendation: recommendationRecord,
+      incident: await this.retrieveAgentIncident(incident.id, {}, sharedContext),
+      recommendation: recommendationRecord
     }
   }
 
@@ -6792,10 +6405,7 @@ class AgentOperationsModuleService extends MedusaService({
         event: existingEvent,
         incident,
         live_order: liveOrder,
-        recommendation: await this.findRecommendationForIncident(
-          incident?.id,
-          sharedContext
-        ),
+        recommendation: await this.findRecommendationForIncident(incident?.id, sharedContext)
       }
     }
 
@@ -6816,7 +6426,7 @@ class AgentOperationsModuleService extends MedusaService({
         status: "PROCESSED",
         subject_id: input.subject_id,
         subject_type: input.subject_type,
-        tenant_id: input.tenant_id,
+        tenant_id: input.tenant_id
       },
       sharedContext
     )
@@ -6824,7 +6434,7 @@ class AgentOperationsModuleService extends MedusaService({
       {
         context: {
           exception_type: input.payload.exception_type,
-          live_order: liveOrder,
+          live_order: liveOrder
         },
         correlation_id: input.correlation_id,
         incident_type: "ORDER_EXCEPTION",
@@ -6835,7 +6445,7 @@ class AgentOperationsModuleService extends MedusaService({
         summary: recommendation.summary,
         tenant_id: input.tenant_id,
         title: `Order exception for #${liveOrder.display_id}`,
-        trigger_event_id: event.id,
+        trigger_event_id: event.id
       },
       sharedContext
     )
@@ -6846,21 +6456,16 @@ class AgentOperationsModuleService extends MedusaService({
         incident_id: incident.id,
         input: {
           event: input.payload,
-          live_order: liveOrder,
+          live_order: liveOrder
         },
         started_at: now,
         status: "RECEIVED",
-        trigger_event_id: event.id,
+        trigger_event_id: event.id
       },
       sharedContext
     )
 
-    await this.transitionIncident(
-      incident.id,
-      "RECEIVED",
-      "INVESTIGATING",
-      sharedContext
-    )
+    await this.transitionIncident(incident.id, "RECEIVED", "INVESTIGATING", sharedContext)
 
     const recommendationRecord = await this.createAgentRecommendations(
       {
@@ -6872,22 +6477,15 @@ class AgentOperationsModuleService extends MedusaService({
         risk_level: recommendation.risk_level,
         run_id: run.id,
         status: "PROPOSED",
-        summary: recommendation.summary,
+        summary: recommendation.summary
       },
       sharedContext
     )
 
-    let actionRequest: Awaited<
-      ReturnType<typeof this.retrieveAgentActionRequest>
-    > | null = null
+    let actionRequest: Awaited<ReturnType<typeof this.retrieveAgentActionRequest>> | null = null
     const finalStatus = recommendation.terminal_status ?? "OPTIONS_READY"
 
-    await this.transitionIncident(
-      incident.id,
-      "INVESTIGATING",
-      finalStatus,
-      sharedContext
-    )
+    await this.transitionIncident(incident.id, "INVESTIGATING", finalStatus, sharedContext)
 
     if (recommendation.action_type === "CREATE_TASK") {
       const actionResult = await this.requestGovernedAgentAction_(
@@ -6898,14 +6496,14 @@ class AgentOperationsModuleService extends MedusaService({
           incident_id: incident.id,
           input: {
             ...recommendation.proposal,
-            incident_id: incident.id,
+            incident_id: incident.id
           },
           recommendation_id: recommendationRecord.id,
           requested_by_id: run.id,
           requested_by_type: "agent",
           tenant_id: input.tenant_id,
           tool_name: "task.create",
-          tool_version: "1.0.0",
+          tool_version: "1.0.0"
         },
         sharedContext
       )
@@ -6918,9 +6516,9 @@ class AgentOperationsModuleService extends MedusaService({
         completed_at: now,
         output: {
           action_request_id: actionRequest?.id ?? null,
-          recommendation,
+          recommendation
         },
-        status: finalStatus,
+        status: finalStatus
       },
       sharedContext
     )
@@ -6934,14 +6532,14 @@ class AgentOperationsModuleService extends MedusaService({
           action_request_id: actionRequest?.id ?? null,
           exception_type: input.payload.exception_type,
           live_order_version: liveOrder.version,
-          recommendation_id: recommendationRecord.id,
+          recommendation_id: recommendationRecord.id
         },
         event_type: "agent.order-exception.analyzed",
         incident_id: incident.id,
         recorded_at: now,
         resource_id: recommendationRecord.id,
         resource_type: "agent_recommendation",
-        run_id: run.id,
+        run_id: run.id
       },
       sharedContext
     )
@@ -6958,9 +6556,9 @@ class AgentOperationsModuleService extends MedusaService({
           payload: {
             incident_id: incident.id,
             order_id: liveOrder.order_id,
-            recommendation_id: recommendationRecord.id,
+            recommendation_id: recommendationRecord.id
           },
-          status: "PENDING",
+          status: "PENDING"
         },
         sharedContext
       )
@@ -6970,13 +6568,9 @@ class AgentOperationsModuleService extends MedusaService({
       action_request: actionRequest,
       duplicate: false,
       event,
-      incident: await this.retrieveAgentIncident(
-        incident.id,
-        {},
-        sharedContext
-      ),
+      incident: await this.retrieveAgentIncident(incident.id, {}, sharedContext),
       live_order: liveOrder,
-      recommendation: recommendationRecord,
+      recommendation: recommendationRecord
     }
   }
 
@@ -6999,23 +6593,17 @@ class AgentOperationsModuleService extends MedusaService({
     )
     const activePrompt = activePrompts[0]
     const prompt = {
-      max_tokens:
-        activePrompt?.max_tokens ?? CUSTOMER_SUPPORT_DEFAULT_MAX_TOKENS,
+      max_tokens: activePrompt?.max_tokens ?? CUSTOMER_SUPPORT_DEFAULT_MAX_TOKENS,
       output_schema:
         (activePrompt?.output_schema as Record<string, unknown> | undefined) ??
         CUSTOMER_SUPPORT_DEFAULT_OUTPUT_SCHEMA,
       prompt_key: activePrompt?.prompt_key ?? CUSTOMER_SUPPORT_PROMPT_KEY,
-      system_prompt:
-        activePrompt?.system_prompt ?? CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT,
-      version: activePrompt?.version ?? CUSTOMER_SUPPORT_PROMPT_VERSION,
+      system_prompt: activePrompt?.system_prompt ?? CUSTOMER_SUPPORT_DEFAULT_SYSTEM_PROMPT,
+      version: activePrompt?.version ?? CUSTOMER_SUPPORT_PROMPT_VERSION
     }
 
     const legacyRun = (
-      await this.listAgentModelRuns(
-        { idempotency_key: idempotencyKey },
-        { take: 1 },
-        sharedContext
-      )
+      await this.listAgentModelRuns({ idempotency_key: idempotencyKey }, { take: 1 }, sharedContext)
     )[0]
     if (legacyRun?.status === "SUCCEEDED" && legacyRun.output) {
       const cached = ResponseDraftOutput.safeParse(legacyRun.output)
@@ -7027,23 +6615,20 @@ class AgentOperationsModuleService extends MedusaService({
         excerpt: item.excerpt,
         locator: item.citation_locator,
         title: item.title,
-        version: item.version,
+        version: item.version
       })),
       locale: parsed.locale,
       live_order: {
         display_id: parsed.order.display_id,
         fulfillment_status: parsed.order.fulfillment_status,
         order_status: parsed.order.order_status,
-        payment_status: parsed.order.payment_status,
+        payment_status: parsed.order.payment_status
       },
-      question: parsed.question,
+      question: parsed.question
     }
     let credentials
     try {
-      credentials = await this.getActiveAiProviderCredentials(
-        "generation",
-        tenantId
-      )
+      credentials = await this.getActiveAiProviderCredentials("generation", tenantId)
     } catch {
       return deterministic
     }
@@ -7052,15 +6637,11 @@ class AgentOperationsModuleService extends MedusaService({
       const adapter = createModelAdapter({
         apiKey: credential.api_key,
         model: credential.model,
-        provider: credential.provider,
+        provider: credential.provider
       })
       const attemptKey = `${idempotencyKey}:provider:${adapter.provider}`
       const existing = (
-        await this.listAgentModelRuns(
-          { idempotency_key: attemptKey },
-          { take: 1 },
-          sharedContext
-        )
+        await this.listAgentModelRuns({ idempotency_key: attemptKey }, { take: 1 }, sharedContext)
       )[0]
       if (existing?.status === "SUCCEEDED" && existing.output) {
         const cached = ResponseDraftOutput.safeParse(existing.output)
@@ -7082,7 +6663,7 @@ class AgentOperationsModuleService extends MedusaService({
           provider: adapter.provider,
           redacted: true,
           started_at: startedAt,
-          status: "RUNNING",
+          status: "RUNNING"
         },
         sharedContext
       )
@@ -7095,13 +6676,13 @@ class AgentOperationsModuleService extends MedusaService({
           output_schema: prompt.output_schema,
           prompt_key: prompt.prompt_key,
           prompt_version: prompt.version,
-          system_prompt: prompt.system_prompt,
+          system_prompt: prompt.system_prompt
         })
         const output = ResponseDraftOutput.parse({
           body: generated.body,
           citations: deterministic.citations,
           grounded: true,
-          requires_human_review: true,
+          requires_human_review: true
         })
         await this.updateAgentModelRuns(
           {
@@ -7109,7 +6690,7 @@ class AgentOperationsModuleService extends MedusaService({
             id: modelRun.id,
             latency_ms: Date.now() - startedAt.getTime(),
             output,
-            status: "SUCCEEDED",
+            status: "SUCCEEDED"
           },
           sharedContext
         )
@@ -7118,13 +6699,10 @@ class AgentOperationsModuleService extends MedusaService({
         await this.updateAgentModelRuns(
           {
             completed_at: new Date(),
-            error:
-              error instanceof Error
-                ? error.message.slice(0, 1_000)
-                : "Model draft failed",
+            error: error instanceof Error ? error.message.slice(0, 1_000) : "Model draft failed",
             id: modelRun.id,
             latency_ms: Date.now() - startedAt.getTime(),
-            status: "FAILED",
+            status: "FAILED"
           },
           sharedContext
         )
@@ -7142,13 +6720,7 @@ class AgentOperationsModuleService extends MedusaService({
     draft: ResponseDraftOutput,
     @MedusaContext() sharedContext: Context = {}
   ) {
-    return this.processSupportRequest_(
-      input,
-      liveOrder,
-      knowledge,
-      draft,
-      sharedContext
-    )
+    return this.processSupportRequest_(input, liveOrder, knowledge, draft, sharedContext)
   }
 
   @InjectTransactionManager()
@@ -7192,10 +6764,7 @@ class AgentOperationsModuleService extends MedusaService({
         incident,
         knowledge,
         live_order: liveOrder,
-        recommendation: await this.findRecommendationForIncident(
-          incident?.id,
-          sharedContext
-        ),
+        recommendation: await this.findRecommendationForIncident(incident?.id, sharedContext)
       }
     }
 
@@ -7215,7 +6784,7 @@ class AgentOperationsModuleService extends MedusaService({
         status: "PROCESSED",
         subject_id: input.subject_id,
         subject_type: input.subject_type,
-        tenant_id: input.tenant_id,
+        tenant_id: input.tenant_id
       },
       sharedContext
     )
@@ -7225,7 +6794,7 @@ class AgentOperationsModuleService extends MedusaService({
           customer_id: input.payload.customer_id,
           draft_grounded: draft.grounded,
           live_order: liveOrder,
-          request_type: input.payload.request_type,
+          request_type: input.payload.request_type
         },
         correlation_id: input.correlation_id,
         incident_type: "CUSTOMER_SUPPORT",
@@ -7236,7 +6805,7 @@ class AgentOperationsModuleService extends MedusaService({
         summary: input.payload.question,
         tenant_id: input.tenant_id,
         title: `Customer support request for #${liveOrder.display_id}`,
-        trigger_event_id: event.id,
+        trigger_event_id: event.id
       },
       sharedContext
     )
@@ -7247,21 +6816,16 @@ class AgentOperationsModuleService extends MedusaService({
         incident_id: incident.id,
         input: {
           question: input.payload.question,
-          request_type: input.payload.request_type,
+          request_type: input.payload.request_type
         },
         started_at: now,
         status: "RECEIVED",
-        trigger_event_id: event.id,
+        trigger_event_id: event.id
       },
       sharedContext
     )
 
-    await this.transitionIncident(
-      incident.id,
-      "RECEIVED",
-      "INVESTIGATING",
-      sharedContext
-    )
+    await this.transitionIncident(incident.id, "RECEIVED", "INVESTIGATING", sharedContext)
 
     const recommendation = await this.createAgentRecommendations(
       {
@@ -7269,14 +6833,14 @@ class AgentOperationsModuleService extends MedusaService({
         evidence: {
           citations: draft.citations,
           knowledge_candidate_count: knowledge.total_candidates,
-          live_order_version: liveOrder.version,
+          live_order_version: liveOrder.version
         },
         incident_id: incident.id,
         proposal: {
           draft: draft.body,
           grounded: draft.grounded,
           message_sent: false,
-          requires_human_review: true,
+          requires_human_review: true
         },
         rationale: draft.grounded
           ? "Draft uses a live order snapshot and approved cited knowledge."
@@ -7284,17 +6848,12 @@ class AgentOperationsModuleService extends MedusaService({
         risk_level: "LOW",
         run_id: run.id,
         status: "PROPOSED",
-        summary: `Review customer response draft for order #${liveOrder.display_id}`,
+        summary: `Review customer response draft for order #${liveOrder.display_id}`
       },
       sharedContext
     )
 
-    await this.transitionIncident(
-      incident.id,
-      "INVESTIGATING",
-      "OPTIONS_READY",
-      sharedContext
-    )
+    await this.transitionIncident(incident.id, "INVESTIGATING", "OPTIONS_READY", sharedContext)
 
     const dueAt = new Date(now.getTime() + 30 * 60 * 1_000).toISOString()
     const actionResult = await this.requestGovernedAgentAction_(
@@ -7315,19 +6874,19 @@ class AgentOperationsModuleService extends MedusaService({
             grounded: draft.grounded,
             order_id: liveOrder.order_id,
             question: input.payload.question,
-            requires_human_review: true,
+            requires_human_review: true
           },
           priority: "MEDIUM",
           task_type: "SUPPORT_RESPONSE_REVIEW",
           tenant_id: input.tenant_id,
-          title: `Review response for order #${liveOrder.display_id}`,
+          title: `Review response for order #${liveOrder.display_id}`
         },
         recommendation_id: recommendation.id,
         requested_by_id: run.id,
         requested_by_type: "agent",
         tenant_id: input.tenant_id,
         tool_name: "task.create",
-        tool_version: "1.0.0",
+        tool_version: "1.0.0"
       },
       sharedContext
     )
@@ -7341,9 +6900,9 @@ class AgentOperationsModuleService extends MedusaService({
           citations: draft.citations,
           draft_grounded: draft.grounded,
           message_sent: false,
-          requires_human_review: true,
+          requires_human_review: true
         },
-        status: "OPTIONS_READY",
+        status: "OPTIONS_READY"
       },
       sharedContext
     )
@@ -7358,14 +6917,14 @@ class AgentOperationsModuleService extends MedusaService({
           citation_count: draft.citations.length,
           grounded: draft.grounded,
           message_sent: false,
-          recommendation_id: recommendation.id,
+          recommendation_id: recommendation.id
         },
         event_type: "agent.support-response.drafted",
         incident_id: incident.id,
         recorded_at: now,
         resource_id: recommendation.id,
         resource_type: "agent_recommendation",
-        run_id: run.id,
+        run_id: run.id
       },
       sharedContext
     )
@@ -7375,14 +6934,10 @@ class AgentOperationsModuleService extends MedusaService({
       draft,
       duplicate: false,
       event,
-      incident: await this.retrieveAgentIncident(
-        incident.id,
-        {},
-        sharedContext
-      ),
+      incident: await this.retrieveAgentIncident(incident.id, {}, sharedContext),
       knowledge,
       live_order: liveOrder,
-      recommendation,
+      recommendation
     }
   }
 
@@ -7415,20 +6970,12 @@ class AgentOperationsModuleService extends MedusaService({
           sharedContext
         ),
         duplicate: true,
-        message: existingMessage,
+        message: existingMessage
       }
     }
 
-    const approval = await this.retrieveAgentApproval(
-      input.approval_id,
-      {},
-      sharedContext
-    )
-    const incident = await this.retrieveAgentIncident(
-      input.incident_id,
-      {},
-      sharedContext
-    )
+    const approval = await this.retrieveAgentApproval(input.approval_id, {}, sharedContext)
+    const incident = await this.retrieveAgentIncident(input.incident_id, {}, sharedContext)
     const recommendation = await this.retrieveAgentRecommendation(
       input.recommendation_id,
       {},
@@ -7438,7 +6985,7 @@ class AgentOperationsModuleService extends MedusaService({
       {
         channel: "IN_APP",
         topic_id: approval.id,
-        topic_type: "APPROVAL",
+        topic_type: "APPROVAL"
       },
       { take: 1 },
       sharedContext
@@ -7453,21 +7000,21 @@ class AgentOperationsModuleService extends MedusaService({
           last_message_at: now,
           metadata: {
             approval_id: approval.id,
-            recommendation_id: recommendation.id,
+            recommendation_id: recommendation.id
           },
           opened_at: now,
           status: "OPEN",
           tenant_id: incident.tenant_id,
           title: `Approval required: ${incident.title}`,
           topic_id: approval.id,
-          topic_type: "APPROVAL",
+          topic_type: "APPROVAL"
         },
         sharedContext
       ))
     const content = buildApprovalRequestedMessage({
       approval,
       incident,
-      recommendation,
+      recommendation
     })
     const message = await this.createAgentMessages(
       {
@@ -7481,7 +7028,7 @@ class AgentOperationsModuleService extends MedusaService({
         sender_id: "agent-operations",
         sender_type: "system",
         status: "AVAILABLE",
-        structured_content: content.structured_content,
+        structured_content: content.structured_content
       },
       sharedContext
     )
@@ -7499,13 +7046,13 @@ class AgentOperationsModuleService extends MedusaService({
         data: {
           approval_id: approval.id,
           channel: "IN_APP",
-          message_id: message.id,
+          message_id: message.id
         },
         event_type: "agent.communication.message.created",
         incident_id: incident.id,
         recorded_at: now,
         resource_id: message.id,
-        resource_type: "agent_message",
+        resource_type: "agent_message"
       },
       sharedContext
     )
@@ -7552,7 +7099,7 @@ class AgentOperationsModuleService extends MedusaService({
         ),
         duplicate: true,
         inbound_message: existingMessage,
-        response_message: responses[0] ?? null,
+        response_message: responses[0] ?? null
       }
     }
 
@@ -7576,11 +7123,7 @@ class AgentOperationsModuleService extends MedusaService({
       )
     }
 
-    const incident = await this.retrieveAgentIncident(
-      conversation.incident_id,
-      {},
-      sharedContext
-    )
+    const incident = await this.retrieveAgentIncident(conversation.incident_id, {}, sharedContext)
     const now = new Date()
     const inboundMessage = await this.createAgentMessages(
       {
@@ -7595,14 +7138,11 @@ class AgentOperationsModuleService extends MedusaService({
         sender_id: input.actor_id,
         sender_type: "user",
         status: "RECEIVED",
-        structured_content: { command: input.command },
+        structured_content: { command: input.command }
       },
       sharedContext
     )
-    const targetIsValid = isApprovalDecisionCommandTarget(
-      conversation,
-      input.command
-    )
+    const targetIsValid = isApprovalDecisionCommandTarget(conversation, input.command)
     let accepted = false
     let actionRequestId: string | null = null
     let commandDuplicate = false
@@ -7617,7 +7157,7 @@ class AgentOperationsModuleService extends MedusaService({
             actor_id: input.actor_id,
             approval_id: input.command.approval_id,
             decision: input.command.decision,
-            reason: input.command.reason,
+            reason: input.command.reason
           },
           sharedContext
         )
@@ -7626,13 +7166,10 @@ class AgentOperationsModuleService extends MedusaService({
         accepted = !conflict
         commandDuplicate = decision.duplicate
         actionRequestId =
-          "action_request" in decision
-            ? (decision.action_request?.id ?? null)
-            : null
+          "action_request" in decision ? (decision.action_request?.id ?? null) : null
         commandError = conflict ?? null
       } catch (error) {
-        commandError =
-          error instanceof Error ? error.message : "Unknown command error"
+        commandError = error instanceof Error ? error.message : "Unknown command error"
       }
     }
 
@@ -7641,15 +7178,15 @@ class AgentOperationsModuleService extends MedusaService({
           action_request_id: actionRequestId,
           approval_id: input.command.approval_id,
           decision: input.command.decision,
-          duplicate: commandDuplicate,
+          duplicate: commandDuplicate
         })
       : {
           body: `Không thể xử lý lệnh cho approval ${input.command.approval_id}: ${commandError}`,
           structured_content: {
             accepted: false,
             approval_id: input.command.approval_id,
-            error: commandError,
-          },
+            error: commandError
+          }
         }
     const processedAt = new Date()
     const updatedInboundMessage = await this.updateAgentMessages(
@@ -7657,7 +7194,7 @@ class AgentOperationsModuleService extends MedusaService({
         error: commandError,
         id: inboundMessage.id,
         processed_at: processedAt,
-        status: accepted ? "PROCESSED" : "REJECTED",
+        status: accepted ? "PROCESSED" : "REJECTED"
       },
       sharedContext
     )
@@ -7673,7 +7210,7 @@ class AgentOperationsModuleService extends MedusaService({
         sender_id: "agent-operations",
         sender_type: "system",
         status: "AVAILABLE",
-        structured_content: responseContent.structured_content,
+        structured_content: responseContent.structured_content
       },
       sharedContext
     )
@@ -7684,9 +7221,7 @@ class AgentOperationsModuleService extends MedusaService({
     )
     await this.createAgentAuditEvents(
       {
-        action: accepted
-          ? "conversation-command-processed"
-          : "conversation-command-rejected",
+        action: accepted ? "conversation-command-processed" : "conversation-command-rejected",
         actor_id: input.actor_id,
         actor_type: "user",
         correlation_id: incident.correlation_id,
@@ -7696,7 +7231,7 @@ class AgentOperationsModuleService extends MedusaService({
           client_message_id: input.client_message_id,
           command: input.command.name,
           error: commandError,
-          message_id: inboundMessage.id,
+          message_id: inboundMessage.id
         },
         event_type: accepted
           ? "agent.communication.command.processed"
@@ -7704,7 +7239,7 @@ class AgentOperationsModuleService extends MedusaService({
         incident_id: incident.id,
         recorded_at: processedAt,
         resource_id: inboundMessage.id,
-        resource_type: "agent_message",
+        resource_type: "agent_message"
       },
       sharedContext
     )
@@ -7712,22 +7247,15 @@ class AgentOperationsModuleService extends MedusaService({
     return {
       accepted,
       command_result: responseContent.structured_content,
-      conversation: await this.retrieveAgentConversation(
-        conversation.id,
-        {},
-        sharedContext
-      ),
+      conversation: await this.retrieveAgentConversation(conversation.id, {}, sharedContext),
       duplicate: false,
       inbound_message: updatedInboundMessage,
-      response_message: responseMessage,
+      response_message: responseMessage
     }
   }
 
   @InjectManager()
-  async decideApproval(
-    input: ApprovalDecisionInput,
-    @MedusaContext() sharedContext: Context = {}
-  ) {
+  async decideApproval(input: ApprovalDecisionInput, @MedusaContext() sharedContext: Context = {}) {
     return this.decideApproval_(input, sharedContext)
   }
 
@@ -7744,11 +7272,7 @@ class AgentOperationsModuleService extends MedusaService({
     input: { actor_id: string; approval_id: string; expired_at: string },
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const approval = await this.retrieveAgentApproval(
-      input.approval_id,
-      {},
-      sharedContext
-    )
+    const approval = await this.retrieveAgentApproval(input.approval_id, {}, sharedContext)
     if (approval.status === "EXPIRED") {
       return { approval, duplicate: true, expired: true }
     }
@@ -7761,11 +7285,7 @@ class AgentOperationsModuleService extends MedusaService({
       return { approval, duplicate: false, expired: false }
     }
 
-    const incident = await this.retrieveAgentIncident(
-      approval.incident_id,
-      {},
-      sharedContext
-    )
+    const incident = await this.retrieveAgentIncident(approval.incident_id, {}, sharedContext)
     const updated = await this.updateAgentApprovals(
       { id: approval.id, status: "EXPIRED" },
       sharedContext
@@ -7781,10 +7301,10 @@ class AgentOperationsModuleService extends MedusaService({
           context: {
             approval_expired_at: expiredAt.toISOString(),
             approval_id: approval.id,
-            previous_context: incident.context,
+            previous_context: incident.context
           },
           id: incident.id,
-          status: "ESCALATED",
+          status: "ESCALATED"
         },
         sharedContext
       )
@@ -7800,7 +7320,7 @@ class AgentOperationsModuleService extends MedusaService({
         incident_id: incident.id,
         recorded_at: expiredAt,
         resource_id: approval.id,
-        resource_type: "agent_approval",
+        resource_type: "agent_approval"
       },
       sharedContext
     )
@@ -7815,9 +7335,9 @@ class AgentOperationsModuleService extends MedusaService({
         payload: {
           approval_id: approval.id,
           incident_id: incident.id,
-          recommendation_id: approval.recommendation_id,
+          recommendation_id: approval.recommendation_id
         },
-        status: "PENDING",
+        status: "PENDING"
       },
       sharedContext
     )
@@ -7847,30 +7367,24 @@ class AgentOperationsModuleService extends MedusaService({
       return { action: existing[0], duplicate: true }
     }
 
-    const prepared = prepareAgentCommand<Record<string, unknown>>(
-      AGENT_TOOL_REGISTRY,
-      {
-        authority: {
-          actor_id: input.requested_by_id,
-          approval_id: input.approval_id ?? null,
-          granted_permissions: input.granted_permissions,
-          granted_roles: input.granted_roles ?? [],
-          idempotency_key: input.idempotency_key,
-          mode: "ACTION_GATEWAY_REQUEST",
-        },
-        input: input.input,
-        tool_name: input.tool_name,
-        tool_version: input.tool_version,
-      }
-    )
+    const prepared = prepareAgentCommand<Record<string, unknown>>(AGENT_TOOL_REGISTRY, {
+      authority: {
+        actor_id: input.requested_by_id,
+        approval_id: input.approval_id ?? null,
+        granted_permissions: input.granted_permissions,
+        granted_roles: input.granted_roles ?? [],
+        idempotency_key: input.idempotency_key,
+        mode: "ACTION_GATEWAY_REQUEST"
+      },
+      input: input.input,
+      tool_name: input.tool_name,
+      tool_version: input.tool_version
+    })
     const now = new Date()
     const tenantId = input.tenant_id ?? "default"
     const declaredIncidentId = prepared.input.incident_id
 
-    if (
-      typeof declaredIncidentId === "string" &&
-      declaredIncidentId !== input.incident_id
-    ) {
+    if (typeof declaredIncidentId === "string" && declaredIncidentId !== input.incident_id) {
       throw new MedusaError(
         MedusaError.Types.CONFLICT,
         "Tool input incident_id must match the Action Gateway envelope."
@@ -7881,15 +7395,13 @@ class AgentOperationsModuleService extends MedusaService({
       {
         action_type: prepared.definition.name,
         status: "ACTIVE",
-        tenant_id: tenantId,
+        tenant_id: tenantId
       },
       {},
       sharedContext
     )
     const activePolicies = activePolicyRecords.filter(
-      (policy) =>
-        policy.effective_at <= now &&
-        (!policy.expires_at || policy.expires_at > now)
+      (policy) => policy.effective_at <= now && (!policy.expires_at || policy.expires_at > now)
     )
     const policyInput = prepared.input as Record<string, unknown>
     const policyDecision = evaluatePolicies(
@@ -7900,7 +7412,7 @@ class AgentOperationsModuleService extends MedusaService({
         policy_version: policy.version,
         required_role: policy.required_role,
         requires_approval: policy.requires_approval,
-        risk_level: policy.risk_level,
+        risk_level: policy.risk_level
       })),
       prepared.definition.name,
       policyInput
@@ -7915,7 +7427,7 @@ class AgentOperationsModuleService extends MedusaService({
       LOW: 1,
       MEDIUM: 2,
       PROHIBITED: 4,
-      READ_ONLY: 0,
+      READ_ONLY: 0
     } as const
     const selectedPolicy = [...matchingPolicies].sort(
       (left, right) =>
@@ -7931,10 +7443,7 @@ class AgentOperationsModuleService extends MedusaService({
       )
     }
 
-    if (
-      riskRank[policyDecision.risk_level] >
-      riskRank[prepared.definition.risk_level]
-    ) {
+    if (riskRank[policyDecision.risk_level] > riskRank[prepared.definition.risk_level]) {
       throw new MedusaError(
         MedusaError.Types.NOT_ALLOWED,
         `Policy risk ${policyDecision.risk_level} exceeds tool ceiling ${prepared.definition.risk_level}.`
@@ -7943,9 +7452,7 @@ class AgentOperationsModuleService extends MedusaService({
 
     const requiresApproval =
       prepared.definition.approval_required || policyDecision.requires_approval
-    let approval: Awaited<
-      ReturnType<typeof this.retrieveAgentApproval>
-    > | null = null
+    let approval: Awaited<ReturnType<typeof this.retrieveAgentApproval>> | null = null
 
     if (requiresApproval) {
       if (!input.approval_id) {
@@ -7955,11 +7462,7 @@ class AgentOperationsModuleService extends MedusaService({
         )
       }
 
-      approval = await this.retrieveAgentApproval(
-        input.approval_id,
-        {},
-        sharedContext
-      )
+      approval = await this.retrieveAgentApproval(input.approval_id, {}, sharedContext)
       if (
         approval.status !== "APPROVED" ||
         new Date(approval.expires_at).getTime() <= now.getTime()
@@ -7978,11 +7481,7 @@ class AgentOperationsModuleService extends MedusaService({
     }
 
     if (input.incident_id) {
-      const incident = await this.retrieveAgentIncident(
-        input.incident_id,
-        {},
-        sharedContext
-      )
+      const incident = await this.retrieveAgentIncident(input.incident_id, {}, sharedContext)
       if (incident.correlation_id !== input.correlation_id) {
         throw new MedusaError(
           MedusaError.Types.CONFLICT,
@@ -7997,10 +7496,7 @@ class AgentOperationsModuleService extends MedusaService({
         {},
         sharedContext
       )
-      if (
-        input.incident_id &&
-        recommendation.incident_id !== input.incident_id
-      ) {
+      if (input.incident_id && recommendation.incident_id !== input.incident_id) {
         throw new MedusaError(
           MedusaError.Types.CONFLICT,
           `Recommendation ${recommendation.id} does not belong to incident ${input.incident_id}.`
@@ -8029,7 +7525,7 @@ class AgentOperationsModuleService extends MedusaService({
         status: "PENDING",
         tenant_id: tenantId,
         tool_name: prepared.definition.name,
-        tool_version: prepared.definition.version,
+        tool_version: prepared.definition.version
       },
       sharedContext
     )
@@ -8047,22 +7543,20 @@ class AgentOperationsModuleService extends MedusaService({
           policy_version: selectedPolicy.version,
           risk_level: policyDecision.risk_level,
           tool_name: prepared.definition.name,
-          tool_version: prepared.definition.version,
+          tool_version: prepared.definition.version
         },
         event_type: "agent.action.requested",
         incident_id: input.incident_id,
         recorded_at: now,
         resource_id: action.id,
-        resource_type: "agent_action_request",
+        resource_type: "agent_action_request"
       },
       sharedContext
     )
     await this.createAgentOutboxEvents(
       {
         aggregate_id: input.incident_id ?? action.id,
-        aggregate_type: input.incident_id
-          ? "agent_incident"
-          : "agent_action_request",
+        aggregate_type: input.incident_id ? "agent_incident" : "agent_action_request",
         available_at: now,
         event_type: "agent.action.requested",
         event_version: 1,
@@ -8071,9 +7565,9 @@ class AgentOperationsModuleService extends MedusaService({
           action_request_id: action.id,
           correlation_id: input.correlation_id,
           incident_id: input.incident_id,
-          tool_name: action.tool_name,
+          tool_name: action.tool_name
         },
-        status: "PENDING",
+        status: "PENDING"
       },
       sharedContext
     )
@@ -8094,11 +7588,7 @@ class AgentOperationsModuleService extends MedusaService({
     input: ClaimAgentActionInput,
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const action = await this.retrieveAgentActionRequest(
-      input.action_request_id,
-      {},
-      sharedContext
-    )
+    const action = await this.retrieveAgentActionRequest(input.action_request_id, {}, sharedContext)
     const claimedAt = new Date(input.claimed_at)
 
     if (!isAgentActionClaimable(action, claimedAt)) {
@@ -8106,16 +7596,13 @@ class AgentOperationsModuleService extends MedusaService({
         action,
         approval: null,
         claimed: false as const,
-        duplicate:
-          action.status === "SUCCEEDED" || action.status === "CONFLICT",
+        duplicate: action.status === "SUCCEEDED" || action.status === "CONFLICT",
         incident: null,
-        recommendation: null,
+        recommendation: null
       }
     }
 
-    const lockExpiresAt = new Date(
-      claimedAt.getTime() + input.lease_duration_ms
-    )
+    const lockExpiresAt = new Date(claimedAt.getTime() + input.lease_duration_ms)
     const claimedActions = await this.updateAgentActionRequests(
       {
         data: {
@@ -8124,13 +7611,13 @@ class AgentOperationsModuleService extends MedusaService({
           lock_expires_at: lockExpiresAt,
           locked_at: claimedAt,
           locked_by: input.worker_id,
-          status: "PROCESSING",
+          status: "PROCESSING"
         },
         selector: {
           id: action.id,
           locked_by: action.locked_by,
-          status: action.status,
-        },
+          status: action.status
+        }
       },
       sharedContext
     )
@@ -8143,30 +7630,18 @@ class AgentOperationsModuleService extends MedusaService({
         claimed: false as const,
         duplicate: false,
         incident: null,
-        recommendation: null,
+        recommendation: null
       }
     }
 
     const approval = claimedAction.approval_id
-      ? await this.retrieveAgentApproval(
-          claimedAction.approval_id,
-          {},
-          sharedContext
-        )
+      ? await this.retrieveAgentApproval(claimedAction.approval_id, {}, sharedContext)
       : null
     const incident = claimedAction.incident_id
-      ? await this.retrieveAgentIncident(
-          claimedAction.incident_id,
-          {},
-          sharedContext
-        )
+      ? await this.retrieveAgentIncident(claimedAction.incident_id, {}, sharedContext)
       : null
     const recommendation = claimedAction.recommendation_id
-      ? await this.retrieveAgentRecommendation(
-          claimedAction.recommendation_id,
-          {},
-          sharedContext
-        )
+      ? await this.retrieveAgentRecommendation(claimedAction.recommendation_id, {}, sharedContext)
       : null
 
     return {
@@ -8175,7 +7650,7 @@ class AgentOperationsModuleService extends MedusaService({
       claimed: true as const,
       duplicate: false,
       incident,
-      recommendation,
+      recommendation
     }
   }
 
@@ -8192,16 +7667,9 @@ class AgentOperationsModuleService extends MedusaService({
     input: FailAgentActionInput,
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const action = await this.retrieveAgentActionRequest(
-      input.action_request_id,
-      {},
-      sharedContext
-    )
+    const action = await this.retrieveAgentActionRequest(input.action_request_id, {}, sharedContext)
 
-    if (
-      action.status !== "PROCESSING" ||
-      action.locked_by !== input.worker_id
-    ) {
+    if (action.status !== "PROCESSING" || action.locked_by !== input.worker_id) {
       return action
     }
 
@@ -8215,13 +7683,13 @@ class AgentOperationsModuleService extends MedusaService({
           lock_expires_at: null,
           locked_at: null,
           locked_by: null,
-          status: retry.status,
+          status: retry.status
         },
         selector: {
           id: action.id,
           locked_by: input.worker_id,
-          status: "PROCESSING",
-        },
+          status: "PROCESSING"
+        }
       },
       sharedContext
     )
@@ -8230,11 +7698,7 @@ class AgentOperationsModuleService extends MedusaService({
 
     if (actions[0] && retry.status === "DEAD") {
       const incident = action.incident_id
-        ? await this.retrieveAgentIncident(
-            action.incident_id,
-            {},
-            sharedContext
-          )
+        ? await this.retrieveAgentIncident(action.incident_id, {}, sharedContext)
         : null
 
       if (incident?.status === "EXECUTING") {
@@ -8245,11 +7709,11 @@ class AgentOperationsModuleService extends MedusaService({
             context: {
               action_dead_letter: {
                 action_request_id: action.id,
-                error: updatedAction.last_error,
+                error: updatedAction.last_error
               },
-              previous_context: incident.context,
+              previous_context: incident.context
             },
-            status: "ESCALATED",
+            status: "ESCALATED"
           },
           sharedContext
         )
@@ -8270,13 +7734,13 @@ class AgentOperationsModuleService extends MedusaService({
           data: {
             action_request_id: action.id,
             attempt_count: updatedAction.attempt_count,
-            error: updatedAction.last_error,
+            error: updatedAction.last_error
           },
           event_type: "agent.action.dead-lettered",
           incident_id: incident?.id,
           recorded_at: failedAt,
           resource_id: action.id,
-          resource_type: "agent_action_request",
+          resource_type: "agent_action_request"
         },
         sharedContext
       )
@@ -8292,9 +7756,9 @@ class AgentOperationsModuleService extends MedusaService({
             action_request_id: action.id,
             attempt_count: updatedAction.attempt_count,
             error: updatedAction.last_error,
-            incident_id: incident?.id,
+            incident_id: incident?.id
           },
-          status: "PENDING",
+          status: "PENDING"
         },
         sharedContext
       )
@@ -8326,24 +7790,17 @@ class AgentOperationsModuleService extends MedusaService({
     },
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const action = await this.retrieveAgentActionRequest(
-      input.action_request_id,
-      {},
-      sharedContext
-    )
+    const action = await this.retrieveAgentActionRequest(input.action_request_id, {}, sharedContext)
 
     if (action.status === "SUCCEEDED" || action.status === "CONFLICT") {
       return {
         action,
         duplicate: true,
-        result: action.result as TaskCommandOutput | null,
+        result: action.result as TaskCommandOutput | null
       }
     }
 
-    if (
-      action.status !== "PROCESSING" ||
-      action.locked_by !== input.worker_id
-    ) {
+    if (action.status !== "PROCESSING" || action.locked_by !== input.worker_id) {
       throw new MedusaError(
         MedusaError.Types.CONFLICT,
         `Action ${action.id} is not leased by ${input.worker_id}.`
@@ -8353,11 +7810,9 @@ class AgentOperationsModuleService extends MedusaService({
     const definition = AGENT_TOOL_REGISTRY[action.tool_name]
     if (
       !definition ||
-      ![
-        TASK_CREATE_TOOL.name,
-        TASK_ASSIGN_TOOL.name,
-        TASK_ESCALATE_TOOL.name,
-      ].includes(action.tool_name as never) ||
+      ![TASK_CREATE_TOOL.name, TASK_ASSIGN_TOOL.name, TASK_ESCALATE_TOOL.name].includes(
+        action.tool_name as never
+      ) ||
       definition.version !== action.tool_version ||
       definition.permission !== action.permission
     ) {
@@ -8373,7 +7828,7 @@ class AgentOperationsModuleService extends MedusaService({
         policy_key: action.policy_key,
         status: "ACTIVE",
         tenant_id: action.tenant_id,
-        version: action.policy_version,
+        version: action.policy_version
       },
       { take: 1 },
       sharedContext
@@ -8387,9 +7842,7 @@ class AgentOperationsModuleService extends MedusaService({
       policy.effective_at <= now &&
       (!policy.expires_at || policy.expires_at > now) &&
       policy.risk_level !== "PROHIBITED" &&
-      policyConditions.every((condition) =>
-        conditionMatches(condition, actionPayload)
-      )
+      policyConditions.every((condition) => conditionMatches(condition, actionPayload))
     )
 
     if (!policyIsUsable) {
@@ -8406,11 +7859,7 @@ class AgentOperationsModuleService extends MedusaService({
           `Action ${action.id} requires approval.`
         )
       }
-      const approval = await this.retrieveAgentApproval(
-        action.approval_id,
-        {},
-        sharedContext
-      )
+      const approval = await this.retrieveAgentApproval(action.approval_id, {}, sharedContext)
       if (
         approval.status !== "APPROVED" ||
         new Date(approval.expires_at).getTime() <= now.getTime()
@@ -8429,27 +7878,21 @@ class AgentOperationsModuleService extends MedusaService({
       granted_permissions: [action.permission],
       granted_roles: getAuthorizedRoles(action.authorized_roles),
       idempotency_key: action.idempotency_key,
-      mode: "ACTION_GATEWAY" as const,
+      mode: "ACTION_GATEWAY" as const
     }
     let result: TaskCommandOutput
 
     if (action.tool_name === TASK_CREATE_TOOL.name) {
-      const execution = await executeAgentTool<
-        TaskCreateInput,
-        TaskCommandOutput
-      >(
+      const execution = await executeAgentTool<TaskCreateInput, TaskCommandOutput>(
         AGENT_TOOL_REGISTRY,
         {
           authority,
           input: action.input,
           tool_name: action.tool_name,
-          tool_version: action.tool_version,
+          tool_version: action.tool_version
         },
         async (taskInput) => {
-          if (
-            taskInput.incident_id &&
-            taskInput.incident_id !== action.incident_id
-          ) {
+          if (taskInput.incident_id && taskInput.incident_id !== action.incident_id) {
             throw new MedusaError(
               MedusaError.Types.CONFLICT,
               "Task incident does not match the action envelope."
@@ -8459,11 +7902,8 @@ class AgentOperationsModuleService extends MedusaService({
             {
               ...taskInput,
               created_by_id: action.requested_by_id,
-              created_by_type: action.requested_by_type as
-                | "agent"
-                | "system"
-                | "user",
-              idempotency_key: `action:${action.id}:task.create`,
+              created_by_type: action.requested_by_type as "agent" | "system" | "user",
+              idempotency_key: `action:${action.id}:task.create`
             },
             sharedContext
           )
@@ -8471,36 +7911,29 @@ class AgentOperationsModuleService extends MedusaService({
           return {
             duplicate: created.duplicate,
             outcome: "SUCCEEDED",
-            task: toGovernedTaskSnapshot(created.task),
+            task: toGovernedTaskSnapshot(created.task)
           }
         }
       )
       result = execution.output
     } else if (action.tool_name === TASK_ASSIGN_TOOL.name) {
-      const execution = await executeAgentTool<
-        TaskAssignInput,
-        TaskCommandOutput
-      >(
+      const execution = await executeAgentTool<TaskAssignInput, TaskCommandOutput>(
         AGENT_TOOL_REGISTRY,
         {
           authority,
           input: action.input,
           tool_name: action.tool_name,
-          tool_version: action.tool_version,
+          tool_version: action.tool_version
         },
         async (taskInput) => {
-          const task = await this.retrieveAgentTask(
-            taskInput.task_id,
-            {},
-            sharedContext
-          )
+          const task = await this.retrieveAgentTask(taskInput.task_id, {}, sharedContext)
 
           if (task.status !== taskInput.expected_status) {
             return {
               code: "TASK_STATE_CONFLICT",
               message: `Task ${task.id} is ${task.status}, expected ${taskInput.expected_status}.`,
               outcome: "CONFLICT",
-              task: toGovernedTaskSnapshot(task),
+              task: toGovernedTaskSnapshot(task)
             }
           }
 
@@ -8512,7 +7945,7 @@ class AgentOperationsModuleService extends MedusaService({
             return {
               duplicate: true,
               outcome: "SUCCEEDED",
-              task: toGovernedTaskSnapshot(task),
+              task: toGovernedTaskSnapshot(task)
             }
           }
 
@@ -8525,7 +7958,7 @@ class AgentOperationsModuleService extends MedusaService({
               assigned_to_type: taskInput.assigned_to_type,
               claimed_at: task.claimed_at ?? now,
               id: task.id,
-              status: "CLAIMED",
+              status: "CLAIMED"
             },
             sharedContext
           )
@@ -8537,13 +7970,13 @@ class AgentOperationsModuleService extends MedusaService({
               correlation_id: task.incident_id ?? action.correlation_id,
               data: {
                 assigned_to_id: taskInput.assigned_to_id,
-                assigned_to_type: taskInput.assigned_to_type,
+                assigned_to_type: taskInput.assigned_to_type
               },
               event_type: "agent.task.assigned",
               incident_id: task.incident_id,
               recorded_at: now,
               resource_id: task.id,
-              resource_type: "agent_task",
+              resource_type: "agent_task"
             },
             sharedContext
           )
@@ -8551,28 +7984,25 @@ class AgentOperationsModuleService extends MedusaService({
           return {
             duplicate: false,
             outcome: "SUCCEEDED",
-            task: toGovernedTaskSnapshot(assigned),
+            task: toGovernedTaskSnapshot(assigned)
           }
         }
       )
       result = execution.output
     } else {
-      const execution = await executeAgentTool<
-        TaskEscalateInput,
-        TaskCommandOutput
-      >(
+      const execution = await executeAgentTool<TaskEscalateInput, TaskCommandOutput>(
         AGENT_TOOL_REGISTRY,
         {
           authority,
           input: action.input,
           tool_name: action.tool_name,
-          tool_version: action.tool_version,
+          tool_version: action.tool_version
         },
         async (taskInput) => {
           const escalated = await this.escalateGovernedAgentTask_(
             {
               ...taskInput,
-              actor_id: action.requested_by_id,
+              actor_id: action.requested_by_id
             },
             sharedContext
           )
@@ -8582,14 +8012,14 @@ class AgentOperationsModuleService extends MedusaService({
               code: escalated.code,
               message: escalated.message,
               outcome: "CONFLICT",
-              task: toGovernedTaskSnapshot(escalated.task),
+              task: toGovernedTaskSnapshot(escalated.task)
             }
           }
 
           return {
             duplicate: false,
             outcome: "SUCCEEDED",
-            task: toGovernedTaskSnapshot(escalated.task),
+            task: toGovernedTaskSnapshot(escalated.task)
           }
         }
       )
@@ -8606,13 +8036,13 @@ class AgentOperationsModuleService extends MedusaService({
           locked_at: null,
           locked_by: null,
           result,
-          status: result.outcome,
+          status: result.outcome
         },
         selector: {
           id: action.id,
           locked_by: input.worker_id,
-          status: "PROCESSING",
-        },
+          status: "PROCESSING"
+        }
       },
       sharedContext
     )
@@ -8638,20 +8068,16 @@ class AgentOperationsModuleService extends MedusaService({
         started_at: action.locked_at ?? completedAt,
         status: result.outcome,
         tool_name: action.tool_name,
-        tool_version: action.tool_version,
+        tool_version: action.tool_version
       },
       sharedContext
     )
     const eventType =
-      result.outcome === "SUCCEEDED"
-        ? "agent.action.executed"
-        : "agent.action.conflicted"
+      result.outcome === "SUCCEEDED" ? "agent.action.executed" : "agent.action.conflicted"
     await this.createAgentAuditEvents(
       {
         action:
-          result.outcome === "SUCCEEDED"
-            ? "agent-action-executed"
-            : "agent-action-conflicted",
+          result.outcome === "SUCCEEDED" ? "agent-action-executed" : "agent-action-conflicted",
         actor_id: input.actor_id,
         actor_type: input.actor_type,
         correlation_id: action.correlation_id,
@@ -8660,16 +8086,14 @@ class AgentOperationsModuleService extends MedusaService({
         incident_id: action.incident_id,
         recorded_at: completedAt,
         resource_id: action.id,
-        resource_type: "agent_action_request",
+        resource_type: "agent_action_request"
       },
       sharedContext
     )
     await this.createAgentOutboxEvents(
       {
         aggregate_id: action.incident_id ?? action.id,
-        aggregate_type: action.incident_id
-          ? "agent_incident"
-          : "agent_action_request",
+        aggregate_type: action.incident_id ? "agent_incident" : "agent_action_request",
         available_at: completedAt,
         event_type: eventType,
         event_version: 1,
@@ -8679,9 +8103,9 @@ class AgentOperationsModuleService extends MedusaService({
           correlation_id: action.correlation_id,
           incident_id: action.incident_id,
           result,
-          tool_name: action.tool_name,
+          tool_name: action.tool_name
         },
-        status: "PENDING",
+        status: "PENDING"
       },
       sharedContext
     )
@@ -8712,22 +8136,15 @@ class AgentOperationsModuleService extends MedusaService({
     },
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const action = await this.retrieveAgentActionRequest(
-      input.action_request_id,
-      {},
-      sharedContext
-    )
+    const action = await this.retrieveAgentActionRequest(input.action_request_id, {}, sharedContext)
     if (action.status === "SUCCEEDED" || action.status === "CONFLICT") {
       return {
         action,
         duplicate: true,
-        result: action.result as PlatformCommandOutput | null,
+        result: action.result as PlatformCommandOutput | null
       }
     }
-    if (
-      action.status !== "PROCESSING" ||
-      action.locked_by !== input.worker_id
-    ) {
+    if (action.status !== "PROCESSING" || action.locked_by !== input.worker_id) {
       throw new MedusaError(
         MedusaError.Types.CONFLICT,
         `Action ${action.id} is not leased by ${input.worker_id}.`
@@ -8737,10 +8154,12 @@ class AgentOperationsModuleService extends MedusaService({
     const supportedTools = [
       APPROVAL_DECIDE_TOOL.name,
       APPROVAL_REQUEST_TOOL.name,
+      CART_HANDOFF_SEND_TOOL.name,
+      DRAFT_CART_CREATE_TOOL.name,
       INCIDENT_CREATE_TOOL.name,
       INCIDENT_UPDATE_TOOL.name,
       KNOWLEDGE_PROPOSE_TOOL.name,
-      MESSAGE_SEND_TOOL.name,
+      MESSAGE_SEND_TOOL.name
     ] as string[]
     const definition = AGENT_TOOL_REGISTRY[action.tool_name]
     if (
@@ -8762,7 +8181,7 @@ class AgentOperationsModuleService extends MedusaService({
           policy_key: action.policy_key,
           status: "ACTIVE",
           tenant_id: action.tenant_id,
-          version: action.policy_version,
+          version: action.policy_version
         },
         { take: 1 },
         sharedContext
@@ -8785,10 +8204,7 @@ class AgentOperationsModuleService extends MedusaService({
       )
     }
 
-    const execution = await executeAgentTool<
-      Record<string, unknown>,
-      PlatformCommandOutput
-    >(
+    const execution = await executeAgentTool<Record<string, unknown>, PlatformCommandOutput>(
       AGENT_TOOL_REGISTRY,
       {
         authority: {
@@ -8798,11 +8214,11 @@ class AgentOperationsModuleService extends MedusaService({
           granted_permissions: [action.permission],
           granted_roles: getAuthorizedRoles(action.authorized_roles),
           idempotency_key: action.idempotency_key,
-          mode: "ACTION_GATEWAY",
+          mode: "ACTION_GATEWAY"
         },
         input: action.input,
         tool_name: action.tool_name,
-        tool_version: action.tool_version,
+        tool_version: action.tool_version
       },
       async (toolInput) => {
         if (action.tool_name === INCIDENT_CREATE_TOOL.name) {
@@ -8833,23 +8249,17 @@ class AgentOperationsModuleService extends MedusaService({
             existing ??
             (await this.createAgentIncidents(
               {
-                context: toolInput.context as
-                  | Record<string, unknown>
-                  | undefined,
+                context: toolInput.context as Record<string, unknown> | undefined,
                 correlation_id: action.correlation_id,
                 incident_type: String(toolInput.incident_type),
-                priority: toolInput.priority as
-                  | "LOW"
-                  | "MEDIUM"
-                  | "HIGH"
-                  | "CRITICAL",
+                priority: toolInput.priority as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
                 status: "RECEIVED",
                 subject_id: String(toolInput.subject_id),
                 subject_type: String(toolInput.subject_type),
                 summary: toolInput.summary as string | undefined,
                 tenant_id: action.tenant_id,
                 title: String(toolInput.title),
-                trigger_event_id: event.id,
+                trigger_event_id: event.id
               },
               sharedContext
             ))
@@ -8862,10 +8272,7 @@ class AgentOperationsModuleService extends MedusaService({
             {},
             sharedContext
           )
-          if (
-            incident.id !== action.incident_id ||
-            incident.status !== toolInput.expected_status
-          ) {
+          if (incident.id !== action.incident_id || incident.status !== toolInput.expected_status) {
             return platformConflict(
               "INCIDENT_STATE_CONFLICT",
               `Incident ${incident.id} is ${incident.status}, expected ${toolInput.expected_status}.`
@@ -8893,15 +8300,13 @@ class AgentOperationsModuleService extends MedusaService({
                 (toolInput.context as Record<string, unknown> | undefined) ??
                 (incident.context as Record<string, unknown> | null),
               id: incident.id,
-              owner_id:
-                (toolInput.owner_id as string | undefined) ?? incident.owner_id,
+              owner_id: (toolInput.owner_id as string | undefined) ?? incident.owner_id,
               resolution: toolInput.resolution
                 ? { summary: toolInput.resolution }
                 : (incident.resolution as Record<string, unknown> | null),
               resolved_at: status === "RESOLVED" ? now : incident.resolved_at,
               status,
-              summary:
-                (toolInput.summary as string | undefined) ?? incident.summary,
+              summary: (toolInput.summary as string | undefined) ?? incident.summary
             },
             sharedContext
           )
@@ -8909,12 +8314,7 @@ class AgentOperationsModuleService extends MedusaService({
         }
 
         if (action.tool_name === APPROVAL_REQUEST_TOOL.name) {
-          return this.requestApprovalFromTool_(
-            action,
-            toolInput,
-            now,
-            sharedContext
-          )
+          return this.requestApprovalFromTool_(action, toolInput, now, sharedContext)
         }
 
         if (action.tool_name === APPROVAL_DECIDE_TOOL.name) {
@@ -8923,7 +8323,7 @@ class AgentOperationsModuleService extends MedusaService({
               actor_id: action.requested_by_id,
               approval_id: String(toolInput.approval_id),
               decision: toolInput.decision as "APPROVED" | "REJECTED",
-              reason: String(toolInput.reason),
+              reason: String(toolInput.reason)
             },
             sharedContext
           )
@@ -8937,7 +8337,7 @@ class AgentOperationsModuleService extends MedusaService({
             approval_id: decision.approval.id,
             duplicate: decision.duplicate,
             outcome: "SUCCEEDED" as const,
-            status: decision.approval.status as "APPROVED" | "REJECTED",
+            status: decision.approval.status as "APPROVED" | "REJECTED"
           }
         }
 
@@ -8954,7 +8354,7 @@ class AgentOperationsModuleService extends MedusaService({
               scope: String(toolInput.scope),
               tenant_id: String(toolInput.tenant_id),
               title: String(toolInput.title),
-              version: String(toolInput.version),
+              version: String(toolInput.version)
             },
             sharedContext
           )
@@ -8962,7 +8362,183 @@ class AgentOperationsModuleService extends MedusaService({
             document_id: created.document.id,
             duplicate: created.duplicate,
             outcome: "SUCCEEDED" as const,
+            status: "DRAFT" as const
+          }
+        }
+
+        if (action.tool_name === DRAFT_CART_CREATE_TOOL.name) {
+          const container = (
+            this as unknown as { __container__: MedusaContainer }
+          ).__container__
+          const conversation = await this.retrieveAgentConversation(
+            String(toolInput.conversation_id),
+            {},
+            sharedContext
+          )
+          const confirmation = await this.retrieveAgentMessage(
+            String(toolInput.customer_confirmation_message_id),
+            {},
+            sharedContext
+          )
+          const metadata = (conversation.metadata ?? {}) as Record<string, unknown>
+          const customerId =
+            typeof metadata.customer_id === "string" &&
+            metadata.principal_role === "CUSTOMER" &&
+            metadata.customer_identity_verified === true
+              ? metadata.customer_id
+              : null
+          if (
+            !customerId ||
+            conversation.status !== "OPEN" ||
+            confirmation.conversation_id !== conversation.id ||
+            confirmation.direction !== "INBOUND"
+          ) {
+            return platformConflict(
+              "CUSTOMER_CONFIRMATION_REQUIRED",
+              "A verified customer confirmation in the current open conversation is required."
+            )
+          }
+          const query = container.resolve(ContainerRegistrationKeys.QUERY)
+          const { data: customers } = await query.graph({
+            entity: "customer",
+            fields: ["id", "email"],
+            filters: { id: customerId },
+            pagination: { skip: 0, take: 2 },
+          })
+          const customer = customers[0] as { email?: string; id: string } | undefined
+          if (customers.length !== 1 || !customer?.email) {
+            return platformConflict(
+              "CUSTOMER_CONFIRMATION_REQUIRED",
+              "The verified customer does not have a usable checkout email."
+            )
+          }
+          const { result: cart } = await createCartWorkflow(container).run({
+            input: {
+              customer_id: customer.id,
+              email: customer.email,
+              items: toolInput.items as Array<{ quantity: number; variant_id: string }>,
+              metadata: {
+                agent_action_request_id: action.id,
+                customer_confirmation_message_id: confirmation.id,
+              },
+              region_id: String(toolInput.region_id),
+              sales_channel_id: String(toolInput.sales_channel_id),
+            },
+          })
+          return {
+            cart_id: cart.id,
+            duplicate: false,
+            outcome: "SUCCEEDED" as const,
             status: "DRAFT" as const,
+          }
+        }
+
+        if (action.tool_name === CART_HANDOFF_SEND_TOOL.name) {
+          const container = (
+            this as unknown as { __container__: MedusaContainer }
+          ).__container__
+          const conversation = await this.retrieveAgentConversation(
+            String(toolInput.conversation_id),
+            {},
+            sharedContext
+          )
+          const metadata = (conversation.metadata ?? {}) as Record<string, unknown>
+          const customerId =
+            typeof metadata.customer_id === "string" &&
+            metadata.principal_role === "CUSTOMER" &&
+            metadata.customer_identity_verified === true
+              ? metadata.customer_id
+              : null
+          if (!customerId || conversation.channel !== "IN_APP" || conversation.status !== "OPEN") {
+            return platformConflict(
+              "CUSTOMER_CONFIRMATION_REQUIRED",
+              "An open in-app conversation with a verified customer is required."
+            )
+          }
+
+          const query = container.resolve(ContainerRegistrationKeys.QUERY)
+          const { data: carts } = await query.graph({
+            entity: "cart",
+            fields: ["id", "customer_id", "completed_at", "metadata"],
+            filters: { customer_id: customerId, id: String(toolInput.cart_id) },
+            pagination: { skip: 0, take: 2 },
+          })
+          const cart = carts[0] as
+            | {
+                completed_at?: Date | null
+                customer_id?: string | null
+                id: string
+                metadata?: Record<string, unknown> | null
+              }
+            | undefined
+          const draftActionId = cart?.metadata?.agent_action_request_id
+          if (
+            carts.length !== 1 ||
+            !cart ||
+            cart.customer_id !== customerId ||
+            cart.completed_at ||
+            typeof draftActionId !== "string"
+          ) {
+            return platformConflict(
+              "CART_HANDOFF_NOT_AVAILABLE",
+              "The cart is not an active customer-owned agent draft."
+            )
+          }
+
+          const draftAction = await this.retrieveAgentActionRequest(
+            draftActionId,
+            {},
+            sharedContext
+          )
+          const draftResult = draftAction.result as Record<string, unknown> | null
+          if (
+            draftAction.status !== "SUCCEEDED" ||
+            draftAction.tool_name !== DRAFT_CART_CREATE_TOOL.name ||
+            draftAction.tenant_id !== action.tenant_id ||
+            draftResult?.cart_id !== cart.id
+          ) {
+            return platformConflict(
+              "CART_HANDOFF_NOT_AVAILABLE",
+              "The cart does not originate from a completed approved draft action."
+            )
+          }
+
+          const message = await this.createAgentMessages(
+            {
+              body: String(toolInput.body),
+              channel: conversation.channel,
+              conversation_id: conversation.id,
+              direction: "OUTBOUND",
+              idempotency_key: `action:${action.id}:cart.send-handoff`,
+              message_type: "NOTIFICATION",
+              occurred_at: now,
+              sender_id: action.requested_by_id,
+              sender_type: action.requested_by_type,
+              status: "AVAILABLE",
+              structured_content: {
+                cart_handoff: { cart_id: cart.id },
+              },
+            },
+            sharedContext
+          )
+          await this.updateAgentConversations(
+            { id: conversation.id, last_message_at: now },
+            sharedContext
+          )
+          this.broadcastMessageCreated(message)
+          this.broadcastConversationUpdated({
+            channel: conversation.channel,
+            id: conversation.id,
+            last_message_at: now,
+            metadata: conversation.metadata as Record<string, unknown> | null,
+            title: conversation.title,
+          })
+          return {
+            cart_id: cart.id,
+            duplicate: false,
+            message_id: message.id,
+            outcome: "SUCCEEDED" as const,
+            status: "AVAILABLE" as const,
           }
         }
 
@@ -8977,16 +8553,9 @@ class AgentOperationsModuleService extends MedusaService({
             `Conversation ${conversation.id} is closed.`
           )
         }
-        const conversationMetadata = (conversation.metadata ?? {}) as Record<
-          string,
-          unknown
-        >
+        const conversationMetadata = (conversation.metadata ?? {}) as Record<string, unknown>
         let externalConnection:
-          | Awaited<
-              ReturnType<
-                AgentOperationsModuleService["retrieveAgentChannelConnection"]
-              >
-            >
+          | Awaited<ReturnType<AgentOperationsModuleService["retrieveAgentChannelConnection"]>>
           | undefined
         if (conversation.channel !== "IN_APP") {
           const connectionId = conversationMetadata.connection_id
@@ -9024,9 +8593,7 @@ class AgentOperationsModuleService extends MedusaService({
             sender_id: action.requested_by_id,
             sender_type: action.requested_by_type,
             status: "AVAILABLE",
-            structured_content: toolInput.structured_content as
-              | Record<string, unknown>
-              | undefined,
+            structured_content: toolInput.structured_content as Record<string, unknown> | undefined
           },
           sharedContext
         )
@@ -9043,7 +8610,7 @@ class AgentOperationsModuleService extends MedusaService({
                 connection_id: externalConnection.id,
                 idempotency_key: `message:${message.id}:delivery`,
                 message_id: message.id,
-                status: "PENDING",
+                status: "PENDING"
               },
               sharedContext
             )
@@ -9053,7 +8620,7 @@ class AgentOperationsModuleService extends MedusaService({
           duplicate: false,
           message_id: message.id,
           outcome: "SUCCEEDED" as const,
-          status: "AVAILABLE" as const,
+          status: "AVAILABLE" as const
         }
       }
     )
@@ -9070,13 +8637,13 @@ class AgentOperationsModuleService extends MedusaService({
             locked_at: null,
             locked_by: null,
             result,
-            status: result.outcome,
+            status: result.outcome
           },
           selector: {
             id: action.id,
             locked_by: input.worker_id,
-            status: "PROCESSING",
-          },
+            status: "PROCESSING"
+          }
         },
         sharedContext
       )
@@ -9100,20 +8667,16 @@ class AgentOperationsModuleService extends MedusaService({
         started_at: action.locked_at ?? completedAt,
         status: result.outcome,
         tool_name: action.tool_name,
-        tool_version: action.tool_version,
+        tool_version: action.tool_version
       },
       sharedContext
     )
     const eventType =
-      result.outcome === "SUCCEEDED"
-        ? "agent.action.executed"
-        : "agent.action.conflicted"
+      result.outcome === "SUCCEEDED" ? "agent.action.executed" : "agent.action.conflicted"
     await this.createAgentAuditEvents(
       {
         action:
-          result.outcome === "SUCCEEDED"
-            ? "agent-action-executed"
-            : "agent-action-conflicted",
+          result.outcome === "SUCCEEDED" ? "agent-action-executed" : "agent-action-conflicted",
         actor_id: input.actor_id,
         actor_type: input.actor_type,
         correlation_id: action.correlation_id,
@@ -9122,16 +8685,14 @@ class AgentOperationsModuleService extends MedusaService({
         incident_id: action.incident_id,
         recorded_at: completedAt,
         resource_id: action.id,
-        resource_type: "agent_action_request",
+        resource_type: "agent_action_request"
       },
       sharedContext
     )
     await this.createAgentOutboxEvents(
       {
         aggregate_id: action.incident_id ?? action.id,
-        aggregate_type: action.incident_id
-          ? "agent_incident"
-          : "agent_action_request",
+        aggregate_type: action.incident_id ? "agent_incident" : "agent_action_request",
         available_at: completedAt,
         event_type: eventType,
         event_version: 1,
@@ -9139,9 +8700,9 @@ class AgentOperationsModuleService extends MedusaService({
         payload: {
           action_request_id: action.id,
           result,
-          tool_name: action.tool_name,
+          tool_name: action.tool_name
         },
-        status: "PENDING",
+        status: "PENDING"
       },
       sharedContext
     )
@@ -9165,10 +8726,7 @@ class AgentOperationsModuleService extends MedusaService({
       {},
       sharedContext
     )
-    if (
-      incident.id !== action.incident_id ||
-      recommendation.incident_id !== incident.id
-    ) {
+    if (incident.id !== action.incident_id || recommendation.incident_id !== incident.id) {
       return platformConflict(
         "APPROVAL_STATE_CONFLICT",
         "Recommendation, incident, and action envelope do not match."
@@ -9192,13 +8750,10 @@ class AgentOperationsModuleService extends MedusaService({
         approval_id: existing.id,
         duplicate: true,
         outcome: "SUCCEEDED",
-        status: existing.status as "PENDING" | "APPROVED" | "REJECTED",
+        status: existing.status as "PENDING" | "APPROVED" | "REJECTED"
       }
     }
-    if (
-      incident.status !== "OPTIONS_READY" ||
-      recommendation.status !== "PROPOSED"
-    ) {
+    if (incident.status !== "OPTIONS_READY" || recommendation.status !== "PROPOSED") {
       return platformConflict(
         "APPROVAL_STATE_CONFLICT",
         "Incident or recommendation is not ready for approval."
@@ -9210,7 +8765,7 @@ class AgentOperationsModuleService extends MedusaService({
           policy_key: String(toolInput.policy_key),
           status: "ACTIVE",
           tenant_id: action.tenant_id,
-          version: String(toolInput.policy_version),
+          version: String(toolInput.policy_version)
         },
         { take: 1 },
         sharedContext
@@ -9240,7 +8795,7 @@ class AgentOperationsModuleService extends MedusaService({
         requested_by_id: action.requested_by_id,
         requested_by_type: action.requested_by_type,
         required_role: String(toolInput.required_role),
-        status: "PENDING",
+        status: "PENDING"
       },
       sharedContext
     )
@@ -9249,10 +8804,7 @@ class AgentOperationsModuleService extends MedusaService({
       sharedContext
     )
     assertIncidentTransition("OPTIONS_READY", "AWAITING_APPROVAL")
-    await this.updateAgentIncidents(
-      { id: incident.id, status: "AWAITING_APPROVAL" },
-      sharedContext
-    )
+    await this.updateAgentIncidents({ id: incident.id, status: "AWAITING_APPROVAL" }, sharedContext)
     await this.createAgentOutboxEvents(
       {
         aggregate_id: incident.id,
@@ -9264,9 +8816,9 @@ class AgentOperationsModuleService extends MedusaService({
         payload: {
           approval_id: approval.id,
           incident_id: incident.id,
-          recommendation_id: recommendation.id,
+          recommendation_id: recommendation.id
         },
-        status: "PENDING",
+        status: "PENDING"
       },
       sharedContext
     )
@@ -9274,7 +8826,7 @@ class AgentOperationsModuleService extends MedusaService({
       approval_id: approval.id,
       duplicate: false,
       outcome: "SUCCEEDED",
-      status: "PENDING",
+      status: "PENDING"
     }
   }
 
@@ -9307,20 +8859,13 @@ class AgentOperationsModuleService extends MedusaService({
     },
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const action = await this.retrieveAgentActionRequest(
-      input.action_request_id,
-      {},
-      sharedContext
-    )
+    const action = await this.retrieveAgentActionRequest(input.action_request_id, {}, sharedContext)
 
     if (action.status === "SUCCEEDED" || action.status === "CONFLICT") {
       return { action, duplicate: true }
     }
 
-    if (
-      action.status !== "PROCESSING" ||
-      action.locked_by !== input.worker_id
-    ) {
+    if (action.status !== "PROCESSING" || action.locked_by !== input.worker_id) {
       throw new MedusaError(
         MedusaError.Types.CONFLICT,
         `Action ${action.id} is not leased by ${input.worker_id}.`
@@ -9335,11 +8880,7 @@ class AgentOperationsModuleService extends MedusaService({
     }
 
     const now = new Date(input.completed_at)
-    const incident = await this.retrieveAgentIncident(
-      action.incident_id,
-      {},
-      sharedContext
-    )
+    const incident = await this.retrieveAgentIncident(action.incident_id, {}, sharedContext)
     assertIncidentTransition(
       incident.status as IncidentStatus,
       input.outcome === "SUCCEEDED" ? "MONITORING" : "OPTIONS_READY"
@@ -9350,20 +8891,18 @@ class AgentOperationsModuleService extends MedusaService({
         data: {
           completed_at: now,
           last_error:
-            input.outcome === "CONFLICT"
-              ? String(input.result.message ?? "Action conflict")
-              : null,
+            input.outcome === "CONFLICT" ? String(input.result.message ?? "Action conflict") : null,
           lock_expires_at: null,
           locked_at: null,
           locked_by: null,
           result: input.result,
-          status: input.outcome,
+          status: input.outcome
         },
         selector: {
           id: action.id,
           locked_by: input.worker_id,
-          status: "PROCESSING",
-        },
+          status: "PROCESSING"
+        }
       },
       sharedContext
     )
@@ -9387,19 +8926,18 @@ class AgentOperationsModuleService extends MedusaService({
           idempotency_key: `action:${action.id}:inventory.get-position:1`,
           incident_id: action.incident_id,
           input: {
-            inventory_item_id: (action.input as Record<string, unknown>)
-              .inventory_item_id,
+            inventory_item_id: (action.input as Record<string, unknown>).inventory_item_id,
             location_ids: [
               (action.input as Record<string, unknown>).source_location_id,
-              (action.input as Record<string, unknown>).target_location_id,
-            ],
+              (action.input as Record<string, unknown>).target_location_id
+            ]
           },
           kind: "READ",
           output: { positions: positionsBefore },
           started_at: action.locked_at ?? now,
           status: "SUCCEEDED",
           tool_name: "inventory.get-position",
-          tool_version: "1.0.0",
+          tool_version: "1.0.0"
         },
         sharedContext
       )
@@ -9410,9 +8948,7 @@ class AgentOperationsModuleService extends MedusaService({
         action_request_id: action.id,
         completed_at: now,
         error:
-          input.outcome === "CONFLICT"
-            ? String(input.result.message ?? "Action conflict")
-            : null,
+          input.outcome === "CONFLICT" ? String(input.result.message ?? "Action conflict") : null,
         idempotency_key: `action:${action.id}:inventory.execute-transfer:1`,
         incident_id: action.incident_id,
         input: action.input as Record<string, unknown>,
@@ -9421,7 +8957,7 @@ class AgentOperationsModuleService extends MedusaService({
         started_at: action.locked_at ?? now,
         status: input.outcome,
         tool_name: action.tool_name,
-        tool_version: action.tool_version,
+        tool_version: action.tool_version
       },
       sharedContext
     )
@@ -9429,26 +8965,23 @@ class AgentOperationsModuleService extends MedusaService({
     await this.updateAgentRecommendations(
       {
         id: action.recommendation_id,
-        status: input.outcome === "SUCCEEDED" ? "EXECUTED" : "FAILED",
+        status: input.outcome === "SUCCEEDED" ? "EXECUTED" : "FAILED"
       },
       sharedContext
     )
 
     if (input.outcome === "SUCCEEDED") {
-      await this.updateAgentIncidents(
-        { id: incident.id, status: "MONITORING" },
-        sharedContext
-      )
+      await this.updateAgentIncidents({ id: incident.id, status: "MONITORING" }, sharedContext)
       assertIncidentTransition("MONITORING", "RESOLVED")
       await this.updateAgentIncidents(
         {
           id: incident.id,
           resolution: {
             action_request_id: action.id,
-            result: input.result,
+            result: input.result
           },
           resolved_at: now,
-          status: "RESOLVED",
+          status: "RESOLVED"
         },
         sharedContext
       )
@@ -9458,18 +8991,16 @@ class AgentOperationsModuleService extends MedusaService({
           id: incident.id,
           context: {
             action_conflict: input.result,
-            previous_context: incident.context,
+            previous_context: incident.context
           },
-          status: "OPTIONS_READY",
+          status: "OPTIONS_READY"
         },
         sharedContext
       )
     }
 
     const eventType =
-      input.outcome === "SUCCEEDED"
-        ? "agent.action.executed"
-        : "agent.action.conflicted"
+      input.outcome === "SUCCEEDED" ? "agent.action.executed" : "agent.action.conflicted"
     await this.createAgentAuditEvents(
       {
         action:
@@ -9484,7 +9015,7 @@ class AgentOperationsModuleService extends MedusaService({
         incident_id: incident.id,
         recorded_at: now,
         resource_id: action.id,
-        resource_type: "agent_action_request",
+        resource_type: "agent_action_request"
       },
       sharedContext
     )
@@ -9500,9 +9031,9 @@ class AgentOperationsModuleService extends MedusaService({
           action_request_id: action.id,
           incident_id: incident.id,
           outcome: input.outcome,
-          result: input.result,
+          result: input.result
         },
-        status: "PENDING",
+        status: "PENDING"
       },
       sharedContext
     )
@@ -9523,20 +9054,14 @@ class AgentOperationsModuleService extends MedusaService({
     input: ClaimAgentOutboxEventInput,
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const event = await this.retrieveAgentOutboxEvent(
-      input.event_id,
-      {},
-      sharedContext
-    )
+    const event = await this.retrieveAgentOutboxEvent(input.event_id, {}, sharedContext)
     const claimedAt = new Date(input.claimed_at)
 
     if (!isOutboxEventClaimable(event, claimedAt)) {
       return { claimed: false as const, event: null }
     }
 
-    const lockExpiresAt = new Date(
-      claimedAt.getTime() + input.lease_duration_ms
-    )
+    const lockExpiresAt = new Date(claimedAt.getTime() + input.lease_duration_ms)
     const claimedEvents = await this.updateAgentOutboxEvents(
       {
         data: {
@@ -9545,13 +9070,13 @@ class AgentOperationsModuleService extends MedusaService({
           lock_expires_at: lockExpiresAt,
           locked_at: claimedAt,
           locked_by: input.worker_id,
-          status: "PROCESSING",
+          status: "PROCESSING"
         },
         selector: {
           id: event.id,
           locked_by: event.locked_by,
-          status: event.status,
-        },
+          status: event.status
+        }
       },
       sharedContext
     )
@@ -9585,13 +9110,13 @@ class AgentOperationsModuleService extends MedusaService({
           lock_expires_at: null,
           locked_at: null,
           locked_by: null,
-          status: "DELIVERED",
+          status: "DELIVERED"
         },
         selector: {
           id: input.event_id,
           locked_by: input.worker_id,
-          status: "PROCESSING",
-        },
+          status: "PROCESSING"
+        }
       },
       sharedContext
     )
@@ -9619,11 +9144,7 @@ class AgentOperationsModuleService extends MedusaService({
     input: FailAgentOutboxEventInput,
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const event = await this.retrieveAgentOutboxEvent(
-      input.event_id,
-      {},
-      sharedContext
-    )
+    const event = await this.retrieveAgentOutboxEvent(input.event_id, {}, sharedContext)
 
     if (event.status !== "PROCESSING" || event.locked_by !== input.worker_id) {
       throw new MedusaError(
@@ -9642,13 +9163,13 @@ class AgentOperationsModuleService extends MedusaService({
           lock_expires_at: null,
           locked_at: null,
           locked_by: null,
-          status: retry.status,
+          status: retry.status
         },
         selector: {
           id: event.id,
           locked_by: input.worker_id,
-          status: "PROCESSING",
-        },
+          status: "PROCESSING"
+        }
       },
       sharedContext
     )
@@ -9676,11 +9197,7 @@ class AgentOperationsModuleService extends MedusaService({
     input: ClaimAgentDeliveryInput,
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const delivery = await this.retrieveAgentDelivery(
-      input.delivery_id,
-      {},
-      sharedContext
-    )
+    const delivery = await this.retrieveAgentDelivery(input.delivery_id, {}, sharedContext)
     const claimedAt = new Date(input.claimed_at)
     if (!isAgentDeliveryClaimable(delivery, claimedAt)) {
       return { claimed: false as const, delivery: null }
@@ -9692,18 +9209,16 @@ class AgentOperationsModuleService extends MedusaService({
           data: {
             attempt_count: delivery.attempt_count + 1,
             last_error: null,
-            lock_expires_at: new Date(
-              claimedAt.getTime() + input.lease_duration_ms
-            ),
+            lock_expires_at: new Date(claimedAt.getTime() + input.lease_duration_ms),
             locked_at: claimedAt,
             locked_by: input.worker_id,
-            status: "PROCESSING",
+            status: "PROCESSING"
           },
           selector: {
             id: delivery.id,
             locked_by: delivery.locked_by,
-            status: delivery.status,
-          },
+            status: delivery.status
+          }
         },
         sharedContext
       )
@@ -9738,13 +9253,13 @@ class AgentOperationsModuleService extends MedusaService({
             lock_expires_at: null,
             locked_at: null,
             locked_by: null,
-            status: "DELIVERED",
+            status: "DELIVERED"
           },
           selector: {
             id: input.delivery_id,
             locked_by: input.worker_id,
-            status: "PROCESSING",
-          },
+            status: "PROCESSING"
+          }
         },
         sharedContext
       )
@@ -9761,7 +9276,7 @@ class AgentOperationsModuleService extends MedusaService({
         external_message_id: input.external_message_id,
         id: delivery.message_id,
         processed_at: deliveredAt,
-        status: "PROCESSED",
+        status: "PROCESSED"
       },
       sharedContext
     )
@@ -9782,15 +9297,8 @@ class AgentOperationsModuleService extends MedusaService({
     input: FailAgentDeliveryInput,
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const delivery = await this.retrieveAgentDelivery(
-      input.delivery_id,
-      {},
-      sharedContext
-    )
-    if (
-      delivery.status !== "PROCESSING" ||
-      delivery.locked_by !== input.worker_id
-    ) {
+    const delivery = await this.retrieveAgentDelivery(input.delivery_id, {}, sharedContext)
+    if (delivery.status !== "PROCESSING" || delivery.locked_by !== input.worker_id) {
       throw new MedusaError(
         MedusaError.Types.CONFLICT,
         `Delivery ${input.delivery_id} is not leased by ${input.worker_id}.`
@@ -9798,11 +9306,7 @@ class AgentOperationsModuleService extends MedusaService({
     }
 
     const failedAt = new Date(input.failed_at)
-    const retry = calculateDeliveryRetry(
-      delivery.attempt_count,
-      failedAt,
-      input
-    )
+    const retry = calculateDeliveryRetry(delivery.attempt_count, failedAt, input)
     const failed = (
       await this.updateAgentDeliveries(
         {
@@ -9812,13 +9316,13 @@ class AgentOperationsModuleService extends MedusaService({
             lock_expires_at: null,
             locked_at: null,
             locked_by: null,
-            status: retry.status,
+            status: retry.status
           },
           selector: {
             id: delivery.id,
             locked_by: input.worker_id,
-            status: "PROCESSING",
-          },
+            status: "PROCESSING"
+          }
         },
         sharedContext
       )
@@ -9836,7 +9340,7 @@ class AgentOperationsModuleService extends MedusaService({
           error: failed.last_error,
           id: failed.message_id,
           processed_at: failedAt,
-          status: "REJECTED",
+          status: "REJECTED"
         },
         sharedContext
       )
@@ -9850,21 +9354,14 @@ class AgentOperationsModuleService extends MedusaService({
     input: ApprovalDecisionInput,
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const approval = await this.retrieveAgentApproval(
-      input.approval_id,
-      {},
-      sharedContext
-    )
+    const approval = await this.retrieveAgentApproval(input.approval_id, {}, sharedContext)
 
     if (approval.status !== "PENDING") {
       if (approval.status === input.decision) {
         return {
-          action_request: await this.findActionRequestForApproval(
-            approval.id,
-            sharedContext
-          ),
+          action_request: await this.findActionRequestForApproval(approval.id, sharedContext),
           approval,
-          duplicate: true,
+          duplicate: true
         }
       }
 
@@ -9885,35 +9382,20 @@ class AgentOperationsModuleService extends MedusaService({
         { id: approval.recommendation_id, status: "EXPIRED" },
         sharedContext
       )
-      const incident = await this.retrieveAgentIncident(
-        approval.incident_id,
-        {},
-        sharedContext
-      )
+      const incident = await this.retrieveAgentIncident(approval.incident_id, {}, sharedContext)
       assertIncidentTransition(incident.status as IncidentStatus, "ESCALATED")
-      await this.updateAgentIncidents(
-        { id: incident.id, status: "ESCALATED" },
-        sharedContext
-      )
+      await this.updateAgentIncidents({ id: incident.id, status: "ESCALATED" }, sharedContext)
 
       return {
         approval: expiredApproval,
         conflict: "APPROVAL_EXPIRED" as const,
-        duplicate: false,
+        duplicate: false
       }
     }
 
-    const incident = await this.retrieveAgentIncident(
-      approval.incident_id,
-      {},
-      sharedContext
-    )
-    const nextIncidentStatus =
-      input.decision === "APPROVED" ? "EXECUTING" : "REJECTED"
-    assertIncidentTransition(
-      incident.status as IncidentStatus,
-      nextIncidentStatus
-    )
+    const incident = await this.retrieveAgentIncident(approval.incident_id, {}, sharedContext)
+    const nextIncidentStatus = input.decision === "APPROVED" ? "EXECUTING" : "REJECTED"
+    assertIncidentTransition(incident.status as IncidentStatus, nextIncidentStatus)
 
     const updatedApproval = await this.updateAgentApprovals(
       {
@@ -9922,21 +9404,21 @@ class AgentOperationsModuleService extends MedusaService({
         decision_by_type: "user",
         decision_reason: input.reason,
         id: approval.id,
-        status: input.decision,
+        status: input.decision
       },
       sharedContext
     )
     const recommendation = await this.updateAgentRecommendations(
       {
         id: approval.recommendation_id,
-        status: input.decision,
+        status: input.decision
       },
       sharedContext
     )
     await this.updateAgentIncidents(
       {
         id: incident.id,
-        status: nextIncidentStatus,
+        status: nextIncidentStatus
       },
       sharedContext
     )
@@ -9949,30 +9431,25 @@ class AgentOperationsModuleService extends MedusaService({
         correlation_id: incident.correlation_id,
         data: {
           decision: input.decision,
-          reason: input.reason,
+          reason: input.reason
         },
         event_type: "approval.decided",
         incident_id: incident.id,
         recorded_at: now,
         resource_id: approval.id,
-        resource_type: "agent_approval",
+        resource_type: "agent_approval"
       },
       sharedContext
     )
-    let actionRequest: Awaited<
-      ReturnType<typeof this.retrieveAgentActionRequest>
-    > | null = null
+    let actionRequest: Awaited<ReturnType<typeof this.retrieveAgentActionRequest>> | null = null
 
-    if (
-      input.decision === "APPROVED" &&
-      recommendation.action_type === "INVENTORY_TRANSFER"
-    ) {
+    if (input.decision === "APPROVED" && recommendation.action_type === "INVENTORY_TRANSFER") {
       const proposal = recommendation.proposal as Record<string, unknown>
       const actionInput = InventoryTransferInput.parse({
         inventory_item_id: proposal.inventory_item_id,
         quantity: proposal.quantity,
         source_location_id: proposal.source_location_id,
-        target_location_id: proposal.target_location_id,
+        target_location_id: proposal.target_location_id
       })
       actionRequest = await this.createAgentActionRequests(
         {
@@ -9995,7 +9472,7 @@ class AgentOperationsModuleService extends MedusaService({
           status: "PENDING",
           tenant_id: incident.tenant_id,
           tool_name: "inventory.execute-transfer",
-          tool_version: "1.0.0",
+          tool_version: "1.0.0"
         },
         sharedContext
       )
@@ -10014,9 +9491,9 @@ class AgentOperationsModuleService extends MedusaService({
           approval_id: approval.id,
           decision: input.decision,
           incident_id: incident.id,
-          recommendation_id: approval.recommendation_id,
+          recommendation_id: approval.recommendation_id
         },
-        status: "PENDING",
+        status: "PENDING"
       },
       sharedContext
     )
@@ -10034,9 +9511,9 @@ class AgentOperationsModuleService extends MedusaService({
             action_request_id: actionRequest.id,
             approval_id: approval.id,
             incident_id: incident.id,
-            recommendation_id: recommendation.id,
+            recommendation_id: recommendation.id
           },
-          status: "PENDING",
+          status: "PENDING"
         },
         sharedContext
       )
@@ -10045,7 +9522,7 @@ class AgentOperationsModuleService extends MedusaService({
     return {
       action_request: actionRequest,
       approval: updatedApproval,
-      duplicate: false,
+      duplicate: false
     }
   }
 
@@ -10057,10 +9534,7 @@ class AgentOperationsModuleService extends MedusaService({
     @MedusaContext() sharedContext: Context
   ) {
     assertIncidentTransition(from, to)
-    return this.updateAgentIncidents(
-      { id: incidentId, status: to },
-      sharedContext
-    )
+    return this.updateAgentIncidents({ id: incidentId, status: to }, sharedContext)
   }
 
   @InjectTransactionManager()
@@ -10122,9 +9596,9 @@ function platformIncidentResult(
     incident: {
       incident_id: incident.id,
       status: incident.status as IncidentStatus,
-      title: incident.title,
+      title: incident.title
     },
-    outcome: "SUCCEEDED" as const,
+    outcome: "SUCCEEDED" as const
   }
 }
 

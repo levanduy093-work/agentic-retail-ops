@@ -61,6 +61,9 @@ export async function GET(
     image_attachments: (
       msg.structured_content as Record<string, unknown> | null
     )?.image_attachments ?? [],
+    cart_handoff: (
+      msg.structured_content as Record<string, unknown> | null
+    )?.cart_handoff,
     sender_type: msg.sender_type,
   }))
 

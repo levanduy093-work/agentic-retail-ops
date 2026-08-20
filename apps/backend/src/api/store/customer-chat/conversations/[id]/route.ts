@@ -42,6 +42,9 @@ export async function GET(
       image_attachments: (
         m.structured_content as Record<string, unknown> | null
       )?.image_attachments ?? [],
+      cart_handoff: (
+        m.structured_content as Record<string, unknown> | null
+      )?.cart_handoff,
       product_media: (
         m.structured_content as Record<string, unknown> | null
       )?.product_media ?? [],

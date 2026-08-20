@@ -29,6 +29,8 @@ import {
 import {
   APPROVAL_DECIDE_TOOL,
   APPROVAL_REQUEST_TOOL,
+  CART_HANDOFF_SEND_TOOL,
+  DRAFT_CART_CREATE_TOOL,
   INCIDENT_CREATE_TOOL,
   INCIDENT_UPDATE_TOOL,
   KNOWLEDGE_PROPOSE_TOOL,
@@ -198,6 +200,20 @@ const bootstrapAgentPlatformStep = createStep(
         name: "Agent outbound message",
         policy_key: "message.send.agent-authorized",
         tool: MESSAGE_SEND_TOOL,
+      },
+      {
+        description:
+          "Operations managers may approve authenticated customer cart drafts.",
+        name: "Customer draft cart creation",
+        policy_key: "cart.create-draft.customer-confirmed",
+        tool: DRAFT_CART_CREATE_TOOL,
+      },
+      {
+        description:
+          "Authorized agents may deliver an approved draft cart to its verified customer.",
+        name: "Customer draft cart handoff",
+        policy_key: "cart.send-handoff.customer-owned",
+        tool: CART_HANDOFF_SEND_TOOL,
       },
     ]
 

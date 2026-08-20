@@ -16,8 +16,13 @@ export type ChatImageAttachment = {
   url: string
 }
 
+export type CartHandoff = {
+  cart_id: string
+}
+
 export type ChatMessage = {
   body: string
+  cart_handoff?: CartHandoff
   id: string
   occurred_at: string
   image_attachments?: ChatImageAttachment[]
@@ -74,7 +79,19 @@ function normalizeChatMessage(message: ChatMessage & {
       (Array.isArray(structured?.product_media)
         ? (structured.product_media as ProductMediaItem[])
         : []),
+    cart_handoff:
+      message.cart_handoff ??
+      (isCartHandoff(structured?.cart_handoff) ? structured.cart_handoff : undefined),
   }
+}
+
+function isCartHandoff(value: unknown): value is CartHandoff {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof (value as { cart_id?: unknown }).cart_id === "string" &&
+      (value as { cart_id: string }).cart_id.trim()
+  )
 }
 
 function getChatErrorMessage(error: unknown) {

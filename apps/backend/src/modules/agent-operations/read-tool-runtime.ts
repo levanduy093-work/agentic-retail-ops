@@ -31,7 +31,7 @@ function directAuthority(authority: AgentReadToolAuthority) {
 }
 
 export async function executeKnowledgeSearchTool(
-  service: AgentReadToolService,
+  service: Pick<AgentReadToolService, "searchGovernedKnowledge">,
   authority: AgentReadToolAuthority,
   input: unknown
 ) {
