@@ -1,5 +1,5 @@
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { z } from "zod";
+import { z } from "@medusajs/framework/zod";
 
 export const MemoryUpdateSchema = z.object({
   summary: z.string().describe("Tóm tắt tổng quan về toàn bộ cuộc trò chuyện tính đến thời điểm hiện tại."),

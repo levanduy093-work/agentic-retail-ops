@@ -1,11 +1,11 @@
-import { z } from "zod";
+import { z } from "@medusajs/framework/zod";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { tool } from "@langchain/core/tools";
 import { HumanMessage, SystemMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
 import { AGENT_TOOL_REGISTRY } from "./tool-registry";
 import { executeCatalogRead } from "./catalog-read-runtime";
 
-import { MedusaContainer } from "@medusajs/framework/types";
+import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 
 export type MessageRole = "system" | "user" | "assistant" | "tool";
 export type Message = { role: MessageRole; content: string; };
@@ -70,7 +70,7 @@ export class AgentEngine {
       tools.push(tool(
         async (args: any) => {
           try {
-            const query = this.service.__container__.resolve("query");
+            const query = this.service.__container__.resolve(ContainerRegistrationKeys.QUERY);
             const { data: orders } = await query.graph({
               entity: "order",
               fields: ["id"],

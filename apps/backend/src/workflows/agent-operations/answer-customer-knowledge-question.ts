@@ -240,7 +240,12 @@ const answerCustomerKnowledgeQuestionStep = createStep(
     const result = await locking.execute(
       `customer-knowledge-answer:${inbound.conversation_id}`,
       () =>
-        service.processCustomerMessageAgentic({ inbound_message_id: inbound.id })
+        service.processCustomerKnowledgeQuestion({
+          catalog_snapshot: catalogSnapshot,
+          customer_order_lookup: customerOrderLookup,
+          customer_order_lookup_locale: customerOrderLookupLocale,
+          inbound_message_id: inbound.id,
+        })
     )
     const imageAttachments = (
       (inbound.structured_content ?? {}) as Record<string, unknown>

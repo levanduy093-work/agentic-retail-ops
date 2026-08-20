@@ -109,6 +109,7 @@ export const postCustomerChatMessageStep = createStep(
           connection_id: connection.id,
           customer_email: input.customer_email ?? null,
           customer_id: customerId,
+          customer_identity_verified: customerId !== "guest",
           customer_name: input.customer_name ?? null,
           customer_phone: input.customer_phone ?? null,
           principal_id: customerId,
@@ -125,6 +126,7 @@ export const postCustomerChatMessageStep = createStep(
     } else {
       // Update customer info on conversation metadata if provided
       if (
+        customerId !== "guest" ||
         input.customer_email ||
         input.customer_name ||
         input.customer_phone
@@ -138,6 +140,7 @@ export const postCustomerChatMessageStep = createStep(
             customer_email:
               input.customer_email ?? prevMetadata.customer_email,
             customer_id: customerId,
+            customer_identity_verified: customerId !== "guest",
             customer_name: input.customer_name ?? prevMetadata.customer_name,
             customer_phone:
               input.customer_phone ?? prevMetadata.customer_phone,
