@@ -8,7 +8,7 @@ import {
   type ZaloChannelConfig,
 } from "../modules/agent-operations/zalo"
 import {
-  verifyFacebookMessengerWebhookSignature,
+  verifyFacebookWebhookSignature,
   type FacebookMessengerChannelConfig,
 } from "../modules/agent-operations/facebook"
 
@@ -38,23 +38,25 @@ export default async function verifyZaloMessengerChannels({
   })
   const zaloSignature = `mac=${createHmac("sha256", zaloAppSecret).update(zaloPayload).digest("hex")}`
 
-  const isZaloValid = verifyZaloWebhookSignature(
-    zaloPayload,
-    zaloSignature,
-    zaloAppSecret
-  )
+  const isZaloValid = verifyZaloWebhookSignature({
+    appId: "123456789",
+    bodyString: zaloPayload,
+    expectedSignature: zaloSignature,
+    oaSecretKey: zaloAppSecret,
+  })
   assert.equal(isZaloValid, true, "Valid Zalo signature must pass")
 
-  const isZaloInvalid = verifyZaloWebhookSignature(
-    zaloPayload,
-    "mac=invalid_mac_123",
-    zaloAppSecret
-  )
+  const isZaloInvalid = verifyZaloWebhookSignature({
+    appId: "123456789",
+    bodyString: zaloPayload,
+    expectedSignature: "mac=invalid_mac_123",
+    oaSecretKey: zaloAppSecret,
+  })
   assert.equal(isZaloInvalid, false, "Invalid Zalo signature must fail")
 
   const zaloConfig: ZaloChannelConfig = {
     app_id: "123456789",
-    app_secret: zaloAppSecret,
+    identities: [],
     oa_id: zaloOaId,
   }
   const zaloConnection = await service.createAgentChannelConnections({
@@ -93,22 +95,22 @@ export default async function verifyZaloMessengerChannels({
   })
   const fbSignature = `sha256=${createHmac("sha256", fbAppSecret).update(fbPayload).digest("hex")}`
 
-  const isFbValid = verifyFacebookMessengerWebhookSignature(
-    fbPayload,
-    fbSignature,
-    fbAppSecret
-  )
+  const isFbValid = verifyFacebookWebhookSignature({
+    appSecret: fbAppSecret,
+    bodyString: fbPayload,
+    expectedSignature: fbSignature,
+  })
   assert.equal(isFbValid, true, "Valid Facebook signature must pass")
 
-  const isFbInvalid = verifyFacebookMessengerWebhookSignature(
-    fbPayload,
-    "sha256=invalid_hash_456",
-    fbAppSecret
-  )
+  const isFbInvalid = verifyFacebookWebhookSignature({
+    appSecret: fbAppSecret,
+    bodyString: fbPayload,
+    expectedSignature: "sha256=invalid_hash_456",
+  })
   assert.equal(isFbInvalid, false, "Invalid Facebook signature must fail")
 
   const fbConfig: FacebookMessengerChannelConfig = {
-    app_secret: fbAppSecret,
+    identities: [],
     page_id: fbPageId,
     verify_token: "fb_verify_token_sample",
   }

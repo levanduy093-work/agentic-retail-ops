@@ -40,6 +40,7 @@ function createService() {
 describe("customer native tool dispatcher", () => {
   it("exposes bounded read tools plus governed cart and return proposals", () => {
     expect(CUSTOMER_SUPPORT_NATIVE_TOOLS.map((tool) => tool.name)).toEqual([
+      "estimate_shipping_delivery",
       "search_orders",
       "search_catalog",
       "propose_return_review",

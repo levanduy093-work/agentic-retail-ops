@@ -133,6 +133,7 @@ import {
   buildCustomerOrderLookupReply,
   buildCustomerReviewAcknowledgement,
   buildDeliveryTimeGuidanceAnswer,
+  extractFreeShippingNotice,
   buildKnowledgeAnswerFallback,
   buildKnowledgeReviewFallback,
   buildScopedCustomerReply,
@@ -170,6 +171,8 @@ import {
   PRODUCT_ADVISOR_TIMEOUT_MS,
   resolveProductAdvisorModelOutput
 } from "./customer-product-advisor"
+import { VietnamAddressService } from "../ghn-fulfillment/services/vietnam-address-service"
+import { executeShippingEstimate } from "./shipping-estimate-runtime"
 import {
   buildCustomerIntentReply,
   CustomerMessageIntentModelOutput,
@@ -3886,6 +3889,50 @@ class AgentOperationsModuleService extends MedusaService({
     },
     @MedusaContext() sharedContext: Context = {}
   ): Promise<KnowledgeAnswer> {
+    const asksLocationShipping = /(?:giao|ship|vận chuyển|nhận hàng|thời gian|bao lâu|bao nhiêu ngày|mấy ngày|phí ship|cước phí|tiền ship)/iu.test(input.question)
+    if (asksLocationShipping) {
+      const destination = await VietnamAddressService.extractDestinationLocation(input.question)
+      const province = destination?.province || (await VietnamAddressService.findProvince(input.question))
+      if (province) {
+        try {
+          const shippingEstimate = await executeShippingEstimate(
+            {
+              destination_location: destination?.district
+                ? `${destination.district.DistrictName}, ${province.ProvinceName}`
+                : province.ProvinceName,
+              weight: 150,
+            },
+            "customer-support-agent"
+          )
+          const locationName = destination?.district ? `${destination.district.DistrictName}, ${province.ProvinceName}` : province.ProvinceName
+          const freeshipNotice = extractFreeShippingNotice(input.knowledge, input.locale)
+          const extraFreeshipText = freeshipNotice ? ` ${freeshipNotice}` : ""
+          return {
+            body: `Dạ đơn hàng gửi về ${locationName} bên mình vận chuyển qua ${shippingEstimate.output.carrier} thường mất khoảng ${shippingEstimate.output.leadtime_text} làm việc (dự kiến nhận khoảng ngày ${shippingEstimate.output.expected_delivery_date}) với phí ship khoảng ${shippingEstimate.output.estimated_fee_formatted} bạn nha!${extraFreeshipText}`,
+            citations: freeshipNotice && input.knowledge.results.length > 0 ? [
+              {
+                document_id: input.knowledge.results[0].document_id,
+                locator: input.knowledge.results[0].citation_locator,
+                quote_checksum: input.knowledge.results[0].quote_checksum,
+                title: input.knowledge.results[0].title,
+                version: input.knowledge.results[0].version,
+              }
+            ] : [],
+            disposition: "ANSWER",
+            grounded: true,
+            locale: input.locale,
+            optimization: {
+              ai_invoked: false,
+              cache_hit: false,
+              path: "GHN_LIVE_SHIPPING_ESTIMATE"
+            }
+          }
+        } catch {
+          // Continue if shipping estimate fails
+        }
+      }
+    }
+
     const deliveryTimeGuidance = buildDeliveryTimeGuidanceAnswer(
       input.question,
       input.knowledge,
@@ -4971,16 +5018,14 @@ class AgentOperationsModuleService extends MedusaService({
         { take: 1 },
         sharedContext
       ).then((memories) => memories[0]),
-      referencesPriorContext
-        ? this.listAgentCustomerPreferences(
-            {
-              customer_id: inbound.sender_id,
-              tenant_id: conversation.tenant_id
-            },
-            { order: { last_confirmed_at: "DESC" }, take: 12 },
-            sharedContext
-          )
-        : Promise.resolve([])
+      this.listAgentCustomerPreferences(
+        {
+          customer_id: inbound.sender_id,
+          tenant_id: conversation.tenant_id
+        },
+        { order: { last_confirmed_at: "DESC" }, take: 12 },
+        sharedContext
+      )
     ])
     await this.recordExplicitCustomerPreferences(
       {
@@ -4998,13 +5043,11 @@ class AgentOperationsModuleService extends MedusaService({
     )
     const memorySummary = buildCustomerConversationContext({
       current_message_at: inbound.occurred_at,
-      current_summary: startsNewTopic ? null : conversationMemory?.summary,
+      current_summary: conversationMemory?.summary,
       customer_facts: readMemoryItems(conversationMemory?.customer_facts),
       last_message_at: conversation.last_message_at,
       open_questions: readMemoryItems(conversationMemory?.open_questions),
-      profile_preferences: referencesPriorContext
-        ? formatCustomerProfilePreferences(activeProfilePreferences)
-        : [],
+      profile_preferences: formatCustomerProfilePreferences(activeProfilePreferences),
       resolved_topics: readMemoryItems(conversationMemory?.resolved_topics)
     })
 
@@ -5013,10 +5056,10 @@ class AgentOperationsModuleService extends MedusaService({
       ? []
       : await this.listAgentMessages(
           { conversation_id: conversation.id },
-          { order: { occurred_at: "DESC" }, take: 7 },
+          { order: { occurred_at: "DESC" }, take: 8 },
           sharedContext
         )
-    const contextMessages = startsNewTopic ? [] : recentMessages
+    const contextMessages = recentMessages
     const mapRecentMessagesWithTime = (
       messages: typeof contextMessages,
       excludeInboundId?: string
@@ -5389,7 +5432,7 @@ class AgentOperationsModuleService extends MedusaService({
           locale,
           question,
           reason: isOrderInquiryWithoutCode
-            ? "ORDER_INQUIRY_WITHOUT_CODE"
+            ? "NEEDS_STAFF_AUTHORITY"
             : "NO_APPROVED_KNOWLEDGE"
         },
         sharedContext

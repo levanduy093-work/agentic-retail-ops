@@ -86,7 +86,15 @@ Response: {
   "body": "Dạ đơn hàng về khu vực Cầu Giấy (nội thành Hà Nội) bên mình có phí ship là 25.000đ và thời gian giao hàng thường chỉ từ 1-2 ngày là bạn nhận được nhé ạ. Đặc biệt nếu đơn hàng của bạn từ 500.000đ thì shop sẽ miễn phí vận chuyển luôn nha!"
 }
 
-Example 2 (Return / exchange policy):
+Example 2 (Regional shipping inquiry without existing order):
+Customer: "Giao hàng đến sóc trăng khoản bao nhiêu ngày vậy sốp"
+Excerpt: "Thời gian giao hàng toàn quốc từ 2-4 ngày làm việc qua Giao Hàng Nhanh (GHN). Khu vực miền Tây/miền Nam thường từ 2-3 ngày."
+Response: {
+  "disposition": "ANSWER",
+  "body": "Dạ đơn hàng gửi về Sóc Trăng bên mình vận chuyển qua Giao Hàng Nhanh (GHN) thường mất khoảng 2-3 ngày làm việc là bạn nhận được nha! Phí ship dự kiến khoảng 30.000đ - 35.000đ bạn nhé 😊"
+}
+
+Example 3 (Return / exchange policy):
 Customer: "Mình nhận áo bị chật thì có được đổi size không?"
 Excerpt: "Cửa hàng hỗ trợ đổi size sản phẩm trong vòng 7 ngày kể từ khi nhận hàng nếu sản phẩm còn nguyên tem mác."
 Response: {
@@ -219,6 +227,14 @@ export function buildDeliveryTimeGuidanceAnswer(
     )
   if (!asksDeliveryTime) return null
 
+  // Do not demand order reference for destination-specific inquiries (handled by shipping estimation)
+  const isDestinationSpecific =
+    /(?:đến|về|ở|tại|khu vực)\s+[a-zà-ỹ\s]{2,}/iu.test(question) ||
+    /(?:sóc trăng|hà nội|tp\.?hcm|hồ chí minh|sài gòn|đà nẵng|cần thơ|hải phòng|huế|bình dương|đồng nai)/iu.test(
+      question
+    )
+  if (isDestinationSpecific) return null
+
   const supportingEvidence = knowledge.results.find((result) =>
     /(trạng thái.*(?:giao hàng|vận chuyển)|(?:giao hàng|vận chuyển).*trạng thái)/iu.test(
       result.excerpt
@@ -245,6 +261,35 @@ export function buildDeliveryTimeGuidanceAnswer(
     locale,
     pending_customer_input: "ORDER_REFERENCE",
   }
+}
+
+export function extractFreeShippingNotice(
+  knowledge?: KnowledgeSearchOutput,
+  locale: "en" | "vi" = "vi"
+): string | null {
+  if (!knowledge?.results?.length) return null
+
+  for (const result of knowledge.results) {
+    const text = result.excerpt
+    // Match freeship clause directly
+    const match =
+      text.match(
+        /(?:miễn phí (?:vận chuyển|ship|giao hàng)|freeship|free ship|free delivery)[^!?;]+?(?:\d{1,3}(?:[.,]\d{3})*|\d+)\s*(?:đ|vnđ|k|nghìn|ngàn|triệu)?/iu
+      ) ||
+      text.match(
+        /(?:đơn (?:hàng )?(?:từ|trên)\s*(?:\d{1,3}(?:[.,]\d{3})*|\d+)\s*(?:đ|vnđ|k|nghìn|ngàn|triệu)?)[^!?;]+?(?:miễn phí (?:vận chuyển|ship|giao hàng)|freeship|free ship|free delivery)/iu
+      )
+
+    if (match) {
+      const matchedText = match[0].trim().replace(/^[,;\s-]+|[,;\s.-]+$/gu, "")
+      if (locale === "vi") {
+        return `Đặc biệt, bên mình ${matchedText.charAt(0).toLowerCase()}${matchedText.slice(1)} bạn nha!`
+      }
+      return `Special perk: ${matchedText}!`
+    }
+  }
+
+  return null
 }
 
 export function buildCustomerOrderLookupReply(

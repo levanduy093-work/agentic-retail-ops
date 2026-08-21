@@ -17,6 +17,7 @@ export type CustomerProductPreferences = {
   budget_flexible?: boolean
   budget_max?: number
   color?: string
+  fit?: string
   product_query?: string
   size?: string
 }
@@ -116,7 +117,7 @@ const shoppingRequestPattern =
   /(?:cần|muốn|định|tính)\s+(?:mua|tìm|xem|chọn)(?:\s+(?:đồ|quần áo|trang phục))?/iu
 
 const productDiscoveryFollowUpPattern =
-  /(?:năng động|lịch sự|thoải mái|cá tính|điệu đà|sporty|smart|relaxed|size\s*[a-z0-9]+|ngân sách|tầm\s*\d+|bao nhiêu cũng (?:được|đc)|không giới hạn|sao cũng (?:được|đc)|tùy)/iu
+  /(?:năng động|lịch sự|thoải mái|cá tính|điệu đà|sporty|smart|relaxed|size\s*[a-z0-9]+|ngân sách|tầm\s*\d+|bao nhiêu cũng (?:được|đc)|không giới hạn|sao cũng (?:được|đc)|tùy|ống rộng|rộng rãi|form rộng|suông|ôm vừa|ôm sát|đen|trắng|xanh|đỏ|vàng|hồng|xám|ghi|nâu|be|kaki|polo|jeans|short|sơ mi|khoác|size|sz|cỡ)/iu
 
 export function isPotentialProductRequest(message: string) {
   const normalized = message.normalize("NFKC").toLocaleLowerCase()
@@ -216,6 +217,13 @@ function extractRequestedSize(normalized: string) {
   return match?.[1]?.toLocaleUpperCase()
 }
 
+function extractRequestedFit(normalized: string) {
+  const match = normalized.match(
+    /(?:^|\s)(ống rộng|rộng rãi|suông|form rộng|oversize|relaxed|ôm vừa|ôm sát|slim|slim fit|regular|regular fit|body|vừa vặn)(?:\s|$)/iu
+  )
+  return match?.[1]?.toLocaleLowerCase()
+}
+
 function extractProductSearchPhrase(normalized: string) {
   const tokens = normalized.split(/\s+/u)
   const productTerms = new Set([
@@ -235,41 +243,34 @@ function extractProductSearchPhrase(normalized: string) {
     "khoác",
     "sơ",
     "mi",
+    "blazer",
+    "gile",
+    "culottes",
+    "short",
+    "jogger",
   ])
-  const stopTerms = new Set([
-    "ạ",
-    "bạn",
-    "cho",
-    "có",
-    "em",
-    "giúp",
-    "không",
-    "mình",
-    "muốn",
-    "mua",
-    "ngân",
-    "nhé",
-    "sách",
-    "shop",
-    "size",
-    "sốp",
-    "tầm",
-    "tìm",
-    "tư",
-    "vấn",
-    "với",
-    "xem",
-    "cỡ",
-    "khoảng",
-    "dưới",
-    "màu",
+  const conversationalStopTerms = new Set([
+    "ạ", "ơi", "nè", "nha", "nhé", "nhỉ", "chứ", "thế", "được", "đc", "không", "k", "ko",
+    "bạn", "cho", "có", "em", "mình", "shop", "sốp", "giúp", "tư", "vấn", "hỏi", "xem",
+    "cần", "muốn", "mua", "tìm", "chọn", "lấy", "định", "tính",
+    "nào", "gì", "để", "mặc", "hợp", "đi", "đẹp", "phối", "mix", "chuẩn", "cùng", "với",
+    "ngân", "sách", "tầm", "khoảng", "dưới", "giá", "tiền", "size", "cỡ", "màu", "tone",
+    "loại", "mẫu", "cái", "đồ", "kiểu", "bên", "nhiều", "khác", "thêm", "nữa", "này", "kia",
   ])
+  const colorTermSet = new Set(colorTerms)
+
   const startIndex = tokens.findIndex((token) => productTerms.has(token))
   if (startIndex < 0) return undefined
 
   const phrase: string[] = []
   for (const token of tokens.slice(startIndex, startIndex + 5)) {
-    if (stopTerms.has(token) || /^\d/u.test(token)) break
+    if (
+      conversationalStopTerms.has(token) ||
+      colorTermSet.has(token) ||
+      /^\d/u.test(token)
+    ) {
+      break
+    }
     phrase.push(token)
   }
 
@@ -284,6 +285,7 @@ export function extractSingleMessageProductPreferences(
   return {
     ...budget,
     color: extractRequestedColor(normalized),
+    fit: extractRequestedFit(normalized),
     product_query: extractProductSearchPhrase(normalized),
     size: extractRequestedSize(normalized),
   }
@@ -312,6 +314,9 @@ export function extractCustomerProductPreferences(
     }
     if (!accumulated.color && historical.color) {
       accumulated.color = historical.color
+    }
+    if (!accumulated.fit && historical.fit) {
+      accumulated.fit = historical.fit
     }
     if (
       accumulated.budget_max === undefined &&
@@ -458,12 +463,21 @@ function buildDiscoveryQuestion(
     if (!preferences.size) missing.push("size")
     if (!hasBudget) missing.push("khoảng ngân sách")
     if (!missing.length) {
+      if (preferences.fit && preferences.color) {
+        return `Bạn muốn ${advisor} lọc thêm tiêu chí nào khác (như chất liệu, dịp mặc) không ạ?`
+      }
+      if (preferences.fit) {
+        return `Bạn muốn ưu tiên gam màu nào để ${advisor} lọc sát hơn ạ?`
+      }
+      if (preferences.color) {
+        return `Bạn muốn ưu tiên form mặc như ôm vừa hay rộng rãi thoải mái ạ?`
+      }
       return `Bạn muốn ưu tiên màu nào hoặc form mặc như ôm vừa, rộng rãi để ${advisor} lọc sát hơn ạ?`
     }
     return `Bạn cho ${advisor} biết thêm ${formatMissingListVi(missing)} để ${advisor} lọc mẫu phù hợp nhất nhé?`
   }
   if (preferences.product_query && preferences.size && hasBudget) {
-    return "Do you prefer a color or fit, such as regular or relaxed, so I can narrow this down?"
+    return "Do you prefer a specific color or fit so I can narrow this down?"
   }
   return seasonal
     ? "Are you after a jacket, knitwear, or trousers, and what size and budget should I work with?"
@@ -528,12 +542,43 @@ function isWithinBudget(
   return price !== undefined && price <= budgetMaximum
 }
 
+function matchesRequestedColor(product: CatalogProductResult, color?: string) {
+  if (!color) return true
+  const text = [
+    product.title,
+    product.subtitle,
+    product.description,
+    ...product.variants.map((v) => v.title),
+  ]
+    .filter((v): v is string => Boolean(v))
+    .join(" ")
+    .toLowerCase()
+  return text.includes(color.toLowerCase())
+}
+
+function matchesRequestedFit(product: CatalogProductResult, fit?: string) {
+  if (!fit) return true
+  const text = [
+    product.title,
+    product.subtitle,
+    product.description,
+  ]
+    .filter((v): v is string => Boolean(v))
+    .join(" ")
+    .toLowerCase()
+  return text.includes(fit.toLowerCase())
+}
+
 function rankCatalogProducts(
   products: CatalogProductResult[],
   preferences: CustomerProductPreferences
 ) {
   return [...products].sort((left, right) => {
     const comparisons = [
+      Number(matchesRequestedFit(right, preferences.fit)) -
+        Number(matchesRequestedFit(left, preferences.fit)),
+      Number(matchesRequestedColor(right, preferences.color)) -
+        Number(matchesRequestedColor(left, preferences.color)),
       Number(hasAvailableRequestedSize(right, preferences.size)) -
         Number(hasAvailableRequestedSize(left, preferences.size)),
       Number(hasRequestedSize(right, preferences.size)) -
@@ -642,7 +687,7 @@ export function buildProductAdvisorFallback(
       follow_up_question: buildDiscoveryQuestion(question, locale, preferences),
       intro:
         locale === "vi"
-          ? `Dạ ${advisor} có nhiều mẫu thời trang đẹp và sẵn sàng tư vấn cho bạn đây ạ!`
+          ? `Dạ ${advisor} có nhiều mẫu thời trang đang sẵn hàng.`
           : "We have a variety of fashion items and I'm happy to help you find the right one!",
       recommendations: [],
     }
@@ -663,17 +708,15 @@ export function buildProductAdvisorFallback(
         : allManagedVariantsOutOfStock
           ? "These items have no available stock right now. Which one should staff check for a restock update?"
           : locale === "vi"
-        ? preferences.product_query && preferences.size && hasBudget
-          ? buildDiscoveryQuestion(question, locale, preferences)
-          : `Bạn thích mẫu nào, hoặc cho ${advisor} biết thêm nhu cầu để ${advisor} lọc kỹ hơn nhé?`
-        : "Which one do you like, or what needs and budget should I narrow this down to?",
+        ? `Bạn ưng mẫu nào trong các mẫu này, hoặc muốn ${advisor} tư vấn thêm màu/form khác không nè?`
+        : "Which one do you like, or would you like me to check other colors or styles?",
     intro:
       allManagedVariantsOutOfStock && locale === "vi"
         ? `${advisorCapitalized} vừa kiểm tra catalog và tìm thấy các mẫu dưới đây, nhưng tồn kho khả dụng hiện đều bằng 0:`
         : allManagedVariantsOutOfStock
           ? "I found these catalog items, but their available stock is currently zero:"
           : locale === "vi"
-        ? `Có nè! ${advisorCapitalized} vừa kiểm tra catalog và chọn vài mẫu để bạn tham khảo:`
+        ? `Dạ ${advisor} gợi ý cho bạn các mẫu ${preferences.product_query || "thời trang"} cực xinh và hợp gu bên mình đây ạ:`
         : "Absolutely! I checked the live catalog and picked a few options:",
     recommendations: rankedProducts
       .slice(0, allManagedVariantsOutOfStock ? 2 : 3)

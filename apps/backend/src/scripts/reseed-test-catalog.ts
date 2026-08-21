@@ -22,7 +22,7 @@ type CatalogDefinition = {
 
 const catalog: CatalogDefinition[] = [
   { name: "Áo thun Essential", category: "Áo", basePrice: 229000, weight: 220, length: 28, width: 20, height: 4, material: "100% cotton compact", description: "Áo thun phom regular, vải cotton mềm thoáng cho nhu cầu mặc hằng ngày.", image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=85" },
-  { name: "Áo polo Piqué", category: "Áo", basePrice: 329000, weight: 280, length: 30, width: 22, height: 5, material: "Cotton piqué co giãn", description: "Áo polo cổ bẻ chỉn chu, phù hợp đi làm và gặp gỡ cuối tuần.", image: "https://images.unsplash.com/photo-1581655353564-df123a1eb820?auto=format&fit=crop&w=1200&q=85" },
+  { name: "Áo polo Piqué", category: "Áo", basePrice: 329000, weight: 280, length: 30, width: 22, height: 5, material: "Cotton piqué co giãn", description: "Áo polo cổ bẻ chỉn chu, phù hợp đi làm và gặp gỡ cuối tuần.", image: "https://images.unsplash.com/photo-1586363104862-3a5e2ab60d99?auto=format&fit=crop&w=1200&q=85" },
   { name: "Áo sơ mi Linen", category: "Áo", basePrice: 419000, weight: 260, length: 32, width: 24, height: 4, material: "Linen pha rayon", description: "Áo sơ mi linen nhẹ, đứng dáng và thoáng mát trong thời tiết nhiệt đới.", image: "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?auto=format&fit=crop&w=1200&q=85" },
   { name: "Áo hoodie Fleece", category: "Áo khoác", basePrice: 529000, weight: 620, length: 38, width: 30, height: 9, material: "Nỉ da cá 420gsm", description: "Hoodie nỉ dày có mũ, giữ ấm vừa phải và hoàn thiện bo viền bền chắc.", image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=1200&q=85" },
   { name: "Áo cardigan Merino", category: "Áo khoác", basePrice: 589000, weight: 460, length: 36, width: 28, height: 7, material: "Len merino pha cotton", description: "Cardigan dệt kim mềm, phù hợp phối lớp khi đi làm hoặc đi chơi.", image: "https://images.unsplash.com/photo-1618354691373-d851c5c3a990?auto=format&fit=crop&w=1200&q=85" },
@@ -158,6 +158,7 @@ export default async function reseedTestCatalog({
         test_catalog: true,
       },
       images: [{ url: definition.image }],
+      thumbnail: definition.image,
       options: [
         { title: "Kích cỡ", values: sizes, is_exclusive: true },
         {

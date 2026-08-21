@@ -51,6 +51,7 @@ export function runCustomerSupportReadToolLoop(input: {
     input.recent_messages
   )
   const filterInput = {
+    color: preferences.color,
     max_price: preferences.budget_max,
     query: preferences.product_query ?? input.question.slice(0, 160),
     size: preferences.size,

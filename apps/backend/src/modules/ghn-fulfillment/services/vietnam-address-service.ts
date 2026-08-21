@@ -387,6 +387,111 @@ export class VietnamAddressService {
   }
 
   /**
+   * Smart match province by text (searches ProvinceName and NameExtension)
+   * Handles queries like 'Sóc Trăng', 'soc trang', 'Đà Nẵng', 'Hà Nội', 'HCM', 'Sài Gòn', etc.
+   */
+  public static async findProvince(query: string): Promise<GhnProvince | null> {
+    const provinces = await this.getProvinces()
+    const normQuery = normalizeText(query)
+    if (!normQuery) return null
+
+    // 1. Exact match on ProvinceName or NameExtension
+    for (const p of provinces) {
+      const normName = normalizeText(p.ProvinceName)
+      if (normName === normQuery) {
+        return p
+      }
+      if (p.NameExtension && Array.isArray(p.NameExtension)) {
+        for (const ext of p.NameExtension) {
+          if (normalizeText(ext) === normQuery) {
+            return p
+          }
+        }
+      }
+    }
+
+    // 2. Query contains ProvinceName (e.g. query "TP Hồ Chí Minh quận 1" contains "hồ chí minh")
+    for (const p of provinces) {
+      const normName = normalizeText(p.ProvinceName)
+      if (normQuery.includes(normName)) {
+        return p
+      }
+      if (p.NameExtension && Array.isArray(p.NameExtension)) {
+        for (const ext of p.NameExtension) {
+          const normExt = normalizeText(ext)
+          if (normExt.length >= 2 && normQuery.includes(normExt)) {
+            return p
+          }
+        }
+      }
+    }
+
+    // 3. ProvinceName starts with Query (avoid picking test provinces with trailing numbers like '02')
+    for (const p of provinces) {
+      const normName = normalizeText(p.ProvinceName)
+      if (normName.startsWith(normQuery)) {
+        return p
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Extract potential Vietnam province/city name from customer natural message
+   */
+  public static async extractDestinationLocation(
+    message: string
+  ): Promise<{ province: GhnProvince; district?: GhnDistrict } | null> {
+    const normMessage = normalizeText(message)
+    const provinces = await this.getProvinces()
+
+    // Find the best matched province in message text (prioritize clean non-test province names)
+    let matchedProvince: GhnProvince | null = null
+    let longestMatchLen = 0
+
+    for (const p of provinces) {
+      // Skip sandbox mock provinces with trailing test digits like "Hà Nội 02"
+      if (/\d+$/u.test(p.ProvinceName)) continue
+
+      const normName = normalizeText(p.ProvinceName)
+      if (normMessage.includes(normName) && normName.length > longestMatchLen) {
+        matchedProvince = p
+        longestMatchLen = normName.length
+      }
+      if (p.NameExtension && Array.isArray(p.NameExtension)) {
+        for (const ext of p.NameExtension) {
+          const normExt = normalizeText(ext)
+          if (normExt.length >= 2 && normMessage.includes(normExt) && normExt.length > longestMatchLen) {
+            matchedProvince = p
+            longestMatchLen = normExt.length
+          }
+        }
+      }
+    }
+
+    // If no standard province found, check all provinces
+    if (!matchedProvince) {
+      for (const p of provinces) {
+        const normName = normalizeText(p.ProvinceName)
+        if (normMessage.includes(normName) && normName.length > longestMatchLen) {
+          matchedProvince = p
+          longestMatchLen = normName.length
+        }
+      }
+    }
+
+    if (!matchedProvince) return null
+
+    // Try finding district if province matched
+    const district = await this.findDistrict(matchedProvince.ProvinceID, message)
+    return {
+      district: district || undefined,
+      province: matchedProvince,
+    }
+  }
+
+  /**
    * Clear cache for fresh reload
    */
   public static clearCache() {

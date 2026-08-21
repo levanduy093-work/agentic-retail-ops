@@ -91,16 +91,19 @@ function getTelegramProductMedia(
 ): TelegramProductMedia[] {
   const candidate = structuredContent?.product_media
   if (!Array.isArray(candidate)) return []
+  const seenUrls = new Set<string>()
   return candidate.flatMap((item) => {
     if (!item || typeof item !== "object") return []
     const media = item as Record<string, unknown>
     if (
       !isPublicTelegramMediaUrl(media.image_url) ||
       typeof media.product_id !== "string" ||
-      typeof media.title !== "string"
+      typeof media.title !== "string" ||
+      seenUrls.has(media.image_url)
     ) {
       return []
     }
+    seenUrls.add(media.image_url)
     return [
       {
         image_url: media.image_url,

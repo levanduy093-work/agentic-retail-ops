@@ -31,6 +31,7 @@ import {
   CATALOG_REALTIME_STOCK_TOOL,
 } from "./tools/catalog-tools"
 import { FULFILLMENT_READ_TOOL } from "./tools/fulfillment-tools"
+import { SHIPPING_ESTIMATE_TOOL } from "./tools/shipping-tools"
 import { PAYMENT_READ_TOOL } from "./tools/payment-tools"
 import { RESPONSE_DRAFT_TOOL } from "./tools/response-tools"
 import { AgentToolDefinition, toAgentToolMetadata } from "./tool-contract"
@@ -45,6 +46,7 @@ export const AGENT_TOOL_REGISTRY = {
   [CATALOG_READ_TOOL.name]: CATALOG_READ_TOOL,
   [CATALOG_REALTIME_STOCK_TOOL.name]: CATALOG_REALTIME_STOCK_TOOL,
   [FULFILLMENT_READ_TOOL.name]: FULFILLMENT_READ_TOOL,
+  [SHIPPING_ESTIMATE_TOOL.name]: SHIPPING_ESTIMATE_TOOL,
   [INVENTORY_GET_POSITION_TOOL.name]: INVENTORY_GET_POSITION_TOOL,
   [INVENTORY_EXECUTE_TRANSFER_TOOL.name]: INVENTORY_EXECUTE_TRANSFER_TOOL,
   [INCIDENT_CREATE_TOOL.name]: INCIDENT_CREATE_TOOL,

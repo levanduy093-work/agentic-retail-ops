@@ -47,32 +47,96 @@ function extractDurableCustomerFacts(
     .map((message) => message.body.normalize("NFKC"))
     .join("\n")
   const facts: string[] = []
+
   if (/\bactive\s+move\b/iu.test(customerText)) {
     facts.push("Khách quan tâm mẫu Active Move.")
   }
-  if (/\bsize\s*m\b/iu.test(customerText)) {
-    facts.push("Khách mặc size M.")
-  }
-  if (/áo\s+thun/iu.test(customerText)) {
+
+  // Categories / Garments
+  if (/áo\s+polo|polo/iu.test(customerText)) {
+    facts.push("Khách đang tìm áo polo.")
+  } else if (/áo\s+thun|áo\s+phông/iu.test(customerText)) {
     facts.push("Khách đang tìm áo thun.")
+  } else if (/áo\s+sơ\s+mi/iu.test(customerText)) {
+    facts.push("Khách đang tìm áo sơ mi.")
+  } else if (/áo\s+khoác/iu.test(customerText)) {
+    facts.push("Khách đang tìm áo khoác.")
   }
+
+  if (/quần\s+ống\s+rộng/iu.test(customerText)) {
+    facts.push("Khách đang tìm quần ống rộng.")
+  } else if (/quần\s+kaki/iu.test(customerText)) {
+    facts.push("Khách đang tìm quần kaki.")
+  } else if (/quần\s+jeans|quần\s+bò/iu.test(customerText)) {
+    facts.push("Khách đang tìm quần jeans.")
+  } else if (/quần\s+tây|quần\s+âu/iu.test(customerText)) {
+    facts.push("Khách đang tìm quần tây.")
+  } else if (/quần\s+short/iu.test(customerText)) {
+    facts.push("Khách đang tìm quần short.")
+  } else if (/\bquần\b/iu.test(customerText) && !facts.some((f) => f.includes("quần"))) {
+    facts.push("Khách đang tìm quần.")
+  }
+
+  // Sizes
+  const sizeMatches = customerText.matchAll(/\b(?:size|cỡ|co|sz)\s*(xs|s|m|l|xl|xxl|2xl|3xl)\b/giu)
+  for (const match of sizeMatches) {
+    if (match[1]) {
+      const sizeVal = match[1].toUpperCase()
+      facts.push(`Khách mặc size ${sizeVal}.`)
+    }
+  }
+
+  // Colors
+  const colorMatch = customerText.match(/\b(?:màu|tone|gam màu)?\s*(đen|trắng|xanh|đỏ|vàng|hồng|xám|ghi|nâu|be|tím|cam|black|white)\b/iu)
+  if (colorMatch?.[1]) {
+    facts.push(`Khách thích màu ${colorMatch[1].toLowerCase()}.`)
+  }
+
+  // Fits & Styles
+  if (/\b(?:ống rộng|suông rộng|rộng rãi|oversize|form rộng)\b/iu.test(customerText)) {
+    facts.push("Khách thích form ống rộng / rộng rãi.")
+  } else if (/\b(?:ôm vừa|ôm sát|slim fit|vừa vặn)\b/iu.test(customerText)) {
+    facts.push("Khách thích form ôm vừa.")
+  }
+
   if (/năng động/iu.test(customerText)) {
     facts.push("Khách thích phong cách năng động.")
   }
-  if (/(?:600\s*(?:nghìn|ngàn)|600\.000)/iu.test(customerText)) {
-    facts.push("Ngân sách khoảng 600.000 đồng.")
+  if (/lịch sự|công sở|chỉn chu/iu.test(customerText)) {
+    facts.push("Khách thích phong cách lịch sự.")
   }
-  const budgetMatch = customerText.match(
-    /(?:ngân sách|tầm|khoảng|dưới|tối đa|không quá)\s*(\d{1,3}(?:[.,]\d{3})?|\d+)\s*(?:nghìn|ngàn|k)?/iu
-  )
-  if (budgetMatch?.[1] && !/600/u.test(budgetMatch[1])) {
-    const amount = Number(budgetMatch[1].replace(/[^\d]/gu, ""))
-    if (Number.isFinite(amount) && amount > 0 && amount < 1_000) {
-      facts.push(
-        `Ngân sách khoảng ${(amount * 1_000).toLocaleString("vi-VN")} đồng.`
-      )
+
+  // Budgets
+  if (/(?:bao nhiêu cũng (?:được|đc)|không giới hạn|sao cũng (?:được|đc)|tùy ý|tùy sốp|tùy shop|thoải mái|unlimited|no limit)/iu.test(customerText)) {
+    facts.push("Ngân sách mua sắm không giới hạn / thoải mái.")
+  } else if (/(?:600\s*(?:nghìn|ngàn)|600\.000)/iu.test(customerText)) {
+    facts.push("Ngân sách khoảng 600.000 đồng.")
+  } else {
+    const budgetMatch = customerText.match(
+      /(?:ngân sách|tầm|khoảng|dưới|tối đa|không quá)\s*(\d{1,3}(?:[.,]\d{3})?|\d+)\s*(triệu|tr|nghìn|ngàn|k)?/iu
+    )
+    if (budgetMatch?.[1] && !/600/u.test(budgetMatch[1])) {
+      const rawDigits = budgetMatch[1].replace(/[^\d]/gu, "")
+      const amount = Number(rawDigits)
+      const unit = budgetMatch[2]?.toLowerCase()
+      if (Number.isFinite(amount) && amount > 0) {
+        if (unit === "triệu" || unit === "tr") {
+          facts.push(`Ngân sách khoảng ${(amount * 1_000_000).toLocaleString("vi-VN")} đồng.`)
+        } else if (amount < 1_000) {
+          facts.push(`Ngân sách khoảng ${(amount * 1_000).toLocaleString("vi-VN")} đồng.`)
+        } else {
+          facts.push(`Ngân sách khoảng ${amount.toLocaleString("vi-VN")} đồng.`)
+        }
+      }
     }
   }
+
+  // Shipping destination
+  const locationMatch = customerText.match(/(?:giao hàng|ship|gửi hàng)?\s*(?:đến|về|ở|tại)\s*(sóc trăng|hà nội|hồ chí minh|sài gòn|đà nẵng|cần thơ|hải phòng|huế|nha trang|bình dương|đồng nai|vũng tàu)/iu)
+  if (locationMatch?.[1]) {
+    facts.push(`Địa chỉ giao hàng dự kiến: ${locationMatch[1].trim()}.`)
+  }
+
   return facts
 }
 

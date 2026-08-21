@@ -1,6 +1,7 @@
 import { getOrderDetailWorkflow } from "@medusajs/core-flows"
 import type { MedusaContainer } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
+import { z } from "@medusajs/framework/zod"
 import { AGENT_TOOL_REGISTRY } from "./tool-registry"
 import { executeAgentTool } from "./tool-executor"
 import {
@@ -59,9 +60,10 @@ export async function executeOrderRead(
 
 export async function executeOrderSearch(
   container: MedusaContainer,
-  input: OrderSearchInput,
+  input: z.input<typeof OrderSearchInput>,
   actorId: string
 ) {
+  const parsedInput = OrderSearchInput.parse(input)
   return executeAgentTool<OrderSearchInput, OrderSearchOutput>(
     AGENT_TOOL_REGISTRY,
     {
@@ -70,7 +72,7 @@ export async function executeOrderSearch(
         granted_permissions: ["agent_order:read"],
         mode: "DIRECT",
       },
-      input,
+      input: parsedInput,
       tool_name: "order.search",
       tool_version: "1.0.0",
     },

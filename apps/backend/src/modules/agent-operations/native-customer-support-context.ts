@@ -4,11 +4,13 @@ import type { NativeToolLoopResult } from "./native-tool-loop"
 import type { KnowledgeSearchOutput } from "./tools/platform-read-tools"
 import type { FulfillmentReadOutput } from "./tools/fulfillment-tools"
 import type { OrderReadOutput } from "./tools/order-tools"
+import type { ShippingEstimateOutput } from "./tools/shipping-tools"
 
 export type NativeCustomerSupportContext = {
   catalog_snapshot?: CustomerCatalogSnapshot
   customer_order_lookup?: CustomerOrderLookup
   knowledge_snapshot?: KnowledgeSearchOutput
+  shipping_estimate?: ShippingEstimateOutput
   route?: "PRODUCT_DISCOVERY" | "STORE_QUESTION" | "HUMAN_ACTION"
 }
 
@@ -166,6 +168,15 @@ export function extractNativeCustomerSupportContext(
     }
 
     if (
+      result.name === "estimate_shipping_delivery" &&
+      typeof output.destination_province === "string" &&
+      typeof output.leadtime_days === "number"
+    ) {
+      context.shipping_estimate = output as any
+      context.route = "STORE_QUESTION"
+    }
+
+    if (
       (result.name === "propose_return_review" ||
         result.name === "propose_order_cancellation" ||
         result.name === "propose_address_change") &&
@@ -182,6 +193,8 @@ export function extractNativeCustomerSupportContext(
   } else if (context.catalog_snapshot) {
     context.route = "PRODUCT_DISCOVERY"
   } else if (context.customer_order_lookup) {
+    context.route = "STORE_QUESTION"
+  } else if (context.shipping_estimate) {
     context.route = "STORE_QUESTION"
   } else if (context.knowledge_snapshot) {
     context.route = "STORE_QUESTION"

@@ -3,6 +3,7 @@ import {
   buildCustomerOrderLookupReply,
   buildCustomerReviewAcknowledgement,
   buildDeliveryTimeGuidanceAnswer,
+  extractFreeShippingNotice,
   buildKnowledgeAnswerFallback,
   detectKnowledgeQuestionLocale,
   filterKnowledgeEvidenceForQuestion,
@@ -456,5 +457,51 @@ describe("grounded knowledge answers", () => {
       const filtered = filterKnowledgeEvidenceForQuestion(question, allDocs)
       expect(filtered.results.length).toBeGreaterThan(0)
     })
+  })
+
+  it("extracts freeship policy notice accurately from knowledge excerpts", () => {
+    const freeshipKnowledge = {
+      results: [
+        {
+          citation_locator: "policy://shipping#chunk-1",
+          chunk_id: "chk_1",
+          chunk_index: 0,
+          document_id: "doc_1",
+          document_key: "shipping-policy",
+          effective_at: "2026-08-01T00:00:00.000Z",
+          excerpt:
+            "Thời gian giao hàng toàn quốc từ 2-4 ngày. Phí ship đồng giá 30k, miễn phí ship cho đơn từ 500.000đ.",
+          quote_checksum: "chk_1",
+          score: 1,
+          title: "Chính sách giao hàng",
+          version: "1.0.0",
+        },
+      ],
+      total_candidates: 1,
+    }
+
+    const noticeVi = extractFreeShippingNotice(freeshipKnowledge, "vi")
+    expect(noticeVi).toContain("miễn phí ship cho đơn từ 500.000đ")
+
+    const noFreeshipKnowledge = {
+      results: [
+        {
+          citation_locator: "policy://shipping#chunk-2",
+          chunk_id: "chk_2",
+          chunk_index: 0,
+          document_id: "doc_2",
+          document_key: "shipping-policy",
+          effective_at: "2026-08-01T00:00:00.000Z",
+          excerpt: "Đổi trả hàng trong 7 ngày.",
+          quote_checksum: "chk_2",
+          score: 1,
+          title: "Chính sách đổi trả",
+          version: "1.0.0",
+        },
+      ],
+      total_candidates: 1,
+    }
+
+    expect(extractFreeShippingNotice(noFreeshipKnowledge, "vi")).toBeNull()
   })
 })

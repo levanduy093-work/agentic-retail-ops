@@ -16,6 +16,8 @@ import {
 import { KNOWLEDGE_SEARCH_TOOL } from "./tools/platform-read-tools"
 import { ORDER_READ_TOOL, ORDER_SEARCH_TOOL } from "./tools/order-tools"
 import { FULFILLMENT_READ_TOOL } from "./tools/fulfillment-tools"
+import { SHIPPING_ESTIMATE_TOOL } from "./tools/shipping-tools"
+import { executeShippingEstimate } from "./shipping-estimate-runtime"
 import {
   DraftCartCreateInput,
   OrderCancelProposeInput,
@@ -53,8 +55,33 @@ const NativeOrderCancelProposalInput = OrderCancelProposeInput
 const NativeOrderUpdateAddressProposalInput = OrderUpdateAddressProposeInput
 const NativeRealtimeStockInput = CatalogRealtimeStockInput
 const NativeDeliveryStatusInput = NativeOrderStatusInput
+const NativeShippingEstimateInput = z.strictObject({
+  destination_location: z.string().trim().min(2).max(200),
+  weight: z.number().int().positive().optional(),
+})
 
 export const CUSTOMER_SUPPORT_NATIVE_TOOLS: ToolDefinition[] = [
+  {
+    description:
+      "Estimate shipping delivery time (number of days and expected delivery date) and shipping fee to a destination province/city or district in Vietnam using Giao Hàng Nhanh (GHN). Use this whenever a customer asks about shipping duration, when their order will arrive in a province (e.g. Sóc Trăng, Đà Nẵng, Hà Nội), or shipping costs before placing an order.",
+    name: "estimate_shipping_delivery",
+    parameters: {
+      additionalProperties: false,
+      properties: {
+        destination_location: {
+          description:
+            "Customer's destination province, city, or district in Vietnam (e.g., 'Sóc Trăng', 'Đà Nẵng', 'Hà Nội', 'Cần Thơ').",
+          type: "string",
+        },
+        weight: {
+          description: "Package weight in grams, default is 150g.",
+          type: "integer",
+        },
+      },
+      required: ["destination_location"],
+      type: "object",
+    },
+  },
   {
     description:
       "Search and locate customer orders by phone number, email address, customer name, or keywords. Use this whenever the customer does not have or does not remember their numeric order code.",
@@ -273,12 +300,12 @@ type CustomerSupportNativeToolService = {
     incident: { id: string } | null
     task: { id: string } | null
   }>
-  proposeCustomerOrderCancellation(input: Record<string, unknown>): Promise<{
+  proposeCustomerOrderCancellation?(input: Record<string, unknown>): Promise<{
     duplicate: boolean
     incident: { id: string } | null
     task: { id: string } | null
   }>
-  proposeCustomerAddressChange(input: Record<string, unknown>): Promise<{
+  proposeCustomerAddressChange?(input: Record<string, unknown>): Promise<{
     duplicate: boolean
     incident: { id: string } | null
     task: { id: string } | null
@@ -349,6 +376,26 @@ export function createCustomerSupportNativeToolDispatcher(
   return async function executeCustomerSupportNativeTool(
     call: ModelToolCall
   ): Promise<Record<string, unknown>> {
+    if (call.name === "estimate_shipping_delivery") {
+      const parsed = NativeShippingEstimateInput.parse(call.arguments)
+      const result = await executeShippingEstimate(
+        {
+          destination_location: parsed.destination_location,
+          weight: parsed.weight ?? 150,
+        },
+        "customer-support-agent"
+      )
+      await context.service.recordCustomerReadToolCall({
+        conversation_id: context.conversation_id,
+        inbound_message_id: context.inbound_message_id,
+        input: result.input,
+        output: result.output,
+        tool_name: SHIPPING_ESTIMATE_TOOL.name,
+        tool_version: SHIPPING_ESTIMATE_TOOL.version,
+      })
+      return result.output
+    }
+
     if (call.name === "search_catalog") {
       const parsed = NativeCatalogSearchInput.parse(call.arguments)
       const result = await executeCatalogRead(
@@ -651,6 +698,12 @@ export function createCustomerSupportNativeToolDispatcher(
           "Cancellation proposals must use the current conversation and inbound customer request."
         )
       }
+      if (!context.service.proposeCustomerOrderCancellation) {
+        throw new MedusaError(
+          MedusaError.Types.NOT_ALLOWED,
+          "Order cancellation is not supported."
+        )
+      }
       const proposal = await context.service.proposeCustomerOrderCancellation(parsed)
       return {
         duplicate: proposal.duplicate,
@@ -669,6 +722,12 @@ export function createCustomerSupportNativeToolDispatcher(
         throw new MedusaError(
           MedusaError.Types.NOT_ALLOWED,
           "Address change proposals must use the current conversation and inbound customer request."
+        )
+      }
+      if (!context.service.proposeCustomerAddressChange) {
+        throw new MedusaError(
+          MedusaError.Types.NOT_ALLOWED,
+          "Address change is not supported."
         )
       }
       const proposal = await context.service.proposeCustomerAddressChange(parsed)

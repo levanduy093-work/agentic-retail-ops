@@ -73,6 +73,7 @@ describe("customer product advisor", () => {
     ).toEqual({
       budget_max: 300000,
       color: undefined,
+      fit: undefined,
       product_query: "áo thun",
       size: "M",
     })
@@ -86,8 +87,27 @@ describe("customer product advisor", () => {
     ).toEqual({
       budget_flexible: true,
       color: "đen",
+      fit: undefined,
       product_query: "áo polo",
       size: "M",
+    })
+    expect(
+      extractCatalogSearchQuery("nên chọn quần nào để mặc cho hợp sốp")
+    ).toBe("quần")
+    expect(
+      extractCustomerProductPreferences("ống rộng đi sốp", [
+        {
+          body: "nên chọn quần nào để mặc cho hợp sốp",
+          direction: "INBOUND",
+        },
+      ])
+    ).toEqual({
+      budget_flexible: undefined,
+      budget_max: undefined,
+      color: undefined,
+      fit: "ống rộng",
+      product_query: "quần",
+      size: undefined,
     })
     expect(
       extractRecentCatalogSearchQuery([

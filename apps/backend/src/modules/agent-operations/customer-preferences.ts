@@ -18,7 +18,7 @@ export function extractExplicitCustomerPreferences(
   const candidates: CustomerPreferenceCandidate[] = []
 
   const sizeMatch = normalized.match(
-    /(?:\bsize\s*|\bcỡ\s*|\bmặc\s+)(xs|s|m|l|xl|xxl)\b/iu
+    /(?:\bsize\s*|\bcỡ\s*|\bmặc\s+|sz\s*)(xs|s|m|l|xl|xxl|2xl|3xl)\b/iu
   )
   if (sizeMatch?.[1]) {
     const value = sizeMatch[1].toUpperCase()
@@ -43,7 +43,7 @@ export function extractExplicitCustomerPreferences(
   }
 
   const styleMatch = normalized.match(
-    /\b(?:gu|phong cách|thích|chuộng)\s+(streetwear|oversize|minimalism|tối giản|vintage|công sở|năng động|bánh bèo|nữ tính)\b/iu
+    /\b(?:gu|phong cách|thích|chuộng|mặc|form)\s+(streetwear|oversize|minimalism|tối giản|vintage|công sở|năng động|bánh bèo|nữ tính|ống rộng|form rộng|thoải mái|lịch sự|basic|cá tính|thể thao)\b/iu
   )
   if (styleMatch?.[1]) {
     candidates.push({

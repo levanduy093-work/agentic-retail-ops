@@ -57,6 +57,21 @@ export type GhnCalculateFeeInput = {
   coupon?: string | null
 }
 
+export type GhnLeadTimeInput = {
+  from_district_id?: number
+  from_ward_code?: string
+  to_district_id: number
+  to_ward_code?: string
+  service_id?: number
+}
+
+export type GhnLeadTimeResponse = {
+  leadtime: number
+  order_date: number
+  leadtime_days?: number
+  expected_delivery_date?: string
+}
+
 export type GhnFeeResponse = {
   total: number
   service_fee: number
@@ -315,6 +330,49 @@ export class GhnClient {
       method: "POST",
       body: payload,
     })
+  }
+
+  // --- Lead Time Estimation ---
+
+  async getLeadTime(input: GhnLeadTimeInput): Promise<GhnLeadTimeResponse> {
+    const payload = {
+      from_district_id: input.from_district_id,
+      from_ward_code: input.from_ward_code,
+      service_id: input.service_id,
+      to_district_id: input.to_district_id,
+      to_ward_code: input.to_ward_code,
+    }
+
+    const raw = await this.request<{ leadtime: number; order_date: number }>(
+      "/v2/shipping-order/leadtime",
+      {
+        method: "POST",
+        body: payload,
+      }
+    )
+
+    let leadtimeDays: number | undefined
+    let expectedDeliveryDate: string | undefined
+
+    if (raw.leadtime && raw.order_date) {
+      const diffSeconds = raw.leadtime - raw.order_date
+      leadtimeDays = Math.max(1, Math.round(diffSeconds / (24 * 60 * 60)))
+      const deliveryDate = new Date(raw.leadtime * 1000)
+      if (!Number.isNaN(deliveryDate.getTime())) {
+        expectedDeliveryDate = deliveryDate.toLocaleDateString("vi-VN", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+      }
+    }
+
+    return {
+      expected_delivery_date: expectedDeliveryDate,
+      leadtime: raw.leadtime,
+      leadtime_days: leadtimeDays,
+      order_date: raw.order_date,
+    }
   }
 
   // --- Create Shipping Order ---
