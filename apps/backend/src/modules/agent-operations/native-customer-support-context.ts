@@ -9,7 +9,7 @@ export type NativeCustomerSupportContext = {
   catalog_snapshot?: CustomerCatalogSnapshot
   customer_order_lookup?: CustomerOrderLookup
   knowledge_snapshot?: KnowledgeSearchOutput
-  route?: "PRODUCT_DISCOVERY" | "STORE_QUESTION"
+  route?: "PRODUCT_DISCOVERY" | "STORE_QUESTION" | "HUMAN_ACTION"
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -132,13 +132,57 @@ export function extractNativeCustomerSupportContext(
         status: "FOUND"
       }
     }
+    if (result.name === "search_orders" && Array.isArray(output.orders)) {
+      const orders = output.orders as any[]
+      if (orders.length > 0) {
+        const firstOrder = orders[0]
+        context.customer_order_lookup = {
+          display_id: firstOrder.display_id,
+          order: {
+            canceled_at: firstOrder.canceled_at,
+            created_at: firstOrder.created_at,
+            currency_code: firstOrder.currency_code,
+            customer_id: firstOrder.customer_id,
+            display_id: firstOrder.display_id,
+            fulfillment_count: firstOrder.fulfillment_status === "fulfilled" ? 1 : 0,
+            fulfillment_status: firstOrder.fulfillment_status,
+            item_count: firstOrder.items.length,
+            order_id: firstOrder.order_id,
+            order_status: firstOrder.order_status,
+            payment_collection_count: 1,
+            payment_status: firstOrder.payment_status,
+            total: firstOrder.total,
+            updated_at: firstOrder.created_at,
+            version: 1,
+          },
+          status: "FOUND",
+        }
+      } else {
+        context.customer_order_lookup = {
+          display_id: null,
+          status: "NOT_FOUND",
+        }
+      }
+    }
+
+    if (
+      (result.name === "propose_return_review" ||
+        result.name === "propose_order_cancellation" ||
+        result.name === "propose_address_change") &&
+      output.outcome === "PENDING_HUMAN_REVIEW"
+    ) {
+      context.route = "HUMAN_ACTION"
+    }
   }
 
   // Tool selection, not keyword matching, controls the response path in ACTIVE
-  // mode. Catalog takes priority so the existing hybrid response composer can
-  // combine it with approved knowledge when both tools were intentionally used.
-  if (context.catalog_snapshot) {
+  // mode. Proposals and catalog take priority.
+  if (context.route === "HUMAN_ACTION") {
+    // Keep HUMAN_ACTION
+  } else if (context.catalog_snapshot) {
     context.route = "PRODUCT_DISCOVERY"
+  } else if (context.customer_order_lookup) {
+    context.route = "STORE_QUESTION"
   } else if (context.knowledge_snapshot) {
     context.route = "STORE_QUESTION"
   }

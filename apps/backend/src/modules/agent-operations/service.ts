@@ -252,7 +252,12 @@ import {
   INCIDENT_UPDATE_TOOL,
   KNOWLEDGE_PROPOSE_TOOL,
   MESSAGE_SEND_TOOL,
+  ORDER_CANCEL_PROPOSE_TOOL,
+  ORDER_UPDATE_ADDRESS_PROPOSE_TOOL,
+  OrderCancelProposeInput,
+  OrderUpdateAddressProposeInput,
   PlatformCommandOutput,
+  RETURN_PROPOSE_TOOL,
   ReturnProposeInput,
 } from "./tools/platform-command-tools"
 
@@ -4103,7 +4108,16 @@ class AgentOperationsModuleService extends MedusaService({
     },
     @MedusaContext() sharedContext: Context = {}
   ): Promise<KnowledgeAnswer> {
-    const fallbackOutput = buildProductAdvisorFallback(input.catalog, input.locale, input.question)
+    const shoppingPreferences = extractCustomerProductPreferences(
+      input.question,
+      input.recent_messages
+    )
+    const fallbackOutput = buildProductAdvisorFallback(
+      input.catalog,
+      input.locale,
+      input.question,
+      shoppingPreferences
+    )
     const fallback = formatProductAdvisorReply(fallbackOutput, input.catalog, input.locale)
     const toAnswer = (
       result: { body: string; product_ids: string[] },
@@ -4161,7 +4175,8 @@ class AgentOperationsModuleService extends MedusaService({
             cached.data,
             input.catalog,
             input.locale,
-            input.question
+            input.question,
+            shoppingPreferences
           ),
           {
             ai_invoked: false,
@@ -4196,7 +4211,7 @@ class AgentOperationsModuleService extends MedusaService({
         body: message.body.slice(0, 400),
         direction: message.direction
       })),
-      shopping_preferences: extractCustomerProductPreferences(input.question)
+      shopping_preferences: shoppingPreferences
     }
     let credentials
     try {
@@ -4233,7 +4248,8 @@ class AgentOperationsModuleService extends MedusaService({
             cachedResponse,
             input.catalog,
             input.locale,
-            input.question
+            input.question,
+            shoppingPreferences
           ),
           {
             ai_invoked: false,
@@ -4254,7 +4270,8 @@ class AgentOperationsModuleService extends MedusaService({
               cached.data,
               input.catalog,
               input.locale,
-              input.question
+              input.question,
+              shoppingPreferences
             )
           )
         }
@@ -4315,7 +4332,13 @@ class AgentOperationsModuleService extends MedusaService({
           sharedContext
         )
         return toAnswer(
-          resolveProductAdvisorModelOutput(output, input.catalog, input.locale, input.question),
+          resolveProductAdvisorModelOutput(
+            output,
+            input.catalog,
+            input.locale,
+            input.question,
+            shoppingPreferences
+          ),
           {
             ai_invoked: true,
             cache_hit: false,
@@ -5247,7 +5270,8 @@ class AgentOperationsModuleService extends MedusaService({
       }
       const toolLoop = runCustomerSupportReadToolLoop({
         catalog,
-        question
+        question,
+        recent_messages: mapRecentMessagesWithTime(contextMessages)
       })
       toolTrace = toolLoop.trace
       const productAnswer = await this.draftCustomerProductAdvice(
@@ -5354,22 +5378,44 @@ class AgentOperationsModuleService extends MedusaService({
       )
     }
     if (answer.disposition === "HUMAN_REVIEW" && !reviewRouted) {
+      const isOrderInquiryWithoutCode =
+        /(?:quên\s*mã|k\s*nhớ\s*mã|không\s*nhớ\s*mã|dùng\s*cái\s*khác|check\s*đơn|tra\s*cứu\s*đơn|tìm\s*đơn|sđt\s*(?:được\s*không|tra\s*được)|kiểm\s*tra\s*(?:bằng|qua)\s*(?:sđt|số\s*điện\s*thoại|email))/iu.test(
+          question.normalize("NFKC")
+        )
       const escalation = await this.createCustomerKnowledgeEscalation(
         {
           conversation_id: conversation.id,
           inbound_message_id: inbound.id,
           locale,
           question,
-          reason: "NO_APPROVED_KNOWLEDGE"
+          reason: isOrderInquiryWithoutCode
+            ? "ORDER_INQUIRY_WITHOUT_CODE"
+            : "NO_APPROVED_KNOWLEDGE"
         },
         sharedContext
       )
       supportTaskId = escalation.task?.id ?? null
-      answer = buildCustomerReviewAcknowledgement(
-        locale,
-        "NO_APPROVED_KNOWLEDGE",
-        locale === "vi" ? settings.review_ack_message_vi : settings.review_ack_message_en
-      )
+      answer = isOrderInquiryWithoutCode
+        ? {
+            body:
+              locale === "vi"
+                ? "Dạ hoàn toàn được bạn nhé! Nếu không nhớ mã đơn hàng, bạn có thể gửi cho mình Số điện thoại đặt hàng, Email hoặc Tên người nhận (kèm tên món đồ bạn đã đặt) để mình tra cứu hệ thống giúp bạn ngay nha."
+                : "Yes, absolutely! If you don't recall your order ID, please share your order phone number, email, or recipient name and I will look it up for you right away.",
+            citations: [],
+            disposition: "ANSWER",
+            grounded: false,
+            locale,
+            optimization: {
+              ai_invoked: false,
+              cache_hit: false,
+              path: "ORDER_INQUIRY_GUIDANCE"
+            }
+          }
+        : buildCustomerReviewAcknowledgement(
+            locale,
+            "NO_APPROVED_KNOWLEDGE",
+            locale === "vi" ? settings.review_ack_message_vi : settings.review_ack_message_en
+          )
     }
 
     const now = new Date()
@@ -6671,6 +6717,547 @@ class AgentOperationsModuleService extends MedusaService({
           task_id: task.id,
         },
         event_type: "agent.returns-refund.review-proposed",
+        incident_id: incident.id,
+        recorded_at: now,
+        resource_id: task.id,
+        resource_type: "agent_task",
+      },
+      sharedContext
+    )
+    return { duplicate: false, incident, task }
+  }
+
+  @InjectManager()
+  async proposeCustomerOrderCancellation(
+    input: Record<string, unknown>,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.proposeCustomerOrderCancellation_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async proposeCustomerOrderCancellation_(
+    input: Record<string, unknown>,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const proposal = OrderCancelProposeInput.parse(input)
+    const [conversation, confirmation] = await Promise.all([
+      this.retrieveAgentConversation(proposal.conversation_id, {}, sharedContext),
+      this.retrieveAgentMessage(
+        proposal.customer_confirmation_message_id,
+        {},
+        sharedContext
+      )
+    ])
+    const metadata = (conversation.metadata ?? {}) as Record<string, unknown>
+    const customerId =
+      typeof metadata.customer_id === "string" &&
+      metadata.principal_role === "CUSTOMER" &&
+      metadata.customer_identity_verified === true
+        ? metadata.customer_id
+        : null
+    if (
+      !customerId ||
+      conversation.channel !== "IN_APP" ||
+      conversation.status !== "OPEN" ||
+      confirmation.conversation_id !== conversation.id ||
+      confirmation.direction !== "INBOUND"
+    ) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        "A verified customer request in the current open conversation is required."
+      )
+    }
+    const container = (
+      this as unknown as { __container__: MedusaContainer }
+    ).__container__
+    const query = container.resolve(ContainerRegistrationKeys.QUERY)
+    const { data: orders } = await query.graph({
+      entity: "order",
+      fields: [
+        "id",
+        "display_id",
+        "fulfillment_status",
+        "items.id",
+        "items.quantity",
+        "items.title",
+        "payment_status",
+        "status",
+      ],
+      filters: {
+        customer_id: customerId,
+        display_id: String(proposal.order_code),
+      },
+      pagination: { skip: 0, take: 2 },
+    })
+    const order = orders[0] as
+      | {
+          display_id: string
+          fulfillment_status?: string | null
+          id: string
+          items?: Array<{ id: string; quantity: number; title?: string | null }>
+          payment_status?: string | null
+          status?: string | null
+        }
+      | undefined
+    if (orders.length !== 1 || !order) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_FOUND,
+        "The requested order does not belong to the verified customer."
+      )
+    }
+
+    const source = "in-app-customer-cancellation"
+    const eventId = `cancellation-proposal:${confirmation.id}`
+    const existingEvent = (
+      await this.listAgentEvents({ event_id: eventId, source }, { take: 1 }, sharedContext)
+    )[0]
+    if (existingEvent) {
+      const incident = (
+        await this.listAgentIncidents(
+          { trigger_event_id: existingEvent.id },
+          { take: 1 },
+          sharedContext
+        )
+      )[0]
+      const task = incident
+        ? (
+            await this.listAgentTasks(
+              { incident_id: incident.id },
+              { take: 1 },
+              sharedContext
+            )
+          )[0]
+        : null
+      return { duplicate: true, incident, task }
+    }
+
+    const now = new Date()
+    const correlationId = `customer-cancellation:${conversation.id}:${confirmation.id}`
+    const event = await this.createAgentEvents(
+      {
+        correlation_id: correlationId,
+        event_id: eventId,
+        event_type: "customer.cancellation-requested",
+        event_version: 1,
+        occurred_at: confirmation.occurred_at,
+        payload: {
+          conversation_id: conversation.id,
+          customer_confirmation_message_id: confirmation.id,
+          order_code: proposal.order_code,
+          order_id: order.id,
+          reason: proposal.reason,
+        },
+        processed_at: now,
+        received_at: now,
+        source,
+        status: "PROCESSED",
+        subject_id: order.id,
+        subject_type: "order",
+        tenant_id: conversation.tenant_id,
+      },
+      sharedContext
+    )
+    const incident = await this.createAgentIncidents(
+      {
+        context: { customer_id: customerId, order_id: order.id },
+        correlation_id: correlationId,
+        incident_type: "CUSTOMER_CANCELLATION_REQUEST",
+        priority: "HIGH",
+        status: "RECEIVED",
+        subject_id: order.id,
+        subject_type: "order",
+        summary: proposal.reason,
+        tenant_id: conversation.tenant_id,
+        title: `Customer cancellation request for #${order.display_id}`,
+        trigger_event_id: event.id,
+      },
+      sharedContext
+    )
+    const run = await this.createAgentRuns(
+      {
+        agent_id: "customer-support-agent",
+        agent_version: "1.0.0",
+        incident_id: incident.id,
+        input: event.payload,
+        started_at: now,
+        status: "RECEIVED",
+        trigger_event_id: event.id,
+      },
+      sharedContext
+    )
+    await this.transitionIncident(incident.id, "RECEIVED", "INVESTIGATING", sharedContext)
+    const recommendation = await this.createAgentRecommendations(
+      {
+        action_type: "ORDER_CANCEL_PROPOSE",
+        evidence: {
+          customer_confirmation_message_id: confirmation.id,
+          fulfillment_status: order.fulfillment_status ?? null,
+          item_count: order.items?.length ?? 0,
+          order_id: order.id,
+          payment_status: order.payment_status ?? null,
+        },
+        incident_id: incident.id,
+        proposal,
+        rationale:
+          "Order ownership is verified, but cancellation requires human review of fulfillment and refund state.",
+        risk_level: "MEDIUM",
+        run_id: run.id,
+        status: "PROPOSED",
+        summary: `Review customer cancellation request for order #${order.display_id}.`,
+      },
+      sharedContext
+    )
+    await this.transitionIncident(incident.id, "INVESTIGATING", "ESCALATED", sharedContext)
+    const task = await this.createAgentTasks(
+      {
+        created_by_id: run.id,
+        created_by_type: "agent",
+        conversation_id: conversation.id,
+        description:
+          "Review customer cancellation request. Check fulfillment status before confirming cancellation in Medusa Admin.",
+        due_at: new Date(now.getTime() + 30 * 60 * 1_000),
+        idempotency_key: `customer-cancel-review:${confirmation.id}`,
+        incident_id: incident.id,
+        input: {
+          customer_confirmation_message_id: confirmation.id,
+          customer_id: customerId,
+          order: {
+            display_id: order.display_id,
+            fulfillment_status: order.fulfillment_status ?? null,
+            id: order.id,
+            items: order.items ?? [],
+            payment_status: order.payment_status ?? null,
+            status: order.status ?? null,
+          },
+          proposal,
+          recommendation_id: recommendation.id,
+          requires_human_review: true,
+        },
+        priority: "HIGH",
+        status: "TODO",
+        task_type: "SUPPORT_CANCELLATION_REVIEW",
+        tenant_id: conversation.tenant_id,
+        title: `Review cancellation request for #${order.display_id}`,
+      },
+      sharedContext
+    )
+    await this.updateAgentRuns(
+      {
+        completed_at: now,
+        id: run.id,
+        output: { recommendation_id: recommendation.id, task_id: task.id },
+        status: "ESCALATED",
+      },
+      sharedContext
+    )
+    this.broadcastTaskUpdated({
+      assigned_to_id: task.assigned_to_id,
+      id: task.id,
+      priority: task.priority,
+      status: task.status,
+      support_conversation_id: conversation.id,
+      task_type: task.task_type,
+    })
+    this.broadcastConversationUpdated({
+      channel: conversation.channel,
+      id: conversation.id,
+      last_message_at: now,
+      metadata: { requires_human_attention: true },
+      title: conversation.title,
+    })
+    await this.createAgentAuditEvents(
+      {
+        action: "customer-cancellation-review-proposed",
+        actor_id: run.id,
+        actor_type: "agent_run",
+        correlation_id: correlationId,
+        data: {
+          order_id: order.id,
+          reason: proposal.reason,
+          task_id: task.id,
+        },
+        event_type: "agent.order.cancellation-proposed",
+        incident_id: incident.id,
+        recorded_at: now,
+        resource_id: task.id,
+        resource_type: "agent_task",
+      },
+      sharedContext
+    )
+    return { duplicate: false, incident, task }
+  }
+
+  @InjectManager()
+  async proposeCustomerAddressChange(
+    input: Record<string, unknown>,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.proposeCustomerAddressChange_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async proposeCustomerAddressChange_(
+    input: Record<string, unknown>,
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const proposal = OrderUpdateAddressProposeInput.parse(input)
+    const [conversation, confirmation] = await Promise.all([
+      this.retrieveAgentConversation(proposal.conversation_id, {}, sharedContext),
+      this.retrieveAgentMessage(
+        proposal.customer_confirmation_message_id,
+        {},
+        sharedContext
+      )
+    ])
+    const metadata = (conversation.metadata ?? {}) as Record<string, unknown>
+    const customerId =
+      typeof metadata.customer_id === "string" &&
+      metadata.principal_role === "CUSTOMER" &&
+      metadata.customer_identity_verified === true
+        ? metadata.customer_id
+        : null
+    if (
+      !customerId ||
+      conversation.channel !== "IN_APP" ||
+      conversation.status !== "OPEN" ||
+      confirmation.conversation_id !== conversation.id ||
+      confirmation.direction !== "INBOUND"
+    ) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        "A verified customer request in the current open conversation is required."
+      )
+    }
+    const container = (
+      this as unknown as { __container__: MedusaContainer }
+    ).__container__
+    const query = container.resolve(ContainerRegistrationKeys.QUERY)
+    const { data: orders } = await query.graph({
+      entity: "order",
+      fields: [
+        "id",
+        "display_id",
+        "fulfillment_status",
+        "shipping_address.*",
+        "payment_status",
+        "status",
+      ],
+      filters: {
+        customer_id: customerId,
+        display_id: String(proposal.order_code),
+      },
+      pagination: { skip: 0, take: 2 },
+    })
+    const order = orders[0] as
+      | {
+          display_id: string
+          fulfillment_status?: string | null
+          id: string
+          payment_status?: string | null
+          shipping_address?: Record<string, unknown> | null
+          status?: string | null
+        }
+      | undefined
+    if (orders.length !== 1 || !order) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_FOUND,
+        "The requested order does not belong to the verified customer."
+      )
+    }
+
+    const source = "in-app-customer-address-change"
+    const eventId = `address-change-proposal:${confirmation.id}`
+    const existingEvent = (
+      await this.listAgentEvents({ event_id: eventId, source }, { take: 1 }, sharedContext)
+    )[0]
+    if (existingEvent) {
+      const incident = (
+        await this.listAgentIncidents(
+          { trigger_event_id: existingEvent.id },
+          { take: 1 },
+          sharedContext
+        )
+      )[0]
+      const task = incident
+        ? (
+            await this.listAgentTasks(
+              { incident_id: incident.id },
+              { take: 1 },
+              sharedContext
+            )
+          )[0]
+        : null
+      return { duplicate: true, incident, task }
+    }
+
+    const now = new Date()
+    const correlationId = `customer-address-change:${conversation.id}:${confirmation.id}`
+    const event = await this.createAgentEvents(
+      {
+        correlation_id: correlationId,
+        event_id: eventId,
+        event_type: "customer.address-update-requested",
+        event_version: 1,
+        occurred_at: confirmation.occurred_at,
+        payload: {
+          address_1: proposal.address_1,
+          city: proposal.city,
+          conversation_id: conversation.id,
+          customer_confirmation_message_id: confirmation.id,
+          first_name: proposal.first_name,
+          last_name: proposal.last_name,
+          order_code: proposal.order_code,
+          order_id: order.id,
+          phone: proposal.phone,
+          province: proposal.province,
+          reason: proposal.reason,
+        },
+        processed_at: now,
+        received_at: now,
+        source,
+        status: "PROCESSED",
+        subject_id: order.id,
+        subject_type: "order",
+        tenant_id: conversation.tenant_id,
+      },
+      sharedContext
+    )
+    const incident = await this.createAgentIncidents(
+      {
+        context: { customer_id: customerId, order_id: order.id },
+        correlation_id: correlationId,
+        incident_type: "CUSTOMER_ADDRESS_UPDATE_REQUEST",
+        priority: "HIGH",
+        status: "RECEIVED",
+        subject_id: order.id,
+        subject_type: "order",
+        summary: proposal.reason,
+        tenant_id: conversation.tenant_id,
+        title: `Customer address update request for #${order.display_id}`,
+        trigger_event_id: event.id,
+      },
+      sharedContext
+    )
+    const run = await this.createAgentRuns(
+      {
+        agent_id: "customer-support-agent",
+        agent_version: "1.0.0",
+        incident_id: incident.id,
+        input: event.payload,
+        started_at: now,
+        status: "RECEIVED",
+        trigger_event_id: event.id,
+      },
+      sharedContext
+    )
+    await this.transitionIncident(incident.id, "RECEIVED", "INVESTIGATING", sharedContext)
+    const recommendation = await this.createAgentRecommendations(
+      {
+        action_type: "ORDER_UPDATE_ADDRESS_PROPOSE",
+        evidence: {
+          current_shipping_address: order.shipping_address ?? null,
+          customer_confirmation_message_id: confirmation.id,
+          fulfillment_status: order.fulfillment_status ?? null,
+          new_shipping_address: {
+            address_1: proposal.address_1,
+            city: proposal.city,
+            first_name: proposal.first_name ?? null,
+            last_name: proposal.last_name ?? null,
+            phone: proposal.phone ?? null,
+            province: proposal.province ?? null,
+          },
+          order_id: order.id,
+        },
+        incident_id: incident.id,
+        proposal,
+        rationale:
+          "Order ownership is verified, but address update requires human review before shipping label is printed.",
+        risk_level: "MEDIUM",
+        run_id: run.id,
+        status: "PROPOSED",
+        summary: `Review customer address update request for order #${order.display_id}.`,
+      },
+      sharedContext
+    )
+    await this.transitionIncident(incident.id, "INVESTIGATING", "ESCALATED", sharedContext)
+    const task = await this.createAgentTasks(
+      {
+        created_by_id: run.id,
+        created_by_type: "agent",
+        conversation_id: conversation.id,
+        description:
+          "Review customer request to change shipping address. Update shipping address on the order before courier pickup.",
+        due_at: new Date(now.getTime() + 30 * 60 * 1_000),
+        idempotency_key: `customer-address-review:${confirmation.id}`,
+        incident_id: incident.id,
+        input: {
+          current_shipping_address: order.shipping_address ?? null,
+          customer_confirmation_message_id: confirmation.id,
+          customer_id: customerId,
+          new_shipping_address: {
+            address_1: proposal.address_1,
+            city: proposal.city,
+            first_name: proposal.first_name ?? null,
+            last_name: proposal.last_name ?? null,
+            phone: proposal.phone ?? null,
+            province: proposal.province ?? null,
+          },
+          order: {
+            display_id: order.display_id,
+            fulfillment_status: order.fulfillment_status ?? null,
+            id: order.id,
+            status: order.status ?? null,
+          },
+          proposal,
+          recommendation_id: recommendation.id,
+          requires_human_review: true,
+        },
+        priority: "HIGH",
+        status: "TODO",
+        task_type: "SUPPORT_ADDRESS_UPDATE_REVIEW",
+        tenant_id: conversation.tenant_id,
+        title: `Review address update for #${order.display_id}`,
+      },
+      sharedContext
+    )
+    await this.updateAgentRuns(
+      {
+        completed_at: now,
+        id: run.id,
+        output: { recommendation_id: recommendation.id, task_id: task.id },
+        status: "ESCALATED",
+      },
+      sharedContext
+    )
+    this.broadcastTaskUpdated({
+      assigned_to_id: task.assigned_to_id,
+      id: task.id,
+      priority: task.priority,
+      status: task.status,
+      support_conversation_id: conversation.id,
+      task_type: task.task_type,
+    })
+    this.broadcastConversationUpdated({
+      channel: conversation.channel,
+      id: conversation.id,
+      last_message_at: now,
+      metadata: { requires_human_attention: true },
+      title: conversation.title,
+    })
+    await this.createAgentAuditEvents(
+      {
+        action: "customer-address-change-review-proposed",
+        actor_id: run.id,
+        actor_type: "agent_run",
+        correlation_id: correlationId,
+        data: {
+          new_address_1: proposal.address_1,
+          new_city: proposal.city,
+          order_id: order.id,
+          task_id: task.id,
+        },
+        event_type: "agent.order.address-update-proposed",
         incident_id: incident.id,
         recorded_at: now,
         resource_id: task.id,
@@ -8730,7 +9317,10 @@ class AgentOperationsModuleService extends MedusaService({
       INCIDENT_CREATE_TOOL.name,
       INCIDENT_UPDATE_TOOL.name,
       KNOWLEDGE_PROPOSE_TOOL.name,
-      MESSAGE_SEND_TOOL.name
+      MESSAGE_SEND_TOOL.name,
+      ORDER_CANCEL_PROPOSE_TOOL.name,
+      ORDER_UPDATE_ADDRESS_PROPOSE_TOOL.name,
+      RETURN_PROPOSE_TOOL.name,
     ] as string[]
     const definition = AGENT_TOOL_REGISTRY[action.tool_name]
     if (

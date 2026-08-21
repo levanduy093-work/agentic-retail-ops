@@ -83,3 +83,79 @@ export function toOrderReadOutput(order: OrderDetailDTO): OrderReadOutput {
     version: order.version,
   })
 }
+
+export const OrderSearchItemSchema = z.strictObject({
+  id: z.string(),
+  product_title: z.string(),
+  quantity: z.number().int().positive(),
+  thumbnail: z.string().nullable(),
+  unit_price: z.number(),
+  variant_title: z.string().nullable(),
+})
+
+export const OrderSearchSummarySchema = z.strictObject({
+  canceled_at: z.string().datetime().nullable(),
+  created_at: z.string().datetime(),
+  currency_code: z.string(),
+  customer_id: z.string().nullable(),
+  display_id: z.number().int(),
+  email: z.string().nullable(),
+  fulfillment_status: z.string(),
+  items: z.array(OrderSearchItemSchema),
+  order_id: z.string(),
+  order_status: z.string(),
+  payment_status: z.string(),
+  shipping_address: z
+    .strictObject({
+      address_1: z.string().nullable(),
+      city: z.string().nullable(),
+      first_name: z.string().nullable(),
+      last_name: z.string().nullable(),
+      phone: z.string().nullable(),
+      province: z.string().nullable(),
+    })
+    .nullable(),
+  total: z.number(),
+})
+
+export const OrderSearchInput = z.strictObject({
+  customer_id: z.string().trim().min(1).optional(),
+  display_id: z.number().int().positive().optional(),
+  email: z.string().trim().min(3).optional(),
+  limit: z.number().int().min(1).max(10).default(5),
+  phone: z.string().trim().min(6).max(20).optional(),
+  query: z.string().trim().min(1).max(100).optional(),
+})
+
+export const OrderSearchOutput = z.strictObject({
+  orders: z.array(OrderSearchSummarySchema),
+  total_count: z.number().int().nonnegative(),
+})
+
+export type OrderSearchInput = z.infer<typeof OrderSearchInput>
+export type OrderSearchOutput = z.infer<typeof OrderSearchOutput>
+export type OrderSearchSummary = z.infer<typeof OrderSearchSummarySchema>
+
+export const ORDER_SEARCH_TOOL = defineAgentTool({
+  approval_required: false,
+  audit_fields: ["phone", "email", "display_id", "customer_id", "query"],
+  description:
+    "Search and locate customer orders by phone number, email address, customer name, display ID, or product keywords.",
+  error_codes: ["INVALID_TOOL_INPUT", "ORDER_SEARCH_FAILED"],
+  idempotency: "NOT_REQUIRED",
+  input_schema: OrderSearchInput,
+  kind: "READ",
+  name: "order.search",
+  output_schema: OrderSearchOutput,
+  permission: "agent_order:read",
+  required_role: null,
+  retry: {
+    backoff: "EXPONENTIAL",
+    base_delay_ms: 250,
+    max_attempts: 2,
+    max_delay_ms: 1_000,
+  },
+  risk_level: "READ_ONLY",
+  timeout_ms: 5_000,
+  version: "1.0.0",
+})

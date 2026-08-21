@@ -40,12 +40,16 @@ export type CustomerSupportToolLoopResult = {
 export function runCustomerSupportReadToolLoop(input: {
   catalog: CustomerCatalogSnapshot
   question: string
+  recent_messages?: Array<{ body: string; direction?: string }>
 }): CustomerSupportToolLoopResult {
   if (input.catalog.status !== "READY") {
     return { catalog: input.catalog, trace: [] }
   }
 
-  const preferences = extractCustomerProductPreferences(input.question)
+  const preferences = extractCustomerProductPreferences(
+    input.question,
+    input.recent_messages
+  )
   const filterInput = {
     max_price: preferences.budget_max,
     query: preferences.product_query ?? input.question.slice(0, 160),

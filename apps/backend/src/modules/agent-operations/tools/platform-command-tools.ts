@@ -135,6 +135,30 @@ export const ReturnProposeInput = z.strictObject({
   requested_resolution: z.enum(["EXCHANGE", "REFUND", "RETURN"]),
 })
 
+export const OrderCancelProposeInput = z.strictObject({
+  conversation_id: z.string().trim().min(1),
+  customer_confirmation_message_id: z.string().trim().min(1),
+  order_code: z
+    .union([z.string().trim().regex(/^\d{1,12}$/), z.number().int().positive()])
+    .transform((value) => Number(value)),
+  reason: z.string().trim().min(5).max(2_000),
+})
+
+export const OrderUpdateAddressProposeInput = z.strictObject({
+  address_1: z.string().trim().min(3).max(255),
+  city: z.string().trim().min(2).max(100),
+  conversation_id: z.string().trim().min(1),
+  customer_confirmation_message_id: z.string().trim().min(1),
+  first_name: z.string().trim().min(1).max(100).optional(),
+  last_name: z.string().trim().min(1).max(100).optional(),
+  order_code: z
+    .union([z.string().trim().regex(/^\d{1,12}$/), z.number().int().positive()])
+    .transform((value) => Number(value)),
+  phone: z.string().trim().min(6).max(20).optional(),
+  province: z.string().trim().min(2).max(100).optional(),
+  reason: z.string().trim().min(5).max(2_000),
+})
+
 export const CartHandoffSendInput = z.strictObject({
   body: z.string().trim().min(1).max(4_000),
   cart_id: z.string().trim().min(1),
@@ -163,6 +187,28 @@ const CartHandoffSendOutput = z.union([
 ])
 
 const ReturnProposeOutput = z.union([
+  z.strictObject({
+    duplicate: z.boolean(),
+    incident_id: z.string(),
+    outcome: z.literal("SUCCEEDED"),
+    status: z.literal("PENDING_HUMAN_REVIEW"),
+    task_id: z.string(),
+  }),
+  CommandConflict,
+])
+
+const OrderCancelProposeOutput = z.union([
+  z.strictObject({
+    duplicate: z.boolean(),
+    incident_id: z.string(),
+    outcome: z.literal("SUCCEEDED"),
+    status: z.literal("PENDING_HUMAN_REVIEW"),
+    task_id: z.string(),
+  }),
+  CommandConflict,
+])
+
+const OrderUpdateAddressProposeOutput = z.union([
   z.strictObject({
     duplicate: z.boolean(),
     incident_id: z.string(),
@@ -329,6 +375,56 @@ export const RETURN_PROPOSE_TOOL = defineAgentTool({
   risk_level: "MEDIUM",
 })
 
+export const ORDER_CANCEL_PROPOSE_TOOL = defineAgentTool({
+  ...commandDefaults,
+  approval_required: false,
+  audit_fields: [
+    "conversation_id",
+    "customer_confirmation_message_id",
+    "order_code",
+    "reason",
+  ],
+  description:
+    "Create a human-review cancellation proposal for a verified customer's own unfulfilled order. It never cancels an order autonomously.",
+  error_codes: [
+    "ACTION_GATE_REJECTED",
+    "CUSTOMER_ORDER_NOT_FOUND",
+    "ORDER_CANCELLATION_REVIEW_REQUIRED",
+  ],
+  input_schema: OrderCancelProposeInput,
+  name: "order.cancel-propose",
+  output_schema: OrderCancelProposeOutput,
+  permission: "agent_task:create",
+  required_role: null,
+  risk_level: "MEDIUM",
+})
+
+export const ORDER_UPDATE_ADDRESS_PROPOSE_TOOL = defineAgentTool({
+  ...commandDefaults,
+  approval_required: false,
+  audit_fields: [
+    "conversation_id",
+    "customer_confirmation_message_id",
+    "order_code",
+    "address_1",
+    "city",
+    "reason",
+  ],
+  description:
+    "Create a human-review shipping address update proposal for a verified customer's own unfulfilled order. It never modifies order address autonomously.",
+  error_codes: [
+    "ACTION_GATE_REJECTED",
+    "CUSTOMER_ORDER_NOT_FOUND",
+    "ORDER_ADDRESS_UPDATE_REVIEW_REQUIRED",
+  ],
+  input_schema: OrderUpdateAddressProposeInput,
+  name: "order.update-address-propose",
+  output_schema: OrderUpdateAddressProposeOutput,
+  permission: "agent_task:create",
+  required_role: null,
+  risk_level: "MEDIUM",
+})
+
 export const CART_HANDOFF_SEND_TOOL = defineAgentTool({
   ...commandDefaults,
   approval_required: false,
@@ -356,4 +452,6 @@ export type PlatformCommandOutput = z.infer<
   | typeof DraftCartCreateOutput
   | typeof CartHandoffSendOutput
   | typeof ReturnProposeOutput
+  | typeof OrderCancelProposeOutput
+  | typeof OrderUpdateAddressProposeOutput
 >

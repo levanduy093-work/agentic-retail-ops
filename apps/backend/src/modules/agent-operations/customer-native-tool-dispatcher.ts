@@ -5,7 +5,7 @@ import { executeCatalogRead } from "./catalog-read-runtime"
 import { executeCatalogRealtimeStockCheck } from "./catalog-realtime-stock-runtime"
 import { executeFulfillmentRead } from "./fulfillment-read-runtime"
 import { ModelToolCall, ToolDefinition } from "./model-gateway"
-import { executeOrderRead } from "./order-read-runtime"
+import { executeOrderRead, executeOrderSearch } from "./order-read-runtime"
 import { executeKnowledgeSearchTool } from "./read-tool-runtime"
 import { CustomerOrderLookup } from "./customer-order-lookup"
 import {
@@ -14,10 +14,12 @@ import {
   CatalogRealtimeStockInput,
 } from "./tools/catalog-tools"
 import { KNOWLEDGE_SEARCH_TOOL } from "./tools/platform-read-tools"
-import { ORDER_READ_TOOL } from "./tools/order-tools"
+import { ORDER_READ_TOOL, ORDER_SEARCH_TOOL } from "./tools/order-tools"
 import { FULFILLMENT_READ_TOOL } from "./tools/fulfillment-tools"
 import {
   DraftCartCreateInput,
+  OrderCancelProposeInput,
+  OrderUpdateAddressProposeInput,
   ReturnProposeInput,
 } from "./tools/platform-command-tools"
 import type {
@@ -39,12 +41,34 @@ const NativeOrderStatusInput = z.strictObject({
     .transform((value) => Number(value)),
 })
 
+const NativeOrderSearchInput = z.strictObject({
+  email: z.string().trim().min(3).optional(),
+  phone: z.string().trim().min(6).max(20).optional(),
+  query: z.string().trim().min(1).max(100).optional(),
+})
+
 const NativeDraftCartProposalInput = DraftCartCreateInput
 const NativeReturnProposalInput = ReturnProposeInput
+const NativeOrderCancelProposalInput = OrderCancelProposeInput
+const NativeOrderUpdateAddressProposalInput = OrderUpdateAddressProposeInput
 const NativeRealtimeStockInput = CatalogRealtimeStockInput
 const NativeDeliveryStatusInput = NativeOrderStatusInput
 
 export const CUSTOMER_SUPPORT_NATIVE_TOOLS: ToolDefinition[] = [
+  {
+    description:
+      "Search and locate customer orders by phone number, email address, customer name, or keywords. Use this whenever the customer does not have or does not remember their numeric order code.",
+    name: "search_orders",
+    parameters: {
+      additionalProperties: false,
+      properties: {
+        email: { description: "Customer email used for the order.", type: "string" },
+        phone: { description: "Customer phone number used for the order.", type: "string" },
+        query: { description: "Customer name or product keyword.", type: "string" },
+      },
+      type: "object",
+    },
+  },
   {
     description:
       "Search the live published product catalog. Use this before recommending a product or promising availability.",
@@ -80,6 +104,56 @@ export const CUSTOMER_SUPPORT_NATIVE_TOOLS: ToolDefinition[] = [
         "order_code",
         "reason",
         "requested_resolution",
+      ],
+      type: "object",
+    },
+  },
+  {
+    description:
+      "Create a human-review proposal to cancel an authenticated customer's unfulfilled order. Use only after the current customer explicitly requests cancellation and gives the order code. This never cancels an order autonomously.",
+    name: "propose_order_cancellation",
+    parameters: {
+      additionalProperties: false,
+      properties: {
+        conversation_id: { type: "string" },
+        customer_confirmation_message_id: { type: "string" },
+        order_code: { type: "string" },
+        reason: { type: "string" },
+      },
+      required: [
+        "conversation_id",
+        "customer_confirmation_message_id",
+        "order_code",
+        "reason",
+      ],
+      type: "object",
+    },
+  },
+  {
+    description:
+      "Create a human-review proposal to update the shipping address for an authenticated customer's unfulfilled order before delivery dispatch. Use only after the current customer explicitly provides the new address details.",
+    name: "propose_address_change",
+    parameters: {
+      additionalProperties: false,
+      properties: {
+        address_1: { type: "string" },
+        city: { type: "string" },
+        conversation_id: { type: "string" },
+        customer_confirmation_message_id: { type: "string" },
+        first_name: { type: "string" },
+        last_name: { type: "string" },
+        order_code: { type: "string" },
+        phone: { type: "string" },
+        province: { type: "string" },
+        reason: { type: "string" },
+      },
+      required: [
+        "address_1",
+        "city",
+        "conversation_id",
+        "customer_confirmation_message_id",
+        "order_code",
+        "reason",
       ],
       type: "object",
     },
@@ -195,6 +269,16 @@ type CustomerSupportNativeToolService = {
     recommendation: { id: string } | null
   }>
   proposeCustomerReturnReview(input: Record<string, unknown>): Promise<{
+    duplicate: boolean
+    incident: { id: string } | null
+    task: { id: string } | null
+  }>
+  proposeCustomerOrderCancellation(input: Record<string, unknown>): Promise<{
+    duplicate: boolean
+    incident: { id: string } | null
+    task: { id: string } | null
+  }>
+  proposeCustomerAddressChange(input: Record<string, unknown>): Promise<{
     duplicate: boolean
     incident: { id: string } | null
     task: { id: string } | null
@@ -348,6 +432,35 @@ export function createCustomerSupportNativeToolDispatcher(
         },
         tool_name: KNOWLEDGE_SEARCH_TOOL.name,
         tool_version: KNOWLEDGE_SEARCH_TOOL.version,
+      })
+      return output
+    }
+
+    if (call.name === "search_orders") {
+      const parsed = NativeOrderSearchInput.parse(call.arguments)
+      const searchResult = await executeOrderSearch(
+        context.container,
+        {
+          customer_id: context.customer_id ?? undefined,
+          email: parsed.email,
+          limit: 5,
+          phone: parsed.phone,
+          query: parsed.query,
+        },
+        "customer-support-agent"
+      )
+      const output = searchResult.output
+      await context.service.recordCustomerReadToolCall({
+        conversation_id: context.conversation_id,
+        inbound_message_id: context.inbound_message_id,
+        input: searchResult.input,
+        output: {
+          order_count: output.orders.length,
+          order_ids: output.orders.map((o) => o.order_id),
+          total_count: output.total_count,
+        },
+        tool_name: ORDER_SEARCH_TOOL.name,
+        tool_version: ORDER_SEARCH_TOOL.version,
       })
       return output
     }
@@ -519,6 +632,46 @@ export function createCustomerSupportNativeToolDispatcher(
         )
       }
       const proposal = await context.service.proposeCustomerReturnReview(parsed)
+      return {
+        duplicate: proposal.duplicate,
+        incident_id: proposal.incident?.id ?? null,
+        outcome: "PENDING_HUMAN_REVIEW",
+        task_id: proposal.task?.id ?? null,
+      }
+    }
+
+    if (call.name === "propose_order_cancellation") {
+      const parsed = NativeOrderCancelProposalInput.parse(call.arguments)
+      if (
+        parsed.conversation_id !== context.conversation_id ||
+        parsed.customer_confirmation_message_id !== context.inbound_message_id
+      ) {
+        throw new MedusaError(
+          MedusaError.Types.NOT_ALLOWED,
+          "Cancellation proposals must use the current conversation and inbound customer request."
+        )
+      }
+      const proposal = await context.service.proposeCustomerOrderCancellation(parsed)
+      return {
+        duplicate: proposal.duplicate,
+        incident_id: proposal.incident?.id ?? null,
+        outcome: "PENDING_HUMAN_REVIEW",
+        task_id: proposal.task?.id ?? null,
+      }
+    }
+
+    if (call.name === "propose_address_change") {
+      const parsed = NativeOrderUpdateAddressProposalInput.parse(call.arguments)
+      if (
+        parsed.conversation_id !== context.conversation_id ||
+        parsed.customer_confirmation_message_id !== context.inbound_message_id
+      ) {
+        throw new MedusaError(
+          MedusaError.Types.NOT_ALLOWED,
+          "Address change proposals must use the current conversation and inbound customer request."
+        )
+      }
+      const proposal = await context.service.proposeCustomerAddressChange(parsed)
       return {
         duplicate: proposal.duplicate,
         incident_id: proposal.incident?.id ?? null,

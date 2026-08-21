@@ -824,7 +824,10 @@ export const CustomerSupportContent = ({
         <Container className="p-0">
           <div className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-y-1">
-              <Heading level="h1">{t("supportDesk.title")}</Heading>
+              <div className="flex items-center gap-x-2">
+                <Heading level="h1">{t("supportDesk.title")}</Heading>
+                <Badge color="green" size="small">Native Loop Dispatch</Badge>
+              </div>
               <Text
                 size="small"
                 leading="compact"
@@ -833,15 +836,34 @@ export const CustomerSupportContent = ({
                 {t("supportDesk.subtitle")}
               </Text>
             </div>
-            {window.location.hostname === "localhost" && (
-              <Button
-                size="small"
-                variant="secondary"
-                onClick={() => setSimulatorOpen(true)}
-              >
-                {t("supportDesk.openSimulator")}
-              </Button>
-            )}
+            <div className="flex items-center gap-x-3">
+              <div className="flex items-center gap-x-2 text-xs text-ui-fg-subtle">
+                <div className="flex flex-col items-end">
+                  <span className="font-medium text-ui-fg-base">
+                    {allConversations.length} hội thoại
+                  </span>
+                  <span>{attentionConversations.length} cần chú ý</span>
+                </div>
+                <div className="h-6 w-px bg-ui-border-base" />
+                <div className="flex flex-col items-start">
+                  <span className="font-semibold text-ui-fg-interactive">
+                    {allConversations.length > 0
+                      ? `${Math.round(((allConversations.length - attentionConversations.length) / allConversations.length) * 100)}%`
+                      : "100%"}
+                  </span>
+                  <span>Containment</span>
+                </div>
+              </div>
+              {window.location.hostname === "localhost" && (
+                <Button
+                  size="small"
+                  variant="secondary"
+                  onClick={() => setSimulatorOpen(true)}
+                >
+                  {t("supportDesk.openSimulator")}
+                </Button>
+              )}
+            </div>
           </div>
         </Container>
       )}

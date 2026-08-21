@@ -51,6 +51,8 @@
     "agent:verify-clear-conversation-history": "medusa exec ./src/scripts/verify-customer-conversation-history-clear.ts",
     "agent:delete-conversations": "medusa exec ./src/scripts/delete-all-conversations.ts",
     "agent:verify-ai-provider-vault": "medusa exec ./src/scripts/verify-ai-provider-vault.ts",
+    "agent:verify-omnichannel": "medusa exec ./src/scripts/verify-zalo-messenger-channels.ts",
+    "agent:worker": "medusa exec ./src/scripts/run-agent-worker.ts",
     "agent:check-config": "medusa exec ./src/scripts/check-agent-runtime-configuration.ts",
     "verify:ghn": "medusa exec ./src/scripts/verify-ghn-module.ts",
     "verify:payos": "medusa exec ./src/scripts/verify-payos-module.ts",

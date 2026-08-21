@@ -35,6 +35,8 @@ import {
   INCIDENT_UPDATE_TOOL,
   KNOWLEDGE_PROPOSE_TOOL,
   MESSAGE_SEND_TOOL,
+  ORDER_CANCEL_PROPOSE_TOOL,
+  ORDER_UPDATE_ADDRESS_PROPOSE_TOOL,
   RETURN_PROPOSE_TOOL,
 } from "../../modules/agent-operations/tools/platform-command-tools"
 
@@ -215,6 +217,20 @@ const bootstrapAgentPlatformStep = createStep(
         name: "Customer return review proposal",
         policy_key: "return.propose.customer-verified",
         tool: RETURN_PROPOSE_TOOL,
+      },
+      {
+        description:
+          "Authorized agents may create a human-review proposal to cancel a verified customer's unfulfilled order.",
+        name: "Customer order cancellation proposal",
+        policy_key: "order.cancel-propose.customer-verified",
+        tool: ORDER_CANCEL_PROPOSE_TOOL,
+      },
+      {
+        description:
+          "Authorized agents may create a human-review proposal to update the shipping address of a verified customer's unfulfilled order.",
+        name: "Customer order address update proposal",
+        policy_key: "order.update-address-propose.customer-verified",
+        tool: ORDER_UPDATE_ADDRESS_PROPOSE_TOOL,
       },
       {
         description:

@@ -70,7 +70,25 @@ describe("customer product advisor", () => {
     ).toBe("áo thun")
     expect(
       extractCustomerProductPreferences("Mình muốn size M khoảng 300 áo thun")
-    ).toEqual({ budget_max: 300000, product_query: "áo thun", size: "M" })
+    ).toEqual({
+      budget_max: 300000,
+      color: undefined,
+      product_query: "áo thun",
+      size: "M",
+    })
+    expect(
+      extractCustomerProductPreferences("Bao nhiêu cũng được", [
+        {
+          body: "Mình cần áo polo màu đen, size M",
+          direction: "INBOUND",
+        },
+      ])
+    ).toEqual({
+      budget_flexible: true,
+      color: "đen",
+      product_query: "áo polo",
+      size: "M",
+    })
     expect(
       extractRecentCatalogSearchQuery([
         { body: "Mẫu đó còn size M không?", direction: "INBOUND" },
@@ -82,6 +100,24 @@ describe("customer product advisor", () => {
     ).toBe("áo khoác active move")
     expect(isCatalogOverviewRequest("Sốp bán gì thế?")).toBe(true)
     expect(isCatalogOverviewRequest("Tư vấn áo nam dưới 300 nghìn")).toBe(false)
+  })
+
+  it("does not repeat questions when customer specifies flexible budget across turns", () => {
+    const preferences = extractCustomerProductPreferences("Bao nhiêu cũng được", [
+      {
+        body: "Mình cần áo polo màu đen, size M",
+        direction: "INBOUND",
+      },
+    ])
+    const output = buildProductAdvisorFallback(
+      catalog,
+      "vi",
+      "Bao nhiêu cũng được",
+      preferences
+    )
+
+    expect(output.follow_up_question).not.toMatch(/loại đồ|size|khoảng ngân sách/iu)
+    expect(output.follow_up_question).toContain("màu")
   })
 
   it("renders verified name, price and availability from the live snapshot", () => {

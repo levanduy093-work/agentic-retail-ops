@@ -38,7 +38,10 @@ import {
   INCIDENT_UPDATE_TOOL,
   KNOWLEDGE_PROPOSE_TOOL,
   MESSAGE_SEND_TOOL,
+  ORDER_CANCEL_PROPOSE_TOOL,
+  ORDER_UPDATE_ADDRESS_PROPOSE_TOOL,
   PlatformCommandOutput,
+  RETURN_PROPOSE_TOOL,
 } from "../../modules/agent-operations/tools/platform-command-tools"
 import { ExecuteAgentActionInput } from "../../modules/agent-operations/types"
 
@@ -58,6 +61,9 @@ export const PLATFORM_COMMAND_TOOL_NAMES = [
   INCIDENT_UPDATE_TOOL.name,
   KNOWLEDGE_PROPOSE_TOOL.name,
   MESSAGE_SEND_TOOL.name,
+  ORDER_CANCEL_PROPOSE_TOOL.name,
+  ORDER_UPDATE_ADDRESS_PROPOSE_TOOL.name,
+  RETURN_PROPOSE_TOOL.name,
 ] as const
 
 type ClaimResult = Awaited<

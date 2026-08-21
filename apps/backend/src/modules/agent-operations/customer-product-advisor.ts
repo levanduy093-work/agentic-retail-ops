@@ -14,7 +14,9 @@ export type CustomerCatalogSnapshot =
     }
 
 export type CustomerProductPreferences = {
+  budget_flexible?: boolean
   budget_max?: number
+  color?: string
   product_query?: string
   size?: string
 }
@@ -114,7 +116,7 @@ const shoppingRequestPattern =
   /(?:cần|muốn|định|tính)\s+(?:mua|tìm|xem|chọn)(?:\s+(?:đồ|quần áo|trang phục))?/iu
 
 const productDiscoveryFollowUpPattern =
-  /(?:năng động|lịch sự|thoải mái|cá tính|điệu đà|sporty|smart|relaxed|size\s*[a-z0-9]+|ngân sách|tầm\s*\d+)/iu
+  /(?:năng động|lịch sự|thoải mái|cá tính|điệu đà|sporty|smart|relaxed|size\s*[a-z0-9]+|ngân sách|tầm\s*\d+|bao nhiêu cũng (?:được|đc)|không giới hạn|sao cũng (?:được|đc)|tùy)/iu
 
 export function isPotentialProductRequest(message: string) {
   const normalized = message.normalize("NFKC").toLocaleLowerCase()
@@ -146,24 +148,65 @@ function normalizeProductPreferenceText(message: string) {
     .trim()
 }
 
-function extractBudgetMaximum(normalized: string) {
+const colorTerms = [
+  "đen",
+  "trắng",
+  "xanh",
+  "đỏ",
+  "vàng",
+  "hồng",
+  "xám",
+  "ghi",
+  "be",
+  "nâu",
+  "tím",
+  "cam",
+  "black",
+  "white",
+  "blue",
+  "navy",
+  "gray",
+  "grey",
+  "beige",
+  "pink",
+]
+
+function extractRequestedColor(normalized: string) {
+  const match = normalized.match(
+    new RegExp(`\\b(?:màu|tone|gam màu)?\\s*(${colorTerms.join("|")})\\b`, "iu")
+  )
+  return match?.[1]?.toLocaleLowerCase()
+}
+
+function extractBudgetPreference(normalized: string): {
+  budget_flexible?: boolean
+  budget_max?: number
+} {
+  const isFlexible =
+    /(?:bao nhiêu cũng (?:được|đc)|không giới hạn|sao cũng (?:được|đc)|tùy ý|tùy shop|tùy sốp|thoải mái|bnhieu cũng (?:được|đc)|bn cũng (?:được|đc)|no limit|any budget|unlimited)/iu.test(
+      normalized
+    )
+  if (isFlexible) {
+    return { budget_flexible: true }
+  }
+
   const match = normalized.match(
     /(?:ngân sách|tầm|khoảng|dưới|tối đa|không quá)\s*(\d{1,3}(?:[.,]\d{3})?|\d+(?:[.,]\d+)?)\s*(triệu|tr|nghìn|ngàn|k)?/iu
   )
-  if (!match) return undefined
+  if (!match) return {}
 
   const numericText = match[1]
   const compactDigits = numericText.replace(/[^\d]/gu, "")
   const numericValue = Number(compactDigits)
-  if (!Number.isFinite(numericValue) || numericValue <= 0) return undefined
+  if (!Number.isFinite(numericValue) || numericValue <= 0) return {}
 
   const unit = match[2]?.toLocaleLowerCase()
-  if (unit === "triệu" || unit === "tr") return numericValue * 1_000_000
+  if (unit === "triệu" || unit === "tr") return { budget_max: numericValue * 1_000_000 }
   if (unit === "nghìn" || unit === "ngàn" || unit === "k") {
-    return numericValue * 1_000
+    return { budget_max: numericValue * 1_000 }
   }
-  if (/[.,]\d{3}$/u.test(numericText)) return numericValue
-  return numericValue < 1_000 ? numericValue * 1_000 : numericValue
+  if (/[.,]\d{3}$/u.test(numericText)) return { budget_max: numericValue }
+  return { budget_max: numericValue < 1_000 ? numericValue * 1_000 : numericValue }
 }
 
 function extractRequestedSize(normalized: string) {
@@ -219,6 +262,7 @@ function extractProductSearchPhrase(normalized: string) {
     "cỡ",
     "khoảng",
     "dưới",
+    "màu",
   ])
   const startIndex = tokens.findIndex((token) => productTerms.has(token))
   if (startIndex < 0) return undefined
@@ -232,15 +276,56 @@ function extractProductSearchPhrase(normalized: string) {
   return phrase.length ? phrase.join(" ") : undefined
 }
 
-export function extractCustomerProductPreferences(
+export function extractSingleMessageProductPreferences(
   message: string
 ): CustomerProductPreferences {
   const normalized = normalizeProductPreferenceText(message)
+  const budget = extractBudgetPreference(normalized)
   return {
-    budget_max: extractBudgetMaximum(normalized),
+    ...budget,
+    color: extractRequestedColor(normalized),
     product_query: extractProductSearchPhrase(normalized),
     size: extractRequestedSize(normalized),
   }
+}
+
+export function extractCustomerProductPreferences(
+  message: string,
+  recentMessages?: Array<{ body: string; direction?: string }>
+): CustomerProductPreferences {
+  const current = extractSingleMessageProductPreferences(message)
+  if (!recentMessages || !recentMessages.length) {
+    return current
+  }
+
+  const accumulated: CustomerProductPreferences = { ...current }
+  for (let i = recentMessages.length - 1; i >= 0; i--) {
+    const item = recentMessages[i]
+    if (item.direction && item.direction !== "INBOUND") continue
+    const historical = extractSingleMessageProductPreferences(item.body)
+
+    if (!accumulated.product_query && historical.product_query) {
+      accumulated.product_query = historical.product_query
+    }
+    if (!accumulated.size && historical.size) {
+      accumulated.size = historical.size
+    }
+    if (!accumulated.color && historical.color) {
+      accumulated.color = historical.color
+    }
+    if (
+      accumulated.budget_max === undefined &&
+      accumulated.budget_flexible === undefined
+    ) {
+      if (historical.budget_max !== undefined) {
+        accumulated.budget_max = historical.budget_max
+      } else if (historical.budget_flexible) {
+        accumulated.budget_flexible = true
+      }
+    }
+  }
+
+  return accumulated
 }
 
 export function shouldReadCatalogForCustomerMessage(
@@ -349,24 +434,35 @@ export function isPublicCustomerUrl(value: string | null | undefined) {
   }
 }
 
-function buildDiscoveryQuestion(question: string, locale: "en" | "vi") {
+function formatMissingListVi(items: string[]): string {
+  if (items.length === 1) return items[0]
+  if (items.length === 2) return `${items[0]} và ${items[1]}`
+  return `${items.slice(0, -1).join(", ")} hoặc ${items[items.length - 1]}`
+}
+
+function buildDiscoveryQuestion(
+  question: string,
+  locale: "en" | "vi",
+  customPreferences?: CustomerProductPreferences
+) {
   const normalized = question.normalize("NFKC").toLocaleLowerCase()
-  const preferences = extractCustomerProductPreferences(question)
+  const preferences = customPreferences ?? extractCustomerProductPreferences(question)
   const advisor = vietnameseAdvisorReference(question)
   const seasonal = /(mùa đông|đồ đông|winter|giữ ấm|ấm)/iu.test(normalized)
+  const hasBudget = Boolean(preferences.budget_max || preferences.budget_flexible)
   if (locale === "vi") {
     const missing: string[] = []
     if (!preferences.product_query) {
       missing.push(seasonal ? "áo khoác, áo len hay quần dài" : "loại đồ")
     }
     if (!preferences.size) missing.push("size")
-    if (!preferences.budget_max) missing.push("khoảng ngân sách")
+    if (!hasBudget) missing.push("khoảng ngân sách")
     if (!missing.length) {
       return `Bạn muốn ưu tiên màu nào hoặc form mặc như ôm vừa, rộng rãi để ${advisor} lọc sát hơn ạ?`
     }
-    return `Bạn cho ${advisor} biết thêm ${missing.join(" và ")} để ${advisor} lọc mẫu phù hợp nhất nhé?`
+    return `Bạn cho ${advisor} biết thêm ${formatMissingListVi(missing)} để ${advisor} lọc mẫu phù hợp nhất nhé?`
   }
-  if (preferences.product_query && preferences.size && preferences.budget_max) {
+  if (preferences.product_query && preferences.size && hasBudget) {
     return "Do you prefer a color or fit, such as regular or relaxed, so I can narrow this down?"
   }
   return seasonal
@@ -450,8 +546,14 @@ function rankCatalogProducts(
         Number(
           left.variants.some((variant) => variant.availability === "IN_STOCK")
         ),
+      (left.variants[0]?.price ?? Number.MAX_SAFE_INTEGER) -
+        (right.variants[0]?.price ?? Number.MAX_SAFE_INTEGER),
     ]
-    return comparisons.find((comparison) => comparison !== 0) ?? 0
+
+    for (const comparison of comparisons) {
+      if (comparison !== 0) return comparison
+    }
+    return left.title.localeCompare(right.title)
   })
 }
 
@@ -491,12 +593,14 @@ export function buildCatalogOverviewReply(
   locale: "en" | "vi",
   question = ""
 ) {
-  if (catalog.status === "UNAVAILABLE") {
-    return formatProductAdvisorReply(
-      buildProductAdvisorFallback(catalog, locale, question),
-      catalog,
-      locale
-    )
+  if (catalog.status === "UNAVAILABLE" || !catalog.products.length) {
+    return {
+      body:
+        locale === "vi"
+          ? "Hiện tại bên mình có nhiều sản phẩm thời trang như áo thun, áo sơ mi, áo khoác và phụ kiện. Bạn muốn tìm đồ nam hay nữ, hoặc đang cần tìm mẫu cụ thể nào để mình hỗ trợ nhé?"
+          : "We carry tops, shirts, outerwear, and accessories. Are you looking for men's, women's, or a specific item?",
+      product_ids: [],
+    }
   }
   const categories = [
     ...new Set(
@@ -517,14 +621,15 @@ export function buildCatalogOverviewReply(
 export function buildProductAdvisorFallback(
   catalog: CustomerCatalogSnapshot,
   locale: "en" | "vi",
-  question = ""
+  question = "",
+  customPreferences?: CustomerProductPreferences
 ): ProductAdvisorModelResult {
-  const preferences = extractCustomerProductPreferences(question)
+  const preferences = customPreferences ?? extractCustomerProductPreferences(question)
   const advisor = vietnameseAdvisorReference(question)
   const advisorCapitalized = advisor === "sốp" ? "Sốp" : "Mình"
   if (catalog.status === "UNAVAILABLE") {
     return {
-      follow_up_question: buildDiscoveryQuestion(question, locale),
+      follow_up_question: buildDiscoveryQuestion(question, locale, preferences),
       intro:
         locale === "vi"
           ? `${advisorCapitalized} cần thêm một chút thông tin để chọn mẫu phù hợp cho bạn.`
@@ -534,7 +639,7 @@ export function buildProductAdvisorFallback(
   }
   if (!catalog.products.length) {
     return {
-      follow_up_question: buildDiscoveryQuestion(question, locale),
+      follow_up_question: buildDiscoveryQuestion(question, locale, preferences),
       intro:
         locale === "vi"
           ? `Dạ ${advisor} có nhiều mẫu thời trang đẹp và sẵn sàng tư vấn cho bạn đây ạ!`
@@ -550,6 +655,7 @@ export function buildProductAdvisorFallback(
         (variant) => variant.availability === "OUT_OF_STOCK"
       )
   )
+  const hasBudget = Boolean(preferences.budget_max || preferences.budget_flexible)
   return {
     follow_up_question:
       allManagedVariantsOutOfStock && locale === "vi"
@@ -557,8 +663,8 @@ export function buildProductAdvisorFallback(
         : allManagedVariantsOutOfStock
           ? "These items have no available stock right now. Which one should staff check for a restock update?"
           : locale === "vi"
-        ? preferences.product_query && preferences.size && preferences.budget_max
-          ? buildDiscoveryQuestion(question, locale)
+        ? preferences.product_query && preferences.size && hasBudget
+          ? buildDiscoveryQuestion(question, locale, preferences)
           : `Bạn thích mẫu nào, hoặc cho ${advisor} biết thêm nhu cầu để ${advisor} lọc kỹ hơn nhé?`
         : "Which one do you like, or what needs and budget should I narrow this down to?",
     intro:
@@ -629,7 +735,8 @@ export function resolveProductAdvisorModelOutput(
   output: ProductAdvisorModelResult,
   catalog: CustomerCatalogSnapshot,
   locale: "en" | "vi",
-  question = ""
+  question = "",
+  customPreferences?: CustomerProductPreferences
 ) {
   const availableIds = new Set(catalog.products.map((product) => product.id))
   const recommendations = output.recommendations.filter((recommendation) =>
@@ -652,11 +759,12 @@ export function resolveProductAdvisorModelOutput(
   const boundedRecommendations = allRecommendationsOutOfStock
     ? recommendations.slice(0, 2)
     : recommendations
-  const preferences = extractCustomerProductPreferences(question)
+  const preferences = customPreferences ?? extractCustomerProductPreferences(question)
+  const hasBudget = Boolean(preferences.budget_max || preferences.budget_flexible)
   const repeatsKnownPreference = Boolean(
     preferences.product_query &&
       preferences.size &&
-      preferences.budget_max &&
+      hasBudget &&
       output.follow_up_question &&
       /(?:loại đồ|size gì|size nào|ngân sách.*bao nhiêu|budget|what type of item|what size)/iu.test(
         output.follow_up_question
@@ -666,10 +774,10 @@ export function resolveProductAdvisorModelOutput(
     ? {
         ...output,
         follow_up_question: repeatsKnownPreference
-          ? buildDiscoveryQuestion(question, locale)
+          ? buildDiscoveryQuestion(question, locale, preferences)
           : output.follow_up_question,
         recommendations: boundedRecommendations,
       }
-    : buildProductAdvisorFallback(catalog, locale)
+    : buildProductAdvisorFallback(catalog, locale, question, preferences)
   return formatProductAdvisorReply(safeOutput, catalog, locale)
 }

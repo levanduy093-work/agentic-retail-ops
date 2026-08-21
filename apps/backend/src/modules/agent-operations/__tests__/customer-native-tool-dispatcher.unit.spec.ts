@@ -40,8 +40,11 @@ function createService() {
 describe("customer native tool dispatcher", () => {
   it("exposes bounded read tools plus governed cart and return proposals", () => {
     expect(CUSTOMER_SUPPORT_NATIVE_TOOLS.map((tool) => tool.name)).toEqual([
+      "search_orders",
       "search_catalog",
       "propose_return_review",
+      "propose_order_cancellation",
+      "propose_address_change",
       "check_realtime_stock",
       "search_knowledge_base",
       "check_order_status",
@@ -261,6 +264,76 @@ describe("customer native tool dispatcher", () => {
         conversation_id: "agconv_1",
         customer_confirmation_message_id: "agmsg_1",
         order_code: 1024,
+      })
+    )
+  })
+
+  it("dispatches search_orders by phone or email", async () => {
+    const service = createService()
+    const mockGraph = jest.fn().mockResolvedValue({
+      data: [
+        {
+          canceled_at: null,
+          created_at: new Date("2026-08-20T10:00:00Z"),
+          currency_code: "vnd",
+          customer_id: "cus_1",
+          display_id: 1005,
+          email: "customer@example.com",
+          fulfillment_status: "shipped",
+          id: "order_1005",
+          items: [
+            {
+              id: "item_1",
+              product_title: "Áo Polo Pima",
+              quantity: 1,
+              thumbnail: null,
+              unit_price: 299000,
+              variant_title: "Đen / Size M",
+            },
+          ],
+          payment_status: "captured",
+          shipping_address: {
+            phone: "0912345678",
+          },
+          status: "completed",
+          total: 299000,
+        },
+      ],
+      metadata: { count: 1 },
+    })
+
+    const container = {
+      resolve: jest.fn(() => ({ graph: mockGraph })),
+    } as any
+
+    const execute = createCustomerSupportNativeToolDispatcher({
+      container,
+      conversation_id: "agconv_1",
+      customer_id: "cus_1",
+      inbound_message_id: "agmsg_1",
+      locale: "vi",
+      service: service as never,
+      tenant_id: "tenant_default",
+    })
+
+    const result = await execute({
+      arguments: { phone: "0912345678" },
+      id: "call_search_order",
+      name: "search_orders",
+    })
+
+    expect(result).toMatchObject({
+      orders: [
+        expect.objectContaining({
+          display_id: 1005,
+          order_id: "order_1005",
+        }),
+      ],
+      total_count: 1,
+    })
+    expect(service.recordCustomerReadToolCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tool_name: "order.search",
       })
     )
   })
