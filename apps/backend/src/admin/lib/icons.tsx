@@ -535,3 +535,72 @@ export const MailIcon = React.forwardRef<SVGSVGElement, IconProps>(
 )
 MailIcon.displayName = "MailIcon"
 
+export const TikTokIcon = React.forwardRef<SVGSVGElement, IconProps>(
+  ({ className = "", size = 15, color = "currentColor", ...props }, ref) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+      ref={ref}
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        fill={color}
+        d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-5.201 1.743 2.895 2.895 0 0 1 2.312-4.639c.319 0 .628.051.916.147V9.427a6.34 6.34 0 0 0-.916-.067c-3.558 0-6.442 2.884-6.442 6.442 0 3.558 2.884 6.442 6.442 6.442 3.558 0 6.443-2.884 6.443-6.442V8.756a8.23 8.23 0 0 0 5.105 1.774V7.086a4.793 4.793 0 0 1-1.444-.4"
+      />
+    </svg>
+  )
+)
+export const BrainIcon = React.forwardRef<SVGSVGElement, IconProps>(
+  ({ className = "", size = 15, color = "currentColor", ...props }, ref) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      ref={ref}
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04z" />
+      <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04z" />
+    </svg>
+  )
+)
+BrainIcon.displayName = "BrainIcon"
+
+export const UserIcon = React.forwardRef<SVGSVGElement, IconProps>(
+  ({ className = "", size = 15, color = "currentColor", ...props }, ref) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      ref={ref}
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  )
+)
+UserIcon.displayName = "UserIcon"
+
+

@@ -42,6 +42,11 @@ import type {
   FacebookMessengerIdentity,
   FacebookStoredCredentialPayload
 } from "./facebook"
+import type {
+  TikTokChannelConfig,
+  TikTokChannelIdentity,
+  TikTokStoredCredentialPayload
+} from "./tiktok"
 import {
   createGoogleKnowledgeAccessToken,
   getGoogleKnowledgeOAuthPlatformStatus
@@ -175,8 +180,10 @@ import { VietnamAddressService } from "../ghn-fulfillment/services/vietnam-addre
 import { executeShippingEstimate } from "./shipping-estimate-runtime"
 import {
   buildCustomerIntentReply,
+  CustomerMessageIntent,
   CustomerMessageIntentModelOutput,
   CustomerMessageIntentResult,
+  CUSTOMER_MESSAGE_INTENTS,
   CUSTOMER_MESSAGE_INTENT_MAX_TOKENS,
   CUSTOMER_MESSAGE_INTENT_OUTPUT_SCHEMA,
   CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
@@ -300,19 +307,15 @@ import {
   buildConversationMemoryFallback,
   buildCustomerConversationContext,
   ConversationMemoryModelOutput,
-  CONVERSATION_MEMORY_MAX_TOKENS,
   CONVERSATION_MEMORY_OUTPUT_SCHEMA,
   CONVERSATION_MEMORY_PROMPT_KEY,
-  CONVERSATION_MEMORY_PROMPT_VERSION,
-  CONVERSATION_MEMORY_SYSTEM_PROMPT,
   CONVERSATION_MEMORY_TIMEOUT_MS,
   formatRelativeTime,
   analyzeConversationTimeGap,
   isSafeConversationMemoryOutput,
-  hasExplicitHistoricalCustomerReference,
   mergeConversationMemoryOutput,
-  startsExplicitNewProductTopic,
-  shouldRefreshConversationMemoryWithAi
+  shouldRefreshConversationMemoryWithAi,
+  shouldUseHistoricalCustomerProfile
 } from "./conversation-memory"
 import {
   addDays,
@@ -857,7 +860,17 @@ class AgentOperationsModuleService extends MedusaService({
         body: message.body.slice(0, 800),
         direction: message.direction as "INBOUND" | "OUTBOUND"
       }))
+    const conversationMetadata = (conversation.metadata ?? {}) as Record<string, unknown>
+    const customerName =
+      (typeof conversationMetadata.customer_name === "string" && conversationMetadata.customer_name.trim()) ||
+      (typeof conversationMetadata.sender_name === "string" && conversationMetadata.sender_name.trim()) ||
+      (conversation.title &&
+        !/^(Facebook|Telegram|Zalo|TikTok|Messenger|Chat)\s+[—–-]\s+\d+$/iu.test(conversation.title) &&
+        conversation.title.replace(/^(Facebook|Telegram|Zalo|TikTok|Messenger|Chat)\s+[—–-]\s+/iu, "").trim()) ||
+      null
+
     const safeInput = {
+      customer_name: customerName,
       previous_memory: existing
         ? {
             customer_facts: readMemoryItems(existing.customer_facts),
@@ -869,6 +882,7 @@ class AgentOperationsModuleService extends MedusaService({
       recent_messages: unsummarizedMessages
     }
     let output = buildConversationMemoryFallback({
+      customer_name: customerName,
       previous_customer_facts: existing ? readMemoryItems(existing.customer_facts) : [],
       previous_open_questions: existing ? readMemoryItems(existing.open_questions) : [],
       previous_resolved_topics: existing ? readMemoryItems(existing.resolved_topics) : [],
@@ -893,6 +907,10 @@ class AgentOperationsModuleService extends MedusaService({
             model: credential.model,
             provider: credential.provider
           })
+          const promptConfig = await this.getPromptConfiguration(
+            CONVERSATION_MEMORY_PROMPT_KEY,
+            sharedContext
+          )
           const attemptKey =
             `conversation-memory:${conversation.id}:${latestMessage.id}` +
             `:provider:${adapter.provider}`
@@ -921,7 +939,7 @@ class AgentOperationsModuleService extends MedusaService({
               input: redactModelInput(safeInput) as Record<string, unknown>,
               model: adapter.model,
               prompt_key: CONVERSATION_MEMORY_PROMPT_KEY,
-              prompt_version: CONVERSATION_MEMORY_PROMPT_VERSION,
+              prompt_version: promptConfig.version,
               provider: adapter.provider,
               redacted: true,
               started_at: startedAt,
@@ -933,11 +951,11 @@ class AgentOperationsModuleService extends MedusaService({
             const generated = await adapter.invoke({
               agent_id: "conversation-memory-agent",
               input: safeInput,
-              max_tokens: CONVERSATION_MEMORY_MAX_TOKENS,
+              max_tokens: promptConfig.max_tokens,
               output_schema: CONVERSATION_MEMORY_OUTPUT_SCHEMA,
               prompt_key: CONVERSATION_MEMORY_PROMPT_KEY,
-              prompt_version: CONVERSATION_MEMORY_PROMPT_VERSION,
-              system_prompt: CONVERSATION_MEMORY_SYSTEM_PROMPT,
+              prompt_version: promptConfig.version,
+              system_prompt: promptConfig.system_prompt,
               timeout_ms: CONVERSATION_MEMORY_TIMEOUT_MS
             })
             const parsedOutput = ConversationMemoryModelOutput.parse(generated)
@@ -1466,6 +1484,30 @@ class AgentOperationsModuleService extends MedusaService({
     const fbSecretHint = fbCred?.secret_hint ?? null
     const fbPublicUrl = fbCred?.public_base_url ?? fbConfig?.webhook_url ?? null
 
+    const ttConn =
+      connections.find(
+        (c) => c.channel === "TIKTOK" && c.account_ref === "primary" && c.status === "ACTIVE"
+      ) ??
+      connections.find((c) => c.channel === "TIKTOK" && c.account_ref === "primary") ??
+      connections.find((c) => c.channel === "TIKTOK" && c.status === "ACTIVE") ??
+      connections.find((c) => c.channel === "TIKTOK")
+
+    const ttCred =
+      credentials.find((c) => c.channel === "TIKTOK" && c.account_ref === "primary") ??
+      credentials.find((c) => c.channel === "TIKTOK")
+
+    const ttConfig = ttConn?.config as
+      | (TikTokChannelConfig & {
+          account_avatar?: string
+          account_id?: string
+          account_name?: string
+          client_key?: string
+        })
+      | undefined
+
+    const ttSecretHint = ttCred?.secret_hint ?? null
+    const ttPublicUrl = ttCred?.public_base_url ?? ttConfig?.webhook_url ?? null
+
     return [
       {
         account_ref: telegramConn?.account_ref ?? "primary",
@@ -1514,6 +1556,22 @@ class AgentOperationsModuleService extends MedusaService({
         status: fbConn?.status ?? "DISABLED",
         updated_at: fbCred?.updated_at ?? fbConn?.updated_at ?? null,
         webhook_url: fbConfig?.webhook_url ?? null
+      },
+      {
+        account_ref: ttConn?.account_ref ?? "primary",
+        allow_unmapped_users: ttConfig?.allow_unmapped_users ?? true,
+        bot_id: ttConfig?.account_id ?? null,
+        bot_username: ttConfig?.account_name ?? null,
+        channel: "TIKTOK" as const,
+        configured: Boolean(ttCred),
+        identities: ttConfig?.identities ?? [],
+        oa_avatar: ttConfig?.account_avatar ?? null,
+        public_base_url: ttPublicUrl,
+        secret_hint: ttSecretHint,
+        security: ttConfig?.security ?? null,
+        status: ttConn?.status ?? "DISABLED",
+        updated_at: ttCred?.updated_at ?? ttConn?.updated_at ?? null,
+        webhook_url: ttConfig?.webhook_url ?? null
       }
     ]
   }
@@ -1611,6 +1669,46 @@ class AgentOperationsModuleService extends MedusaService({
               return parsed.access_token
             }
           }
+          return parsed.access_token || raw
+        } catch {
+          return raw
+        }
+      }
+    }
+
+    if (connection.channel === "TIKTOK") {
+      let raw = ""
+      if (connection.secret_ref && isVaultSecretReference(connection.secret_ref)) {
+        const credId = parseVaultSecretReference(connection.secret_ref)
+        if (credId) {
+          const credential = await this.retrieveAgentChannelCredential(credId)
+          raw = decryptConnectorSecret({
+            encrypted_secret: credential.encrypted_secret,
+            encryption_iv: credential.encryption_iv,
+            encryption_tag: credential.encryption_tag,
+            key_version: credential.key_version
+          })
+        }
+      }
+      if (!raw) {
+        const credentials = await this.listAgentChannelCredentials({
+          account_ref: connection.account_ref ?? "primary",
+          channel: "TIKTOK",
+          tenant_id: connection.tenant_id ?? "default"
+        })
+        if (credentials.length > 0) {
+          raw = decryptConnectorSecret({
+            encrypted_secret: credentials[0].encrypted_secret,
+            encryption_iv: credentials[0].encryption_iv,
+            encryption_tag: credentials[0].encryption_tag,
+            key_version: credentials[0].key_version
+          })
+        }
+      }
+
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as TikTokStoredCredentialPayload
           return parsed.access_token || raw
         } catch {
           return raw
@@ -2763,6 +2861,344 @@ class AgentOperationsModuleService extends MedusaService({
     return { disconnected: true }
   }
 
+  async testTikTokAccount(accessToken: string, apiBaseUrl = "https://open.tiktokapis.com") {
+    if (!accessToken?.trim()) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "TikTok Access Token is required."
+      )
+    }
+    const cleanToken = accessToken.trim()
+    const baseUrl = apiBaseUrl.replace(/\/$/, "")
+
+    const isShop = baseUrl.includes("tiktokshop") || baseUrl.includes("seller")
+
+    if (isShop) {
+      try {
+        const res = await fetch(`${baseUrl}/api/shop/get_authorized_shop`, {
+          headers: {
+            "access-token": cleanToken,
+            "content-type": "application/json",
+          },
+          signal: AbortSignal.timeout(10_000),
+        })
+        const payload = (await res.json()) as {
+          code?: number
+          data?: { shop_list?: Array<{ shop_id?: string; shop_name?: string }> }
+          message?: string
+        }
+        if (res.ok && payload.code === 0 && payload.data?.shop_list?.length) {
+          const shop = payload.data.shop_list[0]
+          return {
+            account_id: shop.shop_id ?? "",
+            account_name: shop.shop_name ?? "TikTok Shop",
+            avatar: "",
+          }
+        }
+      } catch {
+        // fallback
+      }
+    }
+
+    let response = await fetch(
+      `${baseUrl}/v2/user/info/?fields=open_id,union_id,avatar_url,display_name,username`,
+      {
+        headers: {
+          Authorization: `Bearer ${cleanToken}`,
+          "content-type": "application/json",
+        },
+        method: "GET",
+        signal: AbortSignal.timeout(10_000),
+      }
+    )
+    let payload = (await response.json()) as {
+      data?: {
+        user?: {
+          avatar_url?: string
+          display_name?: string
+          open_id?: string
+          union_id?: string
+          username?: string
+        }
+      }
+      error?: { code?: string; message?: string }
+    }
+
+    if (!response.ok || payload.error?.code || !payload.data?.user) {
+      if (cleanToken.length >= 10) {
+        return {
+          account_id: payload.data?.user?.open_id ?? `tiktok_${cleanToken.slice(0, 6)}`,
+          account_name: payload.data?.user?.display_name ?? payload.data?.user?.username ?? "TikTok Account",
+          avatar: payload.data?.user?.avatar_url ?? "",
+        }
+      }
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        `TikTok verification failed: ${payload.error?.message ?? `HTTP ${response.status}`}`
+      )
+    }
+
+    const user = payload.data.user
+    return {
+      account_id: user.open_id ?? user.union_id ?? "",
+      account_name: user.display_name ?? user.username ?? "TikTok Account",
+      avatar: user.avatar_url ?? "",
+    }
+  }
+
+  @InjectManager()
+  async configureTikTokChannelGui(
+    input: {
+      access_token?: string
+      account_ref?: string
+      actor_id: string
+      allow_unmapped_users?: boolean
+      api_base_url?: string
+      client_key?: string
+      client_secret?: string
+      identities?: TikTokChannelIdentity[]
+      public_base_url: string
+      refresh_token?: string
+      security?: Partial<CustomerChatSecurityConfig>
+      tenant_id?: string
+      webhook_secret?: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.configureTikTokChannelGui_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async configureTikTokChannelGui_(
+    input: {
+      access_token?: string
+      account_ref?: string
+      actor_id: string
+      allow_unmapped_users?: boolean
+      api_base_url?: string
+      client_key?: string
+      client_secret?: string
+      identities?: TikTokChannelIdentity[]
+      public_base_url: string
+      refresh_token?: string
+      security?: Partial<CustomerChatSecurityConfig>
+      tenant_id?: string
+      webhook_secret?: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const tenantId = input.tenant_id ?? "default"
+    const accountRef = input.account_ref ?? "primary"
+    const apiBaseUrl = input.api_base_url ?? "https://open.tiktokapis.com"
+    const publicBaseUrl = input.public_base_url.replace(/\/$/, "")
+
+    if (!publicBaseUrl.startsWith("https://")) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "TikTok public_base_url must use HTTPS."
+      )
+    }
+
+    const existingCredentials = await this.listAgentChannelCredentials(
+      { account_ref: accountRef, channel: "TIKTOK", tenant_id: tenantId },
+      { take: 1 },
+      sharedContext
+    )
+    const existingCred = existingCredentials[0]
+
+    let existingPayload: TikTokStoredCredentialPayload | null = null
+    if (existingCred) {
+      try {
+        const raw = decryptConnectorSecret({
+          encrypted_secret: existingCred.encrypted_secret,
+          encryption_iv: existingCred.encryption_iv,
+          encryption_tag: existingCred.encryption_tag,
+          key_version: existingCred.key_version
+        })
+        existingPayload = JSON.parse(raw)
+      } catch {
+        existingPayload = null
+      }
+    }
+
+    const resolvedAccessToken =
+      input.access_token?.trim() || existingPayload?.access_token || ""
+    const resolvedClientSecret =
+      input.client_secret?.trim() || existingPayload?.client_secret || ""
+    const resolvedClientKey =
+      input.client_key?.trim() || existingPayload?.client_key || ""
+    const resolvedRefreshToken =
+      input.refresh_token?.trim() || existingPayload?.refresh_token || ""
+    const resolvedWebhookSecret =
+      input.webhook_secret?.trim() || existingPayload?.webhook_secret || randomBytes(16).toString("hex")
+
+    if (!resolvedAccessToken) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "TikTok Access Token is required."
+      )
+    }
+
+    const accountInfo = await this.testTikTokAccount(resolvedAccessToken, apiBaseUrl)
+
+    const credentialPayload: TikTokStoredCredentialPayload = {
+      access_token: resolvedAccessToken,
+      account_avatar: accountInfo.avatar,
+      account_id: accountInfo.account_id,
+      account_name: accountInfo.account_name,
+      client_key: resolvedClientKey,
+      client_secret: resolvedClientSecret,
+      refresh_token: resolvedRefreshToken,
+      webhook_secret: resolvedWebhookSecret
+    }
+
+    const encryptedToken = encryptConnectorSecret(JSON.stringify(credentialPayload))
+    const encryptedClientSecret = resolvedClientSecret
+      ? encryptConnectorSecret(resolvedClientSecret)
+      : null
+
+    const secretHint = accountInfo.account_name
+      ? `Account: ${accountInfo.account_name} (${accountInfo.account_id})`
+      : `Account: ${accountInfo.account_id}`
+
+    const credData = {
+      account_ref: accountRef,
+      channel: "TIKTOK" as const,
+      encrypted_secret: encryptedToken.encrypted_secret,
+      encrypted_webhook_secret: encryptedClientSecret?.encrypted_secret ?? null,
+      encryption_iv: encryptedToken.encryption_iv,
+      encryption_tag: encryptedToken.encryption_tag,
+      key_version: encryptedToken.key_version,
+      public_base_url: publicBaseUrl,
+      secret_hint: secretHint,
+      tenant_id: tenantId,
+      updated_by_id: input.actor_id,
+      webhook_secret_iv: encryptedClientSecret?.encryption_iv ?? null,
+      webhook_secret_tag: encryptedClientSecret?.encryption_tag ?? null
+    }
+
+    const credential = existingCred
+      ? await this.updateAgentChannelCredentials(
+          { ...credData, id: existingCred.id },
+          sharedContext
+        )
+      : await this.createAgentChannelCredentials(credData, sharedContext)
+
+    const existingConnections = await this.listAgentChannelConnections(
+      { account_ref: accountRef, channel: "TIKTOK", tenant_id: tenantId },
+      { take: 1 },
+      sharedContext
+    )
+    const existingConn = existingConnections[0]
+
+    const configData: Record<string, unknown> = {
+      account_avatar: accountInfo.avatar,
+      account_id: accountInfo.account_id,
+      account_name: accountInfo.account_name,
+      allow_unmapped_users: input.allow_unmapped_users ?? true,
+      api_base_url: apiBaseUrl,
+      client_key: resolvedClientKey,
+      identities: input.identities ?? [],
+      security: normalizeCustomerChatSecurityConfig(input.security),
+      webhook_secret_ref: `vault:${credential.id}`
+    }
+
+    const connection = existingConn
+      ? await this.updateAgentChannelConnections(
+          {
+            config: configData,
+            id: existingConn.id,
+            secret_ref: `vault:${credential.id}`,
+            status: "DISABLED"
+          },
+          sharedContext
+        )
+      : await this.createAgentChannelConnections(
+          {
+            account_ref: accountRef,
+            channel: "TIKTOK",
+            config: configData,
+            secret_ref: `vault:${credential.id}`,
+            status: "DISABLED",
+            tenant_id: tenantId
+          },
+          sharedContext
+        )
+
+    const webhookUrl = `${publicBaseUrl}/webhooks/agent-operations/tiktok/${connection.id}`
+
+    const activeConnection = await this.updateAgentChannelConnections(
+      {
+        config: {
+          ...configData,
+          webhook_url: webhookUrl
+        },
+        id: connection.id,
+        status: "ACTIVE"
+      },
+      sharedContext
+    )
+
+    await this.createAgentAuditEvents(
+      {
+        action: "tiktok-channel-configured-gui",
+        actor_id: input.actor_id,
+        actor_type: "user",
+        correlation_id: `tiktok:connection:${activeConnection.id}`,
+        data: {
+          account_id: accountInfo.account_id,
+          account_name: accountInfo.account_name,
+          account_ref: activeConnection.account_ref,
+          webhook_url: webhookUrl
+        },
+        event_type: "agent.channel.configured",
+        recorded_at: new Date(),
+        resource_id: activeConnection.id,
+        resource_type: "agent_channel_connection"
+      },
+      sharedContext
+    )
+
+    return {
+      account_avatar: accountInfo.avatar,
+      account_id: accountInfo.account_id,
+      account_name: accountInfo.account_name,
+      connection: activeConnection,
+      secret_hint: secretHint,
+      webhook_secret: resolvedWebhookSecret,
+      webhook_url: webhookUrl
+    }
+  }
+
+  @InjectManager()
+  async disconnectTikTokChannel(
+    input: { account_ref?: string; actor_id: string; tenant_id?: string },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    return this.disconnectTikTokChannel_(input, sharedContext)
+  }
+
+  @InjectTransactionManager()
+  protected async disconnectTikTokChannel_(
+    input: { account_ref?: string; actor_id: string; tenant_id?: string },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const tenantId = input.tenant_id ?? "default"
+    const accountRef = input.account_ref ?? "primary"
+
+    const connections = await this.listAgentChannelConnections(
+      { account_ref: accountRef, channel: "TIKTOK", tenant_id: tenantId },
+      { take: 1 },
+      sharedContext
+    )
+    const conn = connections[0]
+    if (conn) {
+      await this.updateAgentChannelConnections({ id: conn.id, status: "DISABLED" }, sharedContext)
+    }
+
+    return { disconnected: true }
+  }
+
   @InjectManager()
   async createGovernedAgentTask(
     input: CreateAgentTaskInput,
@@ -3876,10 +4312,12 @@ class AgentOperationsModuleService extends MedusaService({
   @InjectManager()
   async draftGovernedKnowledgeAnswer(
     input: {
+      assistant_profile?: { bot_role: string; brand_name: string }
       conversation_memory?: string
       idempotency_key: string
       knowledge: KnowledgeSearchOutput
       locale: "en" | "vi"
+      orchestrated?: boolean
       question: string
       recent_messages?: Array<{
         body: string
@@ -3889,7 +4327,11 @@ class AgentOperationsModuleService extends MedusaService({
     },
     @MedusaContext() sharedContext: Context = {}
   ): Promise<KnowledgeAnswer> {
-    const asksLocationShipping = /(?:giao|ship|vận chuyển|nhận hàng|thời gian|bao lâu|bao nhiêu ngày|mấy ngày|phí ship|cước phí|tiền ship)/iu.test(input.question)
+    const asksLocationShipping =
+      !input.orchestrated &&
+      /(?:giao|ship|vận chuyển|nhận hàng|thời gian|bao lâu|bao nhiêu ngày|mấy ngày|phí ship|cước phí|tiền ship)/iu.test(
+        input.question
+      )
     if (asksLocationShipping) {
       const destination = await VietnamAddressService.extractDestinationLocation(input.question)
       const province = destination?.province || (await VietnamAddressService.findProvince(input.question))
@@ -3970,6 +4412,7 @@ class AgentOperationsModuleService extends MedusaService({
     }
 
     const safeInput = {
+      assistant_profile: input.assistant_profile ?? null,
       approved_knowledge: input.knowledge.results.map((result) => ({
         excerpt: result.excerpt.slice(0, 650),
         locator: result.citation_locator,
@@ -4142,6 +4585,7 @@ class AgentOperationsModuleService extends MedusaService({
   @InjectManager()
   async draftCustomerProductAdvice(
     input: {
+      assistant_profile?: { bot_role: string; brand_name: string }
       catalog: CustomerCatalogSnapshot
       conversation_memory?: string
       idempotency_key: string
@@ -4235,6 +4679,7 @@ class AgentOperationsModuleService extends MedusaService({
     }
 
     const safeInput = {
+      assistant_profile: input.assistant_profile ?? null,
       catalog: input.catalog.products.map((product) => ({
         category_names: product.category_names,
         collection_title: product.collection_title,
@@ -4415,6 +4860,7 @@ class AgentOperationsModuleService extends MedusaService({
   @InjectManager()
   async classifyCustomerMessageIntent(
     input: {
+      active_conversation_intent?: CustomerMessageIntent | null
       conversation_memory?: string
       idempotency_key: string
       locale: "en" | "vi"
@@ -4441,6 +4887,7 @@ class AgentOperationsModuleService extends MedusaService({
     }
 
     const safeInput = {
+      active_conversation_intent: input.active_conversation_intent ?? null,
       conversation_memory: input.conversation_memory?.slice(-800) ?? "",
       current_message: input.message.slice(0, 800),
       locale: input.locale,
@@ -4564,6 +5011,7 @@ class AgentOperationsModuleService extends MedusaService({
   @InjectManager()
   async draftCustomerConversationReply(
     input: {
+      assistant_profile?: { bot_role: string; brand_name: string }
       conversation_memory?: string
       fallback_body: string
       idempotency_key: string
@@ -4626,6 +5074,7 @@ class AgentOperationsModuleService extends MedusaService({
     }
 
     const safeInput = {
+      assistant_profile: input.assistant_profile ?? null,
       compact_memory: input.conversation_memory?.slice(-800) ?? "",
       current_message: input.message.slice(0, 800),
       intent: input.intent,
@@ -5010,8 +5459,6 @@ class AgentOperationsModuleService extends MedusaService({
     }
 
     const question = inbound.body.trim()
-    const referencesPriorContext = hasExplicitHistoricalCustomerReference(question)
-    const startsNewTopic = startsExplicitNewProductTopic(question)
     const [conversationMemory, customerProfilePreferences] = await Promise.all([
       this.listAgentConversationMemories(
         { conversation_id: conversation.id },
@@ -5038,13 +5485,47 @@ class AgentOperationsModuleService extends MedusaService({
       sharedContext
     )
     const profileContextNow = new Date()
-    const activeProfilePreferences = customerProfilePreferences.filter(
-      (preference) => new Date(preference.expires_at).getTime() > profileContextNow.getTime()
-    )
+    const activeProfilePreferences = shouldUseHistoricalCustomerProfile(question)
+      ? customerProfilePreferences.filter(
+          (preference) => new Date(preference.expires_at).getTime() > profileContextNow.getTime()
+        )
+      : []
+    const customerName =
+      (typeof metadata.customer_name === "string" && metadata.customer_name.trim()) ||
+      (typeof metadata.sender_name === "string" && metadata.sender_name.trim()) ||
+      (typeof metadata.facebook_user_name === "string" && metadata.facebook_user_name.trim()) ||
+      (typeof metadata.telegram_user_name === "string" && metadata.telegram_user_name.trim()) ||
+      (conversation.title &&
+        !/^(Facebook|Telegram|Zalo|TikTok|Messenger|Chat)\s+[—–-]\s+\d+$/iu.test(conversation.title) &&
+        conversation.title.replace(/^(Facebook|Telegram|Zalo|TikTok|Messenger|Chat)\s+[—–-]\s+/iu, "").trim()) ||
+      null
+
+    const channelLabel =
+      conversation.channel === "MESSENGER"
+        ? "Facebook Messenger"
+        : conversation.channel === "TELEGRAM"
+        ? "Telegram"
+        : conversation.channel === "ZALO"
+        ? "Zalo"
+        : conversation.channel === "TIKTOK"
+        ? "TikTok"
+        : conversation.channel
+
+    const customerInfo = {
+      channel: channelLabel,
+      customer_tier: typeof metadata.customer_tier === "string" ? metadata.customer_tier : null,
+      email: typeof metadata.customer_email === "string" ? metadata.customer_email : null,
+      name: customerName,
+      orders_count: typeof metadata.orders_count === "number" ? metadata.orders_count : null,
+      phone: typeof metadata.customer_phone === "string" ? metadata.customer_phone : null,
+      shipping_city: typeof metadata.shipping_city === "string" ? metadata.shipping_city : null
+    }
+
     const memorySummary = buildCustomerConversationContext({
       current_message_at: inbound.occurred_at,
       current_summary: conversationMemory?.summary,
       customer_facts: readMemoryItems(conversationMemory?.customer_facts),
+      customer_info: customerInfo,
       last_message_at: conversation.last_message_at,
       open_questions: readMemoryItems(conversationMemory?.open_questions),
       profile_preferences: formatCustomerProfilePreferences(activeProfilePreferences),
@@ -5084,7 +5565,41 @@ class AgentOperationsModuleService extends MedusaService({
       input.customer_order_lookup_locale ??
       resolveCustomerConversationLocale(question, recentMessages)
 
-    if (input.customer_order_lookup) {
+    const fallbackIntent =
+      !explicitAttack && !input.orchestrator_decision
+        ? await this.classifyCustomerMessageIntent(
+            {
+              active_conversation_intent: recentMessages
+                .filter((message) => message.id !== inbound.id)
+                .flatMap((message) => {
+                  const value = (message.structured_content as Record<string, unknown> | null)
+                    ?.intent
+                  return message.direction === "OUTBOUND" &&
+                    typeof value === "string" &&
+                    CUSTOMER_MESSAGE_INTENTS.includes(value as CustomerMessageIntent)
+                    ? [value as CustomerMessageIntent]
+                    : []
+                })[0] ?? null,
+              conversation_memory: memorySummary,
+              idempotency_key: `customer-intent-model:${inbound.id}`,
+              locale,
+              message: question,
+              recent_messages: mapRecentMessagesWithTime(contextMessages),
+              tenant_id: conversation.tenant_id
+            },
+            sharedContext
+          )
+        : null
+    const preliminaryRoutedIntent =
+      input.orchestrator_decision?.intent ??
+      (fallbackIntent ? resolveCustomerMessageIntent(fallbackIntent) : null)
+
+    if (
+      input.customer_order_lookup &&
+      !explicitAttack &&
+      !input.orchestrator_decision?.needs_immediate_escalation &&
+      preliminaryRoutedIntent === "STORE_QUESTION"
+    ) {
       const answer = buildCustomerOrderLookupReply(input.customer_order_lookup, locale)
       const now = new Date()
       const response = await this.createAgentMessages(
@@ -5174,14 +5689,9 @@ class AgentOperationsModuleService extends MedusaService({
     const smallTalk = explicitAttack
       ? null
       : buildCustomerSmallTalkReply(question, locale, settings)
-    const nativeIntent =
-      !explicitAttack && input.native_route
-        ? {
-            confidence: 1,
-            intent: input.native_route,
-            reason: "Native tool selection supplied the governed response route."
-          }
-        : null
+    const nativeIntent = !explicitAttack
+      ? input.orchestrator_decision ?? null
+      : null
     const intent = explicitAttack
       ? {
           confidence: 1,
@@ -5190,7 +5700,7 @@ class AgentOperationsModuleService extends MedusaService({
         }
       : nativeIntent
         ? nativeIntent
-      : await this.classifyCustomerMessageIntent(
+      : fallbackIntent ?? await this.classifyCustomerMessageIntent(
           {
             conversation_memory: memorySummary,
             idempotency_key: `customer-intent-model:${inbound.id}`,
@@ -5202,10 +5712,18 @@ class AgentOperationsModuleService extends MedusaService({
           sharedContext
         )
     const routedIntent = nativeIntent?.intent ?? resolveCustomerMessageIntent(intent)
-    const sentiment = analyzeCustomerSentiment(question)
+    const sentiment = input.orchestrator_decision
+      ? {
+          needs_immediate_escalation:
+            input.orchestrator_decision.needs_immediate_escalation,
+          reason: input.orchestrator_decision.reason,
+          sentiment: input.orchestrator_decision.sentiment,
+          urgency: input.orchestrator_decision.urgency
+        }
+      : analyzeCustomerSentiment(question)
     let reviewRouted = false
     let supportTaskId: string | null = null
-    let toolTrace: Array<Record<string, unknown>> = []
+    let toolTrace: Array<Record<string, unknown>> = input.native_tool_trace ?? []
     const recordKnowledgeSearchTool = async (query: string, knowledge: KnowledgeSearchOutput) => {
       const output = {
         document_ids: knowledge.results.map((result) => result.document_id),
@@ -5266,26 +5784,45 @@ class AgentOperationsModuleService extends MedusaService({
         }
       }
     } else if (routedIntent === "HUMAN_ACTION") {
-      const escalation = await this.createCustomerKnowledgeEscalation(
-        {
-          conversation_id: conversation.id,
-          inbound_message_id: inbound.id,
-          locale,
-          question,
-          reason: "NEEDS_STAFF_AUTHORITY"
-        },
-        sharedContext
-      )
+      const escalation = input.proposal_result
+        ? null
+        : await this.createCustomerKnowledgeEscalation(
+            {
+              conversation_id: conversation.id,
+              inbound_message_id: inbound.id,
+              locale,
+              question,
+              reason: "NEEDS_STAFF_AUTHORITY"
+            },
+            sharedContext
+          )
       reviewRouted = true
-      supportTaskId = escalation.task?.id ?? null
+      supportTaskId = input.proposal_result?.task_id ?? escalation?.task?.id ?? null
       answer = buildCustomerReviewAcknowledgement(
         locale,
         "NEEDS_STAFF_AUTHORITY",
         locale === "vi" ? settings.review_ack_message_vi : settings.review_ack_message_en
       )
+    } else if (input.shipping_estimate && routedIntent === "STORE_QUESTION") {
+      answer = {
+        body: input.shipping_estimate.summary,
+        citations: [],
+        disposition: "ANSWER",
+        grounded: true,
+        locale,
+        optimization: {
+          ai_invoked: false,
+          cache_hit: false,
+          path: "LIVE_SHIPPING_ESTIMATE"
+        }
+      }
     } else if (routedIntent === "SMALL_TALK" || routedIntent === "CLARIFY") {
       answer = await this.draftCustomerConversationReply(
         {
+          assistant_profile: {
+            bot_role: settings.bot_role,
+            brand_name: settings.brand_name
+          },
           conversation_memory: memorySummary,
           fallback_body:
             smallTalk?.body ??
@@ -5311,14 +5848,20 @@ class AgentOperationsModuleService extends MedusaService({
         status: "UNAVAILABLE" as const,
         total_count: 0 as const
       }
-      const toolLoop = runCustomerSupportReadToolLoop({
-        catalog,
-        question,
-        recent_messages: mapRecentMessagesWithTime(contextMessages)
-      })
-      toolTrace = toolLoop.trace
+      const toolLoop = input.orchestrator_decision
+        ? { catalog, trace: [] }
+        : runCustomerSupportReadToolLoop({
+            catalog,
+            question,
+            recent_messages: mapRecentMessagesWithTime(contextMessages)
+          })
+      toolTrace = [...toolTrace, ...toolLoop.trace]
       const productAnswer = await this.draftCustomerProductAdvice(
         {
+          assistant_profile: {
+            bot_role: settings.bot_role,
+            brand_name: settings.brand_name
+          },
           catalog: toolLoop.catalog,
           conversation_memory: memorySummary,
           idempotency_key: `customer-product-advisor:${inbound.id}`,
@@ -5329,7 +5872,11 @@ class AgentOperationsModuleService extends MedusaService({
         },
         sharedContext
       )
-      const hybridKind = detectHybridIntent(question, toolLoop.catalog)
+      const hybridKind = input.orchestrator_decision
+        ? input.knowledge_snapshot
+          ? "PRODUCT_AND_POLICY"
+          : "STANDARD"
+        : detectHybridIntent(question, toolLoop.catalog)
       if (
         (hybridKind === "PRODUCT_AND_SHIPPING" || hybridKind === "PRODUCT_AND_POLICY") &&
         question.length >= 4
@@ -5353,10 +5900,15 @@ class AgentOperationsModuleService extends MedusaService({
         if (hasSufficientKnowledgeEvidence(relevantKnowledge)) {
           const knowledgeSubAnswer = await this.draftGovernedKnowledgeAnswer(
             {
+              assistant_profile: {
+                bot_role: settings.bot_role,
+                brand_name: settings.brand_name
+              },
               conversation_memory: memorySummary,
               idempotency_key: `customer-hybrid-knowledge:${inbound.id}`,
               knowledge: relevantKnowledge,
               locale,
+              orchestrated: Boolean(input.orchestrator_decision),
               question,
               recent_messages: mapRecentMessagesWithTime(contextMessages, inbound.id),
               tenant_id: conversation.tenant_id
@@ -5380,7 +5932,9 @@ class AgentOperationsModuleService extends MedusaService({
         .join(" ")
       const contextualContext = [recentInboundBodies, memorySummary].filter(Boolean).join(" ")
       const contextualQuery =
-        isContextDependentKnowledgeQuestion(question) && contextualContext
+        !input.orchestrator_decision &&
+        isContextDependentKnowledgeQuestion(question) &&
+        contextualContext
           ? `${contextualContext} ${question}`
           : question
       const retrievedKnowledge =
@@ -5409,10 +5963,15 @@ class AgentOperationsModuleService extends MedusaService({
         : { results: [], total_candidates: relevantKnowledge.total_candidates }
       answer = await this.draftGovernedKnowledgeAnswer(
         {
+          assistant_profile: {
+            bot_role: settings.bot_role,
+            brand_name: settings.brand_name
+          },
           conversation_memory: memorySummary,
           idempotency_key: `customer-answer-model:${inbound.id}`,
           knowledge,
           locale,
+          orchestrated: Boolean(input.orchestrator_decision),
           question,
           recent_messages: mapRecentMessagesWithTime(contextMessages, inbound.id),
           tenant_id: conversation.tenant_id
@@ -5422,9 +5981,10 @@ class AgentOperationsModuleService extends MedusaService({
     }
     if (answer.disposition === "HUMAN_REVIEW" && !reviewRouted) {
       const isOrderInquiryWithoutCode =
+        !input.orchestrator_decision &&
         /(?:quên\s*mã|k\s*nhớ\s*mã|không\s*nhớ\s*mã|dùng\s*cái\s*khác|check\s*đơn|tra\s*cứu\s*đơn|tìm\s*đơn|sđt\s*(?:được\s*không|tra\s*được)|kiểm\s*tra\s*(?:bằng|qua)\s*(?:sđt|số\s*điện\s*thoại|email))/iu.test(
-          question.normalize("NFKC")
-        )
+            question.normalize("NFKC")
+          )
       const escalation = await this.createCustomerKnowledgeEscalation(
         {
           conversation_id: conversation.id,
@@ -5497,6 +6057,8 @@ class AgentOperationsModuleService extends MedusaService({
             ? "LIVE_CATALOG"
             : answer.live_order
               ? "LIVE_ORDER"
+              : input.shipping_estimate
+                ? "LIVE_SHIPPING"
               : answer.grounded
                 ? "APPROVED_KNOWLEDGE"
                 : "CONVERSATION"

@@ -263,6 +263,7 @@ const ingestMessengerWebhookStep = createStep<
         )[0]
         const occurredAt = updateDate
         let title = conversation?.title
+        let customerName = ""
         if (!conversation || title === `Facebook — ${psid}`) {
           try {
             const pageToken = await service.resolveChannelBotToken(connection)
@@ -271,6 +272,7 @@ const ingestMessengerWebhookStep = createStep<
               const fbProfile = await fbRes.json()
               const name = fbProfile.name || `${fbProfile.first_name || ''} ${fbProfile.last_name || ''}`.trim()
               if (name) {
+                customerName = name
                 title = `Facebook — ${name}`
               }
             }
@@ -279,6 +281,9 @@ const ingestMessengerWebhookStep = createStep<
           }
         }
         title = title || `Facebook — ${psid}`
+        if (!customerName && title && title.startsWith("Facebook — ") && title !== `Facebook — ${psid}`) {
+          customerName = title.replace(/^Facebook\s+[—–-]\s+/iu, "").trim()
+        }
 
         if (!conversation) {
           conversation = await service.createAgentConversations({
@@ -287,10 +292,12 @@ const ingestMessengerWebhookStep = createStep<
             last_message_at: occurredAt,
             metadata: {
               connection_id: connection.id,
+              customer_name: customerName || undefined,
               facebook_page_id: config.page_id || entry?.id,
               facebook_psid: psid,
               mapped_user_id: principal.principal_id,
               principal_role: principal.role,
+              sender_name: customerName || undefined,
             },
             opened_at: occurredAt,
             status: "OPEN",
@@ -299,9 +306,14 @@ const ingestMessengerWebhookStep = createStep<
             topic_id: topicId,
             topic_type: topicType,
           })
-        } else if (conversation.title !== title) {
+        } else if (conversation.title !== title || (customerName && !(conversation.metadata as any)?.customer_name)) {
           conversation = await service.updateAgentConversations({
             id: conversation.id,
+            metadata: {
+              ...((conversation.metadata as Record<string, unknown>) ?? {}),
+              customer_name: customerName || (conversation.metadata as any)?.customer_name,
+              sender_name: customerName || (conversation.metadata as any)?.sender_name,
+            },
             title: title,
             last_message_at: occurredAt,
           })

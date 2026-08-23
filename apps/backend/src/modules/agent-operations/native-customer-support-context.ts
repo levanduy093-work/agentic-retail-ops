@@ -10,6 +10,12 @@ export type NativeCustomerSupportContext = {
   catalog_snapshot?: CustomerCatalogSnapshot
   customer_order_lookup?: CustomerOrderLookup
   knowledge_snapshot?: KnowledgeSearchOutput
+  proposal_result?: {
+    approval_id?: string | null
+    kind: string
+    outcome: "PENDING_HUMAN_REVIEW" | "PENDING_MANAGER_APPROVAL"
+    task_id?: string | null
+  }
   shipping_estimate?: ShippingEstimateOutput
   route?: "PRODUCT_DISCOVERY" | "STORE_QUESTION" | "HUMAN_ACTION"
 }
@@ -42,7 +48,7 @@ export function extractNativeCustomerSupportContext(
       result.name === "check_realtime_stock" &&
       typeof output.product_id === "string" &&
       Array.isArray(output.variants) &&
-      context.catalog_snapshot
+      context.catalog_snapshot?.status === "READY"
     ) {
       const product = context.catalog_snapshot.products.find(
         (candidate) => candidate.id === output.product_id
@@ -177,11 +183,20 @@ export function extractNativeCustomerSupportContext(
     }
 
     if (
-      (result.name === "propose_return_review" ||
+      (result.name === "propose_draft_cart" ||
+        result.name === "propose_return_review" ||
         result.name === "propose_order_cancellation" ||
         result.name === "propose_address_change") &&
-      output.outcome === "PENDING_HUMAN_REVIEW"
+      (output.outcome === "PENDING_HUMAN_REVIEW" ||
+        output.outcome === "PENDING_MANAGER_APPROVAL")
     ) {
+      context.proposal_result = {
+        approval_id:
+          typeof output.approval_id === "string" ? output.approval_id : null,
+        kind: result.name,
+        outcome: output.outcome,
+        task_id: typeof output.task_id === "string" ? output.task_id : null
+      }
       context.route = "HUMAN_ACTION"
     }
   }

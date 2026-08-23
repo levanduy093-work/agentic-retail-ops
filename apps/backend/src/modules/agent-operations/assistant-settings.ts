@@ -35,6 +35,18 @@ import {
   CUSTOMER_VISION_PROMPT_VERSION,
   CUSTOMER_VISION_SYSTEM_PROMPT
 } from "./customer-vision-processor"
+import {
+  CUSTOMER_SUPPORT_ORCHESTRATOR_MAX_TOKENS,
+  CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_KEY,
+  CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_VERSION,
+  CUSTOMER_SUPPORT_ORCHESTRATOR_SYSTEM_PROMPT
+} from "./customer-support-orchestrator"
+import {
+  CONVERSATION_MEMORY_MAX_TOKENS,
+  CONVERSATION_MEMORY_PROMPT_KEY,
+  CONVERSATION_MEMORY_PROMPT_VERSION,
+  CONVERSATION_MEMORY_SYSTEM_PROMPT
+} from "./conversation-memory"
 
 export const ASSISTANT_SETTINGS_PROMPT_KEY = "customer-support.assistant-settings"
 export const ASSISTANT_SETTINGS_VERSION = "1.0.0"
@@ -117,6 +129,15 @@ export type ManagedPromptMetadata = {
 }
 
 export const MANAGED_PROMPTS_REGISTRY: Record<string, ManagedPromptMetadata> = {
+  [CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_KEY]: {
+    default_max_tokens: CUSTOMER_SUPPORT_ORCHESTRATOR_MAX_TOKENS,
+    default_system_prompt: CUSTOMER_SUPPORT_ORCHESTRATOR_SYSTEM_PROMPT,
+    description:
+      "Bộ điều phối hội thoại chính: hiểu context nhiều lượt, tự chọn read/proposal tool phù hợp và trả quyết định có cấu trúc cho response composer.",
+    prompt_key: CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_KEY,
+    title: "Customer Support Orchestrator (Điều phối Agent & Tool)",
+    version: CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_VERSION
+  },
   [CUSTOMER_MESSAGE_INTENT_PROMPT_KEY]: {
     default_max_tokens: CUSTOMER_MESSAGE_INTENT_MAX_TOKENS,
     default_system_prompt: CUSTOMER_MESSAGE_INTENT_SYSTEM_PROMPT,
@@ -170,5 +191,14 @@ export const MANAGED_PROMPTS_REGISTRY: Record<string, ManagedPromptMetadata> = {
     prompt_key: CUSTOMER_VISION_PROMPT_KEY,
     title: "Vision Review (Thẩm định ảnh CSKH)",
     version: CUSTOMER_VISION_PROMPT_VERSION
+  },
+  [CONVERSATION_MEMORY_PROMPT_KEY]: {
+    default_max_tokens: CONVERSATION_MEMORY_MAX_TOKENS,
+    default_system_prompt: CONVERSATION_MEMORY_SYSTEM_PROMPT,
+    description:
+      "Hướng dẫn AI duy trì bộ nhớ gọn, an toàn và chỉ thuộc hội thoại hiện tại; không tự ghép lịch sử hoặc biến memory thành bằng chứng nghiệp vụ.",
+    prompt_key: CONVERSATION_MEMORY_PROMPT_KEY,
+    title: "Conversation Memory (Bộ nhớ theo phiên)",
+    version: CONVERSATION_MEMORY_PROMPT_VERSION
   }
 }

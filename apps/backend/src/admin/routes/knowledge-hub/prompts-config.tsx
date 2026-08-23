@@ -5,6 +5,7 @@ import {
   Heading,
   Input,
   Label,
+  Select,
   StatusBadge,
   Text,
   Textarea,
@@ -23,6 +24,7 @@ export type AssistantSettings = {
   clarify_message_vi: string
   greeting_message_en: string
   greeting_message_vi: string
+  native_tool_loop_mode: "ACTIVE" | "DISABLED" | "SHADOW"
   review_ack_message_en: string
   review_ack_message_vi: string
 }
@@ -65,6 +67,7 @@ export const PromptsConfigContent = () => {
     clarify_message_vi: "",
     greeting_message_en: "",
     greeting_message_vi: "",
+    native_tool_loop_mode: "ACTIVE",
     review_ack_message_en: "",
     review_ack_message_vi: "",
   })
@@ -258,7 +261,17 @@ export const PromptsConfigContent = () => {
               {t("prompts.brandSectionSubtitle")}
             </Text>
           </div>
-          <Badge color="green">Active</Badge>
+          <Badge
+            color={
+              settingsForm.native_tool_loop_mode === "ACTIVE"
+                ? "green"
+                : settingsForm.native_tool_loop_mode === "SHADOW"
+                  ? "orange"
+                  : "grey"
+            }
+          >
+            {settingsForm.native_tool_loop_mode}
+          </Badge>
         </div>
 
         <form onSubmit={handleSaveSettings} className="space-y-4">
@@ -289,6 +302,36 @@ export const PromptsConfigContent = () => {
                 placeholder={t("prompts.botRolePlaceholder")}
               />
             </div>
+          </div>
+
+          <div>
+            <Label className="mb-1 block font-medium text-xs">
+              {t("prompts.orchestratorModeLabel", "Chế độ Customer Support Orchestrator")}
+            </Label>
+            <Select
+              onValueChange={(value) =>
+                setSettingsForm((previous) => ({
+                  ...previous,
+                  native_tool_loop_mode: value as AssistantSettings["native_tool_loop_mode"],
+                }))
+              }
+              value={settingsForm.native_tool_loop_mode}
+            >
+              <Select.Trigger>
+                <Select.Value />
+              </Select.Trigger>
+              <Select.Content>
+                <Select.Item value="ACTIVE">ACTIVE — dùng orchestrator làm đường chính</Select.Item>
+                <Select.Item value="SHADOW">SHADOW — chạy đánh giá, chưa dùng kết quả</Select.Item>
+                <Select.Item value="DISABLED">DISABLED — chỉ dùng fallback pipeline</Select.Item>
+              </Select.Content>
+            </Select>
+            <Text className="text-ui-fg-subtle mt-1" size="small">
+              {t(
+                "prompts.orchestratorModeHint",
+                "ACTIVE cho phép model hiểu context và chọn tool; mọi mutation vẫn đi qua policy, ownership và approval."
+              )}
+            </Text>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

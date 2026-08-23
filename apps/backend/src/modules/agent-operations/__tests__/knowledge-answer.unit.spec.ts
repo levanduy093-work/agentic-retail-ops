@@ -308,6 +308,48 @@ describe("grounded knowledge answers", () => {
     ).toHaveLength(1)
   })
 
+  it("removes invoice and store-profile chunks from delivery-time evidence", () => {
+    const output = filterKnowledgeEvidenceForQuestion(
+      "Thời gian giao hàng bao lâu vậy sốp?",
+      {
+        results: [
+          {
+            ...knowledge.results[0],
+            document_id: "delivery-policy",
+            excerpt:
+              "Thời gian giao hàng nội thành là 1-2 ngày làm việc và ngoại thành là 2-4 ngày.",
+            title: "Chính sách giao hàng"
+          },
+          {
+            ...knowledge.results[0],
+            document_id: "invoice-policy",
+            excerpt:
+              "Hóa đơn được gửi trong 3-5 ngày làm việc sau khi giao hàng thành công.",
+            title: "Đơn hàng và thanh toán"
+          },
+          {
+            ...knowledge.results[0],
+            document_id: "store-profile",
+            excerpt: "Cửa hàng hỗ trợ giao hàng toàn quốc.",
+            title: "Hồ sơ cửa hàng"
+          },
+          {
+            ...knowledge.results[0],
+            document_id: "late-delivery-sla",
+            excerpt:
+              "Giao chậm: quá 5 ngày kể từ ngày đặt thì mở case với đơn vị vận chuyển.",
+            title: "Xử lý sự cố giao chậm"
+          }
+        ],
+        total_candidates: 4
+      }
+    )
+
+    expect(output.results.map((result) => result.document_id)).toEqual([
+      "delivery-policy"
+    ])
+  })
+
   it("turns approved order-status guidance into a safe delivery-time answer", () => {
     const deliveryGuidance = buildDeliveryTimeGuidanceAnswer(
       "Thời gian giao hàng bao lâu?",

@@ -1,5 +1,9 @@
 import type { ILockingModule, IOrderModuleService } from "@medusajs/framework/types"
-import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils"
+import {
+  ContainerRegistrationKeys,
+  MedusaError,
+  Modules
+} from "@medusajs/framework/utils"
 import {
   createStep,
   createWorkflow,
@@ -33,10 +37,24 @@ import {
   CUSTOMER_SUPPORT_NATIVE_TOOLS,
   resolveCustomerDraftCartPurchaseContext
 } from "../../modules/agent-operations/customer-native-tool-dispatcher"
-import { createModelAdapter } from "../../modules/agent-operations/model-gateway"
+import {
+  createModelAdapter,
+  redactModelInput
+} from "../../modules/agent-operations/model-gateway"
 import { extractNativeCustomerSupportContext } from "../../modules/agent-operations/native-customer-support-context"
 import { evaluateNativeToolLoop } from "../../modules/agent-operations/native-tool-loop-evaluation"
 import { runNativeToolLoop } from "../../modules/agent-operations/native-tool-loop"
+import {
+  CUSTOMER_SUPPORT_ORCHESTRATOR_OUTPUT_SCHEMA,
+  CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_KEY,
+  CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_VERSION,
+  CUSTOMER_SUPPORT_ORCHESTRATOR_TIMEOUT_MS,
+  CustomerSupportOrchestratorDecision,
+  reconcileCustomerSupportDecision
+} from "../../modules/agent-operations/customer-support-orchestrator"
+import { shouldUseHistoricalCustomerProfile } from "../../modules/agent-operations/conversation-memory"
+import { formatCustomerProfilePreferences } from "../../modules/agent-operations/customer-preferences"
+import { CUSTOMER_MESSAGE_INTENTS } from "../../modules/agent-operations/customer-message-intent"
 
 const answerCustomerKnowledgeQuestionStep = createStep(
   "answer-customer-knowledge-question",
@@ -50,7 +68,11 @@ const answerCustomerKnowledgeQuestionStep = createStep(
     let customerOrderLookupLocale: "en" | "vi" | undefined
     let knowledgeSnapshot: ProcessCustomerKnowledgeQuestionInput["knowledge_snapshot"]
     let nativeRoute: ProcessCustomerKnowledgeQuestionInput["native_route"]
-    let useNativeToolContext = false
+    let nativeToolTrace: ProcessCustomerKnowledgeQuestionInput["native_tool_trace"]
+    let orchestratorDecision: ProcessCustomerKnowledgeQuestionInput["orchestrator_decision"]
+    let proposalResult: ProcessCustomerKnowledgeQuestionInput["proposal_result"]
+    let shippingEstimate: ProcessCustomerKnowledgeQuestionInput["shipping_estimate"]
+    let useNativeOrchestration = false
     const existingResponse = (
       await service.listAgentMessages(
         { idempotency_key: `customer-answer:${inbound.id}` },
@@ -66,101 +88,266 @@ const answerCustomerKnowledgeQuestionStep = createStep(
           const metadata = (conversation.metadata ?? {}) as Record<string, unknown>
           const customerId = getVerifiedLinkedCustomerId(metadata)
           try {
-            const credential = (
-              await service.getActiveAiProviderCredentials("generation", conversation.tenant_id)
-            )[0]
-            if (credential) {
-              const purchaseContext = await resolveCustomerDraftCartPurchaseContext(
-                container,
-                locale
-              )
-              const loop = await runNativeToolLoop({
-                adapter: createModelAdapter({
-                  apiKey: credential.api_key,
-                  model: credential.model,
-                  provider: credential.provider
-                }),
-                execute_tool: createCustomerSupportNativeToolDispatcher({
-                  container,
-                  conversation_id: conversation.id,
-                  customer_id: customerId,
-                  inbound_message_id: inbound.id,
-                  locale,
-                  service,
+            const [
+              credentials,
+              promptConfig,
+              memories,
+              recentConversation,
+              customerPreferences
+            ] = await Promise.all([
+              service.getActiveAiProviderCredentials("generation", conversation.tenant_id),
+              service.getPromptConfiguration(CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_KEY),
+              service.listAgentConversationMemories(
+                { conversation_id: conversation.id },
+                { take: 1 }
+              ),
+              service.listAgentMessages(
+                { conversation_id: conversation.id },
+                { order: { occurred_at: "DESC" }, take: 10 }
+              ),
+              service.listAgentCustomerPreferences(
+                {
+                  customer_id: inbound.sender_id,
                   tenant_id: conversation.tenant_id
-                }),
-                invocation: {
-                  agent_id:
-                    assistantSettings.native_tool_loop_mode === "ACTIVE"
-                      ? "customer-support-native-tool-agent"
-                      : "customer-support-native-tool-shadow",
-                  input: {
-                    conversation_id: conversation.id,
-                    customer_confirmation_message_id: inbound.id,
-                    message: inbound.body.slice(0, 1_000),
-                    mode: assistantSettings.native_tool_loop_mode,
-                    purchase_context: purchaseContext
-                  },
-                  max_tokens: 500,
-                  prompt_key: "customer-support.native-tool-loop",
-                  prompt_version: "1.0.0",
-                  system_prompt:
-                    assistantSettings.native_tool_loop_mode === "ACTIVE"
-                      ? "You are the customer-support retrieval agent. Use the provided read tools whenever live catalog, approved policy, or the authenticated customer's order facts are needed. Use check_delivery_status rather than estimating shipment location or arrival. You may only use propose_draft_cart after the current authenticated customer explicitly confirms exact published variant IDs. Use only the server-provided conversation, confirmation, and purchase context plus variant IDs returned by the live catalog tool. You may only use propose_return_review when the current authenticated customer explicitly requests a return, exchange, or refund and supplies their own order code; it creates a human review only. Neither proposal tool creates a cart, return, or refund. Never perform any other action, never invent identifiers, and return a concise JSON object after tool use."
-                      : "You are running in shadow mode. Use only the provided read tools when live facts are needed. You may evaluate proposal tools only with server-provided context, exact trusted identifiers, and the current explicit customer request. Proposals never create a cart, return, or refund. Do not claim an answer was sent, do not invent identifiers, and return a concise JSON object after tool use.",
-                  tools: CUSTOMER_SUPPORT_NATIVE_TOOLS,
-                  timeout_ms: 15_000
-                }
-              })
-              const evaluation = evaluateNativeToolLoop({
-                allowed_tool_names: CUSTOMER_SUPPORT_NATIVE_TOOL_NAMES,
-                termination: loop.termination,
-                trace: loop.trace
-              })
-              const nativeContext = extractNativeCustomerSupportContext(loop.tool_results)
-              const hasNativeReadContext = Boolean(
-                nativeContext.catalog_snapshot ||
-                  nativeContext.customer_order_lookup ||
-                  nativeContext.knowledge_snapshot
+                },
+                { order: { last_confirmed_at: "DESC" }, take: 12 }
               )
-              if (
-                assistantSettings.native_tool_loop_mode === "ACTIVE" &&
-                evaluation.safe_to_use &&
-                hasNativeReadContext
-              ) {
-                catalogSnapshot = nativeContext.catalog_snapshot
-                customerOrderLookup = nativeContext.customer_order_lookup
-                knowledgeSnapshot = nativeContext.knowledge_snapshot
-                nativeRoute = nativeContext.route
-                useNativeToolContext = true
-              }
-              await service.createAgentAuditEvents({
-                action:
-                  assistantSettings.native_tool_loop_mode === "ACTIVE"
-                    ? "customer-native-tool-loop-active-completed"
-                    : "customer-native-tool-loop-shadow-completed",
-                actor_id: "customer-support-agent",
-                actor_type: "agent",
-                correlation_id: `customer-native-shadow:${conversation.id}:${inbound.id}`,
-                data: {
-                  mode: assistantSettings.native_tool_loop_mode,
-                  used_as_response_context:
-                    assistantSettings.native_tool_loop_mode === "ACTIVE" &&
-                    evaluation.safe_to_use &&
-                    hasNativeReadContext,
-                  evaluation,
-                  iterations: loop.iterations,
+            ])
+            const purchaseContext = await resolveCustomerDraftCartPurchaseContext(
+              container,
+              locale
+            )
+            const historicalProfilePreferencesAllowed =
+              shouldUseHistoricalCustomerProfile(inbound.body)
+            const activeConversationIntent = recentConversation
+              .filter((message) => message.id !== inbound.id)
+              .find((message) => {
+                const intent = (message.structured_content as Record<string, unknown> | null)
+                  ?.intent
+                return (
+                  message.direction === "OUTBOUND" &&
+                  typeof intent === "string" &&
+                  CUSTOMER_MESSAGE_INTENTS.includes(
+                    intent as (typeof CUSTOMER_MESSAGE_INTENTS)[number]
+                  )
+                )
+              })?.structured_content as Record<string, unknown> | undefined
+            const safeOrchestratorInput = {
+              active_conversation_intent:
+                (activeConversationIntent?.intent as string | undefined) ?? null,
+              assistant_identity: {
+                bot_role: assistantSettings.bot_role,
+                brand_name: assistantSettings.brand_name
+              },
+              conversation_id: conversation.id,
+              conversation_memory: memories[0]
+                ? {
+                    customer_facts: memories[0].customer_facts,
+                    open_questions: memories[0].open_questions,
+                    resolved_topics: memories[0].resolved_topics,
+                    summary: memories[0].summary?.slice(-1_600) ?? ""
+                  }
+                : null,
+              current_message: inbound.body.slice(0, 1_000),
+              customer_confirmation_message_id: inbound.id,
+              locale,
+              historical_profile_preferences:
+                historicalProfilePreferencesAllowed
+                  ? formatCustomerProfilePreferences(
+                      customerPreferences.filter(
+                        (preference) =>
+                          new Date(preference.expires_at).getTime() > Date.now()
+                      )
+                    ).slice(0, 6)
+                  : [],
+              historical_profile_preferences_allowed:
+                historicalProfilePreferencesAllowed,
+              mode: assistantSettings.native_tool_loop_mode,
+              purchase_context: purchaseContext,
+              recent_conversation: recentConversation
+                .slice()
+                .reverse()
+                .filter((message) => message.id !== inbound.id)
+                .slice(-8)
+                .map((message) => ({
+                  body: message.body.slice(0, 500),
+                  direction: message.direction
+                }))
+            }
+            let orchestratorCompleted = false
+            for (const credential of credentials) {
+              const adapter = createModelAdapter({
+                apiKey: credential.api_key,
+                model: credential.model,
+                provider: credential.provider
+              })
+              const attemptKey =
+                `customer-orchestrator:${inbound.id}:provider:${adapter.provider}`
+              const startedAt = new Date()
+              const existingRun = (
+                await service.listAgentModelRuns(
+                  { idempotency_key: attemptKey },
+                  { take: 1 }
+                )
+              )[0]
+              const modelRun = existingRun
+                ? await service.updateAgentModelRuns({
+                    id: existingRun.id,
+                    input: redactModelInput(safeOrchestratorInput) as Record<string, unknown>,
+                    model: adapter.model,
+                    prompt_version: promptConfig.version,
+                    provider: adapter.provider,
+                    started_at: startedAt,
+                    status: "RUNNING"
+                  })
+                : await service.createAgentModelRuns({
+                    agent_id: "customer-support-orchestrator",
+                    agent_version: CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_VERSION,
+                    idempotency_key: attemptKey,
+                    input: redactModelInput(safeOrchestratorInput) as Record<string, unknown>,
+                    model: adapter.model,
+                    prompt_key: CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_KEY,
+                    prompt_version: promptConfig.version,
+                    provider: adapter.provider,
+                    redacted: true,
+                    started_at: startedAt,
+                    status: "RUNNING"
+                  })
+              try {
+                const loop = await runNativeToolLoop({
+                  adapter,
+                  execute_tool: createCustomerSupportNativeToolDispatcher({
+                    container,
+                    conversation_id: conversation.id,
+                    customer_id: customerId,
+                    customer_message_context: [
+                      inbound.body,
+                      ...recentConversation
+                        .filter((message) => message.direction === "INBOUND")
+                        .map((message) => message.body)
+                    ],
+                    inbound_message_id: inbound.id,
+                    locale,
+                    service,
+                    tenant_id: conversation.tenant_id
+                  }),
+                  invocation: {
+                    agent_id: "customer-support-orchestrator",
+                    input: safeOrchestratorInput,
+                    max_tokens: promptConfig.max_tokens,
+                    output_schema: CUSTOMER_SUPPORT_ORCHESTRATOR_OUTPUT_SCHEMA,
+                    prompt_key: CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_KEY,
+                    prompt_version: promptConfig.version,
+                    system_prompt: promptConfig.system_prompt,
+                    tools: CUSTOMER_SUPPORT_NATIVE_TOOLS,
+                    timeout_ms: CUSTOMER_SUPPORT_ORCHESTRATOR_TIMEOUT_MS
+                  }
+                })
+                const evaluation = evaluateNativeToolLoop({
+                  allowed_tool_names: CUSTOMER_SUPPORT_NATIVE_TOOL_NAMES,
                   termination: loop.termination,
                   trace: loop.trace
-                },
-                event_type:
-                  assistantSettings.native_tool_loop_mode === "ACTIVE"
-                    ? "agent.customer-support.native-tool-loop-active-completed"
-                    : "agent.customer-support.native-tool-loop-shadow-completed",
-                recorded_at: new Date(),
-                resource_id: inbound.id,
-                resource_type: "agent_message"
-              })
+                })
+                const nativeContext = extractNativeCustomerSupportContext(loop.tool_results)
+                const toolContextSafe = evaluation.assertions
+                  .filter((assertion) => assertion.id !== "completion")
+                  .every((assertion) => assertion.passed)
+                if (
+                  assistantSettings.native_tool_loop_mode === "ACTIVE" &&
+                  toolContextSafe
+                ) {
+                  catalogSnapshot ??= nativeContext.catalog_snapshot
+                  customerOrderLookup ??= nativeContext.customer_order_lookup
+                  knowledgeSnapshot ??= nativeContext.knowledge_snapshot
+                  proposalResult ??= nativeContext.proposal_result
+                  shippingEstimate ??= nativeContext.shipping_estimate
+                  nativeToolTrace ??= loop.trace
+                }
+                const parsedDecision = CustomerSupportOrchestratorDecision.safeParse(
+                  loop.output
+                )
+                const decision = parsedDecision.success
+                  ? reconcileCustomerSupportDecision(parsedDecision.data, {
+                      catalog_ready:
+                        nativeContext.catalog_snapshot?.status === "READY",
+                      proposal_ready: Boolean(nativeContext.proposal_result)
+                    })
+                  : null
+                orchestratorCompleted = Boolean(decision && evaluation.safe_to_use)
+                await service.updateAgentModelRuns({
+                  completed_at: new Date(),
+                  id: modelRun.id,
+                  latency_ms: Date.now() - startedAt.getTime(),
+                  output: {
+                    decision,
+                    evaluation,
+                    termination: loop.termination,
+                    tool_trace: loop.trace
+                  },
+                  status: decision && evaluation.safe_to_use ? "SUCCEEDED" : "FAILED"
+                })
+                if (
+                  assistantSettings.native_tool_loop_mode === "ACTIVE" &&
+                  evaluation.safe_to_use &&
+                  decision
+                ) {
+                  catalogSnapshot = nativeContext.catalog_snapshot
+                  customerOrderLookup = nativeContext.customer_order_lookup
+                  knowledgeSnapshot = nativeContext.knowledge_snapshot
+                  nativeRoute = decision.intent
+                  nativeToolTrace = loop.trace
+                  orchestratorDecision = decision
+                  proposalResult = nativeContext.proposal_result
+                  shippingEstimate = nativeContext.shipping_estimate
+                  useNativeOrchestration = true
+                }
+                await service.createAgentAuditEvents({
+                  action:
+                    assistantSettings.native_tool_loop_mode === "ACTIVE"
+                      ? "customer-native-tool-loop-active-completed"
+                      : "customer-native-tool-loop-shadow-completed",
+                  actor_id: "customer-support-agent",
+                  actor_type: "agent",
+                  correlation_id: `customer-native-shadow:${conversation.id}:${inbound.id}`,
+                  data: {
+                    mode: assistantSettings.native_tool_loop_mode,
+                    decision,
+                    used_as_response_context:
+                      assistantSettings.native_tool_loop_mode === "ACTIVE" &&
+                      evaluation.safe_to_use &&
+                      Boolean(decision),
+                    evaluation,
+                    iterations: loop.iterations,
+                    termination: loop.termination,
+                    trace: loop.trace
+                  },
+                  event_type:
+                    assistantSettings.native_tool_loop_mode === "ACTIVE"
+                      ? "agent.customer-support.native-tool-loop-active-completed"
+                      : "agent.customer-support.native-tool-loop-shadow-completed",
+                  recorded_at: new Date(),
+                  resource_id: inbound.id,
+                  resource_type: "agent_message"
+                })
+                if (orchestratorCompleted) break
+              } catch (error) {
+                await service.updateAgentModelRuns({
+                  completed_at: new Date(),
+                  error:
+                    error instanceof Error
+                      ? error.message.slice(0, 1_000)
+                      : "Customer support orchestrator failed",
+                  id: modelRun.id,
+                  latency_ms: Date.now() - startedAt.getTime(),
+                  status: "FAILED"
+                })
+              }
+            }
+            if (!orchestratorCompleted) {
+              throw new MedusaError(
+                MedusaError.Types.UNEXPECTED_STATE,
+                "No configured model provider completed a safe customer-support orchestration."
+              )
             }
           } catch (error) {
             await service.createAgentAuditEvents({
@@ -185,7 +372,7 @@ const answerCustomerKnowledgeQuestionStep = createStep(
             })
           }
         }
-        if (!useNativeToolContext) {
+        if (!useNativeOrchestration) {
           const recentInbound = await service.listAgentMessages(
             {
               conversation_id: conversation.id,
@@ -375,6 +562,10 @@ const answerCustomerKnowledgeQuestionStep = createStep(
           inbound_message_id: inbound.id,
           knowledge_snapshot: knowledgeSnapshot,
           native_route: nativeRoute,
+          native_tool_trace: nativeToolTrace,
+          orchestrator_decision: orchestratorDecision,
+          proposal_result: proposalResult,
+          shipping_estimate: shippingEstimate,
         })
     )
     const imageAttachments = ((inbound.structured_content ?? {}) as Record<string, unknown>)

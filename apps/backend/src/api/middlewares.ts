@@ -41,6 +41,10 @@ import {
   TelegramWebhookUpdate,
   ZaloWebhookPayload,
   MessengerWebhookPayload,
+  TikTokWebhookPayload,
+  AdminConfigureTikTokChannel,
+  AdminTestTikTokConnection,
+  AdminDisconnectTikTokChannel,
 } from "./admin/agent-operations/validators"
 import { StoreCreateCustomerChatMessage } from "./store/customer-chat/validators"
 import { shippingHubMiddlewares } from "./admin/shipping/middlewares"
@@ -524,6 +528,30 @@ import { getSepaySettings } from "../modules/payment-hub/sepay-connection"
       matcher: "/admin/agent-operations/channels/messenger/disconnect",
       method: "POST",
       middlewares: [validateAndTransformBody(AdminDisconnectMessengerChannel)],
+      policies: [{ resource: "agent_platform", operation: "delete" }],
+    },
+    {
+      matcher: "/webhooks/agent-operations/tiktok/:id",
+      method: "POST",
+      bodyParser: { preserveRawBody: true },
+      middlewares: [validateAndTransformBody(TikTokWebhookPayload)],
+    },
+    {
+      matcher: "/admin/agent-operations/channels/tiktok",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminConfigureTikTokChannel)],
+      policies: [{ resource: "agent_platform", operation: "configure" }],
+    },
+    {
+      matcher: "/admin/agent-operations/channels/tiktok/test",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminTestTikTokConnection)],
+      policies: [{ resource: "agent_platform", operation: "read" }],
+    },
+    {
+      matcher: "/admin/agent-operations/channels/tiktok/disconnect",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminDisconnectTikTokChannel)],
       policies: [{ resource: "agent_platform", operation: "delete" }],
     },
 ]

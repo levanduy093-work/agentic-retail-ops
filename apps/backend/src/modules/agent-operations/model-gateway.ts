@@ -163,6 +163,45 @@ function parseToolArguments(value: unknown): Record<string, unknown> {
   }
 }
 
+function parseStructuredModelOutput(value: string): ModelInvocationResult {
+  const trimmed = value.trim()
+  const withoutFence = trimmed
+    .replace(/^```(?:json)?\s*/iu, "")
+    .replace(/\s*```$/u, "")
+    .trim()
+  const candidates = [withoutFence]
+  const objectStart = withoutFence.indexOf("{")
+  const objectEnd = withoutFence.lastIndexOf("}")
+  if (objectStart >= 0 && objectEnd > objectStart) {
+    candidates.push(withoutFence.slice(objectStart, objectEnd + 1))
+  }
+
+  for (const candidate of [...new Set(candidates)]) {
+    try {
+      const parsed = JSON.parse(candidate)
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as ModelInvocationResult
+      }
+    } catch {
+      // Try the next bounded JSON candidate.
+    }
+  }
+  throw new MedusaError(
+    MedusaError.Types.INVALID_DATA,
+    "The model provider returned invalid structured output."
+  )
+}
+
+function sanitizeGeminiFunctionSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sanitizeGeminiFunctionSchema)
+  if (!value || typeof value !== "object") return value
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => key !== "additionalProperties")
+      .map(([key, entry]) => [key, sanitizeGeminiFunctionSchema(entry)])
+  )
+}
+
 export class DisabledModelAdapter implements ModelGatewayAdapter {
   model = "disabled"
   provider = "disabled"
@@ -361,7 +400,7 @@ export class OpenAIResponsesModelAdapter implements ModelGatewayAdapter {
         )
       }
 
-      return JSON.parse(outputText) as ModelInvocationResult
+      return parseStructuredModelOutput(outputText)
     } catch (error) {
       if (error instanceof SyntaxError) {
         throw new MedusaError(
@@ -452,7 +491,7 @@ export class GeminiModelAdapter implements ModelGatewayAdapter {
                       functionDeclarations: input.tools.map((tool) => ({
                         description: tool.description,
                         name: tool.name,
-                        parameters: tool.parameters,
+                        parameters: sanitizeGeminiFunctionSchema(tool.parameters),
                       })),
                     },
                   ],
@@ -506,7 +545,7 @@ export class GeminiModelAdapter implements ModelGatewayAdapter {
           "The model provider returned no structured output."
         )
       }
-      return JSON.parse(outputText) as ModelInvocationResult
+      return parseStructuredModelOutput(outputText)
     } catch (error) {
       if (error instanceof SyntaxError) {
         throw new MedusaError(
@@ -631,7 +670,7 @@ export class DeepSeekChatModelAdapter implements ModelGatewayAdapter {
           "The model provider returned no structured output."
         )
       }
-      return JSON.parse(outputText) as ModelInvocationResult
+      return parseStructuredModelOutput(outputText)
     } catch (error) {
       if (error instanceof SyntaxError) {
         throw new MedusaError(

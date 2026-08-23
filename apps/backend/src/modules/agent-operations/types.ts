@@ -58,6 +58,7 @@ export const CONVERSATION_CHANNELS = [
   "TELEGRAM",
   "ZALO",
   "MESSENGER",
+  "TIKTOK",
   "EMAIL",
   "SLACK",
   "TEAMS"
@@ -378,7 +379,11 @@ export type ProcessCustomerKnowledgeQuestionInput = {
   customer_order_lookup_locale?: "en" | "vi"
   inbound_message_id: string
   knowledge_snapshot?: import("./tools/platform-read-tools").KnowledgeSearchOutput
-  native_route?: "PRODUCT_DISCOVERY" | "STORE_QUESTION" | "HUMAN_ACTION"
+  native_route?: import("./customer-message-intent").CustomerMessageIntent
+  native_tool_trace?: Array<Record<string, unknown>>
+  orchestrator_decision?: import("./customer-support-orchestrator").CustomerSupportOrchestratorDecision
+  proposal_result?: import("./native-customer-support-context").NativeCustomerSupportContext["proposal_result"]
+  shipping_estimate?: import("./tools/shipping-tools").ShippingEstimateOutput
 }
 
 export type ProcessTelegramKnowledgeQuestionInput = ProcessCustomerKnowledgeQuestionInput

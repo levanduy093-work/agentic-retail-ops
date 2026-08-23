@@ -37,7 +37,8 @@ function uniqueMemoryItems(values: string[], limit: number) {
 }
 
 function extractDurableCustomerFacts(
-  recentMessages: Array<{ body: string; direction: "INBOUND" | "OUTBOUND" }>
+  recentMessages: Array<{ body: string; direction: "INBOUND" | "OUTBOUND" }>,
+  initialFacts: string[] = []
 ) {
   const customerText = recentMessages
     .filter(
@@ -46,7 +47,47 @@ function extractDurableCustomerFacts(
     )
     .map((message) => message.body.normalize("NFKC"))
     .join("\n")
-  const facts: string[] = []
+  const facts: string[] = [...initialFacts]
+
+  // Customer Name / Identity
+  const nameMatch = customerText.match(
+    /(?:(?:mình|em|anh|chị|tôi)\s+tên(?:\s+là)?|tên\s+(?:mình|em|anh|chị|tôi)(?:\s+là)?|tên\s+là)\s+([A-ZÀ-Ỹa-zà-ỹ0-9_.\s]{1,35})/iu
+  )
+  if (nameMatch?.[1]) {
+    const rawName = nameMatch[1]
+      .split(/[,.!?;:\n]|(?:\s+(?:gọi|sđt|số|sdt|email|ở|tại|nhé|nha|nhe|ạ|a|đang|cần|muốn|mặc|size)\b)/iu)[0]
+      .trim()
+    if (rawName && rawName.length >= 2 && !facts.some((f) => f.toLowerCase().includes("tên khách hàng"))) {
+      facts.push(`Tên khách hàng: ${rawName}.`)
+    }
+  }
+
+  // Pronoun preference
+  const pronounMatch = customerText.match(
+    /(?:gọi\s+(?:mình|em|anh|chị)\s+là\s+(anh|chị|em|bạn)|xưng\s+hô\s+là\s+(anh|chị|em|bạn)|cứ\s+gọi\s+(?:là\s+)?(anh|chị|em|bạn))/iu
+  )
+  if (pronounMatch) {
+    const p = (pronounMatch[1] || pronounMatch[2] || pronounMatch[3])?.toLowerCase()
+    if (p) {
+      facts.push(`Khách muốn xưng hô: ${p}.`)
+    }
+  }
+
+  // Phone number
+  const phoneMatch = customerText.match(
+    /(?:\bsđt\b|số\s*điện\s*thoại|phone|tel)?\s*(?:là|:)?\s*(0[35789]\d{8}|\+84[35789]\d{8})\b/iu
+  )
+  if (phoneMatch?.[1] && !facts.some((f) => f.includes(phoneMatch[1]))) {
+    facts.push(`Số điện thoại: ${phoneMatch[1]}.`)
+  }
+
+  // Email
+  const emailMatch = customerText.match(
+    /\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/iu
+  )
+  if (emailMatch?.[1] && !facts.some((f) => f.includes(emailMatch[1]))) {
+    facts.push(`Email khách: ${emailMatch[1].toLowerCase()}.`)
+  }
 
   if (/\bactive\s+move\b/iu.test(customerText)) {
     facts.push("Khách quan tâm mẫu Active Move.")
@@ -78,7 +119,7 @@ function extractDurableCustomerFacts(
   }
 
   // Sizes
-  const sizeMatches = customerText.matchAll(/\b(?:size|cỡ|co|sz)\s*(xs|s|m|l|xl|xxl|2xl|3xl)\b/giu)
+  const sizeMatches = customerText.matchAll(/\b(?:size|cỡ|sz)\s*(xs|s|m|l|xl|xxl|2xl|3xl)\b/giu)
   for (const match of sizeMatches) {
     if (match[1]) {
       const sizeVal = match[1].toUpperCase()
@@ -213,6 +254,7 @@ export function shouldRefreshConversationMemoryWithAi(input: {
 }
 
 export function buildConversationMemoryFallback(input: {
+  customer_name?: string | null
   previous_customer_facts?: string[]
   previous_open_questions?: string[]
   previous_resolved_topics?: string[]
@@ -237,11 +279,16 @@ export function buildConversationMemoryFallback(input: {
     .join(" | ")
     .slice(-1_600)
 
+  const initialFacts: string[] = []
+  if (input.customer_name?.trim()) {
+    initialFacts.push(`Tên khách hàng: ${input.customer_name.trim()}.`)
+  }
+
   return {
     customer_facts: uniqueMemoryItems(
       [
         ...(input.previous_customer_facts ?? []),
-        ...extractDurableCustomerFacts(input.recent_messages),
+        ...extractDurableCustomerFacts(input.recent_messages, initialFacts),
       ],
       12
     ),
@@ -316,10 +363,21 @@ export function analyzeConversationTimeGap(
   }
 }
 
+export type CustomerProfileInfo = {
+  channel?: string | null
+  customer_tier?: string | null
+  email?: string | null
+  name?: string | null
+  orders_count?: number | null
+  phone?: string | null
+  shipping_city?: string | null
+}
+
 export function buildCustomerConversationContext(input: {
   current_message_at?: Date | string
   current_summary?: string | null
   customer_facts?: string[]
+  customer_info?: CustomerProfileInfo | null
   last_message_at?: Date | string | null
   open_questions?: string[]
   profile_preferences?: string[]
@@ -327,7 +385,39 @@ export function buildCustomerConversationContext(input: {
 }) {
   const parts: string[] = []
 
-  // 1. Dòng thời gian & Khoảng cách phiên
+  // 1. Hồ sơ định danh khách hàng (Customer Identity & Profile)
+  if (input.customer_info) {
+    const profileLines: string[] = []
+    if (input.customer_info.name?.trim()) {
+      profileLines.push(`Tên khách hàng: ${input.customer_info.name.trim()}`)
+    }
+    if (input.customer_info.channel?.trim()) {
+      profileLines.push(`Kênh liên hệ: ${input.customer_info.channel.trim()}`)
+    }
+    if (input.customer_info.phone?.trim()) {
+      profileLines.push(`SĐT: ${input.customer_info.phone.trim()}`)
+    }
+    if (input.customer_info.email?.trim()) {
+      profileLines.push(`Email: ${input.customer_info.email.trim()}`)
+    }
+    if (input.customer_info.customer_tier?.trim()) {
+      profileLines.push(`Hạng khách: ${input.customer_info.customer_tier.trim()}`)
+    }
+    if (
+      typeof input.customer_info.orders_count === "number" &&
+      input.customer_info.orders_count > 0
+    ) {
+      profileLines.push(`Số đơn đã mua: ${input.customer_info.orders_count} đơn hàng`)
+    }
+    if (input.customer_info.shipping_city?.trim()) {
+      profileLines.push(`Khu vực/Tỉnh thành: ${input.customer_info.shipping_city.trim()}`)
+    }
+    if (profileLines.length > 0) {
+      parts.push(`Customer profile:\n${profileLines.map((line) => `- ${line}`).join("\n")}`)
+    }
+  }
+
+  // 2. Dòng thời gian & Khoảng cách phiên
   if (input.last_message_at) {
     const gap = analyzeConversationTimeGap(
       input.last_message_at,
@@ -336,7 +426,7 @@ export function buildCustomerConversationContext(input: {
     parts.push(`Timeline context: ${gap.gap_description}`)
   }
 
-  // 2. Việc đang dang dở (Open Loops)
+  // 3. Việc đang dang dở (Open Loops)
   const openLoops = (input.open_questions ?? [])
     .filter(isSafeMemoryText)
     .slice(0, 4)
@@ -344,7 +434,7 @@ export function buildCustomerConversationContext(input: {
     parts.push(`Pending open loops: ${openLoops.join("; ")}`)
   }
 
-  // 3. Sự thật đã thống nhất & hoàn tất (Resolved Milestones & Facts)
+  // 4. Sự thật đã thống nhất & hoàn tất (Resolved Milestones & Facts)
   const resolved = (input.resolved_topics ?? [])
     .filter(isSafeMemoryText)
     .slice(0, 4)
@@ -354,12 +444,12 @@ export function buildCustomerConversationContext(input: {
 
   const facts = (input.customer_facts ?? [])
     .filter(isSafeMemoryText)
-    .slice(0, 6)
+    .slice(0, 8)
   if (facts.length) {
     parts.push(`Stated customer facts: ${facts.join("; ")}`)
   }
 
-  // 4. Hồ sơ sở thích dài hạn
+  // 5. Hồ sơ sở thích dài hạn
   const profile = (input.profile_preferences ?? [])
     .map((preference) => preference.replace(/\s+/gu, " ").trim())
     .filter(Boolean)
@@ -368,13 +458,13 @@ export function buildCustomerConversationContext(input: {
     parts.push(`Customer profile preferences: ${profile.join(" | ")}`)
   }
 
-  // 5. Bản tóm tắt tiến trình
+  // 6. Bản tóm tắt tiến trình
   const summary = input.current_summary?.trim()
   if (summary && isSafeMemoryText(summary)) {
     parts.push(`Current conversation: ${summary}`)
   }
 
-  return parts.join("\n").slice(0, 2_000)
+  return parts.join("\n").slice(0, 2_500)
 }
 
 export function hasExplicitHistoricalCustomerReference(message: string) {
@@ -388,5 +478,12 @@ export function startsExplicitNewProductTopic(message: string) {
   if (hasExplicitHistoricalCustomerReference(normalized)) return false
   return /(?:mình|tôi|em|anh|chị)?\s*(?:muốn|cần|tìm|mua)\s+(?:(?:mua|tìm|xem|chọn)\s+)?(?:một\s+)?(?:áo|quần|váy|đầm|túi|giày|dép|mũ|phụ kiện)\b/iu.test(
     normalized
+  )
+}
+
+export function shouldUseHistoricalCustomerProfile(message: string) {
+  return (
+    hasExplicitHistoricalCustomerReference(message) &&
+    !startsExplicitNewProductTopic(message)
   )
 }

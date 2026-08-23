@@ -47,5 +47,11 @@ describe("customer conversation responder", () => {
     expect(CUSTOMER_CONVERSATION_SYSTEM_PROMPT).toContain(
       "customer service staff"
     )
+    expect(CUSTOMER_CONVERSATION_SYSTEM_PROMPT).toContain(
+      "Customer Name & Identity Recognition"
+    )
+    expect(CUSTOMER_CONVERSATION_SYSTEM_PROMPT).toContain(
+      "warmly confirm that you know their name"
+    )
   })
 })

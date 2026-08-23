@@ -169,6 +169,27 @@ describe("customer native tool dispatcher", () => {
     ).rejects.toThrow("is not available")
   })
 
+  it("rejects a shipping destination invented outside customer context", async () => {
+    const execute = createCustomerSupportNativeToolDispatcher({
+      container: {} as MedusaContainer,
+      conversation_id: "agconv_1",
+      customer_id: "cus_1",
+      customer_message_context: ["Thời gian giao hàng bao lâu vậy shop?"],
+      inbound_message_id: "agmsg_1",
+      locale: "vi",
+      service: createService(),
+      tenant_id: "tenant_a",
+    })
+
+    await expect(
+      execute({
+        arguments: { destination_location: "Quận Nam Từ Liêm, Hà Nội" },
+        id: "call_shipping_hallucination",
+        name: "estimate_shipping_delivery",
+      })
+    ).rejects.toThrow("destination stated by the customer")
+  })
+
   it("binds a draft-cart proposal to the current confirmation message", async () => {
     const service = createService()
     const execute = createCustomerSupportNativeToolDispatcher({

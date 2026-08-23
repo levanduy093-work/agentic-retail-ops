@@ -143,10 +143,13 @@ describe("native tool loop", () => {
     })
 
     expect(result).toMatchObject({
-      iterations: 2,
+      iterations: 3,
       output: null,
       termination: "MAX_ITERATIONS",
     })
     expect(result.tool_results).toHaveLength(2)
+    expect(adapter.invoke).toHaveBeenLastCalledWith(
+      expect.objectContaining({ tools: [] })
+    )
   })
 })

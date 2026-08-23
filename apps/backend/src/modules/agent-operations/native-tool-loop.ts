@@ -126,8 +126,31 @@ export async function runNativeToolLoop(
     }
   }
 
+  // Once the tool budget is exhausted, force one tool-free synthesis turn.
+  // This prevents a capable provider from losing already validated read-tool
+  // results merely because it kept requesting more searches instead of
+  // emitting the required structured decision.
+  const finalOutput = await input.adapter.invoke({
+    ...input.invocation,
+    input: {
+      request: input.invocation.input,
+      tool_budget_exhausted: true,
+      tool_results: toolResults,
+    },
+    tools: [],
+  })
+  if (!(finalOutput.tool_calls ?? []).length) {
+    return {
+      iterations: maxIterations + 1,
+      output: finalOutput,
+      termination: "COMPLETE",
+      tool_results: toolResults,
+      trace,
+    }
+  }
+
   return {
-    iterations: maxIterations,
+    iterations: maxIterations + 1,
     output: null,
     termination: "MAX_ITERATIONS",
     tool_results: toolResults,

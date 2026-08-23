@@ -216,29 +216,31 @@ const ingestTelegramWebhookStep = createStep<
         )[0]
         const occurredAt = new Date(telegramMessage.date * 1_000)
         if (!conversation) {
-      const senderName = [
-        telegramMessage.from?.first_name,
-        telegramMessage.from?.last_name,
-      ]
-        .filter(Boolean)
-        .join(" ")
+          const senderName = [
+            telegramMessage.from?.first_name,
+            telegramMessage.from?.last_name,
+          ]
+            .filter(Boolean)
+            .join(" ")
           conversation = await service.createAgentConversations({
-        channel: "TELEGRAM",
-        external_thread_id: chatId,
-        last_message_at: occurredAt,
-        metadata: {
-          connection_id: connection.id,
-          mapped_user_id: principal.principal_id,
-          principal_role: principal.role,
-          telegram_chat_id: chatId,
-          telegram_username: telegramMessage.from?.username,
-        },
-        opened_at: occurredAt,
-        status: "OPEN",
-        tenant_id: connection.tenant_id,
-        title: senderName ? `Telegram — ${senderName}` : `Telegram — ${chatId}`,
-        topic_id: topicId,
-        topic_type: topicType,
+            channel: "TELEGRAM",
+            external_thread_id: chatId,
+            last_message_at: occurredAt,
+            metadata: {
+              connection_id: connection.id,
+              customer_name: senderName || telegramMessage.from?.username || undefined,
+              mapped_user_id: principal.principal_id,
+              principal_role: principal.role,
+              sender_name: senderName || telegramMessage.from?.username || undefined,
+              telegram_chat_id: chatId,
+              telegram_username: telegramMessage.from?.username,
+            },
+            opened_at: occurredAt,
+            status: "OPEN",
+            tenant_id: connection.tenant_id,
+            title: senderName ? `Telegram — ${senderName}` : `Telegram — ${chatId}`,
+            topic_id: topicId,
+            topic_type: topicType,
           })
         }
 

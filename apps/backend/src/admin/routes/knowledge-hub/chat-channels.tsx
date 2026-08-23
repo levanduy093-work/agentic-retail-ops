@@ -14,7 +14,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { FormEvent, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { FacebookMessengerIcon, TelegramIcon, ZaloIcon, ClipboardCopyIcon } from "../../lib/icons"
+import { FacebookMessengerIcon, TelegramIcon, TikTokIcon, ZaloIcon, ClipboardCopyIcon } from "../../lib/icons"
 import { sdk } from "../../lib/sdk"
 
 type ChannelStatus = {
@@ -22,9 +22,9 @@ type ChannelStatus = {
   allow_unmapped_users: boolean
   bot_id: string | null
   bot_username: string | null
-  channel: "TELEGRAM" | "ZALO" | "MESSENGER"
+  channel: "TELEGRAM" | "ZALO" | "MESSENGER" | "TIKTOK"
   configured: boolean
-  identities: Array<{ chat_id?: string; psid?: string; user_id: string; zalo_user_id?: string }>
+  identities: Array<{ chat_id?: string; psid?: string; tiktok_user_id?: string; user_id: string; zalo_user_id?: string }>
   oa_avatar?: string | null
   public_base_url: string | null
   secret_hint: string | null
@@ -73,6 +73,15 @@ type FacebookTestResponse = {
   }
 }
 
+type TikTokTestResponse = {
+  account: {
+    account_id: string
+    account_name: string
+    avatar?: string
+  }
+  ok: boolean
+}
+
 type ChatChannelsContentProps = {
   embedded?: boolean
 }
@@ -87,6 +96,7 @@ export const ChatChannelsContent = ({
   const [selectedTelegram, setSelectedTelegram] = useState<ChannelStatus | null>(null)
   const [selectedZalo, setSelectedZalo] = useState<ChannelStatus | null>(null)
   const [selectedMessenger, setSelectedMessenger] = useState<ChannelStatus | null>(null)
+  const [selectedTikTok, setSelectedTikTok] = useState<ChannelStatus | null>(null)
 
   const [telegramTestResult, setTelegramTestResult] = useState<string | null>(null)
   const [telegramTestLoading, setTelegramTestLoading] = useState(false)
@@ -96,6 +106,9 @@ export const ChatChannelsContent = ({
 
   const [messengerTestResult, setMessengerTestResult] = useState<string | null>(null)
   const [messengerTestLoading, setMessengerTestLoading] = useState(false)
+
+  const [tiktokTestResult, setTikTokTestResult] = useState<string | null>(null)
+  const [tiktokTestLoading, setTikTokTestLoading] = useState(false)
 
   const [telegramForm, setTelegramForm] = useState({
     allow_unmapped_users: true,
@@ -131,6 +144,19 @@ export const ChatChannelsContent = ({
     verify_token: "",
   })
 
+  const [tiktokForm, setTikTokForm] = useState({
+    access_token: "",
+    allow_unmapped_users: true,
+    api_base_url: "https://open.tiktokapis.com",
+    burst_limit: 6,
+    client_key: "",
+    client_secret: "",
+    daily_limit: 100,
+    public_base_url: "",
+    refresh_token: "",
+    webhook_secret: "",
+  })
+
   const channelsQuery = useQuery({
     queryFn: () =>
       sdk.client.fetch<ChannelListResponse>(
@@ -150,6 +176,9 @@ export const ChatChannelsContent = ({
   )
   const messengerChannel = channelsQuery.data?.channels.find(
     (c) => c.channel === "MESSENGER"
+  )
+  const tiktokChannel = channelsQuery.data?.channels.find(
+    (c) => c.channel === "TIKTOK"
   )
 
   const openTelegramDrawer = (channel?: ChannelStatus) => {
@@ -225,6 +254,33 @@ export const ChatChannelsContent = ({
       page_access_token: "",
       public_base_url: defaultUrl,
       verify_token: current?.verify_token ?? "",
+    })
+  }
+
+  const openTikTokDrawer = (channel?: ChannelStatus) => {
+    setTikTokTestResult(null)
+    const current = channel ?? tiktokChannel
+    setSelectedTikTok(current ?? null)
+    const defaultUrl =
+      current?.public_base_url &&
+      !current.public_base_url.includes("invalid") &&
+      !current.public_base_url.includes("webhooks/")
+        ? current.public_base_url
+        : typeof window !== "undefined"
+          ? window.location.origin
+          : ""
+
+    setTikTokForm({
+      access_token: "",
+      allow_unmapped_users: current?.allow_unmapped_users ?? true,
+      api_base_url: "https://open.tiktokapis.com",
+      burst_limit: current?.security?.burst_limit ?? 6,
+      client_key: "",
+      client_secret: "",
+      daily_limit: current?.security?.daily_limit ?? 100,
+      public_base_url: defaultUrl,
+      refresh_token: "",
+      webhook_secret: "",
     })
   }
 
@@ -548,6 +604,114 @@ export const ChatChannelsContent = ({
     saveMessengerMutation.mutate()
   }
 
+  const testTikTokMutation = useMutation({
+    mutationFn: async () => {
+      const token = tiktokForm.access_token.trim()
+      if (!token && !tiktokChannel?.configured) {
+        throw new Error(t("knowledgeHub.chatChannels.tiktok.fields.accessTokenPlaceholder"))
+      }
+      setTikTokTestLoading(true)
+      setTikTokTestResult(null)
+      try {
+        const res = await sdk.client.fetch<TikTokTestResponse>(
+          "/admin/agent-operations/channels/tiktok/test",
+          {
+            body: {
+              ...(token ? { access_token: token } : {}),
+              account_ref: "primary",
+              api_base_url: tiktokForm.api_base_url,
+              tenant_id: "default",
+            },
+            method: "POST",
+          }
+        )
+        const msg = t("knowledgeHub.chatChannels.tiktok.testSuccess", {
+          id: res.account.account_id,
+          name: res.account.account_name,
+        })
+        setTikTokTestResult(msg)
+        toast.success(msg)
+      } catch (err: any) {
+        const errMsg = err?.message || t("knowledgeHub.chatChannels.tiktok.testError")
+        setTikTokTestResult(errMsg)
+        toast.error(errMsg)
+      } finally {
+        setTikTokTestLoading(false)
+      }
+    },
+  })
+
+  const saveTikTokMutation = useMutation({
+    mutationFn: async () => {
+      return sdk.client.fetch("/admin/agent-operations/channels/tiktok", {
+        body: {
+          ...(tiktokForm.access_token.trim() ? { access_token: tiktokForm.access_token.trim() } : {}),
+          account_ref: "primary",
+          allow_unmapped_users: tiktokForm.allow_unmapped_users,
+          api_base_url: tiktokForm.api_base_url,
+          client_key: tiktokForm.client_key.trim() || undefined,
+          ...(tiktokForm.client_secret.trim() ? { client_secret: tiktokForm.client_secret.trim() } : {}),
+          public_base_url: tiktokForm.public_base_url.trim(),
+          ...(tiktokForm.refresh_token.trim() ? { refresh_token: tiktokForm.refresh_token.trim() } : {}),
+          security: {
+            burst_limit: Number(tiktokForm.burst_limit),
+            daily_limit: Number(tiktokForm.daily_limit),
+          },
+          tenant_id: "default",
+          ...(tiktokForm.webhook_secret.trim() ? { webhook_secret: tiktokForm.webhook_secret.trim() } : {}),
+        },
+        method: "POST",
+      })
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || t("knowledgeHub.chatChannels.saveError"))
+    },
+    onSuccess: async () => {
+      setSelectedTikTok(null)
+      setTikTokForm((cur) => ({ ...cur, access_token: "" }))
+      await refresh()
+      toast.success(t("knowledgeHub.chatChannels.saveSuccess"))
+    },
+  })
+
+  const disconnectTikTokMutation = useMutation({
+    mutationFn: async () => {
+      return sdk.client.fetch(
+        "/admin/agent-operations/channels/tiktok/disconnect",
+        {
+          body: {
+            account_ref: "primary",
+            tenant_id: "default",
+          },
+          method: "POST",
+        }
+      )
+    },
+    onError: () => toast.error(t("knowledgeHub.chatChannels.disconnectError")),
+    onSuccess: async () => {
+      await refresh()
+      toast.success(t("knowledgeHub.chatChannels.disconnectSuccess"))
+    },
+  })
+
+  const handleDisconnectTikTok = async () => {
+    const ok = await confirm({
+      cancelText: t("knowledgeHub.cancel"),
+      confirmText: t("knowledgeHub.chatChannels.tiktok.disconnectAction"),
+      description: t("knowledgeHub.chatChannels.disconnectConfirm"),
+      title: t("knowledgeHub.chatChannels.tiktok.disconnectAction"),
+      variant: "danger",
+    })
+    if (ok) {
+      disconnectTikTokMutation.mutate()
+    }
+  }
+
+  const handleTikTokSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    saveTikTokMutation.mutate()
+  }
+
   return (
     <div className="flex flex-col gap-y-4">
       {!embedded && (
@@ -843,6 +1007,99 @@ export const ChatChannelsContent = ({
                   variant="secondary"
                 >
                   {t("knowledgeHub.chatChannels.messenger.configureAction")}
+                </Button>
+              </div>
+            </div>
+
+            {/* TikTok Channel Item */}
+            <div className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-4">
+                {tiktokChannel?.oa_avatar ? (
+                  <Avatar
+                    className="h-12 w-12 shrink-0 rounded-xl border shadow-sm"
+                    fallback="TikTok"
+                    src={tiktokChannel.oa_avatar}
+                  />
+                ) : (
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-neutral-900 text-white shadow-sm border border-neutral-800">
+                    <TikTokIcon size={24} color="#ffffff" />
+                  </div>
+                )}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Text weight="plus">
+                      {t("knowledgeHub.chatChannels.tiktok.name")}
+                    </Text>
+                    <StatusBadge
+                      className="shrink-0 whitespace-nowrap"
+                      color={
+                        tiktokChannel?.status === "ACTIVE"
+                          ? "green"
+                          : tiktokChannel?.configured
+                            ? "orange"
+                            : "grey"
+                      }
+                    >
+                      {tiktokChannel?.status === "ACTIVE"
+                        ? t("knowledgeHub.chatChannels.status.active")
+                        : t("knowledgeHub.chatChannels.status.disabled")}
+                    </StatusBadge>
+                  </div>
+                  <Text className="mt-1 text-ui-fg-subtle" size="small">
+                    {t("knowledgeHub.chatChannels.tiktok.description")}
+                  </Text>
+
+                  {tiktokChannel?.configured && (
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ui-fg-muted">
+                      {tiktokChannel.bot_username && (
+                        <span>
+                          Account:{" "}
+                          <strong className="text-ui-fg-base">
+                            {tiktokChannel.bot_username}
+                          </strong>
+                        </span>
+                      )}
+                      {tiktokChannel.secret_hint && (
+                        <span>
+                          Info:{" "}
+                          <span className="font-mono text-ui-fg-subtle">
+                            {tiktokChannel.secret_hint}
+                          </span>
+                          <span className="ml-1 rounded bg-ui-bg-subtle px-1 py-0.5 text-[10px] text-ui-fg-muted border">
+                            AES-256
+                          </span>
+                        </span>
+                      )}
+                      {tiktokChannel.webhook_url && (
+                        <span className="truncate max-w-xs">
+                          Webhook:{" "}
+                          <span className="font-mono text-ui-fg-subtle">
+                            {tiktokChannel.webhook_url}
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {tiktokChannel?.status === "ACTIVE" && (
+                  <Button
+                    disabled={disconnectTikTokMutation.isPending}
+                    onClick={handleDisconnectTikTok}
+                    size="small"
+                    variant="danger"
+                  >
+                    {t("knowledgeHub.chatChannels.tiktok.disconnectAction")}
+                  </Button>
+                )}
+                <Button
+                  onClick={() => openTikTokDrawer(tiktokChannel)}
+                  size="small"
+                  variant="secondary"
+                >
+                  {t("knowledgeHub.chatChannels.tiktok.configureAction")}
                 </Button>
               </div>
             </div>
@@ -1747,6 +2004,339 @@ export const ChatChannelsContent = ({
                   !messengerForm.public_base_url.trim()
                 }
                 isLoading={saveMessengerMutation.isPending}
+                size="small"
+                type="submit"
+              >
+                {t("knowledgeHub.saveDraft")}
+              </Button>
+            </Drawer.Footer>
+          </form>
+        </Drawer.Content>
+      </Drawer>
+
+      {/* Drawer: Configure TikTok */}
+      <Drawer
+        onOpenChange={(open) => {
+          if (!open) setSelectedTikTok(null)
+        }}
+        open={Boolean(selectedTikTok)}
+      >
+        <Drawer.Content className="overflow-y-auto">
+          <Drawer.Header>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-neutral-900 text-white">
+                <TikTokIcon size={18} color="#ffffff" />
+              </div>
+              <Drawer.Title className="text-base font-semibold">
+                {t("knowledgeHub.chatChannels.tiktok.drawerTitle")}
+              </Drawer.Title>
+            </div>
+            <Drawer.Description className="text-xs text-ui-fg-subtle">
+              {t("knowledgeHub.chatChannels.tiktok.drawerHint")}
+            </Drawer.Description>
+          </Drawer.Header>
+
+          <form onSubmit={handleTikTokSubmit}>
+            <Drawer.Body className="space-y-5 px-6 py-4">
+              {/* Connected Account Card if configured */}
+              {selectedTikTok?.configured && (
+                <div className="rounded-lg border border-ui-border-base bg-ui-bg-subtle p-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Text className="text-xs font-semibold text-ui-fg-base">
+                      {t("knowledgeHub.chatChannels.tiktok.connectedCardTitle")}
+                    </Text>
+                    <StatusBadge
+                      color={
+                        selectedTikTok.status === "ACTIVE" ? "green" : "orange"
+                      }
+                    >
+                      {selectedTikTok.status === "ACTIVE"
+                        ? t("knowledgeHub.chatChannels.status.active")
+                        : t("knowledgeHub.chatChannels.status.disabled")}
+                    </StatusBadge>
+                  </div>
+                  {selectedTikTok.bot_username && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-ui-fg-muted">Account:</span>
+                      <span className="font-semibold text-ui-fg-base">
+                        {selectedTikTok.bot_username}
+                      </span>
+                    </div>
+                  )}
+                  {selectedTikTok.secret_hint && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-ui-fg-muted">Info:</span>
+                      <span className="font-mono text-ui-fg-subtle">
+                        {selectedTikTok.secret_hint}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Section 1: Credentials */}
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between min-h-[22px]">
+                    <Label htmlFor="tt-access-token" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.tiktok.fields.accessToken")}
+                    </Label>
+                    {selectedTikTok?.configured && (
+                      <span className="text-[11px] text-ui-fg-muted">
+                        {t(
+                          "knowledgeHub.chatChannels.tiktok.fields.accessTokenStoredHint",
+                          { hint: selectedTikTok.secret_hint }
+                        )}
+                      </span>
+                    )}
+                  </div>
+                  <Input
+                    autoComplete="off"
+                    id="tt-access-token"
+                    onChange={(e) =>
+                      setTikTokForm((cur) => ({
+                        ...cur,
+                        access_token: e.target.value,
+                      }))
+                    }
+                    placeholder={
+                      selectedTikTok?.configured
+                        ? t(
+                            "knowledgeHub.chatChannels.tiktok.fields.accessTokenPlaceholderConfigured"
+                          )
+                        : t(
+                            "knowledgeHub.chatChannels.tiktok.fields.accessTokenPlaceholder"
+                          )
+                    }
+                    type="password"
+                    value={tiktokForm.access_token}
+                  />
+                </div>
+
+                {/* Test Connection Button */}
+                <div className="flex items-center gap-2 pt-1">
+                  <Button
+                    disabled={
+                      tiktokTestLoading ||
+                      (!tiktokForm.access_token.trim() &&
+                        !selectedTikTok?.configured)
+                    }
+                    isLoading={tiktokTestLoading}
+                    onClick={() => testTikTokMutation.mutate()}
+                    size="small"
+                    type="button"
+                    variant="secondary"
+                  >
+                    {t("knowledgeHub.chatChannels.tiktok.testAction")}
+                  </Button>
+                  {tiktokTestResult && (
+                    <Text
+                      className={
+                        tiktokTestResult.includes("thất bại") ||
+                        tiktokTestResult.includes("failed")
+                          ? "text-ui-fg-error text-xs"
+                          : "text-ui-fg-interactive text-xs"
+                      }
+                    >
+                      {tiktokTestResult}
+                    </Text>
+                  )}
+                </div>
+              </div>
+
+              {/* Section 2: Client Key & Secret */}
+              <div className="border-t pt-4 space-y-3">
+                <div className="space-y-1.5">
+                  <div className="min-h-[22px] flex items-center">
+                    <Label htmlFor="tt-client-key" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.tiktok.fields.clientKey")}
+                    </Label>
+                  </div>
+                  <Input
+                    autoComplete="off"
+                    id="tt-client-key"
+                    onChange={(e) =>
+                      setTikTokForm((cur) => ({ ...cur, client_key: e.target.value }))
+                    }
+                    placeholder={t(
+                      "knowledgeHub.chatChannels.tiktok.fields.clientKeyPlaceholder"
+                    )}
+                    value={tiktokForm.client_key}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="min-h-[22px] flex items-center">
+                    <Label htmlFor="tt-client-secret" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.tiktok.fields.clientSecret")}
+                    </Label>
+                  </div>
+                  <Input
+                    autoComplete="off"
+                    id="tt-client-secret"
+                    onChange={(e) =>
+                      setTikTokForm((cur) => ({ ...cur, client_secret: e.target.value }))
+                    }
+                    placeholder={t(
+                      "knowledgeHub.chatChannels.tiktok.fields.clientSecretPlaceholder"
+                    )}
+                    type="password"
+                    value={tiktokForm.client_secret}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="min-h-[22px] flex items-center">
+                    <Label htmlFor="tt-refresh-token" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.tiktok.fields.refreshToken")}
+                    </Label>
+                  </div>
+                  <Input
+                    autoComplete="off"
+                    id="tt-refresh-token"
+                    onChange={(e) =>
+                      setTikTokForm((cur) => ({ ...cur, refresh_token: e.target.value }))
+                    }
+                    placeholder={t(
+                      "knowledgeHub.chatChannels.tiktok.fields.refreshTokenPlaceholder"
+                    )}
+                    type="password"
+                    value={tiktokForm.refresh_token}
+                  />
+                </div>
+              </div>
+
+              {/* Section 3: Webhook Configuration */}
+              <div className="border-t pt-4 space-y-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between min-h-[22px]">
+                    <Label htmlFor="tt-public-url" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.tiktok.fields.publicBaseUrl")}
+                    </Label>
+                    <span className="text-[11px] text-ui-fg-interactive font-medium">HTTPS</span>
+                  </div>
+                  <Input
+                    id="tt-public-url"
+                    onChange={(e) =>
+                      setTikTokForm((cur) => ({
+                        ...cur,
+                        public_base_url: e.target.value,
+                      }))
+                    }
+                    placeholder={t(
+                      "knowledgeHub.chatChannels.tiktok.fields.publicBaseUrlPlaceholder"
+                    )}
+                    required
+                    type="url"
+                    value={tiktokForm.public_base_url}
+                  />
+                  <Text className="text-ui-fg-subtle" size="xsmall">
+                    {t(
+                      "knowledgeHub.chatChannels.tiktok.fields.publicBaseUrlHint"
+                    )}
+                  </Text>
+                </div>
+
+                {/* Webhook Callback URL Copy Box */}
+                <div className="rounded-lg border border-ui-border-base bg-ui-bg-subtle p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Text className="text-ui-fg-base" size="small" weight="plus">
+                      {t("knowledgeHub.chatChannels.tiktok.webhookUrl")}
+                    </Text>
+                    <Button
+                      className="h-6 px-2 text-xs"
+                      onClick={() => {
+                        const base = tiktokForm.public_base_url.trim().replace(/\/$/, "") || "https://trendhub.sbs"
+                        const url = selectedTikTok?.webhook_url || `${base}/webhooks/agent-operations/tiktok/primary`
+                        navigator.clipboard.writeText(url)
+                        toast.success(t("knowledgeHub.chatChannels.tiktok.webhookCopied"))
+                      }}
+                      size="small"
+                      type="button"
+                      variant="secondary"
+                    >
+                      <ClipboardCopyIcon className="mr-1" size={12} />
+                      {t("knowledgeHub.chatChannels.tiktok.copyWebhookUrl")}
+                    </Button>
+                  </div>
+                  <div className="rounded bg-ui-bg-base px-2.5 py-1.5 border font-mono text-xs text-ui-fg-subtle break-all select-all">
+                    {selectedTikTok?.webhook_url || `${(tiktokForm.public_base_url.trim().replace(/\/$/, "") || "https://trendhub.sbs")}/webhooks/agent-operations/tiktok/primary`}
+                  </div>
+                  <Text className="text-ui-fg-muted" size="xsmall">
+                    {t("knowledgeHub.chatChannels.tiktok.webhookUrlHint")}
+                  </Text>
+                </div>
+              </div>
+
+              {/* Section 4: Rate Limits & Security */}
+              <div className="border-t pt-4 space-y-3">
+                <Text size="small" weight="plus">
+                  {t(
+                    "knowledgeHub.chatChannels.tiktok.fields.rateLimitTitle"
+                  )}
+                </Text>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <div className="min-h-[22px] flex items-center">
+                      <Label htmlFor="tt-burst-limit" size="small">
+                        {t(
+                          "knowledgeHub.chatChannels.tiktok.fields.burstLimit"
+                        )}
+                      </Label>
+                    </div>
+                    <Input
+                      id="tt-burst-limit"
+                      min={1}
+                      onChange={(e) =>
+                        setTikTokForm((cur) => ({
+                          ...cur,
+                          burst_limit: Number(e.target.value),
+                        }))
+                      }
+                      type="number"
+                      value={tiktokForm.burst_limit}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="min-h-[22px] flex items-center">
+                      <Label htmlFor="tt-daily-limit" size="small">
+                        {t(
+                          "knowledgeHub.chatChannels.tiktok.fields.dailyLimit"
+                        )}
+                      </Label>
+                    </div>
+                    <Input
+                      id="tt-daily-limit"
+                      min={1}
+                      onChange={(e) =>
+                        setTikTokForm((cur) => ({
+                          ...cur,
+                          daily_limit: Number(e.target.value),
+                        }))
+                      }
+                      type="number"
+                      value={tiktokForm.daily_limit}
+                    />
+                  </div>
+                </div>
+              </div>
+            </Drawer.Body>
+
+            <Drawer.Footer>
+              <Drawer.Close asChild>
+                <Button size="small" type="button" variant="secondary">
+                  {t("knowledgeHub.cancel")}
+                </Button>
+              </Drawer.Close>
+              <Button
+                disabled={
+                  saveTikTokMutation.isPending ||
+                  (!tiktokForm.access_token.trim() && !selectedTikTok?.configured) ||
+                  !tiktokForm.public_base_url.trim()
+                }
+                isLoading={saveTikTokMutation.isPending}
                 size="small"
                 type="submit"
               >

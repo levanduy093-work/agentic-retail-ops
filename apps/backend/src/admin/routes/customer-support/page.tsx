@@ -17,6 +17,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import {
+  BrainIcon,
   EllipsisHorizontalIcon,
   FacebookIcon,
   FacebookMessengerIcon,
@@ -25,6 +26,7 @@ import {
   SendIcon,
   TelegramIcon,
   TrashIcon,
+  UserIcon,
   ZaloIcon,
 } from "../../lib/icons"
 import { sdk } from "../../lib/sdk"
@@ -81,6 +83,21 @@ type SupportConversationResponse = {
     metadata?: Record<string, unknown> | null
     title: string
   }
+  customer_preferences?: Array<{
+    expires_at: string
+    preference_type: string
+    status: string
+    value: string
+  }>
+  customer_profile?: {
+    channel?: string | null
+    customer_tier?: string | null
+    email?: string | null
+    name?: string | null
+    orders_count?: number | null
+    phone?: string | null
+    shipping_city?: string | null
+  } | null
   memory: ConversationMemory | null
   messages: Array<{
     body: string
@@ -221,6 +238,7 @@ export const CustomerSupportContent = ({
     string | null
   >(null)
   const [reply, setReply] = useState("")
+  const [memoryOpen, setMemoryOpen] = useState(false)
   const [clearHistoryOpen, setClearHistoryOpen] = useState(false)
   const [releaseOpen, setReleaseOpen] = useState(false)
   const [sendOpen, setSendOpen] = useState(false)
@@ -1056,6 +1074,19 @@ export const CustomerSupportContent = ({
                     </Text>
                   )}
 
+                  {/* Customer Memory & Profile Button */}
+                  {selectedConversation && (
+                    <Button
+                      size="small"
+                      variant="secondary"
+                      className="text-xsmall"
+                      onClick={() => setMemoryOpen(true)}
+                    >
+                      <BrainIcon size={14} className="mr-1.5 text-ui-fg-subtle" />
+                      {t("supportDesk.customerMemoryBtn", { defaultValue: "Bộ nhớ & Thông tin" })}
+                    </Button>
+                  )}
+
                   {/* Pause / Resume AI Button */}
                   {selectedConversation && (
                     <Button
@@ -1571,6 +1602,152 @@ export const CustomerSupportContent = ({
               >
                 {t("supportDesk.confirmClearHistory")}
               </Button>
+            </div>
+          </Drawer.Footer>
+        </Drawer.Content>
+      </Drawer>
+
+      {/* Customer Memory & Profile Drawer */}
+      <Drawer open={memoryOpen} onOpenChange={setMemoryOpen}>
+        <Drawer.Content className="max-w-md">
+          <Drawer.Header>
+            <div className="flex items-center gap-x-2">
+              <BrainIcon size={20} className="text-ui-fg-interactive" />
+              <Drawer.Title>
+                {t("supportDesk.customerMemoryDrawerTitle", {
+                  defaultValue: "Hồ sơ & Bộ nhớ AI (Customer Memory)",
+                })}
+              </Drawer.Title>
+            </div>
+          </Drawer.Header>
+          <Drawer.Body className="flex flex-col gap-y-5 p-5 overflow-y-auto">
+            {/* Customer Profile Section */}
+            <div className="rounded-lg border border-ui-border-base bg-ui-bg-base p-4">
+              <div className="flex items-center gap-x-2 mb-3">
+                <UserIcon size={16} className="text-ui-fg-subtle" />
+                <Heading level="h3" className="text-small font-semibold">
+                  {t("supportDesk.customerProfileTitle", { defaultValue: "Thông tin khách hàng" })}
+                </Heading>
+              </div>
+              <div className="grid grid-cols-2 gap-y-2 text-small">
+                <Text size="xsmall" className="text-ui-fg-subtle">{t("supportDesk.customerName", { defaultValue: "Họ tên" })}:</Text>
+                <Text size="xsmall" weight="plus" className="text-ui-fg-base">{customerName}</Text>
+                <Text size="xsmall" className="text-ui-fg-subtle">{t("supportDesk.customerChannel", { defaultValue: "Kênh" })}:</Text>
+                <Text size="xsmall" className="text-ui-fg-base">{getChannelLabel(selectedConversation?.channel, t)}</Text>
+                {conversation.data?.customer_profile?.phone && (
+                  <>
+                    <Text size="xsmall" className="text-ui-fg-subtle">SĐT:</Text>
+                    <Text size="xsmall" className="text-ui-fg-base">{conversation.data.customer_profile.phone}</Text>
+                  </>
+                )}
+                {conversation.data?.customer_profile?.email && (
+                  <>
+                    <Text size="xsmall" className="text-ui-fg-subtle">Email:</Text>
+                    <Text size="xsmall" className="text-ui-fg-base">{conversation.data.customer_profile.email}</Text>
+                  </>
+                )}
+                {conversation.data?.customer_profile?.customer_tier && (
+                  <>
+                    <Text size="xsmall" className="text-ui-fg-subtle">Hạng thành viên:</Text>
+                    <Text size="xsmall" weight="plus" className="text-ui-fg-interactive">{conversation.data.customer_profile.customer_tier}</Text>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* AI Stated Facts */}
+            <div className="rounded-lg border border-ui-border-base bg-ui-bg-base p-4">
+              <div className="flex items-center justify-between mb-3">
+                <Heading level="h3" className="text-small font-semibold">
+                  {t("supportDesk.aiFactsTitle", { defaultValue: "Dữ liệu AI đã ghi nhớ (Customer Facts)" })}
+                </Heading>
+                {conversation.data?.memory && (
+                  <Badge size="2xsmall" color="blue">
+                    {t("supportDesk.memoryVersion", {
+                      version: conversation.data.memory.version,
+                      count: conversation.data.memory.source_message_count,
+                    })}
+                  </Badge>
+                )}
+              </div>
+              {conversation.data?.memory?.customer_facts?.length ? (
+                <ul className="list-disc list-inside flex flex-col gap-y-1.5">
+                  {conversation.data.memory.customer_facts.map((fact, index) => (
+                    <li key={index} className="text-xsmall text-ui-fg-base leading-relaxed">
+                      {fact}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <Text size="xsmall" className="text-ui-fg-subtle italic">
+                  {t("supportDesk.noFactsYet", { defaultValue: "Chưa có dữ liệu cố định nào được ghi nhận." })}
+                </Text>
+              )}
+            </div>
+
+            {/* Preferences */}
+            {conversation.data?.customer_preferences?.length ? (
+              <div className="rounded-lg border border-ui-border-base bg-ui-bg-base p-4">
+                <Heading level="h3" className="text-small font-semibold mb-3">
+                  {t("supportDesk.preferencesTitle", { defaultValue: "Sở thích & Thông số (Preferences)" })}
+                </Heading>
+                <div className="flex flex-wrap gap-2">
+                  {conversation.data.customer_preferences.map((pref, idx) => (
+                    <Badge key={idx} size="small" color="grey">
+                      {pref.preference_type}: {pref.value}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Conversation Summary & Progress */}
+            <div className="rounded-lg border border-ui-border-base bg-ui-bg-base p-4">
+              <Heading level="h3" className="text-small font-semibold mb-2">
+                {t("supportDesk.summaryTitle", { defaultValue: "Tóm tắt tiến trình hội thoại" })}
+              </Heading>
+              <Text size="xsmall" className="text-ui-fg-base leading-relaxed mb-3">
+                {conversation.data?.memory?.summary ?? t("supportDesk.memoryPending")}
+              </Text>
+
+              {conversation.data?.memory?.open_questions?.length ? (
+                <div className="mt-3">
+                  <Text size="xsmall" weight="plus" className="text-ui-fg-warning mb-1">
+                    {t("supportDesk.openQuestions")}:
+                  </Text>
+                  <ul className="list-disc list-inside flex flex-col gap-y-1">
+                    {conversation.data.memory.open_questions.map((q, idx) => (
+                      <li key={idx} className="text-xsmall text-ui-fg-subtle">
+                        {q}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {conversation.data?.memory?.resolved_topics?.length ? (
+                <div className="mt-3">
+                  <Text size="xsmall" weight="plus" className="text-ui-fg-success mb-1">
+                    {t("supportDesk.resolvedMilestones", { defaultValue: "Mốc đã hoàn tất" })}:
+                  </Text>
+                  <ul className="list-disc list-inside flex flex-col gap-y-1">
+                    {conversation.data.memory.resolved_topics.map((item, idx) => (
+                      <li key={idx} className="text-xsmall text-ui-fg-subtle">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          </Drawer.Body>
+          <Drawer.Footer>
+            <div className="flex justify-end gap-x-2">
+              <Drawer.Close asChild>
+                <Button size="small" variant="secondary">
+                  {t("supportDesk.close", { defaultValue: "Đóng" })}
+                </Button>
+              </Drawer.Close>
             </div>
           </Drawer.Footer>
         </Drawer.Content>

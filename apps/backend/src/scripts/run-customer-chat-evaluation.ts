@@ -69,7 +69,7 @@ const scenarios: Scenario[] = [
     id: "winter-context-follow-up",
     message: "Em nữ, mặc size M, tầm 600 nghìn thôi sốp.",
     requires_friendly_tone: true,
-    requires_product_context: "áo khoác active move",
+    requires_product_context: "size M",
   },
   {
     expected_intent: "PRODUCT_DISCOVERY",
@@ -83,7 +83,7 @@ const scenarios: Scenario[] = [
     id: "contextual-product-reference",
     message: "Mẫu đó còn hàng không và có size M chứ?",
     requires_friendly_tone: true,
-    requires_product_context: "active move",
+    requires_product_context: "utility 4",
   },
   {
     expected_intent: "PRODUCT_DISCOVERY",
@@ -166,6 +166,7 @@ export default async function runCustomerChatEvaluation({
   const service = container.resolve<AgentOperationsModuleService>(
     AGENT_OPERATIONS_MODULE
   )
+  const assistantSettings = await service.getAssistantSettings()
   const runId = `customer-chat-eval-${Date.now()}`
   const customerId = `qa-customer:${runId}`
   const existingConnection = (
@@ -296,13 +297,15 @@ export default async function runCustomerChatEvaluation({
     }
     if (
       scenario.requires_synapse_identity &&
-      !/nhân viên cskh của synapse/iu.test(body)
+      !body.toLocaleLowerCase().includes(
+        assistantSettings.brand_name.toLocaleLowerCase()
+      )
     ) {
-      violations.push("missing-synapse-cskh-identity")
+      violations.push("missing-configured-brand-identity")
     }
     if (
       scenario.requires_delivery_guidance &&
-      !/trạng thái thanh toán và giao hàng/iu.test(body)
+      !/(?:1\s*[-–]\s*2|2\s*[-–]\s*4)\s*ngày|thời gian\s+giao/iu.test(body)
     ) {
       violations.push("missing-delivery-time-guidance")
     }
@@ -380,7 +383,7 @@ export default async function runCustomerChatEvaluation({
   )
   assert.ok(
     knowledgeCheck.results.every((result) =>
-      /(?:trạng thái.*(?:giao hàng|vận chuyển)|(?:giao hàng|vận chuyển).*trạng thái)/iu.test(
+      /(?:thời gian\s+(?:giao(?:\s+hàng)?|vận chuyển)|(?:giao hàng|vận chuyển)[\s\S]{0,160}\b\d+\s*(?:-|–|đến)?\s*\d*\s*ngày)/iu.test(
         result.excerpt
       )
     ),

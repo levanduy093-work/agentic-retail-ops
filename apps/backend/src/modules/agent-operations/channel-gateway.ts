@@ -374,12 +374,90 @@ export class EmailChannelAdapter implements ChannelAdapter {
   }
 }
 
+export type TikTokChannelAdapterOptions = {
+  access_token: string
+  api_base_url?: string
+  fetch?: typeof fetch
+}
+
+export class TikTokChannelAdapter implements ChannelAdapter {
+  channel = "TIKTOK" as const
+  private readonly apiBaseUrl: string
+  private readonly accessToken: string
+  private readonly fetcher: typeof fetch
+
+  constructor(options: TikTokChannelAdapterOptions) {
+    this.apiBaseUrl = (
+      options.api_base_url ?? "https://open.tiktokapis.com"
+    ).replace(/\/$/, "")
+    this.accessToken = options.access_token
+    this.fetcher = options.fetch ?? fetch
+  }
+
+  async deliver(input: ChannelDeliveryInput): Promise<ChannelDeliveryReceipt> {
+    const isShopUrl =
+      this.apiBaseUrl.includes("tiktokshop") ||
+      this.apiBaseUrl.includes("seller")
+    const endpoint = isShopUrl
+      ? `${this.apiBaseUrl}/api/v2/im/message/send`
+      : `${this.apiBaseUrl}/v2/im/message/send/`
+
+    const body = isShopUrl
+      ? {
+          conversation_id: input.recipient_ref,
+          message: {
+            content: JSON.stringify({ text: input.body }),
+            type: "TEXT",
+          },
+        }
+      : {
+          content: JSON.stringify({ text: input.body }),
+          conversation_id: input.recipient_ref,
+          msg_type: "text",
+        }
+
+    const response = await this.fetcher(endpoint, {
+      body: JSON.stringify(body),
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+        "access-token": this.accessToken,
+        "content-type": "application/json",
+      },
+      method: "POST",
+      signal: AbortSignal.timeout(10_000),
+    })
+
+    const payload = (await response.json()) as {
+      code?: number
+      data?: { message_id?: string; msg_id?: string }
+      error?: { message?: string }
+      message?: string
+    }
+
+    if (!response.ok || (payload.code && payload.code !== 0)) {
+      throw new MedusaError(
+        MedusaError.Types.UNEXPECTED_STATE,
+        `TikTok delivery failed: ${payload.message ?? payload.error?.message ?? `HTTP ${response.status}`}`
+      )
+    }
+
+    const externalMsgId =
+      payload.data?.message_id ?? payload.data?.msg_id ?? input.message_id
+
+    return {
+      external_message_id: externalMsgId,
+      status: "DELIVERED",
+    }
+  }
+}
+
 export function createChannelAdapter(
   channel: ConversationChannel,
   options?: {
     email?: EmailChannelAdapterOptions
     messenger?: FacebookMessengerChannelAdapterOptions
     telegram?: TelegramChannelAdapterOptions
+    tiktok?: TikTokChannelAdapterOptions
     zalo?: ZaloChannelAdapterOptions
   }
 ): ChannelAdapter {
@@ -394,6 +472,9 @@ export function createChannelAdapter(
   }
   if (channel === "MESSENGER" && options?.messenger) {
     return new FacebookMessengerChannelAdapter(options.messenger)
+  }
+  if (channel === "TIKTOK" && options?.tiktok) {
+    return new TikTokChannelAdapter(options.tiktok)
   }
   if (channel === "EMAIL" && options?.email) {
     return new EmailChannelAdapter(options.email)

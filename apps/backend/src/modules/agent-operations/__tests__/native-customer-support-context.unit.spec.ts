@@ -152,4 +152,26 @@ describe("native customer support context", () => {
       },
     })
   })
+
+  it("marks an existing governed proposal without creating a second escalation", () => {
+    expect(
+      extractNativeCustomerSupportContext([
+        {
+          call_id: "call_return",
+          name: "propose_return_review",
+          output: {
+            outcome: "PENDING_HUMAN_REVIEW",
+            task_id: "task_return_1",
+          },
+        },
+      ])
+    ).toMatchObject({
+      proposal_result: {
+        kind: "propose_return_review",
+        outcome: "PENDING_HUMAN_REVIEW",
+        task_id: "task_return_1",
+      },
+      route: "HUMAN_ACTION",
+    })
+  })
 })

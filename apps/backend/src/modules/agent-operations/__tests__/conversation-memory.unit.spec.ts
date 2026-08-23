@@ -9,6 +9,7 @@ import {
   mergeConversationMemoryOutput,
   startsExplicitNewProductTopic,
   shouldRefreshConversationMemoryWithAi,
+  shouldUseHistoricalCustomerProfile,
 } from "../conversation-memory"
 
 describe("conversation memory", () => {
@@ -107,6 +108,12 @@ describe("conversation memory", () => {
     expect(startsExplicitNewProductTopic("Vẫn size M cho mẫu lúc nãy")).toBe(
       false
     )
+  })
+
+  it("loads long-lived profile preferences only after an explicit reference", () => {
+    expect(shouldUseHistoricalCustomerProfile("Mình muốn áo thun mới")).toBe(false)
+    expect(shouldUseHistoricalCustomerProfile("Vẫn size M như lần trước nhé")).toBe(true)
+    expect(shouldUseHistoricalCustomerProfile("Cho mình xem mẫu lúc nãy")).toBe(true)
   })
 
   it("does not retain prompt attacks or secrets in fallback memory", () => {
@@ -210,5 +217,59 @@ describe("conversation memory", () => {
     expect(context).toContain("Resolved milestones: Đã báo phí ship 30.000đ.")
     expect(context).toContain("Stated customer facts: Khách mặc size M.; Ngân sách 500k.")
     expect(context).toContain("Current conversation: Khách đang quan tâm áo khoác bomber.")
+  })
+
+  it("extracts customer name, pronouns, phone, and email in fallback memory", () => {
+    const result = buildConversationMemoryFallback({
+      recent_messages: [
+        {
+          body: "Dạ mình tên Duy, gọi mình là anh Duy nhé. Sđt 0901234567, email duy@gmail.com, ở TP.HCM",
+          direction: "INBOUND",
+        },
+      ],
+    })
+
+    expect(result.customer_facts).toContain("Tên khách hàng: Duy.")
+    expect(result.customer_facts).toContain("Khách muốn xưng hô: anh.")
+    expect(result.customer_facts).toContain("Số điện thoại: 0901234567.")
+    expect(result.customer_facts).toContain("Email khách: duy@gmail.com.")
+  })
+
+  it("seeds customer name from channel into initial fallback facts", () => {
+    const result = buildConversationMemoryFallback({
+      customer_name: "Lê Văn Duy",
+      recent_messages: [
+        {
+          body: "hi shop",
+          direction: "INBOUND",
+        },
+      ],
+    })
+
+    expect(result.customer_facts).toContain("Tên khách hàng: Lê Văn Duy.")
+  })
+
+  it("includes customer profile block in buildCustomerConversationContext", () => {
+    const context = buildCustomerConversationContext({
+      customer_info: {
+        channel: "Facebook Messenger",
+        customer_tier: "VIP",
+        email: "duy@example.com",
+        name: "Lê Văn Duy",
+        orders_count: 5,
+        phone: "0901234567",
+      },
+      current_summary: "Khách đang xem áo polo.",
+      customer_facts: ["Tên khách hàng: Lê Văn Duy.", "Khách mặc size L."],
+    })
+
+    expect(context).toContain("Customer profile:")
+    expect(context).toContain("Tên khách hàng: Lê Văn Duy")
+    expect(context).toContain("Kênh liên hệ: Facebook Messenger")
+    expect(context).toContain("SĐT: 0901234567")
+    expect(context).toContain("Email: duy@example.com")
+    expect(context).toContain("Hạng khách: VIP")
+    expect(context).toContain("Số đơn đã mua: 5 đơn hàng")
+    expect(context).toContain("Stated customer facts: Tên khách hàng: Lê Văn Duy.; Khách mặc size L.")
   })
 })

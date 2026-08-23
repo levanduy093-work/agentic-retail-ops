@@ -275,6 +275,9 @@ export const AdminConfigureManagedPrompt = z.strictObject({
       clarify_message_vi: z.string().trim().min(1).max(500).optional(),
       greeting_message_en: z.string().trim().min(1).max(500).optional(),
       greeting_message_vi: z.string().trim().min(1).max(500).optional(),
+      native_tool_loop_mode: z
+        .enum(["DISABLED", "SHADOW", "ACTIVE"])
+        .optional(),
       review_ack_message_en: z.string().trim().min(1).max(500).optional(),
       review_ack_message_vi: z.string().trim().min(1).max(500).optional(),
     })
@@ -614,6 +617,101 @@ export const AdminDisconnectMessengerChannel = z.object({
 
 export type AdminDisconnectMessengerChannelType = z.infer<
   typeof AdminDisconnectMessengerChannel
+>
+
+export const TikTokWebhookPayload = z.object({
+  client_key: z.string().optional(),
+  data: z
+    .object({
+      content: z.string().optional(),
+      conversation_id: z.string().optional(),
+      from_user_id: z.string().optional(),
+      message: z
+        .object({
+          content: z.string().optional(),
+          msg_id: z.string().optional(),
+          msg_type: z.string().optional(),
+        })
+        .optional(),
+      message_id: z.string().optional(),
+      sender: z
+        .object({
+          avatar_url: z.string().optional(),
+          im_user_id: z.string().optional(),
+          nickname: z.string().optional(),
+          open_id: z.string().optional(),
+          role: z.string().optional(),
+        })
+        .optional(),
+      text: z.string().optional(),
+      to_user_id: z.string().optional(),
+      type: z.string().optional(),
+    })
+    .optional(),
+  event: z.string().optional(),
+  shop_id: z.string().optional(),
+  timestamp: z.union([z.number(), z.string()]).optional(),
+  type: z.union([z.number(), z.string()]).optional(),
+})
+
+export type TikTokWebhookPayloadType = z.infer<typeof TikTokWebhookPayload>
+
+export const AdminConfigureTikTokChannel = z.object({
+  access_token: z.string().min(1).optional(),
+  account_ref: z.string().min(1).default("primary"),
+  allow_unmapped_users: z.boolean().default(true),
+  api_base_url: z.string().min(1).optional(),
+  client_key: z.string().min(1).optional(),
+  client_secret: z.string().min(1).optional(),
+  identities: z
+    .array(
+      z.object({
+        tiktok_user_id: z.string().min(1),
+        user_id: z.string().min(1),
+      })
+    )
+    .default([]),
+  public_base_url: z.string().min(1),
+  refresh_token: z.string().min(1).optional(),
+  security: z
+    .object({
+      blocked_chat_ids: z.array(z.string()).optional(),
+      burst_limit: z.number().int().positive().optional(),
+      burst_window_seconds: z.number().int().positive().optional(),
+      daily_limit: z.number().int().positive().optional(),
+      global_burst_limit: z.number().int().positive().optional(),
+      global_daily_limit: z.number().int().positive().optional(),
+      max_message_characters: z.number().int().positive().optional(),
+      max_open_escalations: z.number().int().positive().optional(),
+      max_update_age_seconds: z.number().int().positive().optional(),
+    })
+    .optional(),
+  tenant_id: z.string().min(1).default("default"),
+  webhook_secret: z.string().min(1).optional(),
+})
+
+export type AdminConfigureTikTokChannelType = z.infer<
+  typeof AdminConfigureTikTokChannel
+>
+
+export const AdminTestTikTokConnection = z.object({
+  access_token: z.string().min(1).optional(),
+  account_ref: z.string().min(1).default("primary"),
+  api_base_url: z.string().min(1).optional(),
+  tenant_id: z.string().min(1).default("default"),
+})
+
+export type AdminTestTikTokConnectionType = z.infer<
+  typeof AdminTestTikTokConnection
+>
+
+export const AdminDisconnectTikTokChannel = z.object({
+  account_ref: z.string().min(1).default("primary"),
+  tenant_id: z.string().min(1).default("default"),
+})
+
+export type AdminDisconnectTikTokChannelType = z.infer<
+  typeof AdminDisconnectTikTokChannel
 >
 
 

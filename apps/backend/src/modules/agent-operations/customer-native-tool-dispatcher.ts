@@ -316,11 +316,23 @@ type CustomerSupportNativeToolService = {
 export type CustomerSupportNativeToolContext = {
   container: MedusaContainer
   conversation_id: string
+  customer_message_context?: string[]
   customer_id: string | null
   inbound_message_id: string
   locale: "en" | "vi"
   service: CustomerSupportNativeToolService
   tenant_id: string
+}
+
+function normalizeLocationEvidence(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/gu, "")
+    .replace(/đ/giu, "d")
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim()
 }
 
 export type CustomerDraftCartPurchaseContext = {
@@ -378,6 +390,18 @@ export function createCustomerSupportNativeToolDispatcher(
   ): Promise<Record<string, unknown>> {
     if (call.name === "estimate_shipping_delivery") {
       const parsed = NativeShippingEstimateInput.parse(call.arguments)
+      const destination = normalizeLocationEvidence(
+        parsed.destination_location
+      )
+      const destinationWasSuppliedByCustomer = (
+        context.customer_message_context ?? []
+      ).some((message) => normalizeLocationEvidence(message).includes(destination))
+      if (!destinationWasSuppliedByCustomer) {
+        throw new MedusaError(
+          MedusaError.Types.NOT_ALLOWED,
+          "Shipping estimates require a destination stated by the customer in the current conversation."
+        )
+      }
       const result = await executeShippingEstimate(
         {
           destination_location: parsed.destination_location,
@@ -398,11 +422,18 @@ export function createCustomerSupportNativeToolDispatcher(
 
     if (call.name === "search_catalog") {
       const parsed = NativeCatalogSearchInput.parse(call.arguments)
-      const result = await executeCatalogRead(
+      let result = await executeCatalogRead(
         context.container,
         { limit: 8, locale: context.locale, query: parsed.query },
         { tenant_id: context.tenant_id }
       )
+      if (result.output.total_count === 0) {
+        result = await executeCatalogRead(
+          context.container,
+          { limit: 8, locale: context.locale },
+          { tenant_id: context.tenant_id }
+        )
+      }
       const output = {
         cache_status: result.cache_status,
         products: result.output.products,

@@ -7,6 +7,8 @@ import { CUSTOMER_MESSAGE_INTENT_PROMPT_KEY } from "../customer-message-intent"
 import { KNOWLEDGE_ANSWER_PROMPT_KEY } from "../knowledge-answer"
 import { PRODUCT_ADVISOR_PROMPT_KEY } from "../customer-product-advisor"
 import { CUSTOMER_SUPPORT_PROMPT_KEY } from "../customer-support-prompt"
+import { CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_KEY } from "../customer-support-orchestrator"
+import { CONVERSATION_MEMORY_PROMPT_KEY } from "../conversation-memory"
 
 describe("assistant settings and managed prompts registry", () => {
   it("validates default assistant settings schema", () => {
@@ -53,6 +55,8 @@ describe("assistant settings and managed prompts registry", () => {
     expect(MANAGED_PROMPTS_REGISTRY[KNOWLEDGE_ANSWER_PROMPT_KEY]).toBeDefined()
     expect(MANAGED_PROMPTS_REGISTRY[PRODUCT_ADVISOR_PROMPT_KEY]).toBeDefined()
     expect(MANAGED_PROMPTS_REGISTRY[CUSTOMER_SUPPORT_PROMPT_KEY]).toBeDefined()
+    expect(MANAGED_PROMPTS_REGISTRY[CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_KEY]).toBeDefined()
+    expect(MANAGED_PROMPTS_REGISTRY[CONVERSATION_MEMORY_PROMPT_KEY]).toBeDefined()
 
     expect(
       MANAGED_PROMPTS_REGISTRY[CUSTOMER_MESSAGE_INTENT_PROMPT_KEY].default_system_prompt

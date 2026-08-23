@@ -138,9 +138,9 @@ export function synthesizeHybridAnswer(
   let combinedBody = ""
 
   if (locale === "vi") {
-    combinedBody = `${productAdviceAnswer.body.trim()}\n\n📌 Về thông tin bạn hỏi thêm: ${knowledgeAnswer.body.trim()}`
+    combinedBody = `${productAdviceAnswer.body.trim()}\n\nVề phần bạn hỏi thêm, ${knowledgeAnswer.body.trim()}`
   } else {
-    combinedBody = `${productAdviceAnswer.body.trim()}\n\n📌 Regarding your additional question: ${knowledgeAnswer.body.trim()}`
+    combinedBody = `${productAdviceAnswer.body.trim()}\n\nRegarding your additional question, ${knowledgeAnswer.body.trim()}`
   }
 
   return {

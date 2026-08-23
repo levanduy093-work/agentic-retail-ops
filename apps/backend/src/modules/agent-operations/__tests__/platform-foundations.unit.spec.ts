@@ -603,6 +603,41 @@ describe("agent platform foundations", () => {
     ).resolves.toEqual({ body: "Đơn đang được chuẩn bị." })
   })
 
+  it("accepts fenced structured JSON from compatible chat providers", async () => {
+    const request = jest.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: "```json\n{\"body\":\"Đã hiểu.\"}\n```",
+              },
+            },
+          ],
+        }),
+        { status: 200 }
+      )
+    )
+    const adapter = new DeepSeekChatModelAdapter(
+      "deepseek-key",
+      "deepseek-v4-flash",
+      "https://api.deepseek.test",
+      request as typeof fetch
+    )
+
+    await expect(
+      adapter.invoke({
+        agent_id: "customer-support-agent",
+        input: { question: "Hello" },
+        max_tokens: 100,
+        output_schema: { type: "object" },
+        prompt_key: "support",
+        prompt_version: "1",
+        system_prompt: "Support prompt",
+      })
+    ).resolves.toEqual({ body: "Đã hiểu." })
+  })
+
   it("keeps a bounded DeepSeek validation message for diagnostics", async () => {
     const request = jest.fn(async () =>
       new Response(

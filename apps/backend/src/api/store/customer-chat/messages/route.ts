@@ -7,6 +7,7 @@ import { AGENT_OPERATIONS_MODULE } from "../../../../modules/agent-operations"
 import AgentOperationsModuleService from "../../../../modules/agent-operations/service"
 import { answerCustomerKnowledgeQuestionWorkflow } from "../../../../workflows/agent-operations/answer-customer-knowledge-question"
 import { postCustomerChatMessageWorkflow } from "../../../../workflows/agent-operations/post-customer-chat-message"
+import { refreshConversationMemoryWorkflow } from "../../../../workflows/agent-operations/refresh-conversation-memory"
 import { StoreCreateCustomerChatMessageType } from "../validators"
 
 export async function POST(
@@ -40,7 +41,17 @@ export async function POST(
     },
   })
 
-  // 2. Run answer workflow to trigger AI / Product Advisor reply
+  // Refresh the current-session memory before orchestration so the latest
+  // customer turn is available without importing any other conversation.
+  try {
+    await refreshConversationMemoryWorkflow(req.scope).run({
+      input: { conversation_id: result.conversation.id },
+    })
+  } catch (error) {
+    console.error("Error refreshing customer chat memory before answer:", error)
+  }
+
+  // Run the governed orchestrator and response pipeline.
   let responseMessage: Record<string, unknown> | null = null
   try {
     const answered = await answerCustomerKnowledgeQuestionWorkflow(req.scope).run({
@@ -55,6 +66,14 @@ export async function POST(
     }
   } catch (error) {
     console.error("Error answering customer chat message:", error)
+  } finally {
+    try {
+      await refreshConversationMemoryWorkflow(req.scope).run({
+        input: { conversation_id: result.conversation.id },
+      })
+    } catch (error) {
+      console.error("Error refreshing customer chat memory after answer:", error)
+    }
   }
 
   res.status(201).json({
