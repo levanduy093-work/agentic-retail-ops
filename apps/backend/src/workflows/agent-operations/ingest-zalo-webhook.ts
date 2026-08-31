@@ -274,6 +274,14 @@ const ingestZaloWebhookStep = createStep<
           id: conversation.id,
           last_message_at: occurredAt,
         })
+        await service.broadcastMessageCreated(message)
+        await service.broadcastConversationUpdated({
+          channel: conversation.channel,
+          id: conversation.id,
+          last_message_at: occurredAt,
+          metadata: conversation.metadata as Record<string, unknown> | null,
+          title: conversation.title,
+        })
         await service.createAgentAuditEvents({
           action: "zalo-message-received",
           actor_id: principal.principal_id,

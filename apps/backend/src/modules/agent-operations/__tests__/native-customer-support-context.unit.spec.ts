@@ -116,6 +116,48 @@ describe("native customer support context", () => {
     })
   })
 
+  it("preserves typed travel evidence and the travel-filtered live catalog", () => {
+    const context = extractNativeCustomerSupportContext([
+      {
+        call_id: "call_location",
+        name: "resolve_travel_location",
+        output: {
+          ambiguous: false,
+          candidates: [],
+          query: "Tokyo",
+          source: "OPEN_METEO_GEOCODING",
+          status: "FOUND",
+        },
+      },
+      {
+        call_id: "call_forecast",
+        name: "get_weather_forecast",
+        output: {
+          evidence_kind: "FORECAST",
+          fetched_at: "2026-08-23T00:00:00.000Z",
+          location: {},
+          source: "OPEN_METEO_FORECAST",
+          status: "READY",
+          weather_days: [],
+        },
+      },
+      {
+        call_id: "call_catalog",
+        name: "search_catalog_by_attributes",
+        output: { products: [{ id: "prod_1" }], query: "áo khoác", status: "READY", total_count: 1 },
+      },
+    ])
+
+    expect(context).toMatchObject({
+      catalog_snapshot: { status: "READY", total_count: 1 },
+      route: "PRODUCT_DISCOVERY",
+      travel_context: {
+        forecast: { evidence_kind: "FORECAST", source: "OPEN_METEO_FORECAST" },
+        location: { query: "Tokyo", source: "OPEN_METEO_GEOCODING" },
+      },
+    })
+  })
+
   it("keeps owned live fulfillment with its verified order result", () => {
     expect(
       extractNativeCustomerSupportContext([

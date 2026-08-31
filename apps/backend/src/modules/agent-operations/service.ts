@@ -174,8 +174,10 @@ import {
   PRODUCT_ADVISOR_PROMPT_VERSION,
   PRODUCT_ADVISOR_SYSTEM_PROMPT,
   PRODUCT_ADVISOR_TIMEOUT_MS,
+  PRODUCT_ADVISOR_TRAVEL_GROUNDING_POLICY,
   resolveProductAdvisorModelOutput
 } from "./customer-product-advisor"
+import { formatTravelAdvisorEvidence } from "./travel-advisor-runtime"
 import { VietnamAddressService } from "../ghn-fulfillment/services/vietnam-address-service"
 import { executeShippingEstimate } from "./shipping-estimate-runtime"
 import {
@@ -4596,6 +4598,7 @@ class AgentOperationsModuleService extends MedusaService({
         direction: "INBOUND" | "OUTBOUND"
       }>
       tenant_id: string
+      travel_context?: ProcessCustomerKnowledgeQuestionInput["travel_context"]
     },
     @MedusaContext() sharedContext: Context = {}
   ): Promise<KnowledgeAnswer> {
@@ -4629,8 +4632,9 @@ class AgentOperationsModuleService extends MedusaService({
           product_url: isPublicCustomerUrl(product.product_url) ? product.product_url : null,
           title: product.title
         }))
+      const travelEvidence = formatTravelAdvisorEvidence(input.travel_context, input.locale)
       return {
-        body: result.body,
+        body: [result.body, travelEvidence].filter(Boolean).join("\n\n"),
         citations: [],
         disposition: "ANSWER" as const,
         grounded: input.catalog.status === "READY",
@@ -4703,7 +4707,8 @@ class AgentOperationsModuleService extends MedusaService({
         body: message.body.slice(0, 400),
         direction: message.direction
       })),
-      shopping_preferences: shoppingPreferences
+      shopping_preferences: shoppingPreferences,
+      travel_context: input.travel_context ?? null
     }
     let credentials
     try {
@@ -4800,7 +4805,9 @@ class AgentOperationsModuleService extends MedusaService({
           output_schema: PRODUCT_ADVISOR_OUTPUT_SCHEMA,
           prompt_key: PRODUCT_ADVISOR_PROMPT_KEY,
           prompt_version: promptConfig.version,
-          system_prompt: promptConfig.system_prompt,
+          system_prompt: promptConfig.system_prompt.includes("Travel advisor grounding policy:")
+            ? promptConfig.system_prompt
+            : `${promptConfig.system_prompt}\n\n${PRODUCT_ADVISOR_TRAVEL_GROUNDING_POLICY}`,
           timeout_ms: PRODUCT_ADVISOR_TIMEOUT_MS
         })
         const output = ProductAdvisorModelOutput.parse(generated)
@@ -5868,7 +5875,8 @@ class AgentOperationsModuleService extends MedusaService({
           locale,
           question,
           recent_messages: mapRecentMessagesWithTime(contextMessages),
-          tenant_id: conversation.tenant_id
+          tenant_id: conversation.tenant_id,
+          travel_context: input.travel_context
         },
         sharedContext
       )

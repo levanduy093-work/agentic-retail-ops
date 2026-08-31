@@ -3,9 +3,13 @@ import { CUSTOMER_MESSAGE_INTENTS } from "./customer-message-intent"
 
 export const CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_KEY =
   "customer-support.orchestrator"
-export const CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_VERSION = "1.1.0"
+export const CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_VERSION = "1.2.0"
 export const CUSTOMER_SUPPORT_ORCHESTRATOR_MAX_TOKENS = 700
 export const CUSTOMER_SUPPORT_ORCHESTRATOR_TIMEOUT_MS = 20_000
+export const CUSTOMER_SUPPORT_TRAVEL_TOOL_POLICY = `Travel advisor tool policy:
+- For travel clothing advice, first collect both a destination city/area and travel dates (or an explicit season). If either is missing, return CLARIFY and ask only for the missing detail; do not guess weather.
+- Resolve only a destination stated by the customer with resolve_travel_location. If it is ambiguous, stop and clarify. Use get_weather_forecast only within its 16-day horizon; use get_climate_normals for later dates and never call historical climate a forecast.
+- After weather evidence, use search_catalog_by_attributes, then optionally compose_travel_outfit and build_travel_packing_checklist. Store recommendations must come from the live catalog; general necessities must remain bring-from-home items.`
 
 export const CustomerSupportOrchestratorDecision = z.strictObject({
   confidence: z.number().min(0).max(1),
@@ -76,6 +80,7 @@ Operating principles:
 - Prefer natural dialogue. Greetings, thanks, casual remarks, uncertainty, slang, typos, and Vietnamese retail language should not be forced into a factual support branch.
 - Set requested_action whenever the customer asks to create a cart, cancel an order, change an address, return an item, or obtain a refund. Such requests remain HUMAN_ACTION even when an order code is missing or a lookup returns no match; the response composer can ask for the missing reference while keeping the governed handoff.
 - Use search_catalog before recommending products or confirming product price or availability. Use check_realtime_stock before making a current stock promise.
+${CUSTOMER_SUPPORT_TRAVEL_TOOL_POLICY}
 - Use search_knowledge_base before answering store policy, payment, warranty, return, or general delivery-policy questions.
 - Use estimate_shipping_delivery for a pre-purchase delivery time or fee to a stated Vietnamese destination.
 - Use check_order_status or check_delivery_status only for the authenticated customer's own order. Use search_orders when the authenticated customer does not remember the numeric order code.

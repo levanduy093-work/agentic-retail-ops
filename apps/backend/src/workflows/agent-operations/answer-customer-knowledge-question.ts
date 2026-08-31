@@ -49,6 +49,7 @@ import {
   CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_KEY,
   CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_VERSION,
   CUSTOMER_SUPPORT_ORCHESTRATOR_TIMEOUT_MS,
+  CUSTOMER_SUPPORT_TRAVEL_TOOL_POLICY,
   CustomerSupportOrchestratorDecision,
   reconcileCustomerSupportDecision
 } from "../../modules/agent-operations/customer-support-orchestrator"
@@ -72,6 +73,7 @@ const answerCustomerKnowledgeQuestionStep = createStep(
     let orchestratorDecision: ProcessCustomerKnowledgeQuestionInput["orchestrator_decision"]
     let proposalResult: ProcessCustomerKnowledgeQuestionInput["proposal_result"]
     let shippingEstimate: ProcessCustomerKnowledgeQuestionInput["shipping_estimate"]
+    let travelContext: ProcessCustomerKnowledgeQuestionInput["travel_context"]
     let useNativeOrchestration = false
     const existingResponse = (
       await service.listAgentMessages(
@@ -238,7 +240,9 @@ const answerCustomerKnowledgeQuestionStep = createStep(
                     output_schema: CUSTOMER_SUPPORT_ORCHESTRATOR_OUTPUT_SCHEMA,
                     prompt_key: CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_KEY,
                     prompt_version: promptConfig.version,
-                    system_prompt: promptConfig.system_prompt,
+                    system_prompt: promptConfig.system_prompt.includes("Travel advisor tool policy:")
+                      ? promptConfig.system_prompt
+                      : `${promptConfig.system_prompt}\n\n${CUSTOMER_SUPPORT_TRAVEL_TOOL_POLICY}`,
                     tools: CUSTOMER_SUPPORT_NATIVE_TOOLS,
                     timeout_ms: CUSTOMER_SUPPORT_ORCHESTRATOR_TIMEOUT_MS
                   }
@@ -261,6 +265,7 @@ const answerCustomerKnowledgeQuestionStep = createStep(
                   knowledgeSnapshot ??= nativeContext.knowledge_snapshot
                   proposalResult ??= nativeContext.proposal_result
                   shippingEstimate ??= nativeContext.shipping_estimate
+                  travelContext ??= nativeContext.travel_context
                   nativeToolTrace ??= loop.trace
                 }
                 const parsedDecision = CustomerSupportOrchestratorDecision.safeParse(
@@ -299,6 +304,7 @@ const answerCustomerKnowledgeQuestionStep = createStep(
                   orchestratorDecision = decision
                   proposalResult = nativeContext.proposal_result
                   shippingEstimate = nativeContext.shipping_estimate
+                  travelContext = nativeContext.travel_context
                   useNativeOrchestration = true
                 }
                 await service.createAgentAuditEvents({
@@ -566,6 +572,7 @@ const answerCustomerKnowledgeQuestionStep = createStep(
           orchestrator_decision: orchestratorDecision,
           proposal_result: proposalResult,
           shipping_estimate: shippingEstimate,
+          travel_context: travelContext,
         })
     )
     const imageAttachments = ((inbound.structured_content ?? {}) as Record<string, unknown>)

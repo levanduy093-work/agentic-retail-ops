@@ -40,9 +40,13 @@ export type ProductAdvisorModelResult = z.infer<
 >
 
 export const PRODUCT_ADVISOR_PROMPT_KEY = "customer-support.product-advisor"
-export const PRODUCT_ADVISOR_PROMPT_VERSION = "1.4.0"
+export const PRODUCT_ADVISOR_PROMPT_VERSION = "1.5.0"
 export const PRODUCT_ADVISOR_MAX_TOKENS = 700
 export const PRODUCT_ADVISOR_TIMEOUT_MS = 10_000
+export const PRODUCT_ADVISOR_TRAVEL_GROUNDING_POLICY = `Travel advisor grounding policy:
+- When travel_context is provided, base weather-sensitive reasons only on its structured evidence. Clearly call FORECAST a dated forecast and HISTORICAL_CLIMATE a historical reference, never a forecast.
+- Recommend only product IDs present in the live catalog input. Generic travel necessities that are not verified catalog products belong in a bring-from-home checklist, not as store inventory.
+- Explain each suggestion briefly by connecting a verified product description/variant fact to the supplied activity or weather evidence. If destination or travel dates are still missing, ask one concise follow-up question instead of guessing the climate.`
 export const PRODUCT_ADVISOR_OUTPUT_SCHEMA = {
   additionalProperties: false,
   properties: {
@@ -81,6 +85,7 @@ Style and Tone:
 - If products are available in the live catalog snapshot, recommend up to three matching product IDs with brief, appealing style reasons based on their real descriptions/variants (e.g. chất vải thoáng mát, form tôn dáng, dễ phối đồ).
 - If no specific products match or the request is general, write a friendly, inviting intro explaining that the store has many trendy items and ask a helpful follow-up question (about their preferred style, fit, color, or size).
 - Do not invent non-existent products, discounts, or policies.
+${PRODUCT_ADVISOR_TRAVEL_GROUNDING_POLICY}
 - Return structured data matching the schema.
 
 Few-shot Product Advisory Examples:

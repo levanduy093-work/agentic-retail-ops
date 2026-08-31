@@ -5,6 +5,21 @@ import type { KnowledgeSearchOutput } from "./tools/platform-read-tools"
 import type { FulfillmentReadOutput } from "./tools/fulfillment-tools"
 import type { OrderReadOutput } from "./tools/order-tools"
 import type { ShippingEstimateOutput } from "./tools/shipping-tools"
+import type {
+  OutfitComposeOutput,
+  TravelLocationResolveOutput,
+  TravelPackingChecklistOutput,
+  WeatherClimateOutput,
+  WeatherForecastOutput,
+} from "./tools/travel-tools"
+
+export type NativeTravelAdvisorContext = {
+  climate?: WeatherClimateOutput
+  forecast?: WeatherForecastOutput
+  location?: TravelLocationResolveOutput
+  outfit?: OutfitComposeOutput
+  packing_checklist?: TravelPackingChecklistOutput
+}
 
 export type NativeCustomerSupportContext = {
   catalog_snapshot?: CustomerCatalogSnapshot
@@ -17,6 +32,7 @@ export type NativeCustomerSupportContext = {
     task_id?: string | null
   }
   shipping_estimate?: ShippingEstimateOutput
+  travel_context?: NativeTravelAdvisorContext
   route?: "PRODUCT_DISCOVERY" | "STORE_QUESTION" | "HUMAN_ACTION"
 }
 
@@ -42,6 +58,40 @@ export function extractNativeCustomerSupportContext(
       typeof output.total_count === "number"
     ) {
       context.catalog_snapshot = output as CustomerCatalogSnapshot
+    }
+
+    if (
+      result.name === "search_catalog_by_attributes" &&
+      output.status === "READY" &&
+      Array.isArray(output.products) &&
+      typeof output.total_count === "number"
+    ) {
+      context.catalog_snapshot = output as CustomerCatalogSnapshot
+    }
+
+    if (result.name === "resolve_travel_location" && Array.isArray(output.candidates)) {
+      context.travel_context ??= {}
+      context.travel_context.location = output as TravelLocationResolveOutput
+    }
+
+    if (result.name === "get_weather_forecast" && output.evidence_kind === "FORECAST") {
+      context.travel_context ??= {}
+      context.travel_context.forecast = output as WeatherForecastOutput
+    }
+
+    if (result.name === "get_climate_normals" && output.evidence_kind === "HISTORICAL_CLIMATE") {
+      context.travel_context ??= {}
+      context.travel_context.climate = output as WeatherClimateOutput
+    }
+
+    if (result.name === "compose_travel_outfit" && Array.isArray(output.product_ids)) {
+      context.travel_context ??= {}
+      context.travel_context.outfit = output as OutfitComposeOutput
+    }
+
+    if (result.name === "build_travel_packing_checklist" && Array.isArray(output.bring_from_home)) {
+      context.travel_context ??= {}
+      context.travel_context.packing_checklist = output as TravelPackingChecklistOutput
     }
 
     if (

@@ -335,6 +335,14 @@ const ingestTikTokWebhookStep = createStep<
             tiktok_sender_id: senderId,
           },
         })
+        await service.broadcastMessageCreated(message)
+        await service.broadcastConversationUpdated({
+          channel: conversation.channel,
+          id: conversation.id,
+          last_message_at: occurredAt,
+          metadata: conversation.metadata as Record<string, unknown> | null,
+          title: conversation.title,
+        })
 
         await service.createAgentAuditEvents({
           action: "tiktok-message-received",

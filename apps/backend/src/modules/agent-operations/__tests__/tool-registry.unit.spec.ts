@@ -7,7 +7,7 @@ describe("agent tool registry", () => {
     expect(coverage).toMatchObject({
       catalog_count: 30,
       complete: false,
-      registered_count: 27,
+      registered_count: 33,
       registered_tools: [
         "approval.decide",
         "approval.request",
@@ -16,6 +16,7 @@ describe("agent tool registry", () => {
         "cart.send-handoff",
         "catalog.check-realtime-stock",
         "catalog.read",
+        "catalog.search-by-attributes",
         "fulfillment.read",
         "incident.create",
         "incident.update",
@@ -28,6 +29,7 @@ describe("agent tool registry", () => {
         "order.read",
         "order.search",
         "order.update-address-propose",
+        "outfit.compose",
         "payment.read",
         "response.draft",
         "return.propose",
@@ -36,6 +38,10 @@ describe("agent tool registry", () => {
         "task.create",
         "task.escalate",
         "trace.replay",
+        "travel.build-packing-checklist",
+        "travel.resolve-location",
+        "weather.get-climate-normals",
+        "weather.get-forecast",
       ],
     })
     expect(coverage.missing).not.toContain("order.read")
@@ -51,7 +57,7 @@ describe("agent tool registry", () => {
   test("publishes serializable metadata without runtime schemas", () => {
     const metadata = listAgentToolMetadata()
 
-    expect(metadata).toHaveLength(27)
+    expect(metadata).toHaveLength(33)
     expect(metadata[0]).not.toHaveProperty("input_schema")
     expect(metadata[0]).not.toHaveProperty("output_schema")
     expect(metadata).toEqual(

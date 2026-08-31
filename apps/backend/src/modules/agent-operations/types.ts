@@ -384,6 +384,7 @@ export type ProcessCustomerKnowledgeQuestionInput = {
   orchestrator_decision?: import("./customer-support-orchestrator").CustomerSupportOrchestratorDecision
   proposal_result?: import("./native-customer-support-context").NativeCustomerSupportContext["proposal_result"]
   shipping_estimate?: import("./tools/shipping-tools").ShippingEstimateOutput
+  travel_context?: import("./native-customer-support-context").NativeTravelAdvisorContext
 }
 
 export type ProcessTelegramKnowledgeQuestionInput = ProcessCustomerKnowledgeQuestionInput

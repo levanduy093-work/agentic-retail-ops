@@ -28,6 +28,32 @@ import type {
   KnowledgeSearchInput,
   KnowledgeSearchOutput,
 } from "./tools/platform-read-tools"
+import {
+  CatalogAttributeSearchInput,
+  OutfitComposeInput,
+  TravelLocationResolveInput,
+  TravelPackingChecklistInput,
+  WeatherClimateInput,
+  WeatherForecastInput,
+  CATALOG_ATTRIBUTE_SEARCH_TOOL,
+  OUTFIT_COMPOSE_TOOL,
+  TRAVEL_LOCATION_RESOLVE_TOOL,
+  TRAVEL_PACKING_CHECKLIST_TOOL,
+  WEATHER_CLIMATE_TOOL,
+  WEATHER_FORECAST_TOOL,
+  type TravelLocation,
+  type WeatherClimateOutput,
+  type WeatherForecastOutput,
+} from "./tools/travel-tools"
+import {
+  buildTravelPackingChecklist,
+  composeTravelOutfit,
+  filterCatalogByTravelAttributes,
+  getTravelClimateNormals,
+  getTravelWeatherForecast,
+  resolveTravelLocation,
+} from "./travel-advisor-runtime"
+import type { CustomerCatalogSnapshot } from "./customer-product-advisor"
 
 const NativeCatalogSearchInput = z.strictObject({
   query: z.string().trim().min(1).max(160),
@@ -106,6 +132,96 @@ export const CUSTOMER_SUPPORT_NATIVE_TOOLS: ToolDefinition[] = [
         query: { description: "Customer product need in their own words.", type: "string" },
       },
       required: ["query"],
+      type: "object",
+    },
+  },
+  {
+    description:
+      "Resolve a travel destination explicitly stated by the customer. If multiple candidates are returned, ask the customer which city/area they mean before reading weather.",
+    name: "resolve_travel_location",
+    parameters: {
+      additionalProperties: false,
+      properties: {
+        country_code: { description: "Optional ISO 2-letter country code only when known.", type: "string" },
+        query: { description: "Destination text stated by the customer.", type: "string" },
+      },
+      required: ["query"],
+      type: "object",
+    },
+  },
+  {
+    description:
+      "Read a real dated weather forecast after resolving one unambiguous travel location. Use only for dates within the next 16 days; otherwise use get_climate_normals.",
+    name: "get_weather_forecast",
+    parameters: {
+      additionalProperties: false,
+      properties: {
+        end_date: { description: "Trip end date in YYYY-MM-DD.", type: "string" },
+        start_date: { description: "Trip start date in YYYY-MM-DD.", type: "string" },
+      },
+      required: ["start_date", "end_date"],
+      type: "object",
+    },
+  },
+  {
+    description:
+      "Read three-year historical climate evidence for a resolved destination when trip dates are outside the forecast horizon. Never describe this output as a forecast.",
+    name: "get_climate_normals",
+    parameters: {
+      additionalProperties: false,
+      properties: {
+        end_date: { description: "Trip end date in YYYY-MM-DD.", type: "string" },
+        start_date: { description: "Trip start date in YYYY-MM-DD.", type: "string" },
+      },
+      required: ["start_date", "end_date"],
+      type: "object",
+    },
+  },
+  {
+    description:
+      "Search and hard-filter the live catalog by size, budget, activity and travel-weather needs. Use after weather evidence is available, or after the customer confirms they only want general travel clothing advice.",
+    name: "search_catalog_by_attributes",
+    parameters: {
+      additionalProperties: false,
+      properties: {
+        activity: { type: "string" },
+        max_budget: { type: "number" },
+        query: { type: "string" },
+        size: { type: "string" },
+        style: { type: "string" },
+        weather_needs: {
+          items: { enum: ["BREATHABLE", "RAIN_PROTECTION", "SUN_PROTECTION", "WARM_LAYER", "WIND_PROTECTION"], type: "string" },
+          type: "array",
+        },
+      },
+      required: ["query"],
+      type: "object",
+    },
+  },
+  {
+    description:
+      "Compose one bounded outfit only from live products returned by search_catalog_by_attributes in this turn.",
+    name: "compose_travel_outfit",
+    parameters: {
+      additionalProperties: false,
+      properties: {
+        activity: { type: "string" },
+        max_items: { type: "integer" },
+        style: { type: "string" },
+      },
+      type: "object",
+    },
+  },
+  {
+    description:
+      "Build a concise travel packing checklist. It clearly separates items to bring from home from verified store products.",
+    name: "build_travel_packing_checklist",
+    parameters: {
+      additionalProperties: false,
+      properties: {
+        activity: { type: "string" },
+        trip_days: { type: "integer" },
+      },
       type: "object",
     },
   },
@@ -385,6 +501,12 @@ function toOrderLookupResult(
 export function createCustomerSupportNativeToolDispatcher(
   context: CustomerSupportNativeToolContext
 ) {
+  let resolvedTravelLocation: TravelLocation | undefined
+  let travelForecast: WeatherForecastOutput | undefined
+  let travelClimate: WeatherClimateOutput | undefined
+  let travelCatalog: CustomerCatalogSnapshot | undefined
+  let travelOutfit: ReturnType<typeof composeTravelOutfit> | undefined
+
   return async function executeCustomerSupportNativeTool(
     call: ModelToolCall
   ): Promise<Record<string, unknown>> {
@@ -452,6 +574,128 @@ export function createCustomerSupportNativeToolDispatcher(
         },
         tool_name: CATALOG_READ_TOOL.name,
         tool_version: CATALOG_READ_TOOL.version,
+      })
+      return output
+    }
+
+    if (call.name === "resolve_travel_location") {
+      const parsed = TravelLocationResolveInput.parse({ ...call.arguments, locale: context.locale })
+      const destination = normalizeLocationEvidence(parsed.query)
+      const suppliedByCustomer = (context.customer_message_context ?? []).some((message) =>
+        normalizeLocationEvidence(message).includes(destination)
+      )
+      if (!suppliedByCustomer) {
+        throw new MedusaError(
+          MedusaError.Types.NOT_ALLOWED,
+          "Travel location lookup requires a destination stated by the customer in the current conversation."
+        )
+      }
+      const output = await resolveTravelLocation(parsed)
+      resolvedTravelLocation = output.candidates.length === 1 ? output.candidates[0] : undefined
+      await context.service.recordCustomerReadToolCall({
+        conversation_id: context.conversation_id,
+        inbound_message_id: context.inbound_message_id,
+        input: parsed,
+        output: { ambiguous: output.ambiguous, candidate_count: output.candidates.length, source: output.source, status: output.status },
+        tool_name: TRAVEL_LOCATION_RESOLVE_TOOL.name,
+        tool_version: TRAVEL_LOCATION_RESOLVE_TOOL.version,
+      })
+      return output
+    }
+
+    if (call.name === "get_weather_forecast") {
+      const parsed = WeatherForecastInput.parse(call.arguments)
+      if (!resolvedTravelLocation) {
+        throw new MedusaError(MedusaError.Types.NOT_ALLOWED, "Resolve one unambiguous customer destination before reading a forecast.")
+      }
+      const output = await getTravelWeatherForecast({ ...parsed, location: resolvedTravelLocation })
+      travelForecast = output
+      await context.service.recordCustomerReadToolCall({
+        conversation_id: context.conversation_id,
+        inbound_message_id: context.inbound_message_id,
+        input: parsed,
+        output: { evidence_kind: output.evidence_kind, source: output.source, status: output.status, weather_day_count: output.weather_days.length },
+        tool_name: WEATHER_FORECAST_TOOL.name,
+        tool_version: WEATHER_FORECAST_TOOL.version,
+      })
+      return output
+    }
+
+    if (call.name === "get_climate_normals") {
+      const parsed = WeatherClimateInput.parse(call.arguments)
+      if (!resolvedTravelLocation) {
+        throw new MedusaError(MedusaError.Types.NOT_ALLOWED, "Resolve one unambiguous customer destination before reading climate history.")
+      }
+      const output = await getTravelClimateNormals({ ...parsed, location: resolvedTravelLocation })
+      travelClimate = output
+      await context.service.recordCustomerReadToolCall({
+        conversation_id: context.conversation_id,
+        inbound_message_id: context.inbound_message_id,
+        input: parsed,
+        output: { evidence_kind: output.evidence_kind, sample_years: output.sample_years, source: output.source },
+        tool_name: WEATHER_CLIMATE_TOOL.name,
+        tool_version: WEATHER_CLIMATE_TOOL.version,
+      })
+      return output
+    }
+
+    if (call.name === "search_catalog_by_attributes") {
+      const parsed = CatalogAttributeSearchInput.parse(call.arguments)
+      let result = await executeCatalogRead(
+        context.container,
+        { limit: 8, locale: context.locale, query: parsed.query },
+        { tenant_id: context.tenant_id }
+      )
+      if (!result.output.products.length) {
+        result = await executeCatalogRead(
+          context.container,
+          { limit: 8, locale: context.locale },
+          { tenant_id: context.tenant_id }
+        )
+      }
+      travelCatalog = filterCatalogByTravelAttributes(result.output, parsed)
+      await context.service.recordCustomerReadToolCall({
+        conversation_id: context.conversation_id,
+        inbound_message_id: context.inbound_message_id,
+        input: parsed,
+        output: { product_ids: travelCatalog.status === "READY" ? travelCatalog.products.map((product) => product.id) : [], total_count: travelCatalog.total_count },
+        tool_name: CATALOG_ATTRIBUTE_SEARCH_TOOL.name,
+        tool_version: CATALOG_ATTRIBUTE_SEARCH_TOOL.version,
+      })
+      return travelCatalog
+    }
+
+    if (call.name === "compose_travel_outfit") {
+      const parsed = OutfitComposeInput.parse(call.arguments)
+      if (!travelCatalog) throw new MedusaError(MedusaError.Types.NOT_ALLOWED, "Search the live catalog by travel attributes before composing an outfit.")
+      travelOutfit = composeTravelOutfit(travelCatalog, parsed)
+      await context.service.recordCustomerReadToolCall({
+        conversation_id: context.conversation_id,
+        inbound_message_id: context.inbound_message_id,
+        input: parsed,
+        output: travelOutfit,
+        tool_name: OUTFIT_COMPOSE_TOOL.name,
+        tool_version: OUTFIT_COMPOSE_TOOL.version,
+      })
+      return travelOutfit
+    }
+
+    if (call.name === "build_travel_packing_checklist") {
+      const parsed = TravelPackingChecklistInput.parse(call.arguments)
+      const output = buildTravelPackingChecklist({
+        catalog: travelCatalog,
+        climate: travelClimate,
+        forecast: travelForecast,
+        outfit: travelOutfit,
+        trip_days: parsed.trip_days,
+      })
+      await context.service.recordCustomerReadToolCall({
+        conversation_id: context.conversation_id,
+        inbound_message_id: context.inbound_message_id,
+        input: parsed,
+        output: { buy_product_ids: output.buy_from_store.flatMap((item) => item.product_id ? [item.product_id] : []), evidence_kind: output.evidence_kind },
+        tool_name: TRAVEL_PACKING_CHECKLIST_TOOL.name,
+        tool_version: TRAVEL_PACKING_CHECKLIST_TOOL.version,
       })
       return output
     }

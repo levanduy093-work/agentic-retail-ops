@@ -108,6 +108,12 @@ type SupportConversationResponse = {
       url: string
     }>
     occurred_at: string
+    product_media: Array<{
+      image_url: string
+      product_id: string
+      product_url: string | null
+      title: string
+    }>
     sender_type: string
     status: string
   }>
@@ -332,7 +338,8 @@ export const CustomerSupportContent = ({
         "/admin/agent-operations/conversations?customer_support=true&limit=100",
       ),
     queryKey: ["customer-support-conversations"],
-    refetchInterval: 15_000,
+    refetchInterval: isLiveConnected ? 5_000 : 3_000,
+    refetchIntervalInBackground: true,
   })
   const simulatorOrders = useQuery({
     enabled: simulatorOpen,
@@ -366,7 +373,8 @@ export const CustomerSupportContent = ({
         `/admin/agent-operations/conversations/${selectedConversationId}`,
       ),
     queryKey: ["customer-support-conversation", selectedConversationId],
-    refetchInterval: 10_000,
+    refetchInterval: isLiveConnected ? 5_000 : 3_000,
+    refetchIntervalInBackground: true,
   })
   const selectedSimulatorOrder = simulatorOrders.data?.orders.find(
     (order) => order.id === simulatorOrderId,
@@ -1226,7 +1234,11 @@ export const CustomerSupportContent = ({
                                 {formatDate(message.occurred_at)}
                               </Text>
                             </div>
-                            <Text size="small" leading="compact">
+                            <Text
+                              className="whitespace-pre-wrap break-words"
+                              size="small"
+                              leading="compact"
+                            >
                               {message.body}
                             </Text>
                             {message.image_attachments.length > 0 && (
@@ -1249,6 +1261,36 @@ export const CustomerSupportContent = ({
                                 ))}
                               </div>
                             )}
+                            {message.product_media.length > 0 && (
+                              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                {message.product_media.map((media) => {
+                                  const image = (
+                                    <img
+                                      alt={media.title}
+                                      className="aspect-square w-full rounded-md border border-ui-border-base object-cover transition-opacity hover:opacity-80"
+                                      loading="lazy"
+                                      src={media.image_url}
+                                    />
+                                  )
+
+                                  return media.product_url ? (
+                                    <a
+                                      href={media.product_url}
+                                      key={`${media.product_id}:${media.image_url}`}
+                                      rel="noreferrer"
+                                      target="_blank"
+                                      title={media.title}
+                                    >
+                                      {image}
+                                    </a>
+                                  ) : (
+                                    <div key={`${media.product_id}:${media.image_url}`}>
+                                      {image}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
                           </div>
                         </div>
                       )
@@ -1268,7 +1310,11 @@ export const CustomerSupportContent = ({
                             {formatDate(selectedConversation.last_message_at)}
                           </Text>
                         </div>
-                        <Text size="small" leading="compact">
+                        <Text
+                          className="whitespace-pre-wrap break-words"
+                          size="small"
+                          leading="compact"
+                        >
                           {selectedConversation.latest_message?.body ?? "—"}
                         </Text>
                       </div>

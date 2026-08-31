@@ -35,6 +35,34 @@ const imageAttachments = (value: unknown) => {
   })
 }
 
+const productMedia = (value: unknown) => {
+  if (!value || typeof value !== "object") return []
+  const media = (value as { product_media?: unknown }).product_media
+  if (!Array.isArray(media)) return []
+
+  return media.flatMap((item) => {
+    if (
+      !item ||
+      typeof item !== "object" ||
+      typeof (item as { image_url?: unknown }).image_url !== "string" ||
+      typeof (item as { product_id?: unknown }).product_id !== "string" ||
+      typeof (item as { title?: unknown }).title !== "string"
+    ) {
+      return []
+    }
+
+    const productUrl = (item as { product_url?: unknown }).product_url
+    return [
+      {
+        image_url: (item as { image_url: string }).image_url,
+        product_id: (item as { product_id: string }).product_id,
+        product_url: typeof productUrl === "string" ? productUrl : null,
+        title: (item as { title: string }).title,
+      },
+    ]
+  })
+}
+
 export async function GET(
   req: AuthenticatedMedusaRequest,
   res: MedusaResponse
@@ -123,6 +151,7 @@ export async function GET(
       id: message.id,
       image_attachments: imageAttachments(message.structured_content),
       occurred_at: message.occurred_at,
+      product_media: productMedia(message.structured_content),
       sender_type: message.sender_type,
       status: message.status,
     })),

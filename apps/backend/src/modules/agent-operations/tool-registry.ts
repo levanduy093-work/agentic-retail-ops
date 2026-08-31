@@ -36,6 +36,14 @@ import { PAYMENT_READ_TOOL } from "./tools/payment-tools"
 import { RESPONSE_DRAFT_TOOL } from "./tools/response-tools"
 import { AgentToolDefinition, toAgentToolMetadata } from "./tool-contract"
 import { AGENT_CATALOG } from "./catalog-registry"
+import {
+  CATALOG_ATTRIBUTE_SEARCH_TOOL,
+  OUTFIT_COMPOSE_TOOL,
+  TRAVEL_LOCATION_RESOLVE_TOOL,
+  TRAVEL_PACKING_CHECKLIST_TOOL,
+  WEATHER_CLIMATE_TOOL,
+  WEATHER_FORECAST_TOOL,
+} from "./tools/travel-tools"
 
 export const AGENT_TOOL_REGISTRY = {
   [APPROVAL_DECIDE_TOOL.name]: APPROVAL_DECIDE_TOOL,
@@ -65,6 +73,12 @@ export const AGENT_TOOL_REGISTRY = {
   [TASK_CREATE_TOOL.name]: TASK_CREATE_TOOL,
   [TASK_ESCALATE_TOOL.name]: TASK_ESCALATE_TOOL,
   [TRACE_REPLAY_TOOL.name]: TRACE_REPLAY_TOOL,
+  [TRAVEL_LOCATION_RESOLVE_TOOL.name]: TRAVEL_LOCATION_RESOLVE_TOOL,
+  [WEATHER_FORECAST_TOOL.name]: WEATHER_FORECAST_TOOL,
+  [WEATHER_CLIMATE_TOOL.name]: WEATHER_CLIMATE_TOOL,
+  [CATALOG_ATTRIBUTE_SEARCH_TOOL.name]: CATALOG_ATTRIBUTE_SEARCH_TOOL,
+  [OUTFIT_COMPOSE_TOOL.name]: OUTFIT_COMPOSE_TOOL,
+  [TRAVEL_PACKING_CHECKLIST_TOOL.name]: TRAVEL_PACKING_CHECKLIST_TOOL,
 } as const satisfies Readonly<Record<string, AgentToolDefinition>>
 
 export type AgentToolName = keyof typeof AGENT_TOOL_REGISTRY
