@@ -72,7 +72,7 @@ export default function CustomerChatWidget({
   }
 
   const handleImagesSelected = (event: ChangeEvent<HTMLInputElement>) => {
-    setPendingImages(Array.from(event.target.files ?? []).slice(0, 3))
+    setPendingImages(Array.from(event.target.files ?? []))
     event.target.value = ""
   }
 

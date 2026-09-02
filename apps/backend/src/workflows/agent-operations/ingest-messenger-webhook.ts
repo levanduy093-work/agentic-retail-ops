@@ -333,7 +333,6 @@ const ingestMessengerWebhookStep = createStep<
               ? [attachment.payload.url]
               : []
           )
-          .slice(0, 3)
         if (imageUrls.length) {
           try {
             const pageToken = await service.resolveChannelBotToken(connection)

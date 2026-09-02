@@ -52,7 +52,7 @@ import { StoreCreateCustomerChatMessage } from "./store/customer-chat/validators
 import { shippingHubMiddlewares } from "./admin/shipping/middlewares"
 
 const customerChatUpload = multer({
-  limits: { fileSize: 5 * 1024 * 1024, files: 3 },
+  limits: { fileSize: 5 * 1024 * 1024 },
   storage: multer.memoryStorage(),
 })
 import { paymentHubMiddlewares } from "./admin/payments/providers/middlewares"
@@ -108,7 +108,7 @@ import { getSepaySettings } from "../modules/payment-hub/sepay-connection"
       method: "POST",
       middlewares: [
         authenticate("customer", ["session", "bearer"]),
-        customerChatUpload.array("files", 3),
+        customerChatUpload.array("files"),
       ],
     },
     {

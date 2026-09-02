@@ -338,7 +338,7 @@ export function useCustomerChat(
   const sendMessage = useCallback(
     async (text: string, images: File[] = []) => {
       const trimmed = text.trim()
-      if (!trimmed || isLoading || images.length > 3) return
+      if (!trimmed || isLoading) return
 
       const clientMsgId = `temp-${crypto.randomUUID()}`
       const optimisticMsg: ChatMessage = {

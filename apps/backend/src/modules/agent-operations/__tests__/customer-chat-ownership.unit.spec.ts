@@ -49,7 +49,7 @@ describe("customer chat conversation ownership", () => {
     ).toBe(true)
   })
 
-  it("allows a bounded list of server-uploaded attachment IDs only", () => {
+  it("allows a server-uploaded attachment list of any size", () => {
     expect(
       StoreCreateCustomerChatMessage.safeParse({
         attachment_ids: ["file_1", "file_2"],
@@ -61,7 +61,7 @@ describe("customer chat conversation ownership", () => {
         attachment_ids: ["file_1", "file_2", "file_3", "file_4"],
         message: "Ảnh hàng bị lỗi đây ạ.",
       }).success
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it("bounds browser-supplied idempotency and conversation identifiers", () => {

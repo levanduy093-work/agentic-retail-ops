@@ -41,12 +41,6 @@ export const postCustomerChatMessageStep = createStep(
     }
     const locking = container.resolve<ILockingModule>(Modules.LOCKING)
     const attachmentIds = Array.from(new Set(input.attachment_ids ?? []))
-    if (attachmentIds.length > 3) {
-      throw new MedusaError(
-        MedusaError.Types.INVALID_DATA,
-        "A customer-support message can include at most three images."
-      )
-    }
     const imageAttachments = await Promise.all(
       attachmentIds.map(async (attachmentId) => {
         const file = await container.resolve(Modules.FILE).retrieveFile(

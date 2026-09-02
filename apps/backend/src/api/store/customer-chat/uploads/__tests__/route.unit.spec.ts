@@ -8,7 +8,7 @@ describe("customer-chat uploads", () => {
     size: 5,
   } as Express.Multer.File
 
-  it("accepts a bounded JPEG, PNG, or WebP image list", () => {
+  it("accepts every JPEG, PNG, or WebP image in a message", () => {
     expect(() => assertCustomerChatImageFiles([image])).not.toThrow()
     expect(() =>
       assertCustomerChatImageFiles([
@@ -16,6 +16,11 @@ describe("customer-chat uploads", () => {
         { ...image, mimetype: "image/png" },
         { ...image, mimetype: "image/webp" },
       ])
+    ).not.toThrow()
+    expect(() =>
+      assertCustomerChatImageFiles(
+        Array.from({ length: 12 }, () => ({ ...image }))
+      )
     ).not.toThrow()
   })
 

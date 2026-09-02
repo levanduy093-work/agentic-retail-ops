@@ -22,12 +22,6 @@ export function assertCustomerChatImageFiles(files: Express.Multer.File[]) {
       "At least one customer-support image is required."
     )
   }
-  if (files.length > 3) {
-    throw new MedusaError(
-      MedusaError.Types.INVALID_DATA,
-      "A customer-support message can include at most three images."
-    )
-  }
   for (const file of files) {
     if (!CUSTOMER_CHAT_IMAGE_MIME_TYPES.has(file.mimetype)) {
       throw new MedusaError(

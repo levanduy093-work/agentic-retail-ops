@@ -55,9 +55,27 @@ import {
 import { shouldUseHistoricalCustomerProfile } from "../../modules/agent-operations/conversation-memory"
 import { formatCustomerProfilePreferences } from "../../modules/agent-operations/customer-preferences"
 import { CUSTOMER_MESSAGE_INTENTS } from "../../modules/agent-operations/customer-message-intent"
+import {
+  isCustomerVisionReviewEnabled,
+  selectVisionImageUrls,
+} from "../../modules/agent-operations/customer-vision-processor"
 import { GuardrailsEngine } from "../../modules/agent-operations/guardrails"
 
-const answerCustomerKnowledgeQuestionStep = createStep(
+type CustomerAnswerWorkflowResult = {
+  ai_paused?: boolean
+  delivery_id: string | null
+  duplicate: boolean
+  grounded: boolean
+  response_message_id: string | null
+  response_preparation_ms: number
+  support_task_id?: string | null
+}
+
+const answerCustomerKnowledgeQuestionStep = createStep<
+  ProcessCustomerKnowledgeQuestionInput,
+  CustomerAnswerWorkflowResult,
+  CustomerAnswerWorkflowResult
+>(
   "answer-customer-knowledge-question",
   async (input: ProcessCustomerKnowledgeQuestionInput, { container }) => {
     const startedAt = Date.now()
@@ -66,6 +84,35 @@ const answerCustomerKnowledgeQuestionStep = createStep(
     const inbound = await service.retrieveAgentMessage(input.inbound_message_id)
 
     const inputGuardrail = GuardrailsEngine.evaluateInputSafeguard(inbound.body)
+    const imageAttachments = ((inbound.structured_content ?? {}) as Record<string, unknown>)
+      .image_attachments
+    const imageUrls = Array.isArray(imageAttachments)
+      ? imageAttachments.flatMap((attachment) => {
+          if (!attachment || typeof attachment !== "object") return []
+          const url = (attachment as Record<string, unknown>).url
+          return typeof url === "string" ? [url] : []
+        })
+      : []
+
+    // While vision is deferred, photos are handled by a person before an AI
+    // reply is generated. The escalation is idempotent per inbound message.
+    if (imageUrls.length && !isCustomerVisionReviewEnabled()) {
+      const escalation = await service.createCustomerKnowledgeEscalation({
+        conversation_id: inbound.conversation_id,
+        inbound_message_id: inbound.id,
+        locale: detectKnowledgeQuestionLocale(inbound.body),
+        question: inbound.body,
+        reason: "VISION_REVIEW",
+      })
+      return new StepResponse<CustomerAnswerWorkflowResult>({
+        delivery_id: null,
+        duplicate: escalation.duplicate,
+        grounded: false,
+        response_message_id: null,
+        response_preparation_ms: Date.now() - startedAt,
+        support_task_id: escalation.task?.id ?? null,
+      })
+    }
 
     let catalogSnapshot
     let customerOrderLookup: ProcessCustomerKnowledgeQuestionInput["customer_order_lookup"]
@@ -584,19 +631,12 @@ const answerCustomerKnowledgeQuestionStep = createStep(
           travel_context: travelContext,
         })
     )
-    const imageAttachments = ((inbound.structured_content ?? {}) as Record<string, unknown>)
-      .image_attachments
-    const imageUrls = Array.isArray(imageAttachments)
-      ? imageAttachments.flatMap((attachment) => {
-          if (!attachment || typeof attachment !== "object") return []
-          const url = (attachment as Record<string, unknown>).url
-          return typeof url === "string" ? [url] : []
-        })
-      : []
-    const visionAnalysis = imageUrls.length
+    const visionImageUrls = selectVisionImageUrls(imageUrls)
+    const visionAnalysis =
+      isCustomerVisionReviewEnabled() && visionImageUrls.length
       ? await service.analyzeCustomerSupportImages({
           caption: inbound.body,
-          image_urls: imageUrls,
+          image_urls: visionImageUrls,
           inbound_message_id: inbound.id,
           tenant_id: (await service.retrieveAgentConversation(inbound.conversation_id)).tenant_id
         })
@@ -613,7 +653,7 @@ const answerCustomerKnowledgeQuestionStep = createStep(
       result.support_task_id = escalation.task?.id ?? result.support_task_id
     }
 
-    return new StepResponse({
+    return new StepResponse<CustomerAnswerWorkflowResult>({
       ...result,
       response_preparation_ms: Date.now() - startedAt
     })

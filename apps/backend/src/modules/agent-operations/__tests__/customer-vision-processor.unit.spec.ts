@@ -1,6 +1,8 @@
 import {
   evaluateDefectSeverity,
   extractVisualKeywordsFromDescription,
+  isCustomerVisionReviewEnabled,
+  selectVisionImageUrls,
   VisionDefectAnalysisOutput,
   VisionProductSearchOutput,
 } from "../customer-vision-processor"
@@ -24,6 +26,18 @@ describe("customer vision processor", () => {
     const none = evaluateDefectSeverity("NONE")
     expect(none.eligible_for_return).toBe(false)
     expect(none.severity).toBe("LOW")
+  })
+
+  it("samples a long image message without hiding any images from staff", () => {
+    expect(
+      selectVisionImageUrls(["first", "second", "middle", "fourth", "last"])
+    ).toEqual(["first", "middle", "last"])
+  })
+
+  it("keeps vision review disabled until it is explicitly enabled", () => {
+    expect(isCustomerVisionReviewEnabled()).toBe(false)
+    expect(isCustomerVisionReviewEnabled("false")).toBe(false)
+    expect(isCustomerVisionReviewEnabled("true")).toBe(true)
   })
 
   it("validates structured vision schemas", () => {
