@@ -285,6 +285,38 @@ export const AdminConfigureManagedPrompt = z.strictObject({
   system_prompt: z.string().trim().min(10).max(30_000).optional(),
 })
 
+export const AdminConfigureTenantSkill = z.union([
+  z.strictObject({
+    action: z.literal("CREATE_DRAFT"),
+    description: z.string().trim().min(20).max(4_000),
+    escalation_guidance: z.string().trim().min(10).max(2_000),
+    name: z.string().trim().min(3).max(120),
+    tenant_id: z.string().trim().min(1).default("default"),
+    when_to_use: z.string().trim().min(10).max(2_000),
+  }),
+  z.strictObject({
+    action: z.literal("INSTALL_PLATFORM"),
+    configuration: z.record(z.string(), z.unknown()).default({}),
+    enabled_tool_names: z.array(z.string().trim().min(1).max(120)).max(20).optional(),
+    skill_key: z.string().trim().min(3).max(120),
+    skill_version: z.string().trim().min(1).max(50),
+    tenant_id: z.string().trim().min(1).default("default"),
+  }),
+])
+
+export type AdminConfigureTenantSkillType = z.infer<
+  typeof AdminConfigureTenantSkill
+>
+
+export const AdminSetTenantSkillStatus = z.strictObject({
+  status: z.enum(["DRAFT", "SHADOW", "PAUSED", "RETIRED"]),
+  tenant_id: z.string().trim().min(1).default("default"),
+})
+
+export type AdminSetTenantSkillStatusType = z.infer<
+  typeof AdminSetTenantSkillStatus
+>
+
 export type AdminConfigureManagedPromptType = z.infer<
   typeof AdminConfigureManagedPrompt
 >
@@ -713,5 +745,4 @@ export const AdminDisconnectTikTokChannel = z.object({
 export type AdminDisconnectTikTokChannelType = z.infer<
   typeof AdminDisconnectTikTokChannel
 >
-
 

@@ -77,7 +77,9 @@ import AgentPolicyDefinition from "./models/agent-policy-definition"
 import AgentPromptTemplate from "./models/agent-prompt-template"
 import AgentRecommendation from "./models/agent-recommendation"
 import AgentRun from "./models/agent-run"
+import AgentSkillDefinition from "./models/agent-skill-definition"
 import AgentTask from "./models/agent-task"
+import AgentTenantSkill from "./models/agent-tenant-skill"
 import AgentToolCall from "./models/agent-tool-call"
 import { calculateOutboxRetry, isOutboxEventClaimable, sanitizeOutboxError } from "./outbox-policy"
 import { calculateDeliveryRetry, isAgentDeliveryClaimable } from "./delivery-policy"
@@ -333,6 +335,7 @@ import {
   writeCustomerAssistantCache
 } from "./customer-assistant-cache"
 import { agentRealtimeHub } from "./realtime-hub"
+import { getPlatformSkillDefinition, PLATFORM_SKILL_CATALOG } from "./skill-registry"
 
 class AgentOperationsModuleService extends MedusaService({
   AgentActionRequest,
@@ -360,9 +363,198 @@ class AgentOperationsModuleService extends MedusaService({
   AgentPromptTemplate,
   AgentRecommendation,
   AgentRun,
+  AgentSkillDefinition,
   AgentTask,
+  AgentTenantSkill,
   AgentToolCall
 }) {
+  @InjectManager()
+  async listTenantSkillCatalog(
+    tenantId = "default",
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const [installations, tenantDefinitions] = await Promise.all([
+      this.listAgentTenantSkills({ tenant_id: tenantId }, {}, sharedContext),
+      this.listAgentSkillDefinitions({ tenant_id: tenantId }, {}, sharedContext),
+    ])
+    const installationBySkill = new Map(
+      installations.map((installation) => [
+        `${installation.skill_key}:${installation.skill_version}`,
+        installation,
+      ])
+    )
+    const platform = PLATFORM_SKILL_CATALOG.map((skill) => ({
+      ...skill,
+      installation: installationBySkill.get(`${skill.key}:${skill.version}`) ?? null,
+      owner: "PLATFORM" as const,
+    }))
+    const custom = tenantDefinitions.map((skill) => ({
+      ...skill,
+      installation: installationBySkill.get(`${skill.key}:${skill.version}`) ?? null,
+      owner: "TENANT" as const,
+    }))
+
+    return { items: [...platform, ...custom] }
+  }
+
+  @InjectManager()
+  async createTenantSkillDraft(
+    input: {
+      actor_id: string
+      description: string
+      escalation_guidance: string
+      name: string
+      tenant_id?: string
+      when_to_use: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const tenantId = input.tenant_id ?? "default"
+    const normalizedName = input.name
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 72)
+    const key = `tenant-${normalizedName || "skill"}-${randomBytes(4).toString("hex")}`
+    const instructions = [
+      `Dùng skill này khi: ${input.when_to_use.trim()}`,
+      `Mục tiêu: ${input.description.trim()}`,
+      `Chuyển nhân viên khi: ${input.escalation_guidance.trim()}`,
+      "Không tự khẳng định dữ kiện cửa hàng nếu chưa có tool result hoặc tài liệu đã duyệt.",
+    ].join("\n\n")
+    const definition = await this.createAgentSkillDefinitions(
+      {
+        configuration_schema: { fields: [] },
+        description: input.description.trim(),
+        eligible_tool_names: { items: [] },
+        evaluation_scenario_keys: { items: [] },
+        instructions,
+        key,
+        name: input.name.trim(),
+        owner: "TENANT",
+        required_evidence: { items: [] },
+        status: "DRAFT",
+        tenant_id: tenantId,
+        version: "1.0.0",
+      },
+      sharedContext
+    )
+    const installation = await this.createAgentTenantSkills(
+      {
+        configuration: {
+          escalation_guidance: input.escalation_guidance.trim(),
+          when_to_use: input.when_to_use.trim(),
+        },
+        definition_id: definition.id,
+        enabled_tool_names: { items: [] },
+        installed_by: input.actor_id,
+        skill_key: definition.key,
+        skill_version: definition.version,
+        status: "DRAFT",
+        tenant_id: tenantId,
+      },
+      sharedContext
+    )
+    return { definition, installation }
+  }
+
+  @InjectManager()
+  async installPlatformSkill(
+    input: {
+      actor_id: string
+      configuration?: Record<string, unknown>
+      enabled_tool_names?: string[]
+      skill_key: string
+      skill_version: string
+      tenant_id?: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const skill = getPlatformSkillDefinition(input.skill_key, input.skill_version)
+    if (!skill) {
+      throw new MedusaError(MedusaError.Types.NOT_FOUND, "Platform skill was not found.")
+    }
+    const enabledToolNames = input.enabled_tool_names ?? skill.eligible_tool_names
+    if (enabledToolNames.some((toolName) => !skill.eligible_tool_names.includes(toolName))) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "A skill cannot enable a tool outside its allowlist."
+      )
+    }
+    const tenantId = input.tenant_id ?? "default"
+    const existing = (
+      await this.listAgentTenantSkills(
+        {
+          skill_key: skill.key,
+          skill_version: skill.version,
+          tenant_id: tenantId,
+        },
+        { take: 1 },
+        sharedContext
+      )
+    )[0]
+    if (existing) {
+      return this.updateAgentTenantSkills(
+        {
+          configuration: input.configuration ?? existing.configuration,
+          enabled_tool_names: { items: enabledToolNames },
+          id: existing.id,
+          status: existing.status === "RETIRED" ? "DRAFT" : existing.status,
+        },
+        sharedContext
+      )
+    }
+    return this.createAgentTenantSkills(
+      {
+        configuration: input.configuration ?? {},
+        definition_id: null,
+        enabled_tool_names: { items: enabledToolNames },
+        installed_by: input.actor_id,
+        skill_key: skill.key,
+        skill_version: skill.version,
+        status: "DRAFT",
+        tenant_id: tenantId,
+      },
+      sharedContext
+    )
+  }
+
+  @InjectManager()
+  async setTenantSkillShadowStatus(
+    input: {
+      actor_id: string
+      skill_id: string
+      status: "DRAFT" | "PAUSED" | "RETIRED" | "SHADOW"
+      tenant_id?: string
+    },
+    @MedusaContext() sharedContext: Context = {}
+  ) {
+    const skill = await this.retrieveAgentTenantSkill(input.skill_id, {}, sharedContext)
+    if (skill.tenant_id !== (input.tenant_id ?? "default")) {
+      throw new MedusaError(MedusaError.Types.NOT_ALLOWED, "Skill does not belong to this tenant.")
+    }
+    const updated = await this.updateAgentTenantSkills(
+      { id: skill.id, status: input.status },
+      sharedContext
+    )
+    await this.createAgentAuditEvents(
+      {
+        action: "tenant-skill-status-changed",
+        actor_id: input.actor_id,
+        actor_type: "user",
+        correlation_id: `tenant-skill:${skill.id}`,
+        data: { from: skill.status, to: input.status },
+        event_type: "agent.tenant-skill.status-changed",
+        recorded_at: new Date(),
+        resource_id: skill.id,
+        resource_type: "agent_tenant_skill",
+      },
+      sharedContext
+    )
+    return updated
+  }
   @InjectManager()
   async processCustomerMessageAgentic(
     input: ProcessCustomerKnowledgeQuestionInput,

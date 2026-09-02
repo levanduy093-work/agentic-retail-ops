@@ -238,7 +238,6 @@ export const CustomerSupportContent = ({
 }: CustomerSupportContentProps) => {
   const { i18n, t } = useTranslation()
   const queryClient = useQueryClient()
-  const [view, setView] = useState<"attention" | "all">("attention")
   const [selectedConversationId, setSelectedConversationId] = useState<
     string | null
   >(null)
@@ -360,8 +359,20 @@ export const CustomerSupportContent = ({
   const attentionConversations = allConversations.filter(
     (conversation) => conversation.requires_human_attention,
   )
-  const visibleConversations =
-    view === "attention" ? attentionConversations : allConversations
+  const visibleConversations = useMemo(
+    () =>
+      [...allConversations].sort((left, right) => {
+        if (left.requires_human_attention !== right.requires_human_attention) {
+          return left.requires_human_attention ? -1 : 1
+        }
+
+        return (
+          new Date(right.last_message_at).getTime() -
+          new Date(left.last_message_at).getTime()
+        )
+      }),
+    [allConversations],
+  )
   const selectedConversation = allConversations.find(
     (conversation) => conversation.id === selectedConversationId,
   )
@@ -663,7 +674,6 @@ export const CustomerSupportContent = ({
       setSimulatorOpen(false)
       setSimulatorOrderId("")
       setSimulatorQuestion("")
-      setView("attention")
       await invalidateSupportData()
     },
   })
@@ -896,32 +906,15 @@ export const CustomerSupportContent = ({
       <div className="grid gap-3 md:h-[calc(100dvh-14rem)] md:min-h-[520px] md:grid-cols-[380px_minmax(0,1fr)]">
         <Container className="p-0 md:grid md:h-full md:min-h-0 md:grid-rows-[auto_auto_minmax(0,1fr)] md:overflow-hidden">
           <div className="flex items-center justify-between border-b border-ui-border-base px-4 py-3">
-            <div className="flex gap-x-2">
-              <Button
-                size="small"
-                variant={view === "attention" ? "primary" : "secondary"}
-                onClick={() => setView("attention")}
-              >
-                {t("supportDesk.attentionTab")}
-              </Button>
-              <Button
-                size="small"
-                variant={view === "all" ? "primary" : "secondary"}
-                onClick={() => setView("all")}
-              >
-                {t("supportDesk.allConversationsTab")}
-              </Button>
-            </div>
+            <Text size="small" leading="compact" weight="plus">
+              {t("supportDesk.allConversationsTab")}
+            </Text>
           </div>
           <div className="px-4 py-3">
             <Text size="small" leading="compact" className="text-ui-fg-subtle">
-              {view === "attention"
-                ? t("supportDesk.attentionCount", {
-                    count: attentionConversations.length,
-                  })
-                : t("supportDesk.allConversationsCount", {
-                    count: allConversations.length,
-                  })}
+              {t("supportDesk.allConversationsCount", {
+                count: allConversations.length,
+              })}
             </Text>
           </div>
           <div className="flex min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain px-3 py-3 [scrollbar-gutter:stable]">
@@ -931,11 +924,7 @@ export const CustomerSupportContent = ({
                 leading="compact"
                 className="px-3 py-8 text-center text-ui-fg-subtle"
               >
-                {t(
-                  view === "attention"
-                    ? "supportDesk.emptyAttention"
-                    : "supportDesk.emptyConversations",
-                )}
+                {t("supportDesk.emptyConversations")}
               </Text>
             ) : (
               visibleConversations.map((item) => {

@@ -49,6 +49,13 @@ type ConversationDetailResponse = {
 }
 
 const STORAGE_KEY = "synapse_storefront_chat_conversation_id"
+const PENDING_STORAGE_PREFIX = "synapse_storefront_chat_pending"
+
+type PendingTextMessage = {
+  client_message_id: string
+  occurred_at: string
+  text: string
+}
 
 let customerChatSdk: Medusa | null = null
 
@@ -111,6 +118,46 @@ function getChatErrorMessage(error: unknown) {
   return "Không thể gửi tin nhắn lúc này. Bạn thử lại giúp shop nhé."
 }
 
+function pendingStorageKey(customerId: string) {
+  return `${PENDING_STORAGE_PREFIX}:${customerId}`
+}
+
+function readPendingTextMessages(customerId: string): PendingTextMessage[] {
+  try {
+    const value = JSON.parse(
+      localStorage.getItem(pendingStorageKey(customerId)) ?? "[]"
+    ) as unknown
+    if (!Array.isArray(value)) return []
+
+    return value.filter(
+      (message): message is PendingTextMessage =>
+        Boolean(
+          message &&
+            typeof message === "object" &&
+            typeof (message as PendingTextMessage).client_message_id === "string" &&
+            typeof (message as PendingTextMessage).occurred_at === "string" &&
+            typeof (message as PendingTextMessage).text === "string"
+        )
+    )
+  } catch {
+    return []
+  }
+}
+
+function writePendingTextMessages(
+  customerId: string,
+  messages: PendingTextMessage[]
+) {
+  try {
+    localStorage.setItem(pendingStorageKey(customerId), JSON.stringify(messages))
+  } catch {}
+}
+
+function shouldQueueForRetry(error: unknown) {
+  const message = getChatErrorMessage(error)
+  return !/unauthorized|forbidden|invalid|validation|too many/i.test(message)
+}
+
 export function useCustomerChat(
   customer?: HttpTypes.StoreCustomer | null,
   locale: string = "vi"
@@ -122,6 +169,31 @@ export function useCustomerChat(
   const [isLive, setIsLive] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
+  const replayingPendingMessageRef = useRef(false)
+
+  const confirmMessage = useCallback(
+    (clientMsgId: string, res: StoreMessageResponse) => {
+      if (res.conversation_id && res.conversation_id !== conversationId) {
+        setConversationId(res.conversation_id)
+        try {
+          localStorage.setItem(STORAGE_KEY, res.conversation_id)
+        } catch {}
+      }
+
+      setMessages((prev) => {
+        const filtered = prev.filter((m) => m.id !== clientMsgId)
+        const updated = [...filtered, normalizeChatMessage(res.inbound_message)]
+        if (
+          res.response_message &&
+          !updated.some((m) => m.id === res.response_message?.id)
+        ) {
+          updated.push(normalizeChatMessage(res.response_message))
+        }
+        return updated
+      })
+    },
+    [conversationId]
+  )
 
   // 1. Fetch active conversation for logged-in customer
   useEffect(() => {
@@ -213,13 +285,62 @@ export function useCustomerChat(
     }
   }, [conversationId, isOpen])
 
+  // Text-only messages survive a tab reload or backend outage. The stable
+  // client_message_id makes replay safe even if the first POST succeeded but
+  // its response was lost while the server was restarting.
+  useEffect(() => {
+    if (!customer?.id) return
+
+    const replayNext = async () => {
+      if (replayingPendingMessageRef.current || !navigator.onLine) return
+      const [pending] = readPendingTextMessages(customer.id)
+      if (!pending) return
+
+      replayingPendingMessageRef.current = true
+      try {
+        const res = await getCustomerChatSdk().client.fetch<StoreMessageResponse>(
+          "/api/customer-chat/messages",
+          {
+            body: {
+              client_message_id: pending.client_message_id,
+              conversation_id: conversationId ?? undefined,
+              locale: locale.startsWith("vi") ? "vi" : "en",
+              message: pending.text,
+            },
+            method: "POST",
+          }
+        )
+        writePendingTextMessages(
+          customer.id,
+          readPendingTextMessages(customer.id).filter(
+            (message) => message.client_message_id !== pending.client_message_id
+          )
+        )
+        confirmMessage(pending.client_message_id, res)
+        setErrorMessage(null)
+      } catch {
+        // Leave it in local storage for the next online/interval retry.
+      } finally {
+        replayingPendingMessageRef.current = false
+      }
+    }
+
+    void replayNext()
+    window.addEventListener("online", replayNext)
+    const interval = window.setInterval(replayNext, 15_000)
+    return () => {
+      window.removeEventListener("online", replayNext)
+      window.clearInterval(interval)
+    }
+  }, [confirmMessage, conversationId, customer?.id, locale])
+
   // 3. Send message action
   const sendMessage = useCallback(
     async (text: string, images: File[] = []) => {
       const trimmed = text.trim()
       if (!trimmed || isLoading || images.length > 3) return
 
-      const clientMsgId = `temp-${Date.now()}`
+      const clientMsgId = `temp-${crypto.randomUUID()}`
       const optimisticMsg: ChatMessage = {
         body: trimmed,
         id: clientMsgId,
@@ -260,36 +381,30 @@ export function useCustomerChat(
           }
         )
 
-        if (res.conversation_id && res.conversation_id !== conversationId) {
-          setConversationId(res.conversation_id)
-          try {
-            localStorage.setItem(STORAGE_KEY, res.conversation_id)
-          } catch {}
-        }
-
-        // Replace optimistic msg with confirmed inbound message
-        setMessages((prev) => {
-          const filtered = prev.filter((m) => m.id !== clientMsgId)
-          const updated = [
-            ...filtered,
-            normalizeChatMessage(res.inbound_message),
-          ]
-          if (
-            res.response_message &&
-            !updated.some((m) => m.id === res.response_message?.id)
-          ) {
-            updated.push(normalizeChatMessage(res.response_message))
-          }
-          return updated
-        })
+        confirmMessage(clientMsgId, res)
       } catch (err) {
-        setMessages((prev) => prev.filter((message) => message.id !== clientMsgId))
-        setErrorMessage(getChatErrorMessage(err))
+        if (customer?.id && images.length === 0 && shouldQueueForRetry(err)) {
+          const pending = readPendingTextMessages(customer.id)
+          if (!pending.some((message) => message.client_message_id === clientMsgId)) {
+            writePendingTextMessages(customer.id, [
+              ...pending,
+              {
+                client_message_id: clientMsgId,
+                occurred_at: optimisticMsg.occurred_at,
+                text: trimmed,
+              },
+            ])
+          }
+          setErrorMessage("Tin nhắn đã được giữ lại và sẽ tự gửi khi server hoạt động lại.")
+        } else {
+          setMessages((prev) => prev.filter((message) => message.id !== clientMsgId))
+          setErrorMessage(getChatErrorMessage(err))
+        }
       } finally {
         setIsLoading(false)
       }
     },
-    [conversationId, customer, isLoading, locale]
+    [confirmMessage, conversationId, customer, isLoading, locale]
   )
 
   const clearChat = useCallback(() => {

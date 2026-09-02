@@ -2,47 +2,64 @@ import os from "node:os"
 import { MedusaContainer } from "@medusajs/framework/types"
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
 import { AGENT_OPERATIONS_MODULE } from "../modules/agent-operations"
-import AgentOperationsModuleService from "../modules/agent-operations/service"
 import { isCustomerSupportConversation } from "../modules/agent-operations/channel-principal"
+import AgentOperationsModuleService from "../modules/agent-operations/service"
+import type { ConversationChannel } from "../modules/agent-operations/types"
 import { answerCustomerKnowledgeQuestionWorkflow } from "../workflows/agent-operations/answer-customer-knowledge-question"
 import { dispatchAgentDeliveryWorkflow } from "../workflows/agent-operations/dispatch-agent-delivery"
 import { refreshConversationMemoryWorkflow } from "../workflows/agent-operations/refresh-conversation-memory"
 
 const BATCH_SIZE = 25
-const CANDIDATE_WINDOW = 200
-const WORKER_ID = `telegram-knowledge-${os.hostname()}-${process.pid}`
+const CANDIDATE_WINDOW = 250
+const RECOVERABLE_CHANNELS = new Set<ConversationChannel>([
+  "TELEGRAM",
+  "ZALO",
+  "MESSENGER",
+  "TIKTOK",
+])
+const WORKER_ID = `customer-channel-recovery-${os.hostname()}-${process.pid}`
 
-export default async function answerTelegramKnowledgeQuestionsJob(
+/**
+ * Recovers inbound messages that were durably stored by a webhook but whose
+ * realtime subscriber did not finish before a restart or transient failure.
+ *
+ * The answer workflow and delivery dispatcher are both idempotent, so this
+ * job can safely run alongside the realtime subscribers and after a restart.
+ */
+export default async function recoverCustomerChannelMessagesJob(
   container: MedusaContainer
 ) {
   const logger = container.resolve(ContainerRegistrationKeys.LOGGER)
   const service = container.resolve<AgentOperationsModuleService>(
     AGENT_OPERATIONS_MODULE
   )
-  const inboundMessages = await service.listAgentMessages(
-    {
-      channel: "TELEGRAM",
-      direction: "INBOUND",
-      message_type: "TEXT",
-      status: "PROCESSED",
-    },
-    { order: { occurred_at: "DESC" }, take: CANDIDATE_WINDOW }
+  const inboundMessages = (
+    await Promise.all(
+      [...RECOVERABLE_CHANNELS].map((channel) =>
+        service.listAgentMessages(
+          {
+            channel,
+            direction: "INBOUND",
+            message_type: "TEXT",
+            status: "PROCESSED",
+          },
+          { order: { occurred_at: "ASC" }, take: CANDIDATE_WINDOW }
+        )
+      )
+    )
   )
-  let processed = 0
+    .flat()
+    .sort(
+      (left, right) =>
+        new Date(left.occurred_at).getTime() -
+        new Date(right.occurred_at).getTime()
+    )
+  let recovered = 0
 
   for (const inbound of inboundMessages) {
-    if (processed >= BATCH_SIZE) break
-    const conversation = await service.retrieveAgentConversation(
-      inbound.conversation_id
-    )
-    if (
-      !isCustomerSupportConversation({
-        metadata: (conversation.metadata ?? {}) as Record<string, unknown>,
-        topic_type: conversation.topic_type,
-      })
-    ) {
-      continue
-    }
+    if (recovered >= BATCH_SIZE) break
+    if (!RECOVERABLE_CHANNELS.has(inbound.channel)) continue
+
     const existing = await service.listAgentMessages(
       { idempotency_key: `customer-answer:${inbound.id}` },
       { take: 1 }
@@ -63,8 +80,20 @@ export default async function answerTelegramKnowledgeQuestionsJob(
     if (escalations.length) continue
 
     try {
+      const conversation = await service.retrieveAgentConversation(
+        inbound.conversation_id
+      )
+      if (
+        !isCustomerSupportConversation({
+          metadata: (conversation.metadata ?? {}) as Record<string, unknown>,
+          topic_type: conversation.topic_type,
+        })
+      ) {
+        continue
+      }
+
       await refreshConversationMemoryWorkflow(container).run({
-        input: { conversation_id: inbound.conversation_id },
+        input: { conversation_id: conversation.id },
       })
       const { result } = await answerCustomerKnowledgeQuestionWorkflow(
         container
@@ -78,23 +107,23 @@ export default async function answerTelegramKnowledgeQuestionsJob(
         })
       }
       await refreshConversationMemoryWorkflow(container).run({
-        input: { conversation_id: inbound.conversation_id },
+        input: { conversation_id: conversation.id },
       })
-      processed += 1
+      recovered += 1
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error"
       logger.error(
-        `Telegram knowledge answer failed for ${inbound.id}: ${message}`
+        `Customer channel recovery failed for ${inbound.id}: ${message}`
       )
     }
   }
 
-  if (processed) {
-    logger.info(`Telegram knowledge answers processed: ${processed}.`)
+  if (recovered) {
+    logger.info(`Customer channel recovery processed: ${recovered}.`)
   }
 }
 
 export const config = {
-  name: "answer-telegram-knowledge-questions",
+  name: "recover-customer-channel-messages",
   schedule: "* * * * *",
 }

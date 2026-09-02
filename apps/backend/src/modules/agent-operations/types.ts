@@ -85,6 +85,16 @@ export const AGENT_TASK_STATUSES = [
 
 export const LIFECYCLE_STATUSES = ["DRAFT", "ACTIVE", "RETIRED"] as const
 
+export const SKILL_OWNERS = ["PLATFORM", "TENANT"] as const
+
+export const TENANT_SKILL_STATUSES = [
+  "DRAFT",
+  "SHADOW",
+  "ACTIVE",
+  "PAUSED",
+  "RETIRED",
+] as const
+
 export const KNOWLEDGE_STATUSES = ["DRAFT", "APPROVED", "RETIRED"] as const
 
 export const MODEL_RUN_STATUSES = ["PENDING", "RUNNING", "SUCCEEDED", "FAILED", "REJECTED"] as const
@@ -112,6 +122,8 @@ export type MessageType = (typeof MESSAGE_TYPES)[number]
 export type MessageStatus = (typeof MESSAGE_STATUSES)[number]
 export type AgentTaskStatus = (typeof AGENT_TASK_STATUSES)[number]
 export type LifecycleStatus = (typeof LIFECYCLE_STATUSES)[number]
+export type SkillOwner = (typeof SKILL_OWNERS)[number]
+export type TenantSkillStatus = (typeof TENANT_SKILL_STATUSES)[number]
 export type KnowledgeStatus = (typeof KNOWLEDGE_STATUSES)[number]
 export type ModelRunStatus = (typeof MODEL_RUN_STATUSES)[number]
 export type EvaluationRunStatus = (typeof EVALUATION_RUN_STATUSES)[number]

@@ -16,6 +16,7 @@ import {
   AdminConfigureTelegramChannel,
   AdminConfigureZaloChannel,
   AdminConfigureMessengerChannel,
+  AdminConfigureTenantSkill,
   AdminClearAgentConversation,
   AdminDiscoverAiModels,
   AdminDecideAgentApproval,
@@ -37,6 +38,7 @@ import {
   AdminTestZaloOa,
   AdminTestMessengerConnection,
   AdminToggleConversationAi,
+  AdminSetTenantSkillStatus,
   AdminTransitionAgentTask,
   TelegramWebhookUpdate,
   ZaloWebhookPayload,
@@ -138,6 +140,23 @@ import { getSepaySettings } from "../modules/payment-hub/sepay-connection"
       middlewares: [
         authenticate("customer", ["bearer"], { allowUnregistered: true }),
       ],
+    },
+    {
+      matcher: "/admin/agent-operations/skills",
+      method: "GET",
+      policies: [{ resource: "agent_skill", operation: "read" }],
+    },
+    {
+      matcher: "/admin/agent-operations/skills",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminConfigureTenantSkill)],
+      policies: [{ resource: "agent_skill", operation: "create" }],
+    },
+    {
+      matcher: "/admin/agent-operations/skills/:id/status",
+      method: "POST",
+      middlewares: [validateAndTransformBody(AdminSetTenantSkillStatus)],
+      policies: [{ resource: "agent_skill", operation: "update" }],
     },
     {
       matcher: "/admin/agent-operations/events",

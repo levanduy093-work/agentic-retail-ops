@@ -21,6 +21,7 @@ import { AiConnectionsContent } from "../ai-connections/page"
 import { CustomerSupportContent } from "../customer-support/page"
 import { ChatChannelsContent } from "./chat-channels"
 import { PromptsConfigContent } from "./prompts-config"
+import { SkillsConfigContent } from "./skills-config"
 import {
   GooglePickerCredential,
   type GooglePickerSelection,
@@ -226,9 +227,10 @@ const KnowledgeHubPage = () => {
   const prompt = usePrompt()
   const [createOpen, setCreateOpen] = useState(false)
   const [sourceOpen, setSourceOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeView, setActiveView] = useState<
-    "ai" | "channels" | "conversations" | "documents" | "prompts" | "search" | "sources"
+    "ai" | "channels" | "conversations" | "documents" | "prompts" | "search" | "skills" | "sources"
   >("conversations")
   const [searchQuery, setSearchQuery] = useState("")
   const [searchLocale, setSearchLocale] = useState("vi")
@@ -719,47 +721,61 @@ const KnowledgeHubPage = () => {
     setActiveView("documents")
   }
 
+  const openSettingsView = (
+    view: Exclude<typeof activeView, "conversations">
+  ) => {
+    setActiveView(view)
+    setSettingsOpen(false)
+  }
+
   return (
     <div className="flex flex-col gap-y-3">
       <Container className="p-0">
         <div className="flex items-center justify-between gap-4 px-6 py-4">
-          <Heading level="h1">{t("knowledgeHub.title")}</Heading>
-          {activeView === "documents" && (
-            <Button size="small" onClick={() => setCreateOpen(true)}>
-              {t("knowledgeHub.createAction")}
-            </Button>
-          )}
-          {activeView === "sources" && (
+          <div>
+            <Heading level="h1">
+              {activeView === "conversations"
+                ? t("knowledgeHub.title")
+                : t(`knowledgeHub.views.${activeView}`)}
+            </Heading>
+            {activeView !== "conversations" && (
+              <Text className="mt-1 text-ui-fg-subtle" size="small">
+                {t("knowledgeHub.settingsHint")}
+              </Text>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {activeView === "documents" && (
+              <Button size="small" onClick={() => setCreateOpen(true)}>
+                {t("knowledgeHub.createAction")}
+              </Button>
+            )}
+            {activeView === "sources" && (
+              <Button
+                disabled={createSource.isPending || sourcePipelineBusy}
+                onClick={openSourceConnection}
+                size="small"
+              >
+                {t("knowledgeHub.sources.connectAction")}
+              </Button>
+            )}
+            {activeView !== "conversations" && (
+              <Button
+                onClick={() => setActiveView("conversations")}
+                size="small"
+                variant="secondary"
+              >
+                {t("knowledgeHub.backToConversations")}
+              </Button>
+            )}
             <Button
-              disabled={createSource.isPending || sourcePipelineBusy}
-              onClick={openSourceConnection}
+              onClick={() => setSettingsOpen(true)}
               size="small"
+              variant="secondary"
             >
-              {t("knowledgeHub.sources.connectAction")}
+              {t("knowledgeHub.settings")}
             </Button>
-          )}
-        </div>
-        <div className="flex gap-1 border-t px-4 py-2">
-          {(
-            [
-              "conversations",
-              "documents",
-              "sources",
-              "search",
-              "channels",
-              "prompts",
-              "ai",
-            ] as const
-          ).map((view) => (
-            <Button
-              key={view}
-              onClick={() => setActiveView(view)}
-              size="small"
-              variant={activeView === view ? "secondary" : "transparent"}
-            >
-              {t(`knowledgeHub.views.${view}`)}
-            </Button>
-          ))}
+          </div>
         </div>
       </Container>
 
@@ -770,6 +786,8 @@ const KnowledgeHubPage = () => {
       {activeView === "prompts" && <PromptsConfigContent />}
 
       {activeView === "ai" && <AiConnectionsContent embedded />}
+
+      {activeView === "skills" && <SkillsConfigContent />}
 
       {activeView === "documents" && (
         <Container className="p-0">
@@ -1249,6 +1267,42 @@ const KnowledgeHubPage = () => {
           </div>
         </Container>
       )}
+
+      <Drawer open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <Drawer.Content>
+          <Drawer.Header>
+            <Drawer.Title>{t("knowledgeHub.settings")}</Drawer.Title>
+          </Drawer.Header>
+          <Drawer.Body className="overflow-y-auto">
+            <div className="flex flex-col gap-2">
+              <Text className="text-ui-fg-subtle" size="small">
+                {t("knowledgeHub.settingsDrawerHint")}
+              </Text>
+              {(
+                [
+                  "documents",
+                  "sources",
+                  "search",
+                  "channels",
+                  "skills",
+                  "prompts",
+                  "ai",
+                ] as const
+              ).map((view) => (
+                <Button
+                  className="justify-start"
+                  key={view}
+                  onClick={() => openSettingsView(view)}
+                  size="small"
+                  variant={activeView === view ? "secondary" : "transparent"}
+                >
+                  {t(`knowledgeHub.views.${view}`)}
+                </Button>
+              ))}
+            </div>
+          </Drawer.Body>
+        </Drawer.Content>
+      </Drawer>
 
       <Drawer open={createOpen} onOpenChange={setCreateOpen}>
         <Drawer.Content>
