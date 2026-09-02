@@ -273,12 +273,22 @@ describe("agent platform foundations", () => {
     expect(
       redactModelInput({
         api_key: "provider-key",
-        customer: { email: "safe@example.com", password: "do-not-send" },
+        customer: {
+          email: "safe@example.com",
+          message:
+            "Gọi 0901234567 hoặc safe@example.com, OTP 123456, thẻ 4111 1111 1111 1111",
+          password: "do-not-send",
+        },
         secret: "provider-secret",
       })
     ).toEqual({
       api_key: "[REDACTED]",
-      customer: { email: "safe@example.com", password: "[REDACTED]" },
+      customer: {
+        email: "[REDACTED]",
+        message:
+          "Gọi [REDACTED_PHONE] hoặc [REDACTED_EMAIL], [REDACTED_AUTH_CODE], thẻ [REDACTED_PAYMENT_NUMBER]",
+        password: "[REDACTED]",
+      },
       secret: "[REDACTED]",
     })
     expect(() =>

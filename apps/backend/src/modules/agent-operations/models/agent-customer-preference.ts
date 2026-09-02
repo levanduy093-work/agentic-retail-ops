@@ -11,17 +11,12 @@ const AgentCustomerPreference = model
     source_conversation_id: model.text(),
     source_message_id: model.text(),
     last_confirmed_at: model.dateTime(),
-    expires_at: model.dateTime(),
   })
   .indexes([
     {
       name: "IDX_agent_customer_preference_customer_type",
       on: ["tenant_id", "customer_id", "preference_type"],
-      where: "deleted_at IS NULL",
-    },
-    {
-      name: "IDX_agent_customer_preference_expiry",
-      on: ["tenant_id", "expires_at"],
+      unique: true,
       where: "deleted_at IS NULL",
     },
   ])

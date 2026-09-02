@@ -37,19 +37,47 @@ export type ModelInvocationResult = Record<string, unknown> & {
 
 const SENSITIVE_KEYS = new Set([
   "access_token",
+  "address_1",
   "api_key",
   "authorization",
   "cookie",
+  "customer_email",
+  "customer_name",
+  "customer_phone",
+  "email",
+  "first_name",
+  "last_name",
   "password",
+  "phone",
   "private_key",
   "refresh_token",
   "secret",
   "token",
 ])
 
+const MODEL_INPUT_EMAIL_PATTERN =
+  /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/gu
+const MODEL_INPUT_PHONE_PATTERN =
+  /(?<!\d)(?:\+?84|0)[35789](?:[ .-]?\d){8}(?!\d)/gu
+const MODEL_INPUT_PAYMENT_NUMBER_PATTERN =
+  /(?<!\d)(?:\d[ -]?){13,19}(?!\d)/gu
+const MODEL_INPUT_AUTH_CODE_PATTERN =
+  /\b(?:otp|mã xác thực|verification code)\s*[:=]?\s*\d{4,8}\b/giu
+
+export function redactModelText(value: string) {
+  return value
+    .replace(MODEL_INPUT_EMAIL_PATTERN, "[REDACTED_EMAIL]")
+    .replace(MODEL_INPUT_PHONE_PATTERN, "[REDACTED_PHONE]")
+    .replace(MODEL_INPUT_PAYMENT_NUMBER_PATTERN, "[REDACTED_PAYMENT_NUMBER]")
+    .replace(MODEL_INPUT_AUTH_CODE_PATTERN, "[REDACTED_AUTH_CODE]")
+}
+
 export function redactModelInput(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(redactModelInput)
+  }
+  if (typeof value === "string") {
+    return redactModelText(value)
   }
   if (!value || typeof value !== "object") {
     return value

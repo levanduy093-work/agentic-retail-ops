@@ -220,6 +220,7 @@ import {
   isExplicitPromptAttack,
   normalizeCustomerChatSecurityConfig
 } from "./customer-chat-security"
+import { GuardrailsEngine } from "./guardrails"
 import { isCustomerSupportConversation } from "./channel-principal"
 import {
   AssistantSettings,
@@ -320,10 +321,9 @@ import {
   shouldUseHistoricalCustomerProfile
 } from "./conversation-memory"
 import {
-  addDays,
-  CUSTOMER_PREFERENCE_EXPIRY_DAYS,
   extractExplicitCustomerPreferences,
-  formatCustomerProfilePreferences
+  formatCustomerProfilePreferences,
+  resolveCustomerPreferenceStatus
 } from "./customer-preferences"
 import {
   buildCustomerAssistantCacheKey,
@@ -1063,23 +1063,19 @@ class AgentOperationsModuleService extends MedusaService({
           {
             customer_id: input.customer_id,
             preference_type: candidate.preference_type,
-            tenant_id: input.tenant_id,
-            value: candidate.value
+            tenant_id: input.tenant_id
           },
           { order: { last_confirmed_at: "DESC" }, take: 1 },
           sharedContext
         )
       )[0]
-      const status: "CUSTOMER_STATED" | "CONFIRMED" =
-        candidate.status === "CONFIRMED" || existing?.status === "CONFIRMED"
-          ? "CONFIRMED"
-          : "CUSTOMER_STATED"
+      const status = resolveCustomerPreferenceStatus(existing ?? null, candidate)
       const preferenceData = {
-        expires_at: addDays(now, CUSTOMER_PREFERENCE_EXPIRY_DAYS[status]),
         last_confirmed_at: now,
         source_conversation_id: input.conversation_id,
         source_message_id: input.message_id,
-        status
+        status,
+        value: candidate.value
       }
       if (existing) {
         await this.updateAgentCustomerPreferences(
@@ -5491,22 +5487,9 @@ class AgentOperationsModuleService extends MedusaService({
       },
       sharedContext
     )
-    const profileContextNow = new Date()
     const activeProfilePreferences = shouldUseHistoricalCustomerProfile(question)
-      ? customerProfilePreferences.filter(
-          (preference) => new Date(preference.expires_at).getTime() > profileContextNow.getTime()
-        )
+      ? customerProfilePreferences
       : []
-    const customerName =
-      (typeof metadata.customer_name === "string" && metadata.customer_name.trim()) ||
-      (typeof metadata.sender_name === "string" && metadata.sender_name.trim()) ||
-      (typeof metadata.facebook_user_name === "string" && metadata.facebook_user_name.trim()) ||
-      (typeof metadata.telegram_user_name === "string" && metadata.telegram_user_name.trim()) ||
-      (conversation.title &&
-        !/^(Facebook|Telegram|Zalo|TikTok|Messenger|Chat)\s+[—–-]\s+\d+$/iu.test(conversation.title) &&
-        conversation.title.replace(/^(Facebook|Telegram|Zalo|TikTok|Messenger|Chat)\s+[—–-]\s+/iu, "").trim()) ||
-      null
-
     const channelLabel =
       conversation.channel === "MESSENGER"
         ? "Facebook Messenger"
@@ -5521,10 +5504,7 @@ class AgentOperationsModuleService extends MedusaService({
     const customerInfo = {
       channel: channelLabel,
       customer_tier: typeof metadata.customer_tier === "string" ? metadata.customer_tier : null,
-      email: typeof metadata.customer_email === "string" ? metadata.customer_email : null,
-      name: customerName,
       orders_count: typeof metadata.orders_count === "number" ? metadata.orders_count : null,
-      phone: typeof metadata.customer_phone === "string" ? metadata.customer_phone : null,
       shipping_city: typeof metadata.shipping_city === "string" ? metadata.shipping_city : null
     }
 
@@ -6029,10 +6009,31 @@ class AgentOperationsModuleService extends MedusaService({
           )
     }
 
+    const formattedAnswer = formatChannelKnowledgeAnswer(answer)
+    const outputGuardrail = GuardrailsEngine.evaluateOutputSafeguard(formattedAnswer)
+    const responseBody = outputGuardrail.allowed
+      ? formattedAnswer
+      : locale === "vi"
+        ? "Mình chưa thể gửi phản hồi này vì hệ thống phát hiện nội dung nhạy cảm. Mình đã chuyển yêu cầu để nhân viên hỗ trợ kiểm tra an toàn."
+        : "I cannot send this response because the system detected sensitive content. I have routed the request for safe staff review."
+    if (!outputGuardrail.allowed && !supportTaskId) {
+      const escalation = await this.createCustomerKnowledgeEscalation(
+        {
+          conversation_id: conversation.id,
+          inbound_message_id: inbound.id,
+          locale,
+          question,
+          reason: "NEEDS_STAFF_AUTHORITY"
+        },
+        sharedContext
+      )
+      supportTaskId = escalation.task?.id ?? null
+    }
+
     const now = new Date()
     const response = await this.createAgentMessages(
       {
-        body: formatChannelKnowledgeAnswer(answer),
+        body: responseBody,
         channel: conversation.channel,
         conversation_id: conversation.id,
         direction: "OUTBOUND",
@@ -6050,6 +6051,9 @@ class AgentOperationsModuleService extends MedusaService({
           intent: routedIntent,
           intent_confidence: intent.confidence,
           locale,
+          output_guardrail: outputGuardrail.allowed
+            ? { allowed: true }
+            : { allowed: false, reason: outputGuardrail.reason },
           sentiment: sentiment.sentiment,
           sentiment_urgency: sentiment.urgency,
           tool_trace: toolTrace,
@@ -6117,6 +6121,9 @@ class AgentOperationsModuleService extends MedusaService({
           },
           product_ids: answer.product_ids ?? [],
           response_message_id: response.id,
+          output_guardrail: outputGuardrail.allowed
+            ? { allowed: true }
+            : { allowed: false, reason: outputGuardrail.reason },
           tool_trace: toolTrace
         },
         event_type: "agent.knowledge.answer-created",

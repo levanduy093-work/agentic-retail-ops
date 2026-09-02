@@ -1,14 +1,19 @@
-export const CUSTOMER_PREFERENCE_EXPIRY_DAYS = {
-  CONFIRMED: 180,
-  CUSTOMER_STATED: 90,
-} as const
-
 export type CustomerPreferenceType = "SIZE" | "STYLE" | "MEASUREMENTS"
 
 export type CustomerPreferenceCandidate = {
   preference_type: CustomerPreferenceType
   value: string
   status: "CUSTOMER_STATED" | "CONFIRMED"
+}
+
+export function resolveCustomerPreferenceStatus(
+  existing: { status: string; value: string } | null,
+  candidate: CustomerPreferenceCandidate
+): CustomerPreferenceCandidate["status"] {
+  if (candidate.status === "CONFIRMED") return "CONFIRMED"
+  return existing?.value === candidate.value && existing.status === "CONFIRMED"
+    ? "CONFIRMED"
+    : "CUSTOMER_STATED"
 }
 
 export function extractExplicitCustomerPreferences(
@@ -56,18 +61,11 @@ export function extractExplicitCustomerPreferences(
   return candidates
 }
 
-export function addDays(date: Date, days: number) {
-  const result = new Date(date)
-  result.setUTCDate(result.getUTCDate() + days)
-  return result
-}
-
 export function formatCustomerProfilePreferences(
   preferences: Array<{
     preference_type: string
     status: string
     value: string
-    expires_at: Date | string
   }>
 ) {
   const items: string[] = []
@@ -76,8 +74,7 @@ export function formatCustomerProfilePreferences(
     if (preference.preference_type === "SIZE") {
       const label =
         preference.status === "CONFIRMED" ? "đã xác nhận" : "khách đã nêu"
-      const expiry = new Date(preference.expires_at).toLocaleDateString("vi-VN")
-      items.push(`Size ${preference.value} (${label}, hết hạn ${expiry})`)
+      items.push(`Size ${preference.value} (${label})`)
     } else if (preference.preference_type === "STYLE") {
       items.push(`Phong cách ưa thích: ${preference.value}`)
     } else if (preference.preference_type === "MEASUREMENTS") {

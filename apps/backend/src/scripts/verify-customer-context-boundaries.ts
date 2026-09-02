@@ -32,15 +32,28 @@ export default async function verifyCustomerContextBoundaries({
       message_id: `${runId}:confirmed`,
       tenant_id: "default",
     })
+    await service.recordExplicitCustomerPreferences({
+      conversation_id: conversationId,
+      customer_id: customerId,
+      message: "Mình báo nhầm, đổi sang size L nhé.",
+      message_id: `${runId}:corrected`,
+      tenant_id: "default",
+    })
+    await service.recordExplicitCustomerPreferences({
+      conversation_id: conversationId,
+      customer_id: customerId,
+      message: "Đúng rồi, vẫn size L nhé.",
+      message_id: `${runId}:reconfirmed`,
+      tenant_id: "default",
+    })
 
     const preferences = await service.listAgentCustomerPreferences({
       customer_id: customerId,
       tenant_id: "default",
     })
     assert.equal(preferences.length, 1)
-    assert.equal(preferences[0].value, "M")
+    assert.equal(preferences[0].value, "L")
     assert.equal(preferences[0].status, "CONFIRMED")
-    assert.ok(new Date(preferences[0].expires_at).getTime() > Date.now())
 
     const currentOnly = buildCustomerConversationContext({
       current_summary: "Khách đang xem áo thun mới.",
@@ -53,11 +66,11 @@ export default async function verifyCustomerContextBoundaries({
     )
 
     const referencedProfile = buildCustomerConversationContext({
-      current_summary: "Khách nói vẫn size M.",
-      profile_preferences: ["Size M (đã xác nhận, hết hạn 16/2/2027)"],
+      current_summary: "Khách nói vẫn size L.",
+      profile_preferences: ["Size L (đã xác nhận)"],
     })
     assert.match(referencedProfile, /Customer profile preferences/u)
-    assert.match(referencedProfile, /Size M/u)
+    assert.match(referencedProfile, /Size L/u)
 
     console.log(
       JSON.stringify({

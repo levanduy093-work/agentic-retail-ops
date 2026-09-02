@@ -2,6 +2,7 @@ import type { MedusaContainer } from "@medusajs/framework/types"
 import {
   createCustomerSupportNativeToolDispatcher,
   CUSTOMER_SUPPORT_NATIVE_TOOLS,
+  getCustomerSupportNativeTools,
 } from "../customer-native-tool-dispatcher"
 
 function createService() {
@@ -60,6 +61,26 @@ describe("customer native tool dispatcher", () => {
     ])
   })
 
+  it("does not expose order or proposal tools without a verified customer", () => {
+    expect(getCustomerSupportNativeTools(null).map((tool) => tool.name)).toEqual(
+      [
+        "estimate_shipping_delivery",
+        "search_catalog",
+        "resolve_travel_location",
+        "get_weather_forecast",
+        "get_climate_normals",
+        "search_catalog_by_attributes",
+        "compose_travel_outfit",
+        "build_travel_packing_checklist",
+        "check_realtime_stock",
+        "search_knowledge_base",
+      ]
+    )
+    expect(getCustomerSupportNativeTools("cus_1")).toBe(
+      CUSTOMER_SUPPORT_NATIVE_TOOLS
+    )
+  })
+
   it("locks knowledge search to the current tenant and customer-support scope", async () => {
     const service = createService()
     const execute = createCustomerSupportNativeToolDispatcher({
@@ -95,7 +116,7 @@ describe("customer native tool dispatcher", () => {
     expect(output).toMatchObject({ total_candidates: 1 })
   })
 
-  it("never queries an order when the customer identity is not verified", async () => {
+  it("rejects order reads when the customer identity is not verified", async () => {
     const service = createService()
     const execute = createCustomerSupportNativeToolDispatcher({
       container: {
@@ -117,17 +138,11 @@ describe("customer native tool dispatcher", () => {
         id: "call_2",
         name: "check_order_status",
       })
-    ).resolves.toEqual({ display_id: 1024, status: "ACCOUNT_NOT_LINKED" })
-    expect(service.recordCustomerReadToolCall).toHaveBeenCalledWith(
-      expect.objectContaining({
-        input: { display_id: 1024 },
-        output: { display_id: 1024, status: "ACCOUNT_NOT_LINKED" },
-        tool_name: "order.read",
-      })
-    )
+    ).rejects.toThrow("require a verified customer identity")
+    expect(service.recordCustomerReadToolCall).not.toHaveBeenCalled()
   })
 
-  it("never reads delivery details when the customer identity is not verified", async () => {
+  it("rejects delivery reads when the customer identity is not verified", async () => {
     const service = createService()
     const execute = createCustomerSupportNativeToolDispatcher({
       container: {
@@ -149,10 +164,33 @@ describe("customer native tool dispatcher", () => {
         id: "call_delivery_1",
         name: "check_delivery_status",
       })
-    ).resolves.toEqual({ display_id: 1024, status: "ACCOUNT_NOT_LINKED" })
-    expect(service.recordCustomerReadToolCall).toHaveBeenCalledWith(
-      expect.objectContaining({ tool_name: "fulfillment.read" })
-    )
+    ).rejects.toThrow("require a verified customer identity")
+    expect(service.recordCustomerReadToolCall).not.toHaveBeenCalled()
+  })
+
+  it("rejects order search when the customer identity is not verified", async () => {
+    const service = createService()
+    const execute = createCustomerSupportNativeToolDispatcher({
+      container: {
+        resolve: jest.fn(() => {
+          throw new Error("Order search must not run")
+        }),
+      } as unknown as MedusaContainer,
+      conversation_id: "agconv_1",
+      customer_id: null,
+      inbound_message_id: "agmsg_1",
+      locale: "vi",
+      service,
+      tenant_id: "tenant_a",
+    })
+
+    await expect(
+      execute({
+        arguments: { email: "victim@example.com" },
+        id: "call_order_search_unverified",
+        name: "search_orders",
+      })
+    ).rejects.toThrow("require a verified customer identity")
   })
 
   it("rejects tools that are not explicitly exposed to customer support", async () => {

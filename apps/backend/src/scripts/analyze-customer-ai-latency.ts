@@ -8,6 +8,8 @@ const CUSTOMER_AGENT_IDS = new Set([
   "customer-intent-router",
   "customer-knowledge-agent",
   "customer-product-advisor",
+  "customer-support-agent",
+  "customer-support-orchestrator",
 ])
 
 function percentile(values: number[], ratio: number) {

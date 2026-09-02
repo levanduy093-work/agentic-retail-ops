@@ -84,7 +84,6 @@ type SupportConversationResponse = {
     title: string
   }
   customer_preferences?: Array<{
-    expires_at: string
     preference_type: string
     status: string
     value: string

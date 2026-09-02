@@ -63,4 +63,20 @@ describe("customer chat conversation ownership", () => {
       }).success
     ).toBe(false)
   })
+
+  it("bounds browser-supplied idempotency and conversation identifiers", () => {
+    expect(
+      StoreCreateCustomerChatMessage.safeParse({
+        client_message_id: "client-message-1",
+        conversation_id: "agconv_1",
+        message: "Kiểm tra giúp mình nhé.",
+      }).success
+    ).toBe(true)
+    expect(
+      StoreCreateCustomerChatMessage.safeParse({
+        client_message_id: "x".repeat(121),
+        message: "Kiểm tra giúp mình nhé.",
+      }).success
+    ).toBe(false)
+  })
 })

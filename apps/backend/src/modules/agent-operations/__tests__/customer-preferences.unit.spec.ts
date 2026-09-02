@@ -1,7 +1,7 @@
 import {
-  CUSTOMER_PREFERENCE_EXPIRY_DAYS,
   extractExplicitCustomerPreferences,
   formatCustomerProfilePreferences,
+  resolveCustomerPreferenceStatus,
 } from "../customer-preferences"
 
 describe("customer preferences", () => {
@@ -22,15 +22,11 @@ describe("customer preferences", () => {
     expect(extractExplicitCustomerPreferences("Vẫn size M nhé")).toEqual([
       { preference_type: "SIZE", status: "CONFIRMED", value: "M" },
     ])
-    expect(CUSTOMER_PREFERENCE_EXPIRY_DAYS.CONFIRMED).toBeGreaterThan(
-      CUSTOMER_PREFERENCE_EXPIRY_DAYS.CUSTOMER_STATED
-    )
   })
 
   it("formats preference metadata without product, price, stock, or policy facts", () => {
     const values = formatCustomerProfilePreferences([
       {
-        expires_at: new Date("2027-02-16T00:00:00.000Z"),
         preference_type: "SIZE",
         status: "CONFIRMED",
         value: "M",
@@ -38,6 +34,22 @@ describe("customer preferences", () => {
     ])
 
     expect(values.join(" ")).toContain("Size M")
+    expect(values.join(" ")).not.toContain("hết hạn")
     expect(values.join(" ")).not.toContain("áo")
+  })
+
+  it("replaces a corrected value without inheriting confirmation from the old value", () => {
+    expect(
+      resolveCustomerPreferenceStatus(
+        { status: "CONFIRMED", value: "M" },
+        { preference_type: "SIZE", status: "CUSTOMER_STATED", value: "L" }
+      )
+    ).toBe("CUSTOMER_STATED")
+    expect(
+      resolveCustomerPreferenceStatus(
+        { status: "CONFIRMED", value: "M" },
+        { preference_type: "SIZE", status: "CUSTOMER_STATED", value: "M" }
+      )
+    ).toBe("CONFIRMED")
   })
 })

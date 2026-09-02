@@ -66,6 +66,7 @@ export async function POST(
     }
   } catch (error) {
     console.error("Error answering customer chat message:", error)
+    throw error
   } finally {
     try {
       await refreshConversationMemoryWorkflow(req.scope).run({
@@ -78,6 +79,7 @@ export async function POST(
 
   res.status(201).json({
     conversation_id: result.conversation.id,
+    duplicate: result.duplicate,
     inbound_message: result.inbound_message,
     response_message: responseMessage,
   })

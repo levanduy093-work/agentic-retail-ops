@@ -50,7 +50,6 @@ export default async function verifyCustomerConversationHistoryClear({
   })
   await service.createAgentCustomerPreferences({
     customer_id: `qa-customer:${runId}`,
-    expires_at: new Date(now.getTime() + 24 * 60 * 60 * 1_000),
     last_confirmed_at: now,
     preference_type: "SIZE",
     source_conversation_id: conversation.id,

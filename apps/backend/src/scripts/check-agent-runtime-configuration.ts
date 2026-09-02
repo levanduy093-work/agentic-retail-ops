@@ -2,7 +2,10 @@ import { ExecArgs } from "@medusajs/framework/types"
 import { AGENT_OPERATIONS_MODULE } from "../modules/agent-operations"
 import { getCredentialVaultStatus } from "../modules/agent-operations/credential-vault"
 import { getGoogleKnowledgeOAuthPlatformStatus } from "../modules/agent-operations/google-knowledge-oauth"
-import { getKnowledgeRagRuntimeStatus } from "../modules/agent-operations/knowledge-rag-engine"
+import {
+  getKnowledgeRagRuntimeStatus,
+  probeKnowledgeRagRuntime,
+} from "../modules/agent-operations/knowledge-rag-engine"
 import AgentOperationsModuleService from "../modules/agent-operations/service"
 import { TelegramChannelConfig } from "../modules/agent-operations/telegram"
 import {
@@ -16,7 +19,7 @@ export default async function checkAgentRuntimeConfiguration({
   const service = container.resolve<AgentOperationsModuleService>(
     AGENT_OPERATIONS_MODULE
   )
-  const [providers, googleConnection, activePrompts, telegramConnections] =
+  const [providers, googleConnection, activePrompts, telegramConnections, ragProbe] =
     await Promise.all([
       service.getAiProviderStatuses("default"),
       service.getGoogleKnowledgeConnectorStatus("default"),
@@ -26,6 +29,7 @@ export default async function checkAgentRuntimeConfiguration({
         status: "ACTIVE",
         tenant_id: "default",
       }),
+      probeKnowledgeRagRuntime(),
     ])
   const vault = getCredentialVaultStatus()
   const googlePlatform = getGoogleKnowledgeOAuthPlatformStatus()
@@ -63,6 +67,7 @@ export default async function checkAgentRuntimeConfiguration({
     google_knowledge_account_connected: googleConnection.connected,
     google_knowledge_platform_ready: googlePlatform.platform_ready,
     qdrant_url_configured: rag.qdrant_configured,
+    qdrant_reachable: ragProbe.reachable,
     distributed_locking_ready:
       process.env.REDIS_INFRASTRUCTURE_ENABLED?.trim().toLowerCase() ===
         "true" && Boolean(process.env.LOCKING_REDIS_URL?.trim()),
@@ -110,6 +115,7 @@ export default async function checkAgentRuntimeConfiguration({
           checks.google_knowledge_platform_ready &&
           checks.google_knowledge_account_connected &&
           checks.qdrant_url_configured &&
+          checks.qdrant_reachable &&
           checks.embedding_provider_selected_in_admin,
         ready_for_telegram_knowledge_qa:
           checks.telegram_bot_token_configured &&
@@ -119,7 +125,8 @@ export default async function checkAgentRuntimeConfiguration({
           checks.telegram_has_customer_access &&
           checks.embedding_provider_selected_in_admin &&
           checks.generation_provider_selected_in_admin &&
-          checks.qdrant_url_configured,
+          checks.qdrant_url_configured &&
+          checks.qdrant_reachable,
         ready_for_production_telegram:
           checks.telegram_bot_token_configured &&
           checks.telegram_public_url_configured &&

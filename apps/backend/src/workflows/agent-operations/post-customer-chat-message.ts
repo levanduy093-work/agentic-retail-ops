@@ -4,10 +4,15 @@ import {
   StepResponse,
   WorkflowResponse,
 } from "@medusajs/framework/workflows-sdk"
+import type { ILockingModule } from "@medusajs/framework/types"
 import { MedusaError, Modules } from "@medusajs/framework/utils"
 import { AGENT_OPERATIONS_MODULE } from "../../modules/agent-operations"
 import AgentOperationsModuleService from "../../modules/agent-operations/service"
 import { assertCustomerChatConversationOwnership } from "../../modules/agent-operations/customer-chat-ownership"
+import {
+  DEFAULT_CUSTOMER_CHAT_SECURITY,
+  evaluateCustomerChatIngress,
+} from "../../modules/agent-operations/customer-chat-security"
 
 export type PostCustomerChatMessageInput = {
   attachment_ids?: string[]
@@ -34,7 +39,7 @@ export const postCustomerChatMessageStep = createStep(
         "Customer chat messages require an authenticated customer."
       )
     }
-    const now = new Date()
+    const locking = container.resolve<ILockingModule>(Modules.LOCKING)
     const attachmentIds = Array.from(new Set(input.attachment_ids ?? []))
     if (attachmentIds.length > 3) {
       throw new MedusaError(
@@ -57,129 +62,192 @@ export const postCustomerChatMessageStep = createStep(
       })
     )
 
-    const existingConnections = await service.listAgentChannelConnections(
-      { account_ref: "default-admin", channel: "IN_APP", tenant_id: "default" },
-      { take: 1 }
+    const connection = await locking.execute(
+      "customer-chat:in-app-connection",
+      async () => {
+        const existingConnections = await service.listAgentChannelConnections(
+          {
+            account_ref: "storefront-chat",
+            channel: "IN_APP",
+            tenant_id: "default",
+          },
+          { take: 1 }
+        )
+        return (
+          existingConnections[0] ??
+          (await service.createAgentChannelConnections({
+            account_ref: "storefront-chat",
+            channel: "IN_APP",
+            config: { delivery: "storefront-chat" },
+            status: "ACTIVE",
+            tenant_id: "default",
+          }))
+        )
+      }
     )
-    const connection =
-      existingConnections[0] ??
-      (await service.createAgentChannelConnections({
-        account_ref: "storefront-chat",
-        channel: "IN_APP",
-        config: { delivery: "storefront-chat" },
-        status: "ACTIVE",
-        tenant_id: "default",
-      }))
 
-    let conversation: any = null
-    if (input.conversation_id) {
-      conversation = await service.retrieveAgentConversation(input.conversation_id)
-      assertCustomerChatConversationOwnership(conversation, customerId)
-    }
+    const result = await locking.execute(
+      `customer-chat:ingress:${customerId}`,
+      async () => {
+        const now = new Date()
+        let conversation: any = null
+        if (input.conversation_id) {
+          conversation = await service.retrieveAgentConversation(
+            input.conversation_id
+          )
+          assertCustomerChatConversationOwnership(conversation, customerId)
+        }
 
-    // If no specific conversation was provided, look for existing OPEN conversation for this customer
-    if (!conversation && customerId !== "guest") {
-      const openConvs = await service.listAgentConversations(
-        {
+        if (!conversation && customerId !== "guest") {
+          const openConvs = await service.listAgentConversations(
+            {
+              channel: "IN_APP",
+              status: "OPEN",
+              topic_type: "CUSTOMER_SUPPORT_CHAT",
+            },
+            { order: { last_message_at: "DESC" }, take: 10 }
+          )
+          conversation =
+            openConvs.find(
+              (candidate) =>
+                (candidate.metadata as Record<string, unknown> | null)
+                  ?.customer_id === customerId
+            ) ?? null
+        }
+
+        if (!conversation || conversation.status !== "OPEN") {
+          const externalThreadId =
+            `storefront-chat-${Date.now()}-` +
+            Math.random().toString(36).slice(2, 7)
+          const customerDisplay =
+            input.customer_name ||
+            input.customer_email ||
+            (customerId === "guest" ? "Khách vãng lai" : customerId)
+
+          conversation = await service.createAgentConversations({
+            channel: "IN_APP",
+            external_thread_id: externalThreadId,
+            last_message_at: now,
+            metadata: {
+              connection_id: connection.id,
+              customer_email: input.customer_email ?? null,
+              customer_id: customerId,
+              customer_identity_verified: customerId !== "guest",
+              customer_name: input.customer_name ?? null,
+              customer_phone: input.customer_phone ?? null,
+              principal_id: customerId,
+              principal_role: "CUSTOMER",
+              storefront: true,
+            },
+            opened_at: now,
+            status: "OPEN",
+            tenant_id: "default",
+            title: `Khách hàng: ${customerDisplay}`,
+            topic_id: externalThreadId,
+            topic_type: "CUSTOMER_SUPPORT_CHAT",
+          })
+        } else if (
+          customerId !== "guest" ||
+          input.customer_email ||
+          input.customer_name ||
+          input.customer_phone
+        ) {
+          const previousMetadata =
+            (conversation.metadata as Record<string, unknown> | null) ?? {}
+          await service.updateAgentConversations({
+            id: conversation.id,
+            metadata: {
+              ...previousMetadata,
+              customer_email:
+                input.customer_email ?? previousMetadata.customer_email,
+              customer_id: customerId,
+              customer_identity_verified: customerId !== "guest",
+              customer_name:
+                input.customer_name ?? previousMetadata.customer_name,
+              customer_phone:
+                input.customer_phone ?? previousMetadata.customer_phone,
+            },
+          })
+        }
+
+        const clientMessageId =
+          input.client_message_id || `storefront-msg-${Date.now()}`
+        const idempotencyKey =
+          `storefront-inbound:${conversation.id}:${clientMessageId}`
+        const existingInbound = (
+          await service.listAgentMessages(
+            { idempotency_key: idempotencyKey },
+            { take: 1 }
+          )
+        )[0]
+        if (existingInbound) {
+          return {
+            conversation,
+            duplicate: true,
+            inbound_message: existingInbound,
+          }
+        }
+
+        const recentInboundMessages = await service.listAgentMessages(
+          {
+            channel: "IN_APP",
+            direction: "INBOUND",
+            sender_id: customerId,
+          },
+          {
+            order: { occurred_at: "DESC" },
+            take: DEFAULT_CUSTOMER_CHAT_SECURITY.daily_limit + 1,
+          }
+        )
+        const ingressDecision = evaluateCustomerChatIngress({
+          chat_id: customerId,
+          config: DEFAULT_CUSTOMER_CHAT_SECURITY,
+          message_length: input.message.length,
+          now,
+          recent_message_times: recentInboundMessages.map(
+            (message) => message.occurred_at
+          ),
+          update_date: now,
+        })
+        if (!ingressDecision.allowed) {
+          throw new MedusaError(
+            MedusaError.Types.NOT_ALLOWED,
+            `Customer chat request rejected: ${ingressDecision.reason}.`
+          )
+        }
+
+        const inboundMessage = await service.createAgentMessages({
+          body: input.message,
           channel: "IN_APP",
-          status: "OPEN",
-          topic_type: "CUSTOMER_SUPPORT_CHAT",
-        },
-        { order: { last_message_at: "DESC" }, take: 10 }
-      )
-      conversation = openConvs.find(
-        (c) =>
-          (c.metadata as Record<string, unknown> | null)?.customer_id ===
-          customerId
-      ) ?? null
-    }
-
-    if (!conversation || conversation.status !== "OPEN") {
-      const externalThreadId = `storefront-chat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-      const customerDisplay =
-        input.customer_name ||
-        input.customer_email ||
-        (customerId === "guest" ? "Khách vãng lai" : customerId)
-
-      conversation = await service.createAgentConversations({
-        channel: "IN_APP",
-        external_thread_id: externalThreadId,
-        last_message_at: now,
-        metadata: {
-          connection_id: connection.id,
-          customer_email: input.customer_email ?? null,
-          customer_id: customerId,
-          customer_identity_verified: customerId !== "guest",
-          customer_name: input.customer_name ?? null,
-          customer_phone: input.customer_phone ?? null,
-          principal_id: customerId,
-          principal_role: "CUSTOMER",
-          storefront: true,
-        },
-        opened_at: now,
-        status: "OPEN",
-        tenant_id: "default",
-        title: `Khách hàng: ${customerDisplay}`,
-        topic_id: externalThreadId,
-        topic_type: "CUSTOMER_SUPPORT_CHAT",
-      })
-    } else {
-      // Update customer info on conversation metadata if provided
-      if (
-        customerId !== "guest" ||
-        input.customer_email ||
-        input.customer_name ||
-        input.customer_phone
-      ) {
-        const prevMetadata =
-          (conversation.metadata as Record<string, unknown> | null) ?? {}
-        await service.updateAgentConversations({
-          id: conversation.id,
-          metadata: {
-            ...prevMetadata,
-            customer_email:
-              input.customer_email ?? prevMetadata.customer_email,
-            customer_id: customerId,
-            customer_identity_verified: customerId !== "guest",
-            customer_name: input.customer_name ?? prevMetadata.customer_name,
-            customer_phone:
-              input.customer_phone ?? prevMetadata.customer_phone,
+          conversation_id: conversation.id,
+          direction: "INBOUND",
+          idempotency_key: idempotencyKey,
+          message_type: "TEXT",
+          occurred_at: now,
+          sender_id: customerId,
+          sender_type: "customer",
+          status: "PROCESSED",
+          structured_content: {
+            client_message_id: clientMessageId,
+            customer_email: input.customer_email ?? null,
+            customer_name: input.customer_name ?? null,
+            image_attachments: imageAttachments,
+            locale: input.locale ?? "vi",
           },
         })
+
+        service.broadcastMessageCreated(inboundMessage)
+        service.broadcastConversationUpdated(conversation)
+
+        return {
+          conversation,
+          duplicate: false,
+          inbound_message: inboundMessage,
+        }
       }
-    }
+    )
 
-    const clientMessageId =
-      input.client_message_id || `storefront-msg-${Date.now()}`
-    const idempotencyKey = `storefront-inbound:${conversation.id}:${clientMessageId}`
-
-    const inboundMessage = await service.createAgentMessages({
-      body: input.message,
-      channel: "IN_APP",
-      conversation_id: conversation.id,
-      direction: "INBOUND",
-      idempotency_key: idempotencyKey,
-      message_type: "TEXT",
-      occurred_at: now,
-      sender_id: customerId,
-      sender_type: "customer",
-      status: "PROCESSED",
-      structured_content: {
-        client_message_id: clientMessageId,
-        customer_email: input.customer_email ?? null,
-        customer_name: input.customer_name ?? null,
-        image_attachments: imageAttachments,
-        locale: input.locale ?? "vi",
-      },
-    })
-
-    service.broadcastMessageCreated(inboundMessage)
-    service.broadcastConversationUpdated(conversation)
-
-    return new StepResponse({
-      conversation,
-      inbound_message: inboundMessage,
-    })
+    return new StepResponse(result)
   }
 )
 

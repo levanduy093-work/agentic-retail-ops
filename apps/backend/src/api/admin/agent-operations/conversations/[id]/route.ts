@@ -104,7 +104,6 @@ export async function GET(
     messages.find((m) => m.direction === "INBOUND")?.sender_id ??
     (metadata.mapped_user_id as string | undefined)
   let customerPreferences: Array<{
-    expires_at: Date
     preference_type: string
     status: string
     value: string
@@ -123,7 +122,6 @@ export async function GET(
   res.json({
     conversation,
     customer_preferences: customerPreferences.map((p) => ({
-      expires_at: p.expires_at,
       preference_type: p.preference_type,
       status: p.status,
       value: p.value,

@@ -3,7 +3,10 @@ import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Modules } from "@medusajs/framework/utils"
 import { AGENT_OPERATIONS_MODULE } from "../../../../../modules/agent-operations"
 import AgentOperationsModuleService from "../../../../../modules/agent-operations/service"
-import { getKnowledgeRagRuntimeStatus } from "../../../../../modules/agent-operations/knowledge-rag-engine"
+import {
+  getKnowledgeRagRuntimeStatus,
+  probeKnowledgeRagRuntime,
+} from "../../../../../modules/agent-operations/knowledge-rag-engine"
 import { getAgentToolCoverage } from "../../../../../modules/agent-operations/tool-registry"
 import { sortAiProvidersByPriority } from "../../../../../modules/agent-operations/ai-provider-routing"
 
@@ -14,13 +17,14 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
   const rbac = req.scope.resolve<IRbacModuleService>(Modules.RBAC)
   const toolCoverage = getAgentToolCoverage()
   const ragStatus = getKnowledgeRagRuntimeStatus()
-  const [roles, policies, prompts, scenarios, channels, aiProviders] = await Promise.all([
+  const [roles, policies, prompts, scenarios, channels, aiProviders, ragProbe] = await Promise.all([
     rbac.listRbacRoles({ name: "operations_manager" }),
     service.listAgentPolicyDefinitions({ status: "ACTIVE" }),
     service.listAgentPromptTemplates({ status: "ACTIVE" }),
     service.listAgentEvaluationCases({ status: "ACTIVE" }),
     service.listAgentChannelConnections({ status: "ACTIVE" }),
     service.getAiProviderStatuses("default"),
+    probeKnowledgeRagRuntime(),
   ])
   const checks = {
     active_channel: channels.length > 0,
@@ -38,6 +42,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       ragStatus.enabled &&
       ragStatus.qdrant_configured &&
       aiProviders.some((provider) => provider.embedding_enabled),
+    rag_provider_reachable: ragProbe.reachable,
     tool_catalog_complete: toolCoverage.complete,
     typed_tool_executor: toolCoverage.registered_count > 0,
   }
@@ -70,6 +75,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       ...ragStatus,
       admin_embedding_provider:
         embeddingProviders[0]?.provider ?? null,
+      probe: ragProbe,
     },
     routing: {
       embedding: embeddingProviders.map((provider) => provider.provider),

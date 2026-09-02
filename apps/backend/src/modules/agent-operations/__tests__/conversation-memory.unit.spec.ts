@@ -77,10 +77,30 @@ describe("conversation memory", () => {
     expect(result.customer_facts).toContain("Ngân sách khoảng 300.000 đồng.")
   })
 
+  it("keeps only the newest corrected singleton facts", () => {
+    const result = buildConversationMemoryFallback({
+      previous_customer_facts: [
+        "Khách mặc size M.",
+      ],
+      previous_summary: "Khách mặc size M và dùng số 0901234567.",
+      recent_messages: [
+        {
+          body: "Mình báo nhầm, đổi sang size L và số mới là 0912345678 nhé.",
+          direction: "INBOUND",
+        },
+      ],
+    })
+
+    expect(result.customer_facts).toContain("Khách mặc size L.")
+    expect(result.customer_facts).not.toContain("Khách mặc size M.")
+    expect(result.summary).not.toContain("0901234567")
+    expect(result.summary).toContain("[REDACTED_PHONE]")
+  })
+
   it("uses only current chat memory by default and accepts a scoped profile separately", () => {
     const context = buildCustomerConversationContext({
       current_summary: "Customer is choosing a cotton shirt.",
-      profile_preferences: ["Size M (đã xác nhận, hết hạn 16/2/2027)"],
+      profile_preferences: ["Size M (đã xác nhận)"],
     })
 
     expect(context).toContain("Current conversation")
@@ -219,7 +239,7 @@ describe("conversation memory", () => {
     expect(context).toContain("Current conversation: Khách đang quan tâm áo khoác bomber.")
   })
 
-  it("extracts customer name, pronouns, phone, and email in fallback memory", () => {
+  it("keeps pronouns but does not duplicate customer PII in fallback memory", () => {
     const result = buildConversationMemoryFallback({
       recent_messages: [
         {
@@ -229,13 +249,14 @@ describe("conversation memory", () => {
       ],
     })
 
-    expect(result.customer_facts).toContain("Tên khách hàng: Duy.")
     expect(result.customer_facts).toContain("Khách muốn xưng hô: anh.")
-    expect(result.customer_facts).toContain("Số điện thoại: 0901234567.")
-    expect(result.customer_facts).toContain("Email khách: duy@gmail.com.")
+    expect(result.customer_facts.join(" ")).not.toContain("0901234567")
+    expect(result.customer_facts.join(" ")).not.toContain("duy@gmail.com")
+    expect(result.summary).toContain("[REDACTED_PHONE]")
+    expect(result.summary).toContain("[REDACTED_EMAIL]")
   })
 
-  it("seeds customer name from channel into initial fallback facts", () => {
+  it("keeps customer identity in the structured profile instead of memory facts", () => {
     const result = buildConversationMemoryFallback({
       customer_name: "Lê Văn Duy",
       recent_messages: [
@@ -246,30 +267,24 @@ describe("conversation memory", () => {
       ],
     })
 
-    expect(result.customer_facts).toContain("Tên khách hàng: Lê Văn Duy.")
+    expect(result.customer_facts.join(" ")).not.toContain("Lê Văn Duy")
   })
 
-  it("includes customer profile block in buildCustomerConversationContext", () => {
+  it("includes only non-identifying profile metadata in model context", () => {
     const context = buildCustomerConversationContext({
       customer_info: {
         channel: "Facebook Messenger",
         customer_tier: "VIP",
-        email: "duy@example.com",
-        name: "Lê Văn Duy",
         orders_count: 5,
-        phone: "0901234567",
       },
       current_summary: "Khách đang xem áo polo.",
-      customer_facts: ["Tên khách hàng: Lê Văn Duy.", "Khách mặc size L."],
+      customer_facts: ["Khách mặc size L."],
     })
 
     expect(context).toContain("Customer profile:")
-    expect(context).toContain("Tên khách hàng: Lê Văn Duy")
     expect(context).toContain("Kênh liên hệ: Facebook Messenger")
-    expect(context).toContain("SĐT: 0901234567")
-    expect(context).toContain("Email: duy@example.com")
     expect(context).toContain("Hạng khách: VIP")
     expect(context).toContain("Số đơn đã mua: 5 đơn hàng")
-    expect(context).toContain("Stated customer facts: Tên khách hàng: Lê Văn Duy.; Khách mặc size L.")
+    expect(context).toContain("Stated customer facts: Khách mặc size L.")
   })
 })

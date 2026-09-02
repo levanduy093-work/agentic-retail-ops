@@ -233,6 +233,49 @@ export function getKnowledgeRagRuntimeStatus(
   }
 }
 
+export async function probeKnowledgeRagRuntime(
+  environment: NodeJS.ProcessEnv = process.env,
+  fetchImpl: typeof fetch = fetch,
+  timeoutMs = 2_000
+) {
+  const qdrantUrl = environment.QDRANT_URL?.trim().replace(/\/$/u, "")
+  if (!qdrantUrl) {
+    return {
+      checked: false,
+      http_status: null,
+      reachable: false,
+      status: "DISABLED" as const,
+    }
+  }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetchImpl(`${qdrantUrl}/collections`, {
+      headers: environment.QDRANT_API_KEY?.trim()
+        ? { "api-key": environment.QDRANT_API_KEY.trim() }
+        : undefined,
+      method: "GET",
+      signal: controller.signal,
+    })
+    return {
+      checked: true,
+      http_status: response.status,
+      reachable: response.ok,
+      status: response.ok ? ("READY" as const) : ("UNREACHABLE" as const),
+    }
+  } catch {
+    return {
+      checked: true,
+      http_status: null,
+      reachable: false,
+      status: "UNREACHABLE" as const,
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 export async function deleteKnowledgeDocumentVectors(
   documentId: string,
   environment: NodeJS.ProcessEnv = process.env,

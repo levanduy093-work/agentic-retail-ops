@@ -5,6 +5,7 @@ import {
   deleteKnowledgeDocumentVectors,
   getKnowledgeRagRuntimeStatus,
   LangChainQdrantKnowledgeRagEngine,
+  probeKnowledgeRagRuntime,
 } from "../knowledge-rag-engine"
 
 describe("knowledge RAG engine", () => {
@@ -31,6 +32,54 @@ describe("knowledge RAG engine", () => {
         }
       )
     ).toThrow("Admin-managed AI provider")
+  })
+
+  it("checks Qdrant reachability instead of treating configuration as readiness", async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }))
+
+    await expect(
+      probeKnowledgeRagRuntime(
+        {
+          QDRANT_API_KEY: "qdrant-key",
+          QDRANT_URL: "http://qdrant:6333/",
+        },
+        fetchImpl as typeof fetch
+      )
+    ).resolves.toEqual({
+      checked: true,
+      http_status: 200,
+      reachable: true,
+      status: "READY",
+    })
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "http://qdrant:6333/collections",
+      expect.objectContaining({
+        headers: { "api-key": "qdrant-key" },
+        method: "GET",
+      })
+    )
+  })
+
+  it("reports an unreachable or disabled Qdrant runtime without throwing", async () => {
+    const fetchImpl = jest.fn().mockRejectedValue(new Error("offline"))
+
+    await expect(
+      probeKnowledgeRagRuntime(
+        { QDRANT_URL: "http://qdrant:6333" },
+        fetchImpl as typeof fetch
+      )
+    ).resolves.toMatchObject({
+      checked: true,
+      reachable: false,
+      status: "UNREACHABLE",
+    })
+    await expect(probeKnowledgeRagRuntime({})).resolves.toMatchObject({
+      checked: false,
+      reachable: false,
+      status: "DISABLED",
+    })
   })
 
   it("deletes a document from every current and historical knowledge collection", async () => {

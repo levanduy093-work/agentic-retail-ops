@@ -1,63 +1,106 @@
-import os from "node:os"
-import type {
-  SubscriberArgs,
-  SubscriberConfig,
-} from "@medusajs/framework"
-import { ContainerRegistrationKeys } from "@medusajs/framework/utils"
-import { AGENT_OPERATIONS_MODULE } from "../modules/agent-operations"
-import AgentOperationsModuleService from "../modules/agent-operations/service"
-import { answerCustomerKnowledgeQuestionWorkflow } from "../workflows/agent-operations/answer-customer-knowledge-question"
-import { dispatchAgentDeliveryWorkflow } from "../workflows/agent-operations/dispatch-agent-delivery"
-import { refreshConversationMemoryWorkflow } from "../workflows/agent-operations/refresh-conversation-memory"
+import { createChannelAdapter } from "../modules/agent-operations/channel-gateway";
+import os from "node:os";
+import type { SubscriberArgs, SubscriberConfig } from "@medusajs/framework";
+import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
+import { AGENT_OPERATIONS_MODULE } from "../modules/agent-operations";
+import AgentOperationsModuleService from "../modules/agent-operations/service";
+import { answerCustomerKnowledgeQuestionWorkflow } from "../workflows/agent-operations/answer-customer-knowledge-question";
+import { dispatchAgentDeliveryWorkflow } from "../workflows/agent-operations/dispatch-agent-delivery";
+import { refreshConversationMemoryWorkflow } from "../workflows/agent-operations/refresh-conversation-memory";
 
 type MessengerCustomerMessageReceivedData = {
-  inbound_message_id: string
-}
+  inbound_message_id: string;
+};
 
-const WORKER_ID = `messenger-realtime-${os.hostname()}-${process.pid}`
+const WORKER_ID = `messenger-realtime-${os.hostname()}-${process.pid}`;
 
 export default async function answerMessengerCustomerMessageHandler({
   event: { data },
   container,
 }: SubscriberArgs<MessengerCustomerMessageReceivedData>) {
-  const logger = container.resolve(ContainerRegistrationKeys.LOGGER)
-  const startedAt = Date.now()
+  const logger = container.resolve(ContainerRegistrationKeys.LOGGER);
+  const startedAt = Date.now();
 
   try {
     const service = container.resolve<AgentOperationsModuleService>(
-      AGENT_OPERATIONS_MODULE
-    )
-    const inbound = await service.retrieveAgentMessage(
-      data.inbound_message_id
-    )
-    const { result } = await answerCustomerKnowledgeQuestionWorkflow(
-      container
-    ).run({
-      input: { inbound_message_id: data.inbound_message_id },
-    })
-    if (result.delivery_id) {
+      AGENT_OPERATIONS_MODULE,
+    );
+    const inbound = await service.retrieveAgentMessage(data.inbound_message_id);
+
+    let typingInterval: NodeJS.Timeout | undefined;
+    try {
+      const conversation = await service.retrieveAgentConversation(
+        inbound.conversation_id,
+      );
+      const metadata = (conversation.metadata ?? {}) as Record<string, unknown>;
+      if (metadata.connection_id && conversation.external_thread_id) {
+        const connection = await service.retrieveAgentChannelConnection(
+          metadata.connection_id as string,
+        );
+        if (
+          connection.channel === "MESSENGER" &&
+          connection.status === "ACTIVE"
+        ) {
+          const botToken = await service.resolveChannelBotToken(connection);
+          const adapter = createChannelAdapter("MESSENGER", {
+            messenger: {
+              api_base_url: (connection.config as Record<string, unknown>)
+                ?.api_base_url as string | undefined,
+              page_access_token: botToken,
+            },
+          });
+          const signalTyping = async () => {
+            try {
+              await adapter.signalTyping?.(
+                conversation.external_thread_id as string,
+              );
+            } catch {}
+          };
+          await signalTyping();
+          typingInterval = setInterval(signalTyping, 4000);
+        }
+      }
+    } catch (error) {
+      logger.warn(
+        `Failed to start typing indicator for ${data.inbound_message_id}: ${error}`,
+      );
+    }
+
+    let workflowResult;
+    try {
+      const { result } = await answerCustomerKnowledgeQuestionWorkflow(
+        container,
+      ).run({
+        input: { inbound_message_id: data.inbound_message_id },
+      });
+      workflowResult = result;
+    } finally {
+      if (typingInterval) clearInterval(typingInterval);
+    }
+
+    if (workflowResult?.delivery_id) {
       await dispatchAgentDeliveryWorkflow(container).run({
         input: {
-          delivery_id: result.delivery_id,
+          delivery_id: workflowResult.delivery_id,
           worker_id: WORKER_ID,
         },
-      })
+      });
     }
     logger.info(
       `Messenger customer answer delivered in ${Date.now() - startedAt}ms ` +
-        `(prepared in ${result.response_preparation_ms}ms)`
-    )
+        `(prepared in ${workflowResult?.response_preparation_ms ?? 0}ms)`,
+    );
     await refreshConversationMemoryWorkflow(container).run({
       input: { conversation_id: inbound.conversation_id },
-    })
+    });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error"
+    const message = error instanceof Error ? error.message : "Unknown error";
     logger.error(
-      `Realtime Messenger customer answer failed for ${data.inbound_message_id}: ${message}`
-    )
+      `Realtime Messenger customer answer failed for ${data.inbound_message_id}: ${message}`,
+    );
   }
 }
 
 export const config: SubscriberConfig = {
   event: "agent.messenger.customer-message-received",
-}
+};

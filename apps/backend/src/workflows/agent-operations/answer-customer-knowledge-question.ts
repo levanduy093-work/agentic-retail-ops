@@ -33,8 +33,7 @@ import { executeOrderRead } from "../../modules/agent-operations/order-read-runt
 import { executePaymentRead } from "../../modules/agent-operations/payment-read-runtime"
 import {
   createCustomerSupportNativeToolDispatcher,
-  CUSTOMER_SUPPORT_NATIVE_TOOL_NAMES,
-  CUSTOMER_SUPPORT_NATIVE_TOOLS,
+  getCustomerSupportNativeTools,
   resolveCustomerDraftCartPurchaseContext
 } from "../../modules/agent-operations/customer-native-tool-dispatcher"
 import {
@@ -56,6 +55,7 @@ import {
 import { shouldUseHistoricalCustomerProfile } from "../../modules/agent-operations/conversation-memory"
 import { formatCustomerProfilePreferences } from "../../modules/agent-operations/customer-preferences"
 import { CUSTOMER_MESSAGE_INTENTS } from "../../modules/agent-operations/customer-message-intent"
+import { GuardrailsEngine } from "../../modules/agent-operations/guardrails"
 
 const answerCustomerKnowledgeQuestionStep = createStep(
   "answer-customer-knowledge-question",
@@ -64,6 +64,9 @@ const answerCustomerKnowledgeQuestionStep = createStep(
     const locking = container.resolve<ILockingModule>(Modules.LOCKING)
     const service = container.resolve<AgentOperationsModuleService>(AGENT_OPERATIONS_MODULE)
     const inbound = await service.retrieveAgentMessage(input.inbound_message_id)
+
+    const inputGuardrail = GuardrailsEngine.evaluateInputSafeguard(inbound.body)
+
     let catalogSnapshot
     let customerOrderLookup: ProcessCustomerKnowledgeQuestionInput["customer_order_lookup"]
     let customerOrderLookupLocale: "en" | "vi" | undefined
@@ -86,9 +89,16 @@ const answerCustomerKnowledgeQuestionStep = createStep(
       try {
         const conversation = await service.retrieveAgentConversation(inbound.conversation_id)
         const assistantSettings = await service.getAssistantSettings()
-        if (assistantSettings.native_tool_loop_mode !== "DISABLED") {
+        if (
+          assistantSettings.native_tool_loop_mode !== "DISABLED" &&
+          inputGuardrail.allowed
+        ) {
           const metadata = (conversation.metadata ?? {}) as Record<string, unknown>
           const customerId = getVerifiedLinkedCustomerId(metadata)
+          const availableNativeTools = getCustomerSupportNativeTools(customerId)
+          const availableNativeToolNames = new Set(
+            availableNativeTools.map((tool) => tool.name)
+          )
           try {
             const [
               credentials,
@@ -155,12 +165,7 @@ const answerCustomerKnowledgeQuestionStep = createStep(
               locale,
               historical_profile_preferences:
                 historicalProfilePreferencesAllowed
-                  ? formatCustomerProfilePreferences(
-                      customerPreferences.filter(
-                        (preference) =>
-                          new Date(preference.expires_at).getTime() > Date.now()
-                      )
-                    ).slice(0, 6)
+                  ? formatCustomerProfilePreferences(customerPreferences).slice(0, 6)
                   : [],
               historical_profile_preferences_allowed:
                 historicalProfilePreferencesAllowed,
@@ -243,12 +248,12 @@ const answerCustomerKnowledgeQuestionStep = createStep(
                     system_prompt: promptConfig.system_prompt.includes("Travel advisor tool policy:")
                       ? promptConfig.system_prompt
                       : `${promptConfig.system_prompt}\n\n${CUSTOMER_SUPPORT_TRAVEL_TOOL_POLICY}`,
-                    tools: CUSTOMER_SUPPORT_NATIVE_TOOLS,
+                    tools: availableNativeTools,
                     timeout_ms: CUSTOMER_SUPPORT_ORCHESTRATOR_TIMEOUT_MS
                   }
                 })
                 const evaluation = evaluateNativeToolLoop({
-                  allowed_tool_names: CUSTOMER_SUPPORT_NATIVE_TOOL_NAMES,
+                  allowed_tool_names: availableNativeToolNames,
                   termination: loop.termination,
                   trace: loop.trace
                 })

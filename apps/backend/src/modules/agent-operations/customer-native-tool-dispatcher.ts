@@ -396,6 +396,24 @@ export const CUSTOMER_SUPPORT_NATIVE_TOOL_NAMES = new Set(
   CUSTOMER_SUPPORT_NATIVE_TOOLS.map((tool) => tool.name)
 )
 
+export const CUSTOMER_SUPPORT_VERIFIED_CUSTOMER_TOOL_NAMES = new Set([
+  "check_delivery_status",
+  "check_order_status",
+  "propose_address_change",
+  "propose_draft_cart",
+  "propose_order_cancellation",
+  "propose_return_review",
+  "search_orders",
+])
+
+export function getCustomerSupportNativeTools(customerId: string | null) {
+  return customerId
+    ? CUSTOMER_SUPPORT_NATIVE_TOOLS
+    : CUSTOMER_SUPPORT_NATIVE_TOOLS.filter(
+        (tool) => !CUSTOMER_SUPPORT_VERIFIED_CUSTOMER_TOOL_NAMES.has(tool.name)
+      )
+}
+
 type CustomerSupportNativeToolService = {
   recordCustomerReadToolCall(input: {
     conversation_id: string
@@ -510,6 +528,16 @@ export function createCustomerSupportNativeToolDispatcher(
   return async function executeCustomerSupportNativeTool(
     call: ModelToolCall
   ): Promise<Record<string, unknown>> {
+    if (
+      !context.customer_id &&
+      CUSTOMER_SUPPORT_VERIFIED_CUSTOMER_TOOL_NAMES.has(call.name)
+    ) {
+      throw new MedusaError(
+        MedusaError.Types.NOT_ALLOWED,
+        "Customer order and proposal tools require a verified customer identity."
+      )
+    }
+
     if (call.name === "estimate_shipping_delivery") {
       const parsed = NativeShippingEstimateInput.parse(call.arguments)
       const destination = normalizeLocationEvidence(
