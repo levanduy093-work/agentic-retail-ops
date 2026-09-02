@@ -1254,7 +1254,7 @@ export const ChatChannelsContent = ({
                       className="h-6 px-2 text-xs"
                       onClick={() => {
                         const base = telegramForm.public_base_url.trim().replace(/\/$/, "") || "https://trendhub.sbs"
-                        const url = selectedTelegram?.webhook_url || `${base}/webhooks/agent-operations/telegram/primary`
+                        const url = `${base}/api/store/telegram/webhook`
                         navigator.clipboard.writeText(url)
                         toast.success(t("knowledgeHub.chatChannels.telegram.webhookCopied"))
                       }}
@@ -1267,7 +1267,7 @@ export const ChatChannelsContent = ({
                     </Button>
                   </div>
                   <div className="rounded bg-ui-bg-base px-2.5 py-1.5 border font-mono text-xs text-ui-fg-subtle break-all select-all">
-                    {selectedTelegram?.webhook_url || `${(telegramForm.public_base_url.trim().replace(/\/$/, "") || "https://trendhub.sbs")}/webhooks/agent-operations/telegram/primary`}
+                    {`${(telegramForm.public_base_url.trim().replace(/\/$/, "") || "https://trendhub.sbs")}/api/store/telegram/webhook`}
                   </div>
                   <Text className="text-ui-fg-muted" size="xsmall">
                     {t("knowledgeHub.chatChannels.telegram.webhookUrlHint")}
@@ -1584,7 +1584,7 @@ export const ChatChannelsContent = ({
                       className="h-6 px-2 text-xs"
                       onClick={() => {
                         const base = zaloForm.public_base_url.trim().replace(/\/$/, "") || "https://trendhub.sbs"
-                        const url = selectedZalo?.webhook_url || `${base}/webhooks/agent-operations/zalo/primary`
+                        const url = `${base}/api/store/zalo/webhook`
                         navigator.clipboard.writeText(url)
                         toast.success(t("knowledgeHub.chatChannels.zalo.webhookCopied"))
                       }}
@@ -1597,7 +1597,7 @@ export const ChatChannelsContent = ({
                     </Button>
                   </div>
                   <div className="rounded bg-ui-bg-base px-2.5 py-1.5 border font-mono text-xs text-ui-fg-subtle break-all select-all">
-                    {selectedZalo?.webhook_url || `${(zaloForm.public_base_url.trim().replace(/\/$/, "") || "https://trendhub.sbs")}/webhooks/agent-operations/zalo/primary`}
+                    {`${(zaloForm.public_base_url.trim().replace(/\/$/, "") || "https://trendhub.sbs")}/api/store/zalo/webhook`}
                   </div>
                   <Text className="text-ui-fg-muted" size="xsmall">
                     {t("knowledgeHub.chatChannels.zalo.webhookUrlHint")}
@@ -1914,7 +1914,7 @@ export const ChatChannelsContent = ({
                       className="h-6 px-2 text-xs"
                       onClick={() => {
                         const base = messengerForm.public_base_url.trim().replace(/\/$/, "") || "https://trendhub.sbs"
-                        const url = selectedMessenger?.webhook_url || `${base}/webhooks/agent-operations/messenger/primary`
+                        const url = `${base}/api/store/messenger/webhook`
                         navigator.clipboard.writeText(url)
                         toast.success(t("knowledgeHub.chatChannels.messenger.webhookCopied"))
                       }}
@@ -1927,7 +1927,7 @@ export const ChatChannelsContent = ({
                     </Button>
                   </div>
                   <div className="rounded bg-ui-bg-base px-2.5 py-1.5 border font-mono text-xs text-ui-fg-subtle break-all select-all">
-                    {selectedMessenger?.webhook_url || `${(messengerForm.public_base_url.trim().replace(/\/$/, "") || "https://trendhub.sbs")}/webhooks/agent-operations/messenger/primary`}
+                    {`${(messengerForm.public_base_url.trim().replace(/\/$/, "") || "https://trendhub.sbs")}/api/store/messenger/webhook`}
                   </div>
                   <Text className="text-ui-fg-muted" size="xsmall">
                     {t("knowledgeHub.chatChannels.messenger.webhookUrlHint")}
