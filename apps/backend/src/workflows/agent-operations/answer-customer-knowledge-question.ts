@@ -87,8 +87,10 @@ const answerCustomerKnowledgeQuestionStep = createStep(
     if (!existingResponse) {
       const locale = detectKnowledgeQuestionLocale(inbound.body)
       try {
-        const conversation = await service.retrieveAgentConversation(inbound.conversation_id)
-        const assistantSettings = await service.getAssistantSettings()
+        const [conversation, assistantSettings] = await Promise.all([
+          service.retrieveAgentConversation(inbound.conversation_id),
+          service.getAssistantSettings()
+        ])
         if (
           assistantSettings.native_tool_loop_mode !== "DISABLED" &&
           inputGuardrail.allowed
@@ -105,7 +107,8 @@ const answerCustomerKnowledgeQuestionStep = createStep(
               promptConfig,
               memories,
               recentConversation,
-              customerPreferences
+              customerPreferences,
+              purchaseContext
             ] = await Promise.all([
               service.getActiveAiProviderCredentials("generation", conversation.tenant_id),
               service.getPromptConfiguration(CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_KEY),
@@ -123,12 +126,9 @@ const answerCustomerKnowledgeQuestionStep = createStep(
                   tenant_id: conversation.tenant_id
                 },
                 { order: { last_confirmed_at: "DESC" }, take: 12 }
-              )
+              ),
+              resolveCustomerDraftCartPurchaseContext(container, locale)
             ])
-            const purchaseContext = await resolveCustomerDraftCartPurchaseContext(
-              container,
-              locale
-            )
             const historicalProfilePreferencesAllowed =
               shouldUseHistoricalCustomerProfile(inbound.body)
             const activeConversationIntent = recentConversation
@@ -384,18 +384,20 @@ const answerCustomerKnowledgeQuestionStep = createStep(
           }
         }
         if (!useNativeOrchestration) {
-          const recentInbound = await service.listAgentMessages(
-            {
-              conversation_id: conversation.id,
-              direction: "INBOUND"
-            },
-            { order: { occurred_at: "DESC" }, take: 6 }
-          )
+          const [recentInbound, recentMessages] = await Promise.all([
+            service.listAgentMessages(
+              {
+                conversation_id: conversation.id,
+                direction: "INBOUND"
+              },
+              { order: { occurred_at: "DESC" }, take: 6 }
+            ),
+            service.listAgentMessages(
+              { conversation_id: conversation.id },
+              { order: { occurred_at: "DESC" }, take: 8 }
+            )
+          ])
           const priorInbound = recentInbound.filter((message) => message.id !== inbound.id)
-          const recentMessages = await service.listAgentMessages(
-            { conversation_id: conversation.id },
-            { order: { occurred_at: "DESC" }, take: 8 }
-          )
           const awaitingOrderReference = isAwaitingCustomerOrderReference(
             recentMessages.filter((message) => message.id !== inbound.id)
           )
@@ -460,13 +462,22 @@ const answerCustomerKnowledgeQuestionStep = createStep(
                   tool_name: read.definition.name,
                   tool_version: read.definition.version
                 })
-                const fulfillment = shouldReadCustomerFulfillment(inbound.body)
-                  ? await executeFulfillmentRead(
-                      container,
-                      { order_id: read.output.order_id },
-                      "customer-knowledge-agent"
-                    )
-                  : null
+                const [fulfillment, payment] = await Promise.all([
+                  shouldReadCustomerFulfillment(inbound.body)
+                    ? executeFulfillmentRead(
+                        container,
+                        { order_id: read.output.order_id },
+                        "customer-knowledge-agent"
+                      )
+                    : Promise.resolve(null),
+                  shouldReadCustomerPayment(inbound.body)
+                    ? executePaymentRead(
+                        container,
+                        { order_id: read.output.order_id },
+                        "customer-knowledge-agent"
+                      )
+                    : Promise.resolve(null)
+                ])
                 if (fulfillment) {
                   await service.recordCustomerReadToolCall({
                     conversation_id: conversation.id,
@@ -477,13 +488,6 @@ const answerCustomerKnowledgeQuestionStep = createStep(
                     tool_version: fulfillment.definition.version
                   })
                 }
-                const payment = shouldReadCustomerPayment(inbound.body)
-                  ? await executePaymentRead(
-                      container,
-                      { order_id: read.output.order_id },
-                      "customer-knowledge-agent"
-                    )
-                  : null
                 if (payment) {
                   await service.recordCustomerReadToolCall({
                     conversation_id: conversation.id,
@@ -589,12 +593,14 @@ const answerCustomerKnowledgeQuestionStep = createStep(
           return typeof url === "string" ? [url] : []
         })
       : []
-    const visionAnalysis = await service.analyzeCustomerSupportImages({
-      caption: inbound.body,
-      image_urls: imageUrls,
-      inbound_message_id: inbound.id,
-      tenant_id: (await service.retrieveAgentConversation(inbound.conversation_id)).tenant_id
-    })
+    const visionAnalysis = imageUrls.length
+      ? await service.analyzeCustomerSupportImages({
+          caption: inbound.body,
+          image_urls: imageUrls,
+          inbound_message_id: inbound.id,
+          tenant_id: (await service.retrieveAgentConversation(inbound.conversation_id)).tenant_id
+        })
+      : null
     if (visionAnalysis && visionAnalysis.defect_type !== "NONE") {
       const escalation = await service.createCustomerKnowledgeEscalation({
         conversation_id: inbound.conversation_id,

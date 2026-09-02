@@ -41,17 +41,9 @@ export async function POST(
     },
   })
 
-  // Refresh the current-session memory before orchestration so the latest
-  // customer turn is available without importing any other conversation.
-  try {
-    await refreshConversationMemoryWorkflow(req.scope).run({
-      input: { conversation_id: result.conversation.id },
-    })
-  } catch (error) {
-    console.error("Error refreshing customer chat memory before answer:", error)
-  }
-
-  // Run the governed orchestrator and response pipeline.
+  // The governed orchestrator already receives the current inbound message and
+  // recent conversation directly. Keep memory summarization off the critical
+  // response path, then refresh it after the response has been flushed.
   let responseMessage: Record<string, unknown> | null = null
   try {
     const answered = await answerCustomerKnowledgeQuestionWorkflow(req.scope).run({
@@ -67,14 +59,6 @@ export async function POST(
   } catch (error) {
     console.error("Error answering customer chat message:", error)
     throw error
-  } finally {
-    try {
-      await refreshConversationMemoryWorkflow(req.scope).run({
-        input: { conversation_id: result.conversation.id },
-      })
-    } catch (error) {
-      console.error("Error refreshing customer chat memory after answer:", error)
-    }
   }
 
   res.status(201).json({
@@ -83,4 +67,12 @@ export async function POST(
     inbound_message: result.inbound_message,
     response_message: responseMessage,
   })
+
+  try {
+    await refreshConversationMemoryWorkflow(req.scope).run({
+      input: { conversation_id: result.conversation.id },
+    })
+  } catch (error) {
+    console.error("Error refreshing customer chat memory after answer:", error)
+  }
 }

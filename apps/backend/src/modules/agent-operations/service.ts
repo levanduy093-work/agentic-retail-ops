@@ -5348,7 +5348,15 @@ class AgentOperationsModuleService extends MedusaService({
     },
     @MedusaContext() sharedContext: Context = {}
   ) {
-    const inbound = await this.retrieveAgentMessage(input.inbound_message_id, {}, sharedContext)
+    const responseIdempotencyKey = `customer-answer:${input.inbound_message_id}`
+    const [inbound, existingResponses] = await Promise.all([
+      this.retrieveAgentMessage(input.inbound_message_id, {}, sharedContext),
+      this.listAgentMessages(
+        { idempotency_key: responseIdempotencyKey },
+        { take: 1 },
+        sharedContext
+      )
+    ])
     if (inbound.direction !== "INBOUND" || inbound.message_type !== "TEXT") {
       throw new MedusaError(
         MedusaError.Types.INVALID_DATA,
@@ -5356,14 +5364,7 @@ class AgentOperationsModuleService extends MedusaService({
       )
     }
 
-    const responseIdempotencyKey = `customer-answer:${inbound.id}`
-    const existing = (
-      await this.listAgentMessages(
-        { idempotency_key: responseIdempotencyKey },
-        { take: 1 },
-        sharedContext
-      )
-    )[0]
+    const existing = existingResponses[0]
     if (existing) {
       let delivery = (
         await this.listAgentDeliveries({ message_id: existing.id }, { take: 1 }, sharedContext)

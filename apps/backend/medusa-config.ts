@@ -105,6 +105,8 @@ const injectDashboardThemeBridge = (code: string, id: string) => {
 
 const bridge = `var SynapseThemeBridge = () => {
   const { theme, setTheme } = useTheme();
+  const { i18n } = useTranslation();
+  const [isLanguageChanging, setIsLanguageChanging] = useState(false);
   useEffect2(() => {
     const toggleId = "synapse-admin-theme-toggle";
     let container = document.getElementById(toggleId);
@@ -144,15 +146,26 @@ const bridge = `var SynapseThemeBridge = () => {
       languageButton.type = "button";
       languageContainer.appendChild(languageButton);
     }
-    const language = localStorage.getItem("lng") === "vi" ? "vi" : "en";
+    const language = i18n.resolvedLanguage === "vi" || i18n.language === "vi"
+      ? "vi"
+      : "en";
     const nextLanguage = language === "vi" ? "en" : "vi";
     languageButton.textContent = language === "vi" ? "VI" : "EN";
     languageButton.title = "Chuyển sang " + (nextLanguage === "vi" ? "Tiếng Việt" : "English");
     languageButton.setAttribute("aria-label", languageButton.title);
-    languageButton.onclick = () => {
-      localStorage.setItem("lng", nextLanguage);
-      document.cookie = "lng=" + nextLanguage + "; path=/; max-age=31536000; SameSite=Lax";
-      window.location.reload();
+    languageButton.disabled = isLanguageChanging;
+    languageButton.onclick = async () => {
+      if (isLanguageChanging) {
+        return;
+      }
+      setIsLanguageChanging(true);
+      try {
+        // Medusa's initialized i18next instance persists the language through its
+        // configured language detector and re-renders Admin in place.
+        await i18n.changeLanguage(nextLanguage);
+      } finally {
+        setIsLanguageChanging(false);
+      }
     };
 
     const mountSynapseBranding = () => {
@@ -223,7 +236,7 @@ const bridge = `var SynapseThemeBridge = () => {
       button.onclick = null;
       languageButton.onclick = null;
     };
-  }, [theme, setTheme]);
+  }, [theme, setTheme, i18n, i18n.language, i18n.resolvedLanguage, isLanguageChanging]);
   return null;
 };
 
