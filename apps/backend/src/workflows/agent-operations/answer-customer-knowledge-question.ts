@@ -38,7 +38,8 @@ import {
 } from "../../modules/agent-operations/customer-native-tool-dispatcher"
 import {
   createModelAdapter,
-  redactModelInput
+  redactModelInput,
+  toModelRunUsage
 } from "../../modules/agent-operations/model-gateway"
 import { extractNativeCustomerSupportContext } from "../../modules/agent-operations/native-customer-support-context"
 import { evaluateNativeToolLoop } from "../../modules/agent-operations/native-tool-loop-evaluation"
@@ -334,6 +335,7 @@ const answerCustomerKnowledgeQuestionStep = createStep<
                 await service.updateAgentModelRuns({
                   completed_at: new Date(),
                   id: modelRun.id,
+                  ...toModelRunUsage(loop.usage),
                   latency_ms: Date.now() - startedAt.getTime(),
                   output: {
                     decision,

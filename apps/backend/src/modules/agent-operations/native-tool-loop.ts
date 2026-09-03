@@ -4,6 +4,8 @@ import {
   ModelInvocation,
   ModelInvocationResult,
   ModelToolCall,
+  ModelUsage,
+  sumModelUsage,
 } from "./model-gateway"
 
 export type NativeToolLoopTrace = {
@@ -23,6 +25,7 @@ export type NativeToolLoopResult = {
     output: Record<string, unknown>
   }>
   trace: NativeToolLoopTrace[]
+  usage?: ModelUsage
 }
 
 export type NativeToolCallExecutor = (
@@ -61,6 +64,7 @@ export async function runNativeToolLoop(
   )
   const toolResults: NativeToolLoopResult["tool_results"] = []
   const trace: NativeToolLoopTrace[] = []
+  const usages: Array<ModelUsage | undefined> = []
 
   for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
     const output = await input.adapter.invoke({
@@ -71,6 +75,7 @@ export async function runNativeToolLoop(
       },
     })
     const toolCalls = output.tool_calls ?? []
+    usages.push(output.usage)
     if (!toolCalls.length) {
       return {
         iterations: iteration,
@@ -78,6 +83,7 @@ export async function runNativeToolLoop(
         termination: "COMPLETE",
         tool_results: toolResults,
         trace,
+        usage: sumModelUsage(usages),
       }
     }
 
@@ -139,6 +145,7 @@ export async function runNativeToolLoop(
     },
     tools: [],
   })
+  usages.push(finalOutput.usage)
   if (!(finalOutput.tool_calls ?? []).length) {
     return {
       iterations: maxIterations + 1,
@@ -146,6 +153,7 @@ export async function runNativeToolLoop(
       termination: "COMPLETE",
       tool_results: toolResults,
       trace,
+      usage: sumModelUsage(usages),
     }
   }
 
@@ -155,5 +163,6 @@ export async function runNativeToolLoop(
     termination: "MAX_ITERATIONS",
     tool_results: toolResults,
     trace,
+    usage: sumModelUsage(usages),
   }
 }

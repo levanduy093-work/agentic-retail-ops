@@ -37,6 +37,23 @@ type AiProviderListResponse = {
   providers: AiProviderStatus[]
 }
 
+type ProviderUsage = {
+  average_tokens_per_request: number
+  input_tokens: number
+  output_tokens: number
+  provider: AiProvider
+  runs: number
+  total_tokens: number
+  tracked_runs: number
+}
+
+type ModelRunUsageResponse = {
+  usage_summary: {
+    by_provider: ProviderUsage[]
+    sampled_runs: number
+  }
+}
+
 type AiPromptConfiguration = {
   customized: boolean
   default_system_prompt: string
@@ -79,6 +96,8 @@ const PROVIDER_LABELS: Record<AiProvider, string> = {
 
 const providerLabel = (provider: AiProvider) =>
   PROVIDER_LABELS[provider] ?? provider
+
+const formatInteger = (value: number) => new Intl.NumberFormat("vi-VN").format(value)
 
 const includeCurrentModel = (
   models: AiModelOption[],
@@ -134,6 +153,14 @@ export const AiConnectionsContent = ({
         "/admin/agent-operations/ai/prompt"
       ),
     queryKey: ["agent-ai-prompt"],
+  })
+
+  const usage = useQuery({
+    queryFn: () =>
+      sdk.client.fetch<ModelRunUsageResponse>(
+        "/admin/agent-operations/model-runs"
+      ),
+    queryKey: ["agent-model-run-usage"],
   })
 
   useEffect(() => {
@@ -296,6 +323,56 @@ export const AiConnectionsContent = ({
 
       <Container className="px-6 py-4">
         <Text size="small">{t("aiProviders.security")}</Text>
+      </Container>
+
+      <Container className="px-6 py-5">
+        <div className="flex flex-col gap-1">
+          <Heading level="h2">Token usage trả lời khách hàng</Heading>
+          <Text className="text-ui-fg-subtle" size="small">
+            Tổng hợp theo 100 lượt gọi model mới nhất. Trung bình chỉ tính các lượt đã nhận usage từ provider.
+          </Text>
+        </div>
+        {usage.isLoading && (
+          <Text className="mt-4 text-ui-fg-subtle" size="small">
+            Đang tải thống kê token...
+          </Text>
+        )}
+        {usage.isError && (
+          <Text className="mt-4 text-ui-fg-error" size="small">
+            Không thể tải thống kê token.
+          </Text>
+        )}
+        {usage.data && (
+          <>
+            <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
+              {usage.data.usage_summary.by_provider.map((provider) => (
+                <div
+                  className="rounded-lg border border-ui-border-base bg-ui-bg-subtle p-4"
+                  key={provider.provider}
+                >
+                  <Text leading="compact" size="small" weight="plus">
+                    {providerLabel(provider.provider)}
+                  </Text>
+                  <Text className="mt-3" leading="compact" size="xsmall">
+                    {formatInteger(provider.total_tokens)} token tổng
+                  </Text>
+                  <Text className="mt-1 text-ui-fg-subtle" leading="compact" size="xsmall">
+                    Trung bình {formatInteger(provider.average_tokens_per_request)} token / request
+                  </Text>
+                  <Text className="mt-3 text-ui-fg-subtle" leading="compact" size="xsmall">
+                    Input {formatInteger(provider.input_tokens)} · Output {formatInteger(provider.output_tokens)}
+                  </Text>
+                  <Text className="mt-1 text-ui-fg-subtle" leading="compact" size="xsmall">
+                    {formatInteger(provider.tracked_runs)} lượt đã đo / {formatInteger(provider.runs)} lượt gọi
+                  </Text>
+                </div>
+              ))}
+            </div>
+            <Text className="mt-3 text-ui-fg-muted" leading="compact" size="xsmall">
+              Mẫu thống kê: {formatInteger(usage.data.usage_summary.sampled_runs)} lượt gọi gần nhất.
+            </Text>
+          </>
+        )}
       </Container>
 
       {providers.isLoading && (

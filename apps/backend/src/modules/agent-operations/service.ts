@@ -18,7 +18,7 @@ import {
 } from "./communication"
 import { analyzeInventoryLow } from "./inventory-low-analyzer"
 import { analyzeOrderException } from "./order-exception-analyzer"
-import { createModelAdapter, redactModelInput } from "./model-gateway"
+import { createModelAdapter, redactModelInput, toModelRunUsage } from "./model-gateway"
 import { summarizeNativeToolLoopStatus } from "./native-tool-loop-status"
 import {
   CUSTOMER_VISION_OUTPUT_SCHEMA,
@@ -1164,6 +1164,7 @@ class AgentOperationsModuleService extends MedusaService({
               {
                 completed_at: new Date(),
                 id: modelRun.id,
+                ...toModelRunUsage(generated.usage),
                 latency_ms: Date.now() - startedAt.getTime(),
                 output,
                 status: "SUCCEEDED"
@@ -4727,6 +4728,7 @@ class AgentOperationsModuleService extends MedusaService({
           {
             completed_at: new Date(),
             id: modelRun.id,
+            ...toModelRunUsage(generated.usage),
             latency_ms: Date.now() - startedAt.getTime(),
             output,
             status: "SUCCEEDED"
@@ -5012,6 +5014,7 @@ class AgentOperationsModuleService extends MedusaService({
           {
             completed_at: new Date(),
             id: modelRun.id,
+            ...toModelRunUsage(generated.usage),
             latency_ms: Date.now() - startedAt.getTime(),
             output,
             status: "SUCCEEDED"
@@ -5176,6 +5179,7 @@ class AgentOperationsModuleService extends MedusaService({
           {
             completed_at: new Date(),
             id: modelRun.id,
+            ...toModelRunUsage(generated.usage),
             latency_ms: Date.now() - startedAt.getTime(),
             output,
             status: "SUCCEEDED"
@@ -5388,6 +5392,7 @@ class AgentOperationsModuleService extends MedusaService({
           {
             completed_at: new Date(),
             id: modelRun.id,
+            ...toModelRunUsage(generated.usage),
             latency_ms: Date.now() - startedAt.getTime(),
             output,
             status: "SUCCEEDED"
@@ -5508,6 +5513,7 @@ class AgentOperationsModuleService extends MedusaService({
         {
           completed_at: new Date(),
           id: modelRun.id,
+          ...toModelRunUsage(generated.usage),
           latency_ms: Date.now() - startedAt,
           output,
           status: "SUCCEEDED"
@@ -8659,6 +8665,7 @@ class AgentOperationsModuleService extends MedusaService({
           {
             completed_at: new Date(),
             id: modelRun.id,
+            ...toModelRunUsage(generated.usage),
             latency_ms: Date.now() - startedAt.getTime(),
             output,
             status: "SUCCEEDED"

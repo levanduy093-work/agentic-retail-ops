@@ -33,6 +33,57 @@ export type ModelGatewayAdapter = {
 
 export type ModelInvocationResult = Record<string, unknown> & {
   tool_calls?: ModelToolCall[]
+  usage?: ModelUsage
+}
+
+export type ModelUsage = {
+  cached_input_tokens?: number
+  input_tokens: number
+  output_tokens: number
+  reasoning_output_tokens?: number
+}
+
+function positiveInteger(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? Math.trunc(value)
+    : 0
+}
+
+export function normalizeModelUsage(value: unknown): ModelUsage | undefined {
+  if (!value || typeof value !== "object") return undefined
+  const usage = value as Record<string, unknown>
+  const inputTokens = positiveInteger(usage.input_tokens ?? usage.promptTokenCount ?? usage.prompt_tokens)
+  const outputTokens = positiveInteger(usage.output_tokens ?? usage.candidatesTokenCount ?? usage.completion_tokens)
+  const details = (usage.input_tokens_details ?? usage.promptTokensDetails ?? usage.prompt_tokens_details) as Record<string, unknown> | undefined
+  const outputDetails = (usage.output_tokens_details ?? usage.candidatesTokensDetails ?? usage.completion_tokens_details) as Record<string, unknown> | undefined
+  const normalized = {
+    cached_input_tokens: positiveInteger(details?.cached_tokens ?? details?.cachedContentTokenCount),
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    reasoning_output_tokens: positiveInteger(outputDetails?.reasoning_tokens ?? outputDetails?.thoughtsTokenCount),
+  }
+  return inputTokens || outputTokens || normalized.cached_input_tokens || normalized.reasoning_output_tokens
+    ? normalized
+    : undefined
+}
+
+export function sumModelUsage(usages: Array<ModelUsage | undefined>): ModelUsage | undefined {
+  const values = usages.filter((usage): usage is ModelUsage => Boolean(usage))
+  if (!values.length) return undefined
+  return values.reduce<ModelUsage>((total, usage) => ({
+    cached_input_tokens: (total.cached_input_tokens ?? 0) + (usage.cached_input_tokens ?? 0),
+    input_tokens: total.input_tokens + usage.input_tokens,
+    output_tokens: total.output_tokens + usage.output_tokens,
+    reasoning_output_tokens: (total.reasoning_output_tokens ?? 0) + (usage.reasoning_output_tokens ?? 0),
+  }), { input_tokens: 0, output_tokens: 0 })
+}
+
+export function toModelRunUsage(usage: ModelUsage | undefined) {
+  if (!usage) return {}
+  return {
+    input_tokens: usage.input_tokens,
+    output_tokens: usage.output_tokens,
+  }
 }
 
 const SENSITIVE_KEYS = new Set([
@@ -393,7 +444,9 @@ export class OpenAIResponsesModelAdapter implements ModelGatewayAdapter {
           name?: string
           type?: string
         }>
+        usage?: unknown
       }
+      const usage = normalizeModelUsage(payload.usage)
       const toolCalls = (payload.output ?? [])
         .filter((item) => item.type === "function_call")
         .map((item, index) => {
@@ -409,7 +462,7 @@ export class OpenAIResponsesModelAdapter implements ModelGatewayAdapter {
             name: item.name,
           }
         })
-      if (toolCalls.length) return { tool_calls: toolCalls }
+      if (toolCalls.length) return { tool_calls: toolCalls, usage }
       const content = payload.output?.flatMap((item) => item.content ?? []) ?? []
       const refusal = content.find((item) => item.type === "refusal")?.refusal
       if (refusal) {
@@ -428,7 +481,7 @@ export class OpenAIResponsesModelAdapter implements ModelGatewayAdapter {
         )
       }
 
-      return parseStructuredModelOutput(outputText)
+      return { ...parseStructuredModelOutput(outputText), usage }
     } catch (error) {
       if (error instanceof SyntaxError) {
         throw new MedusaError(
@@ -553,7 +606,9 @@ export class GeminiModelAdapter implements ModelGatewayAdapter {
             }>
           }
         }>
+        usageMetadata?: unknown
       }
+      const usage = normalizeModelUsage(payload.usageMetadata)
       const parts = payload.candidates?.[0]?.content?.parts ?? []
       const toolCalls = parts.flatMap((part, index) => {
         if (!part.functionCall?.name) return []
@@ -563,7 +618,7 @@ export class GeminiModelAdapter implements ModelGatewayAdapter {
           name: part.functionCall.name,
         }]
       })
-      if (toolCalls.length) return { tool_calls: toolCalls }
+      if (toolCalls.length) return { tool_calls: toolCalls, usage }
       const outputText = parts
         ?.map((part) => part.text ?? "")
         .join("")
@@ -573,7 +628,7 @@ export class GeminiModelAdapter implements ModelGatewayAdapter {
           "The model provider returned no structured output."
         )
       }
-      return parseStructuredModelOutput(outputText)
+      return { ...parseStructuredModelOutput(outputText), usage }
     } catch (error) {
       if (error instanceof SyntaxError) {
         throw new MedusaError(
@@ -674,7 +729,9 @@ export class DeepSeekChatModelAdapter implements ModelGatewayAdapter {
             }>
           }
         }>
+        usage?: unknown
       }
+      const usage = normalizeModelUsage(payload.usage)
       const toolCalls = (payload.choices?.[0]?.message?.tool_calls ?? []).map(
         (toolCall, index) => {
           if (!toolCall.function?.name) {
@@ -690,7 +747,7 @@ export class DeepSeekChatModelAdapter implements ModelGatewayAdapter {
           }
         }
       )
-      if (toolCalls.length) return { tool_calls: toolCalls }
+      if (toolCalls.length) return { tool_calls: toolCalls, usage }
       const outputText = payload.choices?.[0]?.message?.content
       if (!outputText) {
         throw new MedusaError(
@@ -698,7 +755,7 @@ export class DeepSeekChatModelAdapter implements ModelGatewayAdapter {
           "The model provider returned no structured output."
         )
       }
-      return parseStructuredModelOutput(outputText)
+      return { ...parseStructuredModelOutput(outputText), usage }
     } catch (error) {
       if (error instanceof SyntaxError) {
         throw new MedusaError(

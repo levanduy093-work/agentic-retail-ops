@@ -359,6 +359,11 @@ describe("agent platform foundations", () => {
       })
       return new Response(
         JSON.stringify({
+          usage: {
+            input_tokens: 120,
+            input_tokens_details: { cached_tokens: 40 },
+            output_tokens: 32,
+          },
           output: [
             {
               content: [
@@ -396,7 +401,15 @@ describe("agent platform foundations", () => {
         prompt_version: "1",
         system_prompt: "Configured support prompt",
       })
-    ).resolves.toEqual({ body: "Your order is being prepared." })
+    ).resolves.toEqual({
+      body: "Your order is being prepared.",
+      usage: {
+        cached_input_tokens: 40,
+        input_tokens: 120,
+        output_tokens: 32,
+        reasoning_output_tokens: 0,
+      },
+    })
     expect(request).toHaveBeenCalledTimes(1)
   })
 
