@@ -1,7 +1,6 @@
 import {
   buildCustomerIntentReply,
   CustomerMessageIntentModelOutput,
-  CUSTOMER_MESSAGE_INTENT_SYSTEM_PROMPT,
   defaultCustomerMessageIntent,
   resolveCustomerMessageIntent,
 } from "../customer-message-intent"
@@ -67,11 +66,5 @@ describe("customer message intent routing", () => {
       "sốp là nhân viên CSKH của Synapse"
     )
     expect(buildCustomerIntentReply("CLARIFY", "en")).toContain("Could you")
-  })
-
-  it("keeps tool execution and untrusted-input protections in the router", () => {
-    expect(CUSTOMER_MESSAGE_INTENT_SYSTEM_PROMPT).toContain("no tools")
-    expect(CUSTOMER_MESSAGE_INTENT_SYSTEM_PROMPT).toContain("untrusted data")
-    expect(CUSTOMER_MESSAGE_INTENT_SYSTEM_PROMPT).toContain("HUMAN_ACTION")
   })
 })

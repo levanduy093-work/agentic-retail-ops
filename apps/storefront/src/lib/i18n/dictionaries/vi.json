@@ -310,31 +310,18 @@
     "auth_benefit_size": "Tư vấn sản phẩm phù hợp với nhu cầu của bạn",
     "auth_benefit_orders": "Tra cứu đơn hàng và hỗ trợ đổi trả nhanh chóng",
     "sign_in_register": "Đăng nhập để trò chuyện",
-    "welcome_message": "Cửa hàng có thể hỗ trợ bạn tìm sản phẩm, kiểm tra size hoặc tra cứu đơn hàng.",
-    "typing": "Đang tìm mẫu và trả lời...",
-    "input_placeholder": "Nhập câu hỏi hoặc yêu cầu tìm mẫu...",
+    "welcome_message": "Cửa hàng có thể hỗ trợ bạn tìm linh kiện, kiểm tra độ tương thích hoặc tra cứu đơn hàng.",
+    "typing": "Đang tìm linh kiện và trả lời...",
+    "input_placeholder": "Nhập linh kiện cần tìm hoặc hỏi build PC...",
     "send": "Gửi",
     "view_product": "Xem chi tiết",
     "button_label": "Mở hỗ trợ cửa hàng",
     "quick_prompts": {
-      "jackets": "Tư vấn áo khoác đi chơi",
-      "tshirt_m": "Tìm áo thun size M dưới 300k",
-      "jeans": "Xem mẫu quần jeans",
-      "policy": "Quy trình đổi trả hàng"
+      "jackets": "Tư vấn build PC gaming tầm 20tr",
+      "tshirt_m": "Tìm card RTX 4070 SUPER",
+      "jeans": "RAM DDR5 32GB 6000MHz",
+      "policy": "Chính sách bảo hành linh kiện"
     }
-  },
-  "devLock": {
-    "badge": "Dev Safe Mode",
-    "title": "Chế độ Phát triển Riêng tư",
-    "description": "Hệ thống đang được bảo vệ trong lúc lập trình viên đang làm việc. Vui lòng nhập mã PIN được chia sẻ để mở khóa.",
-    "pin_label": "Mã PIN mở khóa",
-    "pin_placeholder": "Nhập mã PIN truy cập...",
-    "pin_required": "Vui lòng nhập mã PIN.",
-    "pin_invalid": "Mã PIN không chính xác. Vui lòng kiểm tra lại.",
-    "network_error": "Không thể kết nối đến máy chủ. Vui lòng thử lại sau.",
-    "verifying": "Đang xác thực...",
-    "unlock": "Mở khóa truy cập",
-    "localhost_notice": "Truy cập từ localhost trên máy dev luôn được cho phép trực tiếp."
   },
   "common": {
     "subtotal_excl": "Tạm tính (chưa gồm phí vận chuyển và thuế)",

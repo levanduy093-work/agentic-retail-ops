@@ -164,8 +164,11 @@ import {
 import {
   buildCatalogOverviewReply,
   buildProductAdvisorFallback,
+  buildProductAdvisorSystemPrompt,
   CustomerCatalogSnapshot,
+  extractCatalogSearchQuery,
   extractCustomerProductPreferences,
+  extractRecentCatalogSearchQuery,
   formatProductAdvisorReply,
   isCatalogOverviewRequest,
   isPublicCustomerUrl,
@@ -188,12 +191,6 @@ import {
   CustomerMessageIntentModelOutput,
   CustomerMessageIntentResult,
   CUSTOMER_MESSAGE_INTENTS,
-  CUSTOMER_MESSAGE_INTENT_MAX_TOKENS,
-  CUSTOMER_MESSAGE_INTENT_OUTPUT_SCHEMA,
-  CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
-  CUSTOMER_MESSAGE_INTENT_PROMPT_VERSION,
-  CUSTOMER_MESSAGE_INTENT_SYSTEM_PROMPT,
-  CUSTOMER_MESSAGE_INTENT_TIMEOUT_MS,
   defaultCustomerMessageIntent,
   isCustomerAddressingShop,
   resolveCustomerMessageIntent
@@ -4988,6 +4985,20 @@ class AgentOperationsModuleService extends MedusaService({
           PRODUCT_ADVISOR_PROMPT_KEY,
           sharedContext
         )
+        const settings = await this.getAssistantSettings(sharedContext)
+        const baseSystemPrompt = promptConfig.customized
+          ? promptConfig.system_prompt
+          : buildProductAdvisorSystemPrompt({
+              advisor_tone: settings.advisor_tone,
+              advisory_guidelines: settings.advisory_guidelines,
+              bot_role: input.assistant_profile?.bot_role || settings.bot_role,
+              brand_name: input.assistant_profile?.brand_name || settings.brand_name,
+              few_shot_examples: settings.few_shot_examples,
+              store_specialty: settings.store_specialty
+            })
+        const finalSystemPrompt = baseSystemPrompt.includes("Travel advisor grounding policy:")
+          ? baseSystemPrompt
+          : `${baseSystemPrompt}\n\n${PRODUCT_ADVISOR_TRAVEL_GROUNDING_POLICY}`
         const generated = await adapter.invoke({
           agent_id: "customer-product-advisor",
           input: safeInput,
@@ -4995,9 +5006,7 @@ class AgentOperationsModuleService extends MedusaService({
           output_schema: PRODUCT_ADVISOR_OUTPUT_SCHEMA,
           prompt_key: PRODUCT_ADVISOR_PROMPT_KEY,
           prompt_version: promptConfig.version,
-          system_prompt: promptConfig.system_prompt.includes("Travel advisor grounding policy:")
-            ? promptConfig.system_prompt
-            : `${promptConfig.system_prompt}\n\n${PRODUCT_ADVISOR_TRAVEL_GROUNDING_POLICY}`,
+          system_prompt: finalSystemPrompt,
           timeout_ms: PRODUCT_ADVISOR_TIMEOUT_MS
         })
         const output = ProductAdvisorModelOutput.parse(generated)
@@ -5055,157 +5064,6 @@ class AgentOperationsModuleService extends MedusaService({
     return toAnswer(fallback)
   }
 
-  @InjectManager()
-  async classifyCustomerMessageIntent(
-    input: {
-      active_conversation_intent?: CustomerMessageIntent | null
-      conversation_memory?: string
-      idempotency_key: string
-      locale: "en" | "vi"
-      message: string
-      recent_messages: Array<{
-        body: string
-        direction: "INBOUND" | "OUTBOUND"
-      }>
-      tenant_id: string
-    },
-    @MedusaContext() sharedContext: Context = {}
-  ): Promise<CustomerMessageIntentResult> {
-    const fallback = defaultCustomerMessageIntent()
-    const legacyRun = (
-      await this.listAgentModelRuns(
-        { idempotency_key: input.idempotency_key },
-        { take: 1 },
-        sharedContext
-      )
-    )[0]
-    if (legacyRun?.status === "SUCCEEDED" && legacyRun.output) {
-      const cached = CustomerMessageIntentModelOutput.safeParse(legacyRun.output)
-      return cached.success ? cached.data : fallback
-    }
-
-    const safeInput = {
-      active_conversation_intent: input.active_conversation_intent ?? null,
-      conversation_memory: input.conversation_memory?.slice(-800) ?? "",
-      current_message: input.message.slice(0, 800),
-      locale: input.locale,
-      recent_conversation: input.recent_messages.slice(-3).map((message) => ({
-        body: message.body.slice(0, 320),
-        direction: message.direction
-      }))
-    }
-    let credentials
-    try {
-      credentials = await this.getActiveAiProviderCredentials("generation", input.tenant_id)
-    } catch {
-      return fallback
-    }
-
-    for (const credential of credentials) {
-      const adapter = createModelAdapter({
-        apiKey: credential.api_key,
-        model: credential.model,
-        provider: credential.provider
-      })
-      const intentCacheKey = buildCustomerAssistantCacheKey("intent", {
-        input: safeInput,
-        model: adapter.model,
-        prompt_key: CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
-        prompt_version: CUSTOMER_MESSAGE_INTENT_PROMPT_VERSION,
-        provider: adapter.provider,
-        tenant_id: input.tenant_id
-      })
-      const cachedIntent = await readCustomerAssistantCache(
-        this.getCustomerAssistantCaching(),
-        intentCacheKey,
-        (value) => {
-          const result = CustomerMessageIntentModelOutput.safeParse(value)
-          return result.success ? result.data : null
-        }
-      )
-      if (cachedIntent) return cachedIntent
-      const attemptKey = `${input.idempotency_key}:provider:${adapter.provider}`
-      const existing = (
-        await this.listAgentModelRuns({ idempotency_key: attemptKey }, { take: 1 }, sharedContext)
-      )[0]
-      if (existing?.status === "SUCCEEDED" && existing.output) {
-        const cached = CustomerMessageIntentModelOutput.safeParse(existing.output)
-        if (cached.success) return cached.data
-      }
-      if (existing?.status === "RUNNING") return fallback
-      if (existing) continue
-
-      const startedAt = new Date()
-      const modelRun = await this.createAgentModelRuns(
-        {
-          agent_id: "customer-intent-router",
-          agent_version: "1.0.0",
-          idempotency_key: attemptKey,
-          input: redactModelInput(safeInput) as Record<string, unknown>,
-          model: adapter.model,
-          prompt_key: CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
-          prompt_version: CUSTOMER_MESSAGE_INTENT_PROMPT_VERSION,
-          provider: adapter.provider,
-          redacted: true,
-          started_at: startedAt,
-          status: "RUNNING"
-        },
-        sharedContext
-      )
-
-      try {
-        const promptConfig = await this.getPromptConfiguration(
-          CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
-          sharedContext
-        )
-        const generated = await adapter.invoke({
-          agent_id: "customer-intent-router",
-          input: safeInput,
-          max_tokens: promptConfig.max_tokens,
-          output_schema: CUSTOMER_MESSAGE_INTENT_OUTPUT_SCHEMA,
-          prompt_key: CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
-          prompt_version: promptConfig.version,
-          system_prompt: promptConfig.system_prompt,
-          timeout_ms: CUSTOMER_MESSAGE_INTENT_TIMEOUT_MS
-        })
-        const output = CustomerMessageIntentModelOutput.parse(generated)
-        await writeCustomerAssistantCache(this.getCustomerAssistantCaching(), {
-          key: intentCacheKey,
-          tags: ["customer-assistant:intent", `customer-assistant:tenant:${input.tenant_id}`],
-          ttl: CUSTOMER_ASSISTANT_CACHE_TTL_SECONDS.intent,
-          value: output
-        })
-        await this.updateAgentModelRuns(
-          {
-            completed_at: new Date(),
-            id: modelRun.id,
-            ...toModelRunUsage(generated.usage),
-            latency_ms: Date.now() - startedAt.getTime(),
-            output,
-            status: "SUCCEEDED"
-          },
-          sharedContext
-        )
-        return output
-      } catch (error) {
-        await this.updateAgentModelRuns(
-          {
-            completed_at: new Date(),
-            error:
-              error instanceof Error
-                ? error.message.slice(0, 1_000)
-                : "Customer intent classification failed",
-            id: modelRun.id,
-            latency_ms: Date.now() - startedAt.getTime(),
-            status: "FAILED"
-          },
-          sharedContext
-        )
-      }
-    }
-
-    return fallback
-  }
 
   @InjectManager()
   async draftCustomerConversationReply(
@@ -5751,34 +5609,9 @@ class AgentOperationsModuleService extends MedusaService({
       input.customer_order_lookup_locale ??
       resolveCustomerConversationLocale(question, recentMessages)
 
-    const fallbackIntent =
-      !explicitAttack && !input.orchestrator_decision
-        ? await this.classifyCustomerMessageIntent(
-            {
-              active_conversation_intent: recentMessages
-                .filter((message) => message.id !== inbound.id)
-                .flatMap((message) => {
-                  const value = (message.structured_content as Record<string, unknown> | null)
-                    ?.intent
-                  return message.direction === "OUTBOUND" &&
-                    typeof value === "string" &&
-                    CUSTOMER_MESSAGE_INTENTS.includes(value as CustomerMessageIntent)
-                    ? [value as CustomerMessageIntent]
-                    : []
-                })[0] ?? null,
-              conversation_memory: memorySummary,
-              idempotency_key: `customer-intent-model:${inbound.id}`,
-              locale,
-              message: question,
-              recent_messages: mapRecentMessagesWithTime(contextMessages),
-              tenant_id: conversation.tenant_id
-            },
-            sharedContext
-          )
-        : null
     const preliminaryRoutedIntent =
       input.orchestrator_decision?.intent ??
-      (fallbackIntent ? resolveCustomerMessageIntent(fallbackIntent) : null)
+      (explicitAttack ? "UNSAFE" : "STORE_QUESTION")
 
     if (
       input.customer_order_lookup &&
@@ -5878,7 +5711,7 @@ class AgentOperationsModuleService extends MedusaService({
     const nativeIntent = !explicitAttack
       ? input.orchestrator_decision ?? null
       : null
-    const intent = explicitAttack
+    const intent: CustomerMessageIntentResult = explicitAttack
       ? {
           confidence: 1,
           intent: "UNSAFE" as const,
@@ -5886,17 +5719,7 @@ class AgentOperationsModuleService extends MedusaService({
         }
       : nativeIntent
         ? nativeIntent
-      : fallbackIntent ?? await this.classifyCustomerMessageIntent(
-          {
-            conversation_memory: memorySummary,
-            idempotency_key: `customer-intent-model:${inbound.id}`,
-            locale,
-            message: question,
-            recent_messages: mapRecentMessagesWithTime(contextMessages),
-            tenant_id: conversation.tenant_id
-          },
-          sharedContext
-        )
+        : defaultCustomerMessageIntent()
     const routedIntent = nativeIntent?.intent ?? resolveCustomerMessageIntent(intent)
     const sentiment = input.orchestrator_decision
       ? {

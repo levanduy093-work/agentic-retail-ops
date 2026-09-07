@@ -17,16 +17,27 @@ import { FormEvent, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { sdk } from "../../lib/sdk"
 
+export type ProductAdvisorFewShotExample = {
+  advice_intro: string
+  customer_query: string
+  follow_up_question: string
+  product_reason: string
+}
+
 export type AssistantSettings = {
+  advisor_tone?: string
+  advisory_guidelines?: string
   bot_role: string
   brand_name: string
   clarify_message_en: string
   clarify_message_vi: string
+  few_shot_examples?: ProductAdvisorFewShotExample[]
   greeting_message_en: string
   greeting_message_vi: string
   native_tool_loop_mode: "ACTIVE" | "DISABLED" | "SHADOW"
   review_ack_message_en: string
   review_ack_message_vi: string
+  store_specialty?: string
 }
 
 export type ManagedPromptItem = {
@@ -53,6 +64,13 @@ export const PromptsConfigContent = () => {
   const queryClient = useQueryClient()
   const [advancedPromptsOpen, setAdvancedPromptsOpen] = useState(false)
   const [fallbackMessagesOpen, setFallbackMessagesOpen] = useState(false)
+  const [showAddExample, setShowAddExample] = useState(false)
+  const [exampleForm, setExampleForm] = useState<ProductAdvisorFewShotExample>({
+    advice_intro: "",
+    customer_query: "",
+    follow_up_question: "",
+    product_reason: "",
+  })
 
   const { data, error, isError, isLoading, refetch } = useQuery({
     queryFn: () =>
@@ -63,15 +81,21 @@ export const PromptsConfigContent = () => {
   })
 
   const [settingsForm, setSettingsForm] = useState<AssistantSettings>({
+    advisor_tone:
+      "Nhiệt tình, thân thiện, tư vấn chân thành và am hiểu sâu sắc về sản phẩm",
+    advisory_guidelines:
+      "Tư vấn đúng nhu cầu thực tế, minh bạch về thông số và giá bán, chủ động hỏi thêm để nắm rõ nhu cầu của khách hàng.",
     bot_role: "nhân viên CSKH",
     brand_name: "Synapse",
     clarify_message_en: "",
     clarify_message_vi: "",
+    few_shot_examples: [],
     greeting_message_en: "",
     greeting_message_vi: "",
     native_tool_loop_mode: "ACTIVE",
     review_ack_message_en: "",
     review_ack_message_vi: "",
+    store_specialty: "Sản phẩm bán lẻ đa ngành",
   })
 
   const [promptForms, setPromptForms] = useState<
@@ -173,6 +197,47 @@ export const PromptsConfigContent = () => {
   const handleSaveSettings = (e: FormEvent) => {
     e.preventDefault()
     saveSettingsMutation.mutate(settingsForm)
+  }
+
+  const handleAddExample = (e: FormEvent) => {
+    e.preventDefault()
+    if (
+      !exampleForm.customer_query.trim() ||
+      !exampleForm.advice_intro.trim() ||
+      !exampleForm.product_reason.trim() ||
+      !exampleForm.follow_up_question.trim()
+    ) {
+      toast.error(
+        t("prompts.fillAllExampleFields", "Vui lòng điền đầy đủ các thông tin của ví dụ")
+      )
+      return
+    }
+    setSettingsForm((prev) => ({
+      ...prev,
+      few_shot_examples: [...(prev.few_shot_examples || []), exampleForm],
+    }))
+    setExampleForm({
+      advice_intro: "",
+      customer_query: "",
+      follow_up_question: "",
+      product_reason: "",
+    })
+    setShowAddExample(false)
+    toast.success(
+      t(
+        "prompts.exampleAddedDraft",
+        "Đã thêm ví dụ vào danh sách. Hãy bấm 'Lưu cấu hình tư vấn' để cập nhật."
+      )
+    )
+  }
+
+  const handleRemoveExample = (index: number) => {
+    setSettingsForm((prev) => ({
+      ...prev,
+      few_shot_examples: (prev.few_shot_examples || []).filter(
+        (_, i) => i !== index
+      ),
+    }))
   }
 
   const handleSavePrompt = (promptKey: string) => {
@@ -418,6 +483,231 @@ export const PromptsConfigContent = () => {
               type="submit"
             >
               {t("prompts.saveBrandSettings")}
+            </Button>
+          </div>
+        </form>
+      </Container>
+
+      {/* Product Advisor Setup (Persona, Domain & Few-shot Examples) */}
+      <Container className="p-6">
+        <div className="mb-4 flex items-center justify-between border-b border-ui-border-base pb-3">
+          <div>
+            <Heading level="h3">{t("prompts.advisorSectionTitle")}</Heading>
+            <Text className="text-ui-fg-subtle text-xs mt-0.5">
+              {t("prompts.advisorSectionSubtitle")}
+            </Text>
+          </div>
+        </div>
+
+        <form onSubmit={handleSaveSettings} className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <Label className="mb-1 block font-medium text-xs">
+                {t("prompts.storeSpecialtyLabel")}
+              </Label>
+              <Input
+                value={settingsForm.store_specialty || ""}
+                onChange={(e) =>
+                  setSettingsForm((prev) => ({
+                    ...prev,
+                    store_specialty: e.target.value,
+                  }))
+                }
+                placeholder={t("prompts.storeSpecialtyPlaceholder")}
+              />
+            </div>
+            <div>
+              <Label className="mb-1 block font-medium text-xs">
+                {t("prompts.advisorToneLabel")}
+              </Label>
+              <Input
+                value={settingsForm.advisor_tone || ""}
+                onChange={(e) =>
+                  setSettingsForm((prev) => ({
+                    ...prev,
+                    advisor_tone: e.target.value,
+                  }))
+                }
+                placeholder={t("prompts.advisorTonePlaceholder")}
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label className="mb-1 block font-medium text-xs">
+              {t("prompts.advisoryGuidelinesLabel")}
+            </Label>
+            <Textarea
+              rows={2}
+              value={settingsForm.advisory_guidelines || ""}
+              onChange={(e) =>
+                setSettingsForm((prev) => ({
+                  ...prev,
+                  advisory_guidelines: e.target.value,
+                }))
+              }
+              placeholder={t("prompts.advisoryGuidelinesPlaceholder")}
+            />
+          </div>
+
+          {/* Few-shot Examples Section */}
+          <div className="border-t border-ui-border-base pt-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <Text leading="compact" size="small" weight="plus">
+                  {t("prompts.fewShotSectionTitle")}
+                </Text>
+                <Text className="mt-0.5 text-ui-fg-subtle" size="small">
+                  {t("prompts.fewShotSectionSubtitle")}
+                </Text>
+              </div>
+              <Button
+                onClick={() => setShowAddExample((prev) => !prev)}
+                size="small"
+                type="button"
+                variant="secondary"
+              >
+                {showAddExample
+                  ? t("prompts.cancelAddExample")
+                  : t("prompts.addExample")}
+              </Button>
+            </div>
+
+            {showAddExample && (
+              <div className="mb-4 rounded-lg border border-ui-border-base bg-ui-bg-subtle p-4 space-y-3">
+                <div>
+                  <Label className="mb-1 block font-medium text-xs">
+                    {t("prompts.customerQueryLabel")}
+                  </Label>
+                  <Input
+                    value={exampleForm.customer_query}
+                    onChange={(e) =>
+                      setExampleForm((prev) => ({
+                        ...prev,
+                        customer_query: e.target.value,
+                      }))
+                    }
+                    placeholder={t("prompts.customerQueryPlaceholder")}
+                  />
+                </div>
+                <div>
+                  <Label className="mb-1 block font-medium text-xs">
+                    {t("prompts.adviceIntroLabel")}
+                  </Label>
+                  <Input
+                    value={exampleForm.advice_intro}
+                    onChange={(e) =>
+                      setExampleForm((prev) => ({
+                        ...prev,
+                        advice_intro: e.target.value,
+                      }))
+                    }
+                    placeholder={t("prompts.adviceIntroPlaceholder")}
+                  />
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label className="mb-1 block font-medium text-xs">
+                      {t("prompts.productReasonLabel")}
+                    </Label>
+                    <Input
+                      value={exampleForm.product_reason}
+                      onChange={(e) =>
+                        setExampleForm((prev) => ({
+                          ...prev,
+                          product_reason: e.target.value,
+                        }))
+                      }
+                      placeholder={t("prompts.productReasonPlaceholder")}
+                    />
+                  </div>
+                  <div>
+                    <Label className="mb-1 block font-medium text-xs">
+                      {t("prompts.followUpQuestionLabel")}
+                    </Label>
+                    <Input
+                      value={exampleForm.follow_up_question}
+                      onChange={(e) =>
+                        setExampleForm((prev) => ({
+                          ...prev,
+                          follow_up_question: e.target.value,
+                        }))
+                      }
+                      placeholder={t("prompts.followUpQuestionPlaceholder")}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button
+                    onClick={() => setShowAddExample(false)}
+                    size="small"
+                    type="button"
+                    variant="secondary"
+                  >
+                    {t("prompts.cancelAddExample")}
+                  </Button>
+                  <Button
+                    onClick={handleAddExample}
+                    size="small"
+                    type="button"
+                  >
+                    {t("prompts.confirmAddExample")}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {settingsForm.few_shot_examples && settingsForm.few_shot_examples.length > 0 ? (
+              <div className="space-y-3">
+                {settingsForm.few_shot_examples.map((ex, idx) => (
+                  <div
+                    key={idx}
+                    className="flex flex-col gap-2 rounded-lg border border-ui-border-base bg-ui-bg-base p-3 sm:flex-row sm:items-start sm:justify-between"
+                  >
+                    <div className="space-y-1 text-xs">
+                      <p>
+                        <strong className="text-ui-fg-base">Khách: </strong>
+                        <span className="text-ui-fg-subtle">"{ex.customer_query}"</span>
+                      </p>
+                      <p>
+                        <strong className="text-ui-fg-base">Mở đầu: </strong>
+                        <span className="text-ui-fg-subtle">{ex.advice_intro}</span>
+                      </p>
+                      <p>
+                        <strong className="text-ui-fg-base">Lý do gợi ý: </strong>
+                        <span className="text-ui-fg-subtle">{ex.product_reason}</span>
+                      </p>
+                      <p>
+                        <strong className="text-ui-fg-base">Câu hỏi gợi mở: </strong>
+                        <span className="text-ui-fg-subtle">{ex.follow_up_question}</span>
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() => handleRemoveExample(idx)}
+                      size="small"
+                      type="button"
+                      variant="danger"
+                    >
+                      {t("prompts.removeExample")}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Text className="text-xs text-ui-fg-muted italic">
+                {t("prompts.emptyExamples")}
+              </Text>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <Button
+              disabled={saveSettingsMutation.isPending}
+              isLoading={saveSettingsMutation.isPending}
+              size="small"
+              type="submit"
+            >
+              {t("prompts.saveAdvisorSettings")}
             </Button>
           </div>
         </form>

@@ -310,31 +310,18 @@
     "auth_benefit_size": "Get help finding products that suit your needs",
     "auth_benefit_orders": "Track orders and quick return assistance",
     "sign_in_register": "Sign in to chat",
-    "welcome_message": "The store can help you find products, check sizing, or look up an order.",
-    "typing": "Searching products and replying...",
-    "input_placeholder": "Ask a question or request outfit recommendations...",
+    "welcome_message": "The store can help you find PC components, check compatibility, or look up an order.",
+    "typing": "Searching PC components and replying...",
+    "input_placeholder": "Ask a question or request PC build recommendations...",
     "send": "Send",
     "view_product": "View details",
     "button_label": "Open store support",
     "quick_prompts": {
-      "jackets": "Style advice for jackets",
-      "tshirt_m": "Find M size t-shirt under $15",
-      "jeans": "Browse jeans collection",
-      "policy": "Return & exchange policy"
+      "jackets": "Gaming PC build advice around $1000",
+      "tshirt_m": "Find RTX 4070 SUPER card",
+      "jeans": "Browse DDR5 RAM kits",
+      "policy": "Hardware warranty policy"
     }
-  },
-  "devLock": {
-    "badge": "Dev Safe Mode",
-    "title": "Private Development Mode",
-    "description": "This system is protected while developers are working. Please enter the shared PIN passcode to unlock access.",
-    "pin_label": "Unlock PIN Passcode",
-    "pin_placeholder": "Enter access PIN...",
-    "pin_required": "Please enter the PIN passcode.",
-    "pin_invalid": "Incorrect PIN passcode. Please check again.",
-    "network_error": "Could not connect to the server. Please try again later.",
-    "verifying": "Verifying...",
-    "unlock": "Unlock Access",
-    "localhost_notice": "Access from localhost on development machines is always allowed directly."
   },
   "common": {
     "subtotal_excl": "Subtotal (excl. shipping and taxes)",

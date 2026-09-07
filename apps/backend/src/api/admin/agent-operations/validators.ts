@@ -269,10 +269,22 @@ export const AdminConfigureManagedPrompt = z.strictObject({
   prompt_key: z.string().trim().min(1).max(200).optional(),
   settings: z
     .strictObject({
+      advisor_tone: z.string().trim().min(1).max(300).optional(),
+      advisory_guidelines: z.string().trim().max(2000).optional(),
       bot_role: z.string().trim().min(1).max(100).optional(),
       brand_name: z.string().trim().min(1).max(100).optional(),
       clarify_message_en: z.string().trim().min(1).max(500).optional(),
       clarify_message_vi: z.string().trim().min(1).max(500).optional(),
+      few_shot_examples: z
+        .array(
+          z.strictObject({
+            advice_intro: z.string().trim().min(1).max(1000),
+            customer_query: z.string().trim().min(1).max(500),
+            follow_up_question: z.string().trim().min(1).max(500),
+            product_reason: z.string().trim().min(1).max(500),
+          })
+        )
+        .optional(),
       greeting_message_en: z.string().trim().min(1).max(500).optional(),
       greeting_message_vi: z.string().trim().min(1).max(500).optional(),
       native_tool_loop_mode: z
@@ -280,6 +292,7 @@ export const AdminConfigureManagedPrompt = z.strictObject({
         .optional(),
       review_ack_message_en: z.string().trim().min(1).max(500).optional(),
       review_ack_message_vi: z.string().trim().min(1).max(500).optional(),
+      store_specialty: z.string().trim().min(1).max(300).optional(),
     })
     .optional(),
   system_prompt: z.string().trim().min(10).max(30_000).optional(),

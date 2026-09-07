@@ -1,0 +1,137 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: synapse-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD:-trust}
+      POSTGRES_DB: ${POSTGRES_DB:-medusa-dtc-starter}
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - agent-postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: synapse-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - agent-redis-data:/data
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.0
+    container_name: synapse-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    volumes:
+      - agent-qdrant-data:/qdrant/storage
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: synapse-backend
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgres://postgres:@postgres:5432/medusa-dtc-starter}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - LOCKING_REDIS_URL=${LOCKING_REDIS_URL:-redis://redis:6379}
+      - REDIS_INFRASTRUCTURE_ENABLED=true
+      - QDRANT_URL=${QDRANT_URL:-http://qdrant:6333}
+      - STORE_CORS=${STORE_CORS:-http://localhost:8000,http://storefront:8000}
+      - ADMIN_CORS=${ADMIN_CORS:-http://localhost:9000}
+      - AUTH_CORS=${AUTH_CORS:-http://localhost:9000,http://localhost:8000}
+      - JWT_SECRET=${JWT_SECRET:-supersecret}
+      - COOKIE_SECRET=${COOKIE_SECRET:-supersecret}
+      - MEDUSA_FF_RBAC=true
+      - MEDUSA_FF_VIEW_CONFIGURATIONS=true
+      - RUN_MIGRATIONS=true
+      - HOST=0.0.0.0
+      - PORT=9000
+    env_file:
+      - path: apps/backend/.env
+        required: false
+
+  storefront:
+    build:
+      context: .
+      dockerfile: apps/storefront/Dockerfile
+      args:
+        NEXT_PUBLIC_MEDUSA_BACKEND_URL: ${NEXT_PUBLIC_MEDUSA_BACKEND_URL:-http://localhost:9000}
+        NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY: ${NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY:-pk_placeholder}
+        NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-http://localhost:8000}
+        NEXT_PUBLIC_DEFAULT_REGION: ${NEXT_PUBLIC_DEFAULT_REGION:-vn}
+    container_name: synapse-storefront
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    depends_on:
+      - backend
+    environment:
+      - NEXT_PUBLIC_MEDUSA_BACKEND_URL=${NEXT_PUBLIC_MEDUSA_BACKEND_URL:-http://localhost:9000}
+      - NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY=${NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY:-}
+      - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL:-http://localhost:8000}
+      - NEXT_PUBLIC_DEFAULT_REGION=${NEXT_PUBLIC_DEFAULT_REGION:-vn}
+      - HOSTNAME=0.0.0.0
+      - PORT=8000
+    env_file:
+      - path: apps/storefront/.env.local
+        required: false
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: synapse-cloudflared
+    pull_policy: always
+    restart: unless-stopped
+    command:
+      - tunnel
+      - --no-autoupdate
+      - --loglevel
+      - info
+      - run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    profiles:
+      - telegram-tunnel
+      - tunnel
+
+volumes:
+  agent-postgres-data:
+  agent-redis-data:
+  agent-qdrant-data:

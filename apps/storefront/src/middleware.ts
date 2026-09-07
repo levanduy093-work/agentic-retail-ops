@@ -12,53 +12,6 @@ const regionMapCache = {
   regionMapUpdated: Date.now(),
 }
 
-const devAccessCache = {
-  isPublic: false,
-  lastChecked: 0,
-}
-
-async function checkDevAccessIsPublic(): Promise<boolean> {
-  if (Date.now() - devAccessCache.lastChecked < 10000) {
-    return devAccessCache.isPublic
-  }
-
-  try {
-    if (!BACKEND_URL) return false
-    const res = await fetch(`${BACKEND_URL}/store/dev-access/status`, {
-      method: "GET",
-      headers: {
-        "x-publishable-api-key": PUBLISHABLE_API_KEY || "",
-      },
-      next: { revalidate: 10 },
-    })
-    if (res.ok) {
-      const data = await res.json()
-      devAccessCache.isPublic = Boolean(data?.is_public)
-      devAccessCache.lastChecked = Date.now()
-      return devAccessCache.isPublic
-    }
-  } catch {
-    // If backend unreachable or error, don't block
-  }
-
-  return devAccessCache.isPublic
-}
-
-async function hasValidDevAccessSession(token: string): Promise<boolean> {
-  if (!BACKEND_URL || !token) return false
-  try {
-    const response = await fetch(`${BACKEND_URL}/store/dev-access/session`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-publishable-api-key": PUBLISHABLE_API_KEY || "" },
-      body: JSON.stringify({ session_token: token }),
-      cache: "no-store",
-    })
-    return response.ok && Boolean((await response.json()).valid)
-  } catch {
-    return false
-  }
-}
-
 async function getRegionMap(cacheId: string) {
   const { regionMap, regionMapUpdated } = regionMapCache
 
@@ -195,33 +148,8 @@ function getLocale(request: NextRequest): string {
  */
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
-  let consumeDevAccessSession = false
-  if (pathname.includes(".") || pathname.includes("/dev-lock")) {
+  if (pathname.includes(".")) {
     return NextResponse.next()
-  }
-
-  const host = request.headers.get("host") || ""
-  const isLocal =
-    host.includes("localhost") ||
-    host.includes("127.0.0.1") ||
-    host.endsWith(".local")
-
-  if (!isLocal) {
-    const isPublic = await checkDevAccessIsPublic()
-    if (!isPublic) {
-      const hasSession = await hasValidDevAccessSession(
-        request.cookies.get("synapse_dev_access_session")?.value || ""
-      )
-      if (!hasSession) {
-        const locale = getLocale(request)
-        const country = DEFAULT_REGION
-        const redirectUrl = `${request.nextUrl.origin}/${locale}/${country}/dev-lock?from=${encodeURIComponent(
-          pathname + (request.nextUrl.search || ""),
-        )}`
-        return NextResponse.redirect(redirectUrl, 307)
-      }
-      consumeDevAccessSession = true
-    }
   }
 
   const cacheIdCookie = request.cookies.get("_medusa_cache_id")
@@ -271,10 +199,6 @@ export async function middleware(request: NextRequest) {
         sameSite: "strict",
         secure: request.nextUrl.protocol === "https:",
       })
-    }
-
-    if (consumeDevAccessSession) {
-      response.cookies.delete("synapse_dev_access_session")
     }
 
     return response

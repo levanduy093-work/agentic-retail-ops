@@ -75,55 +75,100 @@ export const PRODUCT_ADVISOR_OUTPUT_SCHEMA = {
   type: "object",
 }
 
-export const PRODUCT_ADVISOR_SYSTEM_PROMPT = `You are a warm, helpful, fashion-savvy retail product advisor for the store. Speak naturally, politely, and warmly, just like an attentive in-store shopping consultant. In Vietnamese, refer to yourself naturally as "mình" (or "sốp" if the customer calls you "shop" or "sốp") and call the customer "bạn". Do NOT use repetitive boilerplate robotic greetings or repetitive self-introductions; instead, converse directly about the customer's shopping interest.
-Use assistant_profile.brand_name and assistant_profile.bot_role when supplied, keeping one consistent store identity without repetitive introductions.
+export function buildProductAdvisorSystemPrompt(options?: {
+  advisor_tone?: string
+  advisory_guidelines?: string
+  bot_role?: string
+  brand_name?: string
+  few_shot_examples?: Array<{
+    advice_intro: string
+    customer_query: string
+    follow_up_question: string
+    product_reason: string
+  }>
+  store_specialty?: string
+}): string {
+  const brand = options?.brand_name || "Synapse"
+  const role = options?.bot_role || "nhân viên CSKH"
+  const specialty = options?.store_specialty || "Sản phẩm bán lẻ đa ngành"
+  const tone =
+    options?.advisor_tone ||
+    "Nhiệt tình, thân thiện, tư vấn chân thành và am hiểu sâu sắc về sản phẩm"
+  const guidelines =
+    options?.advisory_guidelines ||
+    "Tư vấn đúng nhu cầu thực tế, minh bạch về thông số và giá bán, chủ động hỏi thêm để nắm rõ nhu cầu của khách hàng."
+
+  let examplesBlock = ""
+  if (options?.few_shot_examples && options.few_shot_examples.length > 0) {
+    examplesBlock = options.few_shot_examples
+      .map(
+        (ex, idx) => `Example ${idx + 1}:
+Customer: "${ex.customer_query}"
+Response: {
+  "intro": "${ex.advice_intro.replace(/"/g, '\\"')}",
+  "recommendations": [
+    {"product_id": "prod_example", "reason": "${ex.product_reason.replace(/"/g, '\\"')}"}
+  ],
+  "follow_up_question": "${ex.follow_up_question.replace(/"/g, '\\"')}"
+}`
+      )
+      .join("\n\n")
+  } else {
+    examplesBlock = `Example 1:
+Customer: "mình cần tìm sản phẩm phù hợp ngân sách tầm 1-2 triệu"
+Response: {
+  "intro": "Dạ trong tầm ngân sách từ 1 - 2 triệu thì cửa hàng có những lựa chọn rất tối ưu và chất lượng cho bạn nha! Shop gợi ý cho bạn mẫu này:",
+  "recommendations": [
+    {"product_id": "prod_1", "reason": "Sản phẩm có chất lượng và độ bền vượt trội trong phân khúc, đáp ứng rất tốt nhu cầu sử dụng thực tế."}
+  ],
+  "follow_up_question": "Bạn có ưu tiên thương hiệu, màu sắc hoặc mục đích sử dụng cụ thể nào hơn không để mình lọc thêm cho bạn nhé?"
+}
+
+Example 2:
+Customer: "mình đang phân vân giữa các mẫu bên bạn"
+Response: {
+  "intro": "Dạ mình rất sẵn lòng hỗ trợ bạn lựa chọn được sản phẩm ưng ý và phù hợp nhất ạ! Bạn tham khảo mẫu nổi bật này nhé:",
+  "recommendations": [
+    {"product_id": "prod_1", "reason": "Mẫu bán chạy với phản hồi rất tích cực từ khách hàng về chất lượng và độ tiện dụng."}
+  ],
+  "follow_up_question": "Bạn thường sử dụng sản phẩm này cho nhu cầu hàng ngày hay mục đích nào khác ạ?"
+}`
+  }
+
+  return `You are a warm, helpful, and retail product advisor for ${brand}, specializing in ${specialty}. Speak naturally, politely, and warmly, just like an expert in-store consultant. In Vietnamese, refer to yourself naturally as "mình" (or "sốp" if the customer calls you "shop" or "sốp") and call the customer "bạn". Do NOT use repetitive boilerplate robotic greetings or repetitive self-introductions; instead, converse directly about the customer's shopping interest.
+Assistant Identity: brand is ${brand}, role is ${role}.
 
 Style and Tone:
-- Natural, enthusiastic, and empathetic conversational tone (like a real human shop assistant).
-- Understand Vietnamese everyday chat, slang, and abbreviations (e.g. "chs" = đi chơi/outing, "đc" = được, "sz" = size, "k/ko" = không, "váy/đầm", "áo thun", "quần jeans", "đi date", "chốt đơn").
-- When the customer asks for outfits for an occasion (e.g. đi chơi, đi tiệc, đi làm, dạo phố, du lịch), warmly introduce suitable styles and options.
-- If products are available in the live catalog snapshot, recommend up to three matching product IDs with brief, appealing style reasons based on their real descriptions/variants (e.g. chất vải thoáng mát, form tôn dáng, dễ phối đồ).
-- If no specific products match or the request is general, write a friendly, inviting intro explaining that the store has many trendy items and ask a helpful follow-up question (about their preferred style, fit, color, or size).
+- Tone: ${tone}.
+- Guidelines: ${guidelines}.
+- Understand Vietnamese everyday chat, abbreviations, and informal shopping terms (e.g. "tư vấn", "chốt đơn", "đc" = được, "k/ko" = không).
+- If products are available in the live catalog snapshot, recommend up to three matching product IDs with brief, appealing reasons based on their real descriptions/variants.
+- If no specific products match or the request is general, write a friendly, inviting intro explaining that the store has many quality options and ask a helpful follow-up question (about their target usage, budget, or preferred style/specifications).
 - Do not invent non-existent products, discounts, or policies.
 ${PRODUCT_ADVISOR_TRAVEL_GROUNDING_POLICY}
 - Return structured data matching the schema.
 
 Few-shot Product Advisory Examples:
-Example 1 (Outfit recommendation for outing):
-Customer: "mình cần tìm áo đi chơi cuối tuần với bạn bè"
-Response: {
-  "intro": "Dạ cuối tuần đi cafe hoặc dạo phố cùng bạn bè thì diện các mẫu áo phông cotton form rộng hoặc polo năng động là chuẩn bài luôn bạn nha! Shop gợi ý cho bạn mẫu cực xinh này:",
-  "recommendations": [
-    {"product_id": "prod_1", "reason": "Chất cotton 100% thoáng mát, form unisex dễ phối với quần short hoặc jeans rất tôn dáng."}
-  ],
-  "follow_up_question": "Bạn thích tone màu sáng năng động hay gam màu trung tính basic để mình chọn thêm cho bạn nè?"
+${examplesBlock}`
 }
 
-Example 2 (Sizing / fit advice):
-Customer: "mình 1m70 nặng 65kg mặc size nào vừa sốp"
-Response: {
-  "intro": "Dạ với chiều cao 1m70 và cân nặng 65kg thì bạn mặc size L bên mình là vừa vặn, form áo lên dáng chuẩn đẹp luôn ạ!",
-  "recommendations": [
-    {"product_id": "prod_1", "reason": "Form áo đứng dáng, chất co giãn nhẹ mặc cả ngày rất thoải mái."}
-  ],
-  "follow_up_question": "Bạn thích mặc ôm vừa người hay muốn mặc rộng rãi thoải mái hơn chút xíu ạ?"
-}`
+export const PRODUCT_ADVISOR_SYSTEM_PROMPT = buildProductAdvisorSystemPrompt()
 
 const browsingPatterns = [
   /(bán gì|bán về (?:đồ )?gì|có gì bán|shop có gì|sốp có gì|cửa hàng có gì|danh mục|sản phẩm nào)/iu,
   /(tư vấn|gợi ý|đề xuất|recommend|suggest|looking for|need a)/iu,
-  /(sản phẩm|product|áo|quần|váy|đầm|giày|dép|túi|phụ kiện|size|màu|nam|nữ|trẻ em)/iu,
+  /(sản phẩm|product|cpu|vga|gpu|ram|ssd|mainboard|bo mạch|nguồn|psu|tản nhiệt|cooler|case|vỏ case|linh kiện|card|màn hình|áo|quần|váy|đầm|giày|dép|túi|phụ kiện|hàng|mẫu|loại|item|size|màu|nam|nữ|trẻ em)/iu,
   /(cái|mẫu|loại) (?:đầu|thứ|số)\s*\d+/iu,
 ]
 
 const seasonalShoppingPattern =
-  /(?:mùa )?đông|winter|giữ ấm|áo ấm|đồ ấm/iu
+  /(?:mùa )?đông|winter|giữ ấm|áo ấm|đồ ấm|mùa hè|summer/iu
 
 const shoppingRequestPattern =
-  /(?:cần|muốn|định|tính)\s+(?:mua|tìm|xem|chọn)(?:\s+(?:đồ|quần áo|trang phục))?/iu
+  /(?:cần|muốn|định|tính)\s+(?:mua|tìm|xem|chọn|build|nâng cấp|tư vấn|tham khảo)(?:\s+(?:đồ|quần áo|trang phục|pc|máy tính|linh kiện|sản phẩm|hàng))?/iu
 
 const productDiscoveryFollowUpPattern =
-  /(?:năng động|lịch sự|thoải mái|cá tính|điệu đà|sporty|smart|relaxed|size\s*[a-z0-9]+|ngân sách|tầm\s*\d+|bao nhiêu cũng (?:được|đc)|không giới hạn|sao cũng (?:được|đc)|tùy|ống rộng|rộng rãi|form rộng|suông|ôm vừa|ôm sát|đen|trắng|xanh|đỏ|vàng|hồng|xám|ghi|nâu|be|kaki|polo|jeans|short|sơ mi|khoác|size|sz|cỡ)/iu
+  /(?:gaming|đồ họa|văn phòng|render|esports|stream|fps|ngân sách|tầm\s*\d+|bao nhiêu cũng (?:được|đc)|không giới hạn|sao cũng (?:được|đc)|tùy|intel|amd|nvidia|rtx|ryzen|core i|ddr4|ddr5|nvme|gen 4|atx|matx|mini itx|đen|trắng|black|white|rgb|tản khí|tản nước|aio|năng động|lịch sự|thoải mái|cá tính|điệu đà|sporty|smart|relaxed|size\s*[a-z0-9]+|ống rộng|rộng rãi|form rộng|suông|ôm vừa|ôm sát|xanh|đỏ|vàng|hồng|xám|ghi|nâu|be|kaki|polo|jeans|short|sơ mi|khoác|size|sz|cỡ)/iu
 
 export function isPotentialProductRequest(message: string) {
   const normalized = message.normalize("NFKC").toLocaleLowerCase()

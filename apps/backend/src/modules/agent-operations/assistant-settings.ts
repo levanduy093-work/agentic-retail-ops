@@ -6,12 +6,6 @@ import {
   CUSTOMER_SUPPORT_PROMPT_VERSION
 } from "./customer-support-prompt"
 import {
-  CUSTOMER_MESSAGE_INTENT_MAX_TOKENS,
-  CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
-  CUSTOMER_MESSAGE_INTENT_PROMPT_VERSION,
-  CUSTOMER_MESSAGE_INTENT_SYSTEM_PROMPT
-} from "./customer-message-intent"
-import {
   KNOWLEDGE_ANSWER_MAX_TOKENS,
   KNOWLEDGE_ANSWER_PROMPT_KEY,
   KNOWLEDGE_ANSWER_PROMPT_VERSION,
@@ -51,7 +45,33 @@ import {
 export const ASSISTANT_SETTINGS_PROMPT_KEY = "customer-support.assistant-settings"
 export const ASSISTANT_SETTINGS_VERSION = "1.0.0"
 
+export const ProductAdvisorFewShotExampleSchema = z.strictObject({
+  advice_intro: z.string().trim().min(1).max(1000),
+  customer_query: z.string().trim().min(1).max(500),
+  follow_up_question: z.string().trim().min(1).max(500),
+  product_reason: z.string().trim().min(1).max(500)
+})
+
+export type ProductAdvisorFewShotExample = z.infer<
+  typeof ProductAdvisorFewShotExampleSchema
+>
+
 export const AssistantSettingsSchema = z.strictObject({
+  advisor_tone: z
+    .string()
+    .trim()
+    .min(1)
+    .max(300)
+    .default(
+      "Nhiệt tình, thân thiện, tư vấn chân thành và am hiểu sâu sắc về sản phẩm"
+    ),
+  advisory_guidelines: z
+    .string()
+    .trim()
+    .max(2000)
+    .default(
+      "Tư vấn đúng nhu cầu thực tế, minh bạch về thông số và giá bán, chủ động hỏi thêm để nắm rõ nhu cầu của khách hàng."
+    ),
   bot_role: z.string().trim().min(1).max(100).default("nhân viên CSKH"),
   brand_name: z.string().trim().min(1).max(100).default("Synapse"),
   clarify_message_en: z
@@ -70,6 +90,7 @@ export const AssistantSettingsSchema = z.strictObject({
     .default(
       "Mình là nhân viên CSKH và sẵn sàng hỗ trợ. Bạn cho mình biết cụ thể sản phẩm, đơn hàng hoặc vấn đề đang quan tâm nhé?"
     ),
+  few_shot_examples: z.array(ProductAdvisorFewShotExampleSchema).default([]),
   greeting_message_en: z
     .string()
     .trim()
@@ -98,25 +119,37 @@ export const AssistantSettingsSchema = z.strictObject({
     .max(500)
     .default(
       "Dạ thông tin này shop cần kiểm tra lại để hỗ trợ bạn chính xác nhất ạ. Trong lúc chờ, bạn có cần shop tư vấn thêm về sản phẩm, chọn size hay kiểm tra đơn hàng nào không nhé?"
-    )
+    ),
+  store_specialty: z
+    .string()
+    .trim()
+    .min(1)
+    .max(300)
+    .default("Sản phẩm bán lẻ đa ngành")
 })
 
 export type AssistantSettings = z.infer<typeof AssistantSettingsSchema>
 
 export const DEFAULT_ASSISTANT_SETTINGS: AssistantSettings = {
+  advisor_tone:
+    "Nhiệt tình, thân thiện, tư vấn chân thành và am hiểu sâu sắc về sản phẩm",
+  advisory_guidelines:
+    "Tư vấn đúng nhu cầu thực tế, minh bạch về thông số và giá bán, chủ động hỏi thêm để nắm rõ nhu cầu của khách hàng.",
   bot_role: "nhân viên CSKH",
   brand_name: "Synapse",
   clarify_message_en:
     "I'm ready to help. Could you tell me which product, order, or issue you need help with?",
   clarify_message_vi:
     "Mình là nhân viên CSKH của Synapse và sẵn sàng hỗ trợ. Bạn cho mình biết cụ thể sản phẩm, đơn hàng hoặc vấn đề đang quan tâm nhé?",
+  few_shot_examples: [],
   greeting_message_en: "Hello, I'm Synapse customer support. How can I help you today?",
   greeting_message_vi: "Chào bạn, mình là nhân viên CSKH của Synapse. Bạn cần mình hỗ trợ gì ạ?",
   native_tool_loop_mode: "ACTIVE",
   review_ack_message_en:
     "I will need to verify this information with our team to help you accurately. In the meantime, is there anything else regarding products, sizing, or orders I can help with?",
   review_ack_message_vi:
-    "Dạ thông tin này shop cần kiểm tra lại để hỗ trợ bạn chính xác nhất ạ. Trong lúc chờ, bạn có cần shop tư vấn thêm về sản phẩm, chọn size hay kiểm tra đơn hàng nào không nhé?"
+    "Dạ thông tin này shop cần kiểm tra lại để hỗ trợ bạn chính xác nhất ạ. Trong lúc chờ, bạn có cần shop tư vấn thêm về sản phẩm, chọn size hay kiểm tra đơn hàng nào không nhé?",
+  store_specialty: "Sản phẩm bán lẻ đa ngành"
 }
 
 export type ManagedPromptMetadata = {
@@ -137,15 +170,6 @@ export const MANAGED_PROMPTS_REGISTRY: Record<string, ManagedPromptMetadata> = {
     prompt_key: CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_KEY,
     title: "Customer Support Orchestrator (Điều phối Agent & Tool)",
     version: CUSTOMER_SUPPORT_ORCHESTRATOR_PROMPT_VERSION
-  },
-  [CUSTOMER_MESSAGE_INTENT_PROMPT_KEY]: {
-    default_max_tokens: CUSTOMER_MESSAGE_INTENT_MAX_TOKENS,
-    default_system_prompt: CUSTOMER_MESSAGE_INTENT_SYSTEM_PROMPT,
-    description:
-      "Hướng dẫn mô hình AI phân loại chính xác ý định khách hàng (Chào hỏi, Hỏi chính sách/RAG, Tư vấn sản phẩm, Yêu cầu hành động).",
-    prompt_key: CUSTOMER_MESSAGE_INTENT_PROMPT_KEY,
-    title: "Intent Router (Phân loại ý định LLM)",
-    version: CUSTOMER_MESSAGE_INTENT_PROMPT_VERSION
   },
   [KNOWLEDGE_ANSWER_PROMPT_KEY]: {
     default_max_tokens: KNOWLEDGE_ANSWER_MAX_TOKENS,

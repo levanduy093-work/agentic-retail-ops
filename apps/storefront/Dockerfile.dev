@@ -1,0 +1,30 @@
+FROM node:20-bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g pnpm@10.11.1
+
+WORKDIR /app
+
+# Copy monorepo configuration and manifests
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY patches/ ./patches/
+COPY apps/backend/package.json ./apps/backend/
+COPY apps/storefront/package.json ./apps/storefront/
+
+# Install dependencies for storefront
+RUN pnpm install --frozen-lockfile --filter=@synapse/storefront...
+
+WORKDIR /app/apps/storefront
+
+EXPOSE 8000
+
+ENV NODE_ENV=development
+ENV HOSTNAME=0.0.0.0
+ENV PORT=8000
+ENV WATCHPACK_POLLING=true
+
+CMD ["pnpm", "exec", "next", "dev", "-H", "0.0.0.0", "-p", "8000"]

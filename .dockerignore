@@ -1,0 +1,35 @@
+# Version control & metadata
+.git
+.gitignore
+.dockerignore
+.DS_Store
+**/.DS_Store
+.vscode
+.turbo
+
+# Dependencies (will be freshly installed in container)
+node_modules
+**/node_modules
+
+# Build artifacts
+apps/storefront/.next
+apps/storefront/out
+apps/backend/.medusa
+**/dist
+**/build
+coverage
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+next-run.log
+next.log
+
+# Local environment files & secrets
+**/.env
+**/.env.local
+**/.env.*.local
+**/.ghn-settings.json

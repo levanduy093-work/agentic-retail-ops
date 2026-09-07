@@ -1,0 +1,40 @@
+FROM node:20-bookworm-slim
+
+# Install system utilities & build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    netcat-traditional \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pnpm matching repo version
+RUN npm install -g pnpm@10.11.1
+
+WORKDIR /app
+
+# Copy monorepo configuration and patches
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY patches/ ./patches/
+COPY apps/backend/package.json ./apps/backend/
+COPY apps/storefront/package.json ./apps/storefront/
+
+# Install dependencies for backend
+RUN pnpm install --frozen-lockfile --filter=@synapse/backend...
+
+# Copy entrypoint script
+COPY apps/backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+WORKDIR /app/apps/backend
+
+EXPOSE 9000
+
+ENV NODE_ENV=development
+ENV HOST=0.0.0.0
+ENV PORT=9000
+
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["pnpm", "exec", "medusa", "develop", "-H", "0.0.0.0", "-p", "9000"]

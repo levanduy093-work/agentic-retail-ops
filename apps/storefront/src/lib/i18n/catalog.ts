@@ -1,6 +1,17 @@
 import { HttpTypes } from "@medusajs/types"
 
 const englishCategoryNames: Record<string, string> = {
+  "cpu": "CPU - Processors",
+  "vga": "VGA - Graphics Cards",
+  "mainboard": "Mainboards - Motherboards",
+  "ram": "RAM - Memory",
+  "ssd": "SSD - Solid State Drives",
+  "nguon-may-tinh": "PSU - Power Supplies",
+  "nguồn-máy-tính": "PSU - Power Supplies",
+  "tan-nhiet": "Cooling & Heatsinks",
+  "tản-nhiệt": "Cooling & Heatsinks",
+  "vo-case": "PC Cases",
+  "vỏ-case": "PC Cases",
   "ao-nam-nu": "Men's & Women's Clothing",
   "ao-ni-hoodie": "Sweatshirts & Hoodies",
   "quan-dai-jeans": "Long Pants & Jeans",
@@ -36,6 +47,16 @@ const englishProductNames: Record<string, string> = {
 }
 
 const productTitlePrefixes: Array<[string, string]> = [
+  ["Intel Core", "Intel Core Processor"],
+  ["AMD Ryzen", "AMD Ryzen Processor"],
+  ["Mainboard", "Motherboard"],
+  ["Card màn hình", "Graphics Card"],
+  ["RAM", "RAM Memory"],
+  ["Ổ cứng SSD", "SSD Storage"],
+  ["SSD", "SSD Storage"],
+  ["Nguồn", "Power Supply"],
+  ["Tản nhiệt", "CPU Cooler"],
+  ["Vỏ Case", "PC Case"],
   ["Bộ Đồ Thể Thao", "Sportswear Set"],
   ["Nón Mũ Thời Trang", "Fashion Cap"],
   ["Túi Canvas Tote", "Canvas Tote Bag"],
